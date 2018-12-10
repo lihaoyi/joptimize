@@ -7,7 +7,9 @@ import org.objectweb.asm.tree.analysis.{Analyzer, Frame}
 import collection.JavaConverters._
 import scala.collection.mutable
 object JOptimize{
-  def run(classFiles: Map[String, Array[Byte]], entrypoints: Seq[MethodSig]) = {
+  def run(classFiles: Map[String, Array[Byte]],
+          entrypoints: Seq[MethodSig],
+          eliminateOldMethods: Boolean) = {
     val classFileMap = for((k, v) <- classFiles) yield {
       val cr = new ClassReader(v)
       val cn = new ClassNode()
@@ -55,7 +57,15 @@ object JOptimize{
             newMethods.append((cn, mangledMethodNode))
             mangledMethodNode
         }
-        remaining.enqueue(process(cn, mn):_*)
+        remaining.enqueue(process(cn, mn, classNodeMap):_*)
+      }
+    }
+
+    for((k, cn) <- classFileMap) {
+      cn.methods.removeIf { mn =>
+        val sig = MethodSig(cn.name, mn.name, mn.desc, (mn.access & Opcodes.ACC_STATIC) != 0)
+        val res = !visited.exists(x => x._1 == sig && x._2.isEmpty) && mn.name != "<init>" && mn.name != "<clinit>"
+        res
       }
     }
 
@@ -72,7 +82,9 @@ object JOptimize{
     * Transforms a single method, narrowing any method calls within that method
     * and returning a list of called methods that would need to be processed next
     */
-  def process(cn: ClassNode, mn: MethodNode): Seq[(MethodSig, Option[Seq[Type]])] = {
+  def process(cn: ClassNode,
+              mn: MethodNode,
+              classNodeMap: Map[String, ClassNode]): Seq[(MethodSig, Option[Seq[Type]])] = {
     val df = new Dataflow()
     val analyzer = new Analyzer(df)
     analyzer.analyze(cn.name, mn)
@@ -80,10 +92,20 @@ object JOptimize{
     val output = mutable.Buffer.empty[(MethodSig, Option[Seq[Type]])]
     for((insn, idx) <- mn.instructions.iterator().asScala.zipWithIndex) {
       insn.getOpcode match{
-        case Opcodes.INVOKEVIRTUAL =>
-          mangleInstruction(frames, output, insn, idx, static = false)
+        case Opcodes.INVOKEVIRTUAL | Opcodes.INVOKEINTERFACE | Opcodes.INVOKESPECIAL =>
+          mangleInstruction(
+            frames, output, insn, idx,
+            static = false,
+            isInterface = s => (classNodeMap(s).access & Opcodes.ACC_INTERFACE) != 0,
+            replace = mn.instructions.set
+          )
         case Opcodes.INVOKESTATIC =>
-          mangleInstruction(frames, output, insn, idx, static = true)
+          mangleInstruction(
+            frames, output, insn, idx,
+            static = true,
+            isInterface = s => (classNodeMap(s).access & Opcodes.ACC_INTERFACE) != 0,
+            replace = mn.instructions.set
+          )
         case _ => // do nothing
       }
     }
@@ -95,7 +117,9 @@ object JOptimize{
                         output: mutable.Buffer[(MethodSig, Option[Seq[Type]])],
                         insn: AbstractInsnNode,
                         idx: Int,
-                        static: Boolean) = {
+                        static: Boolean,
+                        isInterface: String => Boolean,
+                        replace: (AbstractInsnNode, AbstractInsnNode) => Unit) = {
     val called = insn.asInstanceOf[MethodInsnNode]
 
     val calledDesc = Type.getType(called.desc)
@@ -109,7 +133,25 @@ object JOptimize{
 
     val sig = MethodSig(called.owner, called.name, called.desc, static)
     if (stackTypes == calledTypes) {
-      output.append((sig, None))
+      if (static) output.append((sig, None))
+      else if (Type.getObjectType(called.owner) != frame.getStack(frame.getStackSize - calledTypes.length).value){
+        val newOwner = frame.getStack(frame.getStackSize - calledTypes.length - 1).value.getInternalName
+        (isInterface(called.owner), isInterface(newOwner)) match{
+          case (true, false) =>
+            val newNode = new MethodInsnNode(Opcodes.INVOKEVIRTUAL, newOwner, called.name, called.desc)
+            replace(insn, newNode)
+            output.append((sig.copy(clsName = newOwner), None))
+          case (false, true) => ???
+          case _ =>
+            called.owner = newOwner
+            output.append((sig, None))
+        }
+
+
+
+      }else{
+        output.append((sig, None))
+      }
     } else {
       val (mangledName, mangledDesc) = mangle(called.name, calledDesc, stackTypes)
       output.append((sig, Some(stackTypes)))

@@ -5,6 +5,16 @@ import org.objectweb.asm.tree.analysis._
 import org.objectweb.asm.{Handle}
 import org.objectweb.asm.tree._
 
+/**
+  * The inferred type at any point in the program.
+  *
+  * Currently a dumb wrapper of the ASM/JVM runtime types, but should grow more
+  * detailed in future to include things such as:
+  *
+  * - Literal types: for integers, strings, ...
+  * - Union types: A | B, A | B | C. More specific than widening to the LUB
+  * - Arrays of known size
+  */
 case class Inferred(value: org.objectweb.asm.Type) extends org.objectweb.asm.tree.analysis.Value{
   def getSize: Int = value.getSize
 }

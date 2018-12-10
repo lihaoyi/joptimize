@@ -11,7 +11,8 @@ object MainTests extends TestSuite{
       os.walk(testRoot / tp.value.last)
         .map(p => (p.relativeTo(classesRoot).toString, os.read.bytes(p)))
         .toMap,
-      Seq(MethodSig(s"joptimize/examples/${tp.value.last}/Main", "main", "(II)I", static = true))
+      Seq(MethodSig(s"joptimize/examples/${tp.value.last}/Main", "main", "(II)I", static = true)),
+      eliminateOldMethods = true
     )
 
     os.remove.all(outRoot / tp.value.last)
@@ -24,7 +25,18 @@ object MainTests extends TestSuite{
       val cls = cl.loadClass(s"joptimize.examples.${tp.value.last}.Main")
       val method = cls.getMethod("main", classOf[Int], classOf[Int])
       val res = method.invoke(null, Integer.valueOf(x), Integer.valueOf(y))
-      assert(res == expected)
+
+      val cls2 = cl.loadClass(s"joptimize.examples.${tp.value.last}.Main$$")
+
+      assert(
+        // Make sure the correct value is computed
+        res == expected,
+        // That the previously-existing method has been removed
+        !cls2.getMethods.exists(_.getName == "call"),
+        // And the n>=2 duplicate methods are in place (presumably being used)
+        cls2.getMethods.count(_.getName.startsWith("call")) >= 2
+
+      )
     }finally{
       cl.close()
     }
