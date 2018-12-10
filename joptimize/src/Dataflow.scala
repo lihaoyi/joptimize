@@ -14,6 +14,8 @@ import org.objectweb.asm.tree._
   * - Literal types: for integers, strings, ...
   * - Union types: A | B, A | B | C. More specific than widening to the LUB
   * - Arrays of known size
+  * - Bottom: a type representing unreachable code, to help in narrowing after
+  *   dead code elimination
   */
 case class Inferred(value: org.objectweb.asm.Type) extends org.objectweb.asm.tree.analysis.Value{
   def getSize: Int = value.getSize
@@ -58,7 +60,7 @@ class Dataflow() extends Interpreter[Inferred](ASM4){
   def unaryOperation(insn: AbstractInsnNode, value: Inferred) = {
     insn.getOpcode match {
       case INEG | IINC | L2I | F2I | D2I | I2B | I2C | I2S => INT_TYPE
-      case FNEG| I2F| L2F| D2F => FLOAT_TYPE
+      case FNEG | I2F| L2F| D2F => FLOAT_TYPE
       case LNEG | I2L | F2L | D2L => LONG_TYPE
       case DNEG | I2D | L2D | F2D => DOUBLE_TYPE
       case IFEQ | IFNE | IFLT | IFGE | IFGT | IFLE | TABLESWITCH | LOOKUPSWITCH |

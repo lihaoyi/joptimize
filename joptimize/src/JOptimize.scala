@@ -61,11 +61,12 @@ object JOptimize{
       }
     }
 
-    for((k, cn) <- classFileMap) {
-      cn.methods.removeIf { mn =>
-        val sig = MethodSig(cn.name, mn.name, mn.desc, (mn.access & Opcodes.ACC_STATIC) != 0)
-        val res = !visited.exists(x => x._1 == sig && x._2.isEmpty) && mn.name != "<init>" && mn.name != "<clinit>"
-        res
+    if (eliminateOldMethods) {
+      for ((k, cn) <- classFileMap) {
+        cn.methods.removeIf { mn =>
+          val sig = MethodSig(cn.name, mn.name, mn.desc, (mn.access & Opcodes.ACC_STATIC) != 0)
+          !visited.exists(x => x._1 == sig && x._2.isEmpty) && mn.name != "<init>" && mn.name != "<clinit>"
+        }
       }
     }
 
