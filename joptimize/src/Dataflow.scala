@@ -5,14 +5,11 @@ import org.objectweb.asm.tree.analysis._
 import org.objectweb.asm.{Handle}
 import org.objectweb.asm.tree._
 
-sealed trait Inferred extends org.objectweb.asm.tree.analysis.Value{
-  def getSize: Int
+case class Inferred(value: org.objectweb.asm.Type) extends org.objectweb.asm.tree.analysis.Value{
+  def getSize: Int = value.getSize
 }
 object Inferred{
-  implicit def fromAsmType(value: org.objectweb.asm.Type): Inferred = AsmType(value)
-  case class AsmType(value: org.objectweb.asm.Type) extends Inferred{
-    def getSize = value.getSize
-  }
+  implicit def fromAsmType(value: org.objectweb.asm.Type): Inferred = Inferred(value)
 }
 
 class Dataflow() extends Interpreter[Inferred](ASM4){

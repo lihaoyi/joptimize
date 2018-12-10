@@ -18,3 +18,5 @@ object Util{
     sw.toString
   }
 }
+
+case class MethodSig(clsName: String, name: String, desc: String)
