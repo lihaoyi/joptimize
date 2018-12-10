@@ -19,4 +19,4 @@ object Util{
   }
 }
 
-case class MethodSig(clsName: String, name: String, desc: String)
+case class MethodSig(clsName: String, name: String, desc: String, static: Boolean)

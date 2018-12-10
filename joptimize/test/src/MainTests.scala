@@ -11,7 +11,7 @@ object MainTests extends TestSuite{
       os.walk(testRoot / tp.value.last)
         .map(p => (p.relativeTo(classesRoot).toString, os.read.bytes(p)))
         .toMap,
-      Seq(MethodSig(s"joptimize/examples/${tp.value.last}/Main$$", "main", "(II)I"))
+      Seq(MethodSig(s"joptimize/examples/${tp.value.last}/Main", "main", "(II)I", static = true))
     )
 
     os.remove.all(outRoot / tp.value.last)

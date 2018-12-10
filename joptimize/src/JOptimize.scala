@@ -1,8 +1,8 @@
 package joptimize
 
 import org.objectweb.asm.{ClassReader, ClassWriter, Opcodes, Type}
-import org.objectweb.asm.tree.{ClassNode, MethodInsnNode, MethodNode}
-import org.objectweb.asm.tree.analysis.Analyzer
+import org.objectweb.asm.tree.{AbstractInsnNode, ClassNode, MethodInsnNode, MethodNode}
+import org.objectweb.asm.tree.analysis.{Analyzer, Frame}
 
 import collection.JavaConverters._
 import scala.collection.mutable
@@ -20,7 +20,7 @@ object JOptimize{
     val originalMethods = for{
       (k, cls) <- classNodeMap
       m <- cls.methods.iterator().asScala
-    } yield (MethodSig(cls.name, m.name, m.desc), m)
+    } yield (MethodSig(cls.name, m.name, m.desc, (m.access & Opcodes.ACC_STATIC) != 0), m)
 
     val newMethods = mutable.Buffer.empty[(ClassNode, MethodNode)]
     val remaining = mutable.Queue.empty[(MethodSig, Option[Seq[Type]])]
@@ -81,31 +81,41 @@ object JOptimize{
     for((insn, idx) <- mn.instructions.iterator().asScala.zipWithIndex) {
       insn.getOpcode match{
         case Opcodes.INVOKEVIRTUAL =>
-          val called = insn.asInstanceOf[MethodInsnNode]
-
-          val calledDesc = Type.getType(called.desc)
-          val calledTypes = calledDesc.getArgumentTypes.toSeq
-
-          val frame = frames(idx)
-          val stackTypes =
-            (frame.getStackSize - calledTypes.length)
-              .until(frame.getStackSize)
-              .map(frame.getStack(_).value)
-
-          val sig = MethodSig(called.owner, called.name, called.desc)
-          if (stackTypes == calledTypes){
-            output.append((sig, None))
-          }else{
-            val (mangledName, mangledDesc) = mangle(called.name, calledDesc, stackTypes)
-            output.append((sig, Some(stackTypes)))
-            called.name = mangledName
-            called.desc = mangledDesc
-          }
+          mangleInstruction(frames, output, insn, idx, static = false)
         case Opcodes.INVOKESTATIC =>
+          mangleInstruction(frames, output, insn, idx, static = true)
         case _ => // do nothing
       }
     }
     output
+  }
+
+
+  def mangleInstruction(frames: Array[Frame[Inferred]],
+                        output: mutable.Buffer[(MethodSig, Option[Seq[Type]])],
+                        insn: AbstractInsnNode,
+                        idx: Int,
+                        static: Boolean) = {
+    val called = insn.asInstanceOf[MethodInsnNode]
+
+    val calledDesc = Type.getType(called.desc)
+    val calledTypes = calledDesc.getArgumentTypes.toSeq
+
+    val frame = frames(idx)
+    val stackTypes =
+      (frame.getStackSize - calledTypes.length)
+        .until(frame.getStackSize)
+        .map(frame.getStack(_).value)
+
+    val sig = MethodSig(called.owner, called.name, called.desc, static)
+    if (stackTypes == calledTypes) {
+      output.append((sig, None))
+    } else {
+      val (mangledName, mangledDesc) = mangle(called.name, calledDesc, stackTypes)
+      output.append((sig, Some(stackTypes)))
+      called.name = mangledName
+      called.desc = mangledDesc
+    }
   }
 
   def mangle(name: String, desc: Type, stackTypes: Seq[Type]) = {
