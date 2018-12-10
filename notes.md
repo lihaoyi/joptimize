@@ -19,6 +19,11 @@ Optimization Plan
     comes from a variable field whose concrete type can vary at runtime. That's
     ok, we just pick the narrowest type possible
 
+  - Return types to methods are also specialized; if the narrowed argument types
+    to a duplicated method mean the return type is also narrowed, this is done
+    and made available to downstream code making use of the method return value
+    (requires dead code elimination)
+
 - Specialization is recursive; if a specialized method calls downstream methods
   and forwards along arguments, the downstream methods are also duplicated based
   on the narrowed types of the arguments
@@ -28,6 +33,7 @@ Optimization Plan
   - Constant folding
   - Allocation Sinking
   - Partial Evaluation
+  - Dead Code Elimination
 
 - Possible to optimize:
   - Chains of Options

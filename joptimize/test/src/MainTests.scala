@@ -33,8 +33,8 @@ object MainTests extends TestSuite{
 
     'supertype - check(1, 2, 6)
     'supertypeindirect - check(1, 2, 6)
-//    'parametric - check()
-//    'parametricindirect - check()
+    'parametric - check(1, 2, 6)
+    'parametricindirect - check(1, 2, 6)
 //    'lambda - check()
 //    'lambdaindirect - check()
   }
