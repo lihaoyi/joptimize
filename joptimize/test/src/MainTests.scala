@@ -4,10 +4,8 @@ object MainTests extends TestSuite{
   val classesRoot = os.Path("out/joptimize/test/compile/dest/classes", os.pwd)
   val testRoot = classesRoot / "joptimize" / "examples"
   def check()(implicit tp: utest.framework.TestPath) = {
-    val checkRoot = testRoot / tp.value.last
-
     JOptimize.run(
-      os.walk(checkRoot)
+      os.walk(testRoot / tp.value.last)
         .map(p => (p.relativeTo(classesRoot).toString, os.read.bytes(p)))
         .toMap,
       Seq(s"joptimize/examples/${tp.value.last}/Main.class" -> "main")
