@@ -10,6 +10,7 @@ object JOptimize{
   def run(classFiles: Map[String, Array[Byte]],
           entrypoints: Seq[MethodSig],
           eliminateOldMethods: Boolean) = {
+
     val classFileMap = for((k, v) <- classFiles) yield {
       val cr = new ClassReader(v)
       val cn = new ClassNode()
@@ -25,24 +26,24 @@ object JOptimize{
     } yield (MethodSig(cls.name, m.name, m.desc, (m.access & Opcodes.ACC_STATIC) != 0), m)
 
     val newMethods = mutable.Buffer.empty[(ClassNode, MethodNode)]
-    val remaining = mutable.Queue.empty[(MethodSig, Option[Seq[Type]])]
-    remaining.enqueue(entrypoints.map((_, None)):_*)
-    val visited = collection.mutable.Set.empty[(MethodSig, Option[Seq[Type]])]
-    while(remaining.nonEmpty){
-      val current = remaining.dequeue()
-      if (!visited.contains(current)){
-        visited.add(current)
-        val (sig, mangledTypes) = current
+    val visited = collection.mutable.Map.empty[(MethodSig, Option[Seq[Type]]), Type]
+    for(ep <- entrypoints){
+      visited(ep -> None) = Type.getType(ep.desc).getReturnType
+    }
+    def recurse(sig: MethodSig, mangledTypes: Option[Seq[Type]]): Type = {
+      visited.getOrElseUpdate((sig, mangledTypes), {
         val cn = classNodeMap(sig.clsName)
-        val mn = mangledTypes match{
-          case None => originalMethods(sig)
+        mangledTypes match{
+          case None =>
+            process(cn, originalMethods(sig), classNodeMap, recurse)
           case Some(mangled) =>
             val originalMethod = originalMethods(sig)
             val (mangledName, mangledDesc) = mangle(
               originalMethod.name,
-              Type.getType(originalMethod.desc),
-              mangled
+              mangled,
+              Type.getType(originalMethod.desc).getReturnType
             )
+
             val mangledMethodNode = new MethodNode(
               Opcodes.ASM6,
               originalMethod.access,
@@ -54,18 +55,33 @@ object JOptimize{
 
             originalMethod.accept(mangledMethodNode)
 
+            val returnType = process(cn, mangledMethodNode, classNodeMap, recurse)
+
+            mangledMethodNode.desc = Type.getMethodDescriptor(
+              returnType,
+              Type.getType(mangledMethodNode.desc).getArgumentTypes:_*
+            )
+
             newMethods.append((cn, mangledMethodNode))
-            mangledMethodNode
+            returnType
         }
-        remaining.enqueue(process(cn, mn, classNodeMap):_*)
-      }
+      })
+    }
+
+    for(entrypoint <- entrypoints){
+      process(
+        classNodeMap(entrypoint.clsName),
+        originalMethods(entrypoint),
+        classNodeMap,
+        recurse
+      )
     }
 
     if (eliminateOldMethods) {
       for ((k, cn) <- classFileMap) {
         cn.methods.removeIf { mn =>
           val sig = MethodSig(cn.name, mn.name, mn.desc, (mn.access & Opcodes.ACC_STATIC) != 0)
-          !visited.exists(x => x._1 == sig && x._2.isEmpty) && mn.name != "<init>" && mn.name != "<clinit>"
+          !visited.keys.exists(x => x._1 == sig && x._2.isEmpty) && mn.name != "<init>" && mn.name != "<clinit>"
         }
       }
     }
@@ -85,42 +101,59 @@ object JOptimize{
     */
   def process(cn: ClassNode,
               mn: MethodNode,
-              classNodeMap: Map[String, ClassNode]): Seq[(MethodSig, Option[Seq[Type]])] = {
+              classNodeMap: Map[String, ClassNode],
+              recurse: (MethodSig, Option[Seq[Type]]) => Type): Type = {
     val df = new Dataflow()
     val analyzer = new Analyzer(df)
     analyzer.analyze(cn.name, mn)
     val frames = analyzer.getFrames
-    val output = mutable.Buffer.empty[(MethodSig, Option[Seq[Type]])]
+    val narrowReturnTypes = mutable.Buffer.empty[Inferred]
+    val originalMethodType = Type.getType(mn.desc)
+    var narrowReturn = false
     for((insn, idx) <- mn.instructions.iterator().asScala.zipWithIndex) {
       insn.getOpcode match{
         case Opcodes.INVOKEVIRTUAL | Opcodes.INVOKEINTERFACE | Opcodes.INVOKESPECIAL =>
           mangleInstruction(
-            frames, output, insn, idx,
+            frames, insn, idx,
             static = false,
             isInterface = s => (classNodeMap(s).access & Opcodes.ACC_INTERFACE) != 0,
-            replace = mn.instructions.set
+            replace = mn.instructions.set,
+            recurse = recurse
           )
         case Opcodes.INVOKESTATIC =>
           mangleInstruction(
-            frames, output, insn, idx,
+            frames, insn, idx,
             static = true,
             isInterface = s => (classNodeMap(s).access & Opcodes.ACC_INTERFACE) != 0,
-            replace = mn.instructions.set
+            replace = mn.instructions.set,
+            recurse = recurse
           )
+        case Opcodes.ARETURN =>
+          val inferred = frames(idx).getStack(frames(idx).getStackSize - 1)
+          if (inferred.value != originalMethodType.getReturnType) {
+            narrowReturn = true
+            narrowReturnTypes.append(inferred)
+          }
         case _ => // do nothing
       }
     }
-    output
+    if (narrowReturn){
+      val narrowReturnType = narrowReturnTypes.reduce(df.merge).value
+      mn.desc = Type.getMethodDescriptor(narrowReturnType, originalMethodType.getArgumentTypes:_*)
+      narrowReturnType
+    }else {
+      originalMethodType.getReturnType
+    }
   }
 
 
   def mangleInstruction(frames: Array[Frame[Inferred]],
-                        output: mutable.Buffer[(MethodSig, Option[Seq[Type]])],
                         insn: AbstractInsnNode,
                         idx: Int,
                         static: Boolean,
                         isInterface: String => Boolean,
-                        replace: (AbstractInsnNode, AbstractInsnNode) => Unit) = {
+                        replace: (AbstractInsnNode, AbstractInsnNode) => Unit,
+                        recurse: (MethodSig, Option[Seq[Type]]) => Type) = {
     val called = insn.asInstanceOf[MethodInsnNode]
 
     val calledDesc = Type.getType(called.desc)
@@ -134,36 +167,33 @@ object JOptimize{
 
     val sig = MethodSig(called.owner, called.name, called.desc, static)
     if (stackTypes == calledTypes) {
-      if (static) output.append((sig, None))
+      if (static) recurse(sig, None)
       else if (Type.getObjectType(called.owner) != frame.getStack(frame.getStackSize - calledTypes.length).value){
         val newOwner = frame.getStack(frame.getStackSize - calledTypes.length - 1).value.getInternalName
         (isInterface(called.owner), isInterface(newOwner)) match{
           case (true, false) =>
             val newNode = new MethodInsnNode(Opcodes.INVOKEVIRTUAL, newOwner, called.name, called.desc)
             replace(insn, newNode)
-            output.append((sig.copy(clsName = newOwner), None))
+            recurse(sig.copy(clsName = newOwner), None)
           case (false, true) => ???
           case _ =>
             called.owner = newOwner
-            output.append((sig, None))
+            recurse(sig, None)
         }
-
-
-
       }else{
-        output.append((sig, None))
+        recurse(sig, None)
       }
     } else {
-      val (mangledName, mangledDesc) = mangle(called.name, calledDesc, stackTypes)
-      output.append((sig, Some(stackTypes)))
+      val narrowReturnType = recurse(sig, Some(stackTypes))
+      val (mangledName, mangledDesc) = mangle(called.name, stackTypes, narrowReturnType)
       called.name = mangledName
       called.desc = mangledDesc
     }
   }
 
-  def mangle(name: String, desc: Type, stackTypes: Seq[Type]) = {
+  def mangle(name: String, stackTypes: Seq[Type], narrowReturnType: Type) = {
     val mangledName = name + "__" + stackTypes.mkString("__").replace('/', '_').replace(';', '_')
-    val mangledDesc = Type.getMethodDescriptor(desc.getReturnType, stackTypes:_*)
+    val mangledDesc = Type.getMethodDescriptor(narrowReturnType, stackTypes:_*)
     (mangledName, mangledDesc)
   }
 }
