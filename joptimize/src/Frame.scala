@@ -1,11 +1,12 @@
 package joptimize
 
+import org.objectweb.asm.Type
 import org.objectweb.asm.tree.AbstractInsnNode
 import org.objectweb.asm.tree.analysis.Interpreter
 
 
 /**
-  * An immutable wrapper around `org.objectweb.asm.tree.analysis.Frame[Inferred]`,
+  * An immutable wrapper around [[org.objectweb.asm.tree.analysis.Frame]],
   */
 class Frame(private val value: org.objectweb.asm.tree.analysis.Frame[Inferred]){
   val locals = new IndexedSeq[Inferred] {
@@ -13,8 +14,14 @@ class Frame(private val value: org.objectweb.asm.tree.analysis.Frame[Inferred]){
     def apply(idx: Int) = value.getLocal(idx)
   }
   val stack = new IndexedSeq[Inferred] {
+
     def length = value.getStackSize
-    def apply(idx: Int) = value.getStack(idx)
+    def apply(idx: Int) = {
+      value.getStack(idx) match{
+        case null => throw new IndexOutOfBoundsException(s"$idx >= $length")
+        case x => x
+      }
+    }
   }
   override def hashCode() = {
     (
@@ -37,6 +44,15 @@ class Frame(private val value: org.objectweb.asm.tree.analysis.Frame[Inferred]){
       newFrame.execute(insn, interpreter)
       new Frame(newFrame)
     }
+  }
+
+  override def toString = {
+    def stringify(values: IndexedSeq[Inferred]) = {
+      values
+        .map{case null => "" case x => x.value.getDescriptor}
+        .mkString
+    }
+    s"Frame(${stringify(locals)}, ${stringify(stack)})"
   }
 }
 

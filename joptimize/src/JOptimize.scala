@@ -26,19 +26,21 @@ object JOptimize{
     } yield (MethodSig(cls.name, m.name, m.desc, (m.access & Opcodes.ACC_STATIC) != 0), m)
 
     val newMethods = mutable.Buffer.empty[(ClassNode, MethodNode)]
-    val visited = collection.mutable.Map.empty[(MethodSig, Option[Seq[Type]]), Type]
+    val visitedMethods = collection.mutable.Map.empty[(MethodSig, Seq[Type]), Type]
     for(ep <- entrypoints){
-      visited(ep -> None) = Type.getType(ep.desc).getReturnType
+      visitedMethods(ep -> Type.getType(ep.desc).getArgumentTypes.toSeq) = Type.getType(ep.desc).getReturnType
     }
 
     val interp = new AbstractInterpret(
       s => (classNodeMap(s).access & Opcodes.ACC_INTERFACE) != 0,
-      visited
+      sig => originalMethods(sig),
+      visitedMethods
     )
 
     for(entrypoint <- entrypoints){
       val mn = originalMethods(entrypoint)
       interp.interpretMethod(
+        entrypoint,
         mn.instructions,
         Type.getType(mn.desc).getArgumentTypes.map(Inferred(_)).toList,
         mn.maxLocals,
@@ -46,11 +48,12 @@ object JOptimize{
       )
     }
 
+    pprint.log(visitedMethods)
     if (eliminateOldMethods) {
       for ((k, cn) <- classFileMap) {
         cn.methods.removeIf { mn =>
           val sig = MethodSig(cn.name, mn.name, mn.desc, (mn.access & Opcodes.ACC_STATIC) != 0)
-          !visited.keys.exists(x => x._1 == sig && x._2.isEmpty) && mn.name != "<init>" && mn.name != "<clinit>"
+          !visitedMethods.keys.exists(x => x._1 == sig && x._2.isEmpty) && mn.name != "<init>" && mn.name != "<clinit>"
         }
       }
     }

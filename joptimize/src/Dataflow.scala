@@ -80,7 +80,7 @@ object Dataflow extends Interpreter[Inferred](ASM4){
         }
       case ANEWARRAY => getType("[" + getType(insn.asInstanceOf[TypeInsnNode].desc))
       case ARRAYLENGTH => INT_TYPE
-      case ATHROW => null
+      case ATHROW => BasicInterpreter.NULL_TYPE
       case CHECKCAST => getType(insn.asInstanceOf[TypeInsnNode].desc)
       case INSTANCEOF => BOOLEAN_TYPE
       case MONITORENTER | MONITOREXIT | IFNULL | IFNONNULL => BasicInterpreter.NULL_TYPE

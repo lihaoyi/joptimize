@@ -11,12 +11,14 @@ import scala.annotation.tailrec
 import scala.collection.mutable
 
 class AbstractInterpret(isInterface: String => Boolean,
-                        visitedMethods: mutable.Map[(MethodSig, Option[Seq[Type]]), Type]) {
+                        lookupMethod: MethodSig => MethodNode,
+                        visitedMethods: mutable.Map[(MethodSig, Seq[Type]), Type]) {
 
-  def interpretMethod(insns: InsnList,
+  def interpretMethod(sig: MethodSig,
+                      insns: InsnList,
                       args: List[Inferred],
-                      maxStack: Int,
-                      maxLocals: Int) = {
+                      maxLocals: Int,
+                      maxStack: Int): Type = visitedMethods.getOrElseUpdate((sig, args.map(_.value)), {
     // - One-pass walk through the instruction list of a method, starting from
     //   narrowed argument types
     //
@@ -82,14 +84,14 @@ class AbstractInterpret(isInterface: String => Boolean,
             val n = new InsnNode(current.getOpcode)
             finalInsnList.add(n)
             n.getOpcode match{
-              case ARETURN => 
+              case ARETURN =>
                 methodReturns.append(currentState.stack.last)
                 finalInsnList
               case RETURN | DRETURN | FRETURN | IRETURN | LRETURN =>
                 finalInsnList
               case _ => walkBlockInsn(current.getNext, nextState)
             }
-            
+
 
           case current: IntInsnNode =>
             val n = new IntInsnNode(current.getOpcode, current.operand)
@@ -135,15 +137,27 @@ class AbstractInterpret(isInterface: String => Boolean,
             val mangled = copy.getOpcode match{
               case INVOKEVIRTUAL | INVOKEINTERFACE | INVOKESPECIAL =>
                 mangleInstruction(
-                  nextState, copy,
+                  currentState, copy,
                   static = false,
-                  recurse = ???
+                  recurse = (staticSig, types) => interpretMethod(
+                    staticSig.copy(clsName = types(0).getInternalName),
+                    lookupMethod(staticSig.copy(clsName = types(0).getInternalName)).instructions,
+                    types.toList.map(Inferred(_)),
+                    lookupMethod(staticSig.copy(clsName = types(0).getInternalName)).maxLocals,
+                    lookupMethod(staticSig.copy(clsName = types(0).getInternalName)).maxStack
+                  )
                 )
               case INVOKESTATIC =>
                 mangleInstruction(
-                  nextState, copy,
+                  currentState, copy,
                   static = true,
-                  recurse = ???
+                  recurse = (staticSig, types) => interpretMethod(
+                    staticSig,
+                    lookupMethod(staticSig).instructions,
+                    types.toList.map(Inferred(_)),
+                    lookupMethod(staticSig).maxLocals,
+                    lookupMethod(staticSig).maxStack
+                  )
                 )
               case _ => ??? // do nothing
             }
@@ -177,54 +191,60 @@ class AbstractInterpret(isInterface: String => Boolean,
     }
 
     walkBlock(insns.getFirst, Frame.initial(maxLocals, maxStack, args))
-  }
 
+    if (methodReturns.isEmpty) Type.getMethodType(sig.desc).getReturnType
+    else methodReturns.reduce(Dataflow.merge).value
+  })
 
 
   def mangleInstruction(frame: Frame,
                         insn: AbstractInsnNode,
                         static: Boolean,
-                        recurse: (MethodSig, Option[Seq[Type]]) => Type): AbstractInsnNode = {
+                        recurse: (MethodSig, Seq[Type]) => Type): AbstractInsnNode = {
     val called = insn.asInstanceOf[MethodInsnNode]
 
     val calledDesc = Type.getType(called.desc)
-    val calledTypes = calledDesc.getArgumentTypes.toSeq
+    val calledSelf = if (static) Nil else Seq(Type.getObjectType(called.owner))
+    val originalTypes = calledSelf ++ calledDesc.getArgumentTypes.toSeq
 
-    val stackTypes =
-      (frame.stack.length - calledTypes.map(_.getSize).sum)
+    val inferredTypes =
+      (frame.stack.length - originalTypes.map(_.getSize).sum)
         .until(frame.stack.length)
         .map(frame.stack(_).value)
 
     val sig = MethodSig(called.owner, called.name, called.desc, static)
 
-    if (stackTypes == calledTypes) {
-      if (static) {
-        recurse(sig, None)
-        insn
-      } else if (Type.getObjectType(called.owner) != frame.stack(frame.stack.length - calledTypes.length).value){
-        val newOwner = frame.stack(frame.stack.length - calledTypes.map(_.getSize).sum - 1).value.getInternalName
-        (isInterface(called.owner), isInterface(newOwner)) match{
-          case (true, false) =>
-            val newNode = new MethodInsnNode(INVOKEVIRTUAL, newOwner, called.name, called.desc)
-
-            recurse(sig.copy(clsName = newOwner), None)
-            newNode
-          case (false, true) => ???
-          case _ =>
-            called.owner = newOwner
-            recurse(sig, None)
-            called
-        }
-      }else{
-        recurse(sig, None)
-        insn
-      }
+    if (inferredTypes == originalTypes) {
+      // No narrowing
+      recurse(sig, originalTypes)
+      insn
     } else {
-      val narrowReturnType = recurse(sig, Some(stackTypes))
-      val (mangledName, mangledDesc) = mangle(called.name, stackTypes, narrowReturnType)
-      called.name = mangledName
+      val newNode =
+        if (static || Type.getObjectType(called.owner) == frame.stack(frame.stack.length - originalTypes.length).value) called
+        else {
+          // Owner type changed! We may need to narrow from an invokeinterface to an invokevirtual
+          val newOwner = frame.stack(frame.stack.length - originalTypes.map(_.getSize).sum).value.getInternalName
+          (isInterface(called.owner), isInterface(newOwner)) match{
+            case (true, false) =>
+              new MethodInsnNode(INVOKEVIRTUAL, newOwner, called.name, called.desc)
+            case (false, true) => ???
+            case _ =>
+              called.owner = newOwner
+              called
+          }
+        }
+
+      val narrowReturnType = recurse(sig, inferredTypes)
+      val descChanged =
+        (static && inferredTypes == originalTypes) ||
+        (!static && inferredTypes.drop(1) == originalTypes.drop(1)) // ignore self type
+      val (mangledName, mangledDesc) =
+        if (descChanged) (newNode.name, newNode.desc)
+        else mangle(newNode.name, inferredTypes, narrowReturnType)
+
+      newNode.name = mangledName
       called.desc = mangledDesc
-      called
+      newNode
     }
   }
 
