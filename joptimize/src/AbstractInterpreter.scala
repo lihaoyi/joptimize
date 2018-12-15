@@ -20,6 +20,7 @@ class AbstractInterpreter(isInterface: String => Boolean,
                       maxLocals: Int,
                       maxStack: Int): (Type, InsnList) = {
     visitedMethods.getOrElseUpdate((sig, args.map(_.value)), {
+//      pprint.log(sig)
       // - One-pass walk through the instruction list of a method, starting from
       //   narrowed argument types
       //
@@ -57,6 +58,7 @@ class AbstractInterpreter(isInterface: String => Boolean,
           */
         @tailrec def walkBlockInsn(currentInsn: AbstractInsnNode, currentState: Frame): Unit = {
 //          println(Util.prettyprint(currentInsn))
+//          println(currentState)
           val nextState = currentState.execute(currentInsn, Dataflow)
           currentInsn match{
             case current: FieldInsnNode =>
@@ -165,9 +167,10 @@ class AbstractInterpreter(isInterface: String => Boolean,
                   )
                 case _ => ??? // do nothing
               }
+
               finalInsnList.add(mangled)
-              if (currentInsn.getNext.isInstanceOf[LabelNode]) walkBlock(currentInsn.getNext, nextState)
-              else walkBlockInsn(current.getNext, nextState)
+              if (currentInsn.getNext.isInstanceOf[LabelNode]) walkBlock(currentInsn.getNext, currentState.execute(mangled, Dataflow))
+              else walkBlockInsn(current.getNext, currentState.execute(mangled, Dataflow))
 
             case current: MultiANewArrayInsnNode =>
               val n = new MultiANewArrayInsnNode(current.desc, current.dims)
