@@ -20,8 +20,10 @@ class AbstractInterpreter(isInterface: String => Boolean,
                       insns: InsnList,
                       args: List[Inferred],
                       maxLocals: Int,
-                      maxStack: Int): (Type, InsnList) = {
+                      maxStack: Int,
+                      seen0: Set[(MethodSig, Seq[Inferred])]): (Type, InsnList) = {
     visitedMethods.getOrElseUpdate((sig, args.map(_.value).drop(if (sig.static) 0 else 1)), {
+      val seen = seen0 ++ Seq((sig, args))
       // - One-pass walk through the instruction list of a method, starting from
       //   narrowed argument types
       //
@@ -141,35 +143,21 @@ class AbstractInterpreter(isInterface: String => Boolean,
               val copy = new MethodInsnNode(
                 current.getOpcode, current.owner, current.name, current.desc, current.itf
               )
-              val mangled = copy.getOpcode match{
-                case INVOKEVIRTUAL | INVOKEINTERFACE | INVOKESPECIAL =>
-                  mangleInstruction(
-                    currentState, copy,
-                    static = false,
-                    recurse = (staticSig, types) => {
-                      interpretMethod(
-                        staticSig,
-                        lookupMethod(staticSig).instructions,
-                        types.toList.map(Inferred(_)),
-                        lookupMethod(staticSig).maxLocals,
-                        lookupMethod(staticSig).maxStack
-                      )._1
-                    }
-                  )
-                case INVOKESTATIC =>
-                  mangleInstruction(
-                    currentState, copy,
-                    static = true,
-                    recurse = (staticSig, types) => interpretMethod(
-                      staticSig,
-                      lookupMethod(staticSig).instructions,
-                      types.toList.map(Inferred(_)),
-                      lookupMethod(staticSig).maxLocals,
-                      lookupMethod(staticSig).maxStack
-                    )._1
-                  )
-                case _ => ??? // do nothing
-              }
+              val mangled = mangleInstruction(
+                currentState, copy,
+                static = copy.getOpcode == INVOKESTATIC,
+                recurse = (staticSig, types) => {
+                  if (seen((staticSig, types.map(Inferred(_))))) Type.getMethodType(staticSig.desc).getReturnType
+                  else interpretMethod(
+                    staticSig,
+                    lookupMethod(staticSig).instructions,
+                    types.toList.map(Inferred(_)),
+                    lookupMethod(staticSig).maxLocals,
+                    lookupMethod(staticSig).maxStack,
+                    seen
+                  )._1
+                }
+              )
 
               finalInsnList.add(mangled)
               if (currentInsn.getNext.isInstanceOf[LabelNode]) walkBlock(currentInsn.getNext, currentState.execute(mangled, Dataflow))

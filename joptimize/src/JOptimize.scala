@@ -49,7 +49,8 @@ object JOptimize{
         mn.instructions,
         Type.getType(mn.desc).getArgumentTypes.map(Inferred(_)).toList,
         mn.maxLocals,
-        mn.maxStack
+        mn.maxStack,
+        Set()
       )
     }
 
