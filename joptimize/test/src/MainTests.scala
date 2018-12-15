@@ -242,6 +242,47 @@ object MainTests extends TestSuite{
           3.toByte -> 10,
         )
       }
+      'statics - {
+//        opt1[Int, Int]("Statics", "helloWorld").check(
+//          1 -> 2,
+//          2 -> 4
+//        )
+//        opt1[Int, Int]("Statics", "timesTwo").check(
+//          1 -> 2,
+//          2 -> 4
+//        )
+//        opt2[Int, Int, Int]("Statics", "helloWorld2").check(
+//          (1, 1) -> 0,
+//          (5, 2) -> 6
+//        )
+//        opt2[Int, Int, Int]("Statics", "timesTwo2").check(
+//          (1, 1) -> 0,
+//          (5, 2) -> 6
+//        )
+        opt1[Int, Int]("Statics", "tailFactorial").check(
+          1 -> 1,
+          2 -> 2,
+          3 -> 6,
+          4 -> 24
+        )
+//        opt1[Int, Int]("Statics", "fibonacci").check(
+//          1 -> 1,
+//          2 -> 1,
+//          3 -> 2,
+//          4 -> 3,
+//          5 -> 5
+//        )
+//        opt1[Int, Int]("Statics", "call").check(
+//          1 -> 2,
+//          2 -> 3,
+//          3 -> 4
+//        )
+//        opt1[Int, Int]("Statics", "callAtPhiBoundary").check(
+//          -1 -> 1,
+//          0 -> 1,
+//          1 -> 2
+//        )
+      }
     }
     'narrow - {
       'supertype - opt2("Main", "main").check((1, 2) -> 6)
