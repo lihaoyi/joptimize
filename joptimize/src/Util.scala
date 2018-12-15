@@ -3,6 +3,7 @@ package joptimize
 import java.io.PrintWriter
 import java.io.StringWriter
 
+import org.objectweb.asm.Type
 import org.objectweb.asm.tree.AbstractInsnNode
 import org.objectweb.asm.util.{Textifier, TraceMethodVisitor}
 
@@ -16,6 +17,11 @@ object Util{
     printer.print(new PrintWriter(sw))
     printer.getText.clear
     sw.toString.stripSuffix("\n")
+  }
+  def mangle(name: String, stackTypes: Seq[Type], narrowReturnType: Type) = {
+    val mangledName = name + "__" + stackTypes.mkString("__").replace('/', '_').replace(';', '_')
+    val mangledDesc = Type.getMethodDescriptor(narrowReturnType, stackTypes:_*)
+    (mangledName, mangledDesc)
   }
 }
 
