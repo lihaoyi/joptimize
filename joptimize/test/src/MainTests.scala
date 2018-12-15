@@ -249,6 +249,7 @@ object MainTests extends TestSuite{
       'parametric - opt2("Main", "main").check((1, 2) -> 6)
       'parametricindirect - opt2("Main", "main").check((1, 2) -> 6)
       'narrowreturn - opt2("Main", "main").check((1, 2) -> 6)
+      'forcewide - opt2("Main", "main").check((1, 2) -> 6)
       //    'lambda - check()
       //    'lambdaindirect - check()
     }

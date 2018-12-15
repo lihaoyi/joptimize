@@ -13,6 +13,6 @@ object joptimize extends ScalaModule{
   )
   object test extends Tests{
     def ivyDeps = Agg(ivy"com.lihaoyi::utest::0.6.6")
-    def testFrameworks = Seq("utest.runner.Framework")
+    def testFrameworks = Seq("joptimize.UTestFramework")
   }
 }

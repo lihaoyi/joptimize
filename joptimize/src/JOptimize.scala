@@ -2,7 +2,6 @@ package joptimize
 
 import org.objectweb.asm.{ClassReader, ClassWriter, Opcodes, Type}
 import org.objectweb.asm.tree._
-import org.objectweb.asm.tree.analysis.{Analyzer, Frame}
 
 import collection.JavaConverters._
 import scala.collection.mutable
@@ -19,6 +18,14 @@ object JOptimize{
     }
 
     val classNodeMap = classFileMap.map{case (k, v) => (v.name, v)}
+    val subtypeMap = {
+      val map = mutable.Map.empty[String, List[String]]
+      for{
+        (k, v) <- classNodeMap
+        sup <- v.interfaces.asScala ++ Option(v.superName)
+      } map(sup) = v.name :: map.getOrElse(sup, Nil)
+      map
+    }
 
     val originalMethods = for{
       (k, cls) <- classNodeMap
@@ -28,9 +35,11 @@ object JOptimize{
     val visitedMethods = collection.mutable.Map.empty[(MethodSig, Seq[Type]), (Type, InsnList)]
 
     val interp = new AbstractInterpreter(
-      s => (classNodeMap(s).access & Opcodes.ACC_INTERFACE) != 0,
-      sig => originalMethods(sig),
-      visitedMethods
+      isInterface = s => (classNodeMap(s).access & Opcodes.ACC_INTERFACE) != 0,
+      lookupMethod = sig => originalMethods(sig),
+      visitedMethods = visitedMethods,
+      findSubtypes = subtypeMap.getOrElse(_, Nil),
+      isConcrete = sig => originalMethods(sig).instructions.size != 0
     )
 
     for(entrypoint <- entrypoints){
@@ -45,13 +54,12 @@ object JOptimize{
     }
 
     val newMethods = visitedMethods.toList.map{case ((sig, inferredTypes), (returnType, insns)) =>
-      val argSelf = if (sig.static) Nil else Seq(Type.getObjectType(sig.clsName))
-      val args = argSelf ++ Type.getMethodType(sig.desc).getArgumentTypes.toSeq
+      val args = Type.getMethodType(sig.desc).getArgumentTypes.toSeq
 
       val originalNode = originalMethods(sig)
       val (mangledName, mangledDesc) =
         if (args == inferredTypes) (originalNode.name, originalNode.desc)
-        else Util.mangle(originalNode.name, if (sig.static) inferredTypes else inferredTypes.drop(1), returnType)
+        else Util.mangle(originalNode.name, inferredTypes, returnType)
 
       val newNode = new MethodNode(
         Opcodes.ASM6,
@@ -64,10 +72,7 @@ object JOptimize{
 
       originalNode.accept(newNode)
       newNode.instructions = insns
-      newNode.desc = Type.getMethodDescriptor(
-        returnType,
-        (if (sig.static) inferredTypes else inferredTypes.drop(1)):_*
-      )
+      newNode.desc = Type.getMethodDescriptor(returnType, inferredTypes:_*)
       classNodeMap(sig.clsName) -> newNode
     }
 

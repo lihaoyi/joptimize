@@ -12,15 +12,16 @@ import scala.collection.mutable
 
 class AbstractInterpreter(isInterface: String => Boolean,
                           lookupMethod: MethodSig => MethodNode,
-                          visitedMethods: mutable.Map[(MethodSig, Seq[Type]), (Type, InsnList)]) {
+                          visitedMethods: mutable.Map[(MethodSig, Seq[Type]), (Type, InsnList)],
+                          findSubtypes: String => List[String],
+                          isConcrete: MethodSig => Boolean) {
 
   def interpretMethod(sig: MethodSig,
                       insns: InsnList,
                       args: List[Inferred],
                       maxLocals: Int,
                       maxStack: Int): (Type, InsnList) = {
-    visitedMethods.getOrElseUpdate((sig, args.map(_.value)), {
-//      pprint.log(sig)
+    visitedMethods.getOrElseUpdate((sig, args.map(_.value).drop(if (sig.static) 0 else 1)), {
       // - One-pass walk through the instruction list of a method, starting from
       //   narrowed argument types
       //
@@ -145,13 +146,15 @@ class AbstractInterpreter(isInterface: String => Boolean,
                   mangleInstruction(
                     currentState, copy,
                     static = false,
-                    recurse = (staticSig, types) => interpretMethod(
-                      staticSig.copy(clsName = types(0).getInternalName),
-                      lookupMethod(staticSig.copy(clsName = types(0).getInternalName)).instructions,
-                      types.toList.map(Inferred(_)),
-                      lookupMethod(staticSig.copy(clsName = types(0).getInternalName)).maxLocals,
-                      lookupMethod(staticSig.copy(clsName = types(0).getInternalName)).maxStack
-                    )._1
+                    recurse = (staticSig, types) => {
+                      interpretMethod(
+                        staticSig,
+                        lookupMethod(staticSig).instructions,
+                        types.toList.map(Inferred(_)),
+                        lookupMethod(staticSig).maxLocals,
+                        lookupMethod(staticSig).maxStack
+                      )._1
+                    }
                   )
                 case INVOKESTATIC =>
                   mangleInstruction(
@@ -248,13 +251,21 @@ class AbstractInterpreter(isInterface: String => Boolean,
 
     val sig = MethodSig(called.owner, called.name, called.desc, static)
 
-    if (inferredTypes == originalTypes) {
-      // No narrowing
-      recurse(sig, originalTypes)
-      insn
-    } else {
-      val narrowReturnType = recurse(sig, inferredTypes)
+    val subtypes = findSubtypes(sig.clsName)
+    val possibleSigs = subtypes.map(st => sig.copy(clsName = st)) ++ Seq(sig)
+    val concreteSigs = possibleSigs.filter(isConcrete)
+    for(interfaceSig <- possibleSigs.filter(!isConcrete(_))){
+      visitedMethods((interfaceSig, originalTypes.drop(1))) = (
+        Type.getMethodType(interfaceSig.desc).getReturnType,
+        new InsnList
+      )
+    }
+    val narrowReturnType = concreteSigs
+      .map(recurse(_, inferredTypes))
+      .reduce((l, r) => Dataflow.merge(Inferred(l), Inferred(r)).value)
 
+    if (inferredTypes == originalTypes) insn // No narrowing
+    else {
       val descChanged =
         (static && inferredTypes != originalTypes) ||
         (!static && inferredTypes.drop(1) != originalTypes.drop(1)) // ignore self type
