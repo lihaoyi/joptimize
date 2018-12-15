@@ -56,21 +56,26 @@ object MainTests extends TestSuite{
               res == expected
             }
           }
-
-
-//          if (checkMissing) {
-//            val cls2 = cl.loadClass(s"joptimize.examples.${tp.value.mkString(".")}.$clsName$$")
-//            assert(
-//               That the previously-existing method has been removed
-//              !cls2.getMethods.exists(_.getName == "call"),
-//               And the n>=2 duplicate methods are in place (presumably being used)
-//              cls2.getMethods.count(_.getName.startsWith("call")) >= 2
-//            )
-//          }
         } finally {
           cl.close()
         }
       }
+      this
+    }
+    def checkRemoved(methodName: String) = {
+      val cl = new URLClassLoader(Array((outRoot / tp.value.last).toNIO.toUri.toURL))
+      try {
+        val cls2 = cl.loadClass(s"joptimize.examples.${tp.value.dropRight(1).mkString(".")}$$")
+        assert(
+          // That the previously-existing method has been removed
+          !cls2.getMethods.exists(_.getName == "call"),
+          // And the n>=2 duplicate methods are in place (presumably being used)
+          cls2.getMethods.count(_.getName.startsWith("call")) >= 2
+        )
+      } finally {
+        cl.close()
+      }
+      this
     }
   }
 
@@ -278,19 +283,19 @@ object MainTests extends TestSuite{
     }
     'narrow - {
       'Supertype - {
-        'main - opt2[Int, Int, Int]().check((1, 2) -> 6)
+        'main - opt2[Int, Int, Int]().check((1, 2) -> 6).checkRemoved("call")
       }
       'Parametric - {
-        'main - opt2[Int, Int, Int]().check((1, 2) -> 6)
+        'main - opt2[Int, Int, Int]().check((1, 2) -> 6).checkRemoved("call")
       }
       'Supertype2 - {
-        'main - opt2[Int, Int, Int]().check((1, 2) -> 6)
+        'main - opt2[Int, Int, Int]().check((1, 2) -> 6).checkRemoved("call")
       }
       'Parametric2 - {
-        'main - opt2[Int, Int, Int]().check((1, 2) -> 6)
+        'main - opt2[Int, Int, Int]().check((1, 2) -> 6).checkRemoved("call")
       }
       'NarrowReturn - {
-        'main - opt2[Int, Int, Int]().check((1, 2) -> 6)
+        'main - opt2[Int, Int, Int]().check((1, 2) -> 6).checkRemoved("call")
       }
       'ForceWide - {
         'main - opt2[Int, Int, Int]().check((1, 2) -> 6)
