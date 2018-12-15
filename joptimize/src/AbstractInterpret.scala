@@ -1,11 +1,13 @@
 package joptimize
 
 import java.util
+
 import collection.JavaConverters._
 import org.objectweb.asm.Label
 import org.objectweb.asm.Opcodes._
 import org.objectweb.asm.tree._
 
+import scala.annotation.tailrec
 import scala.collection.mutable
 
 object AbstractInterpret {
@@ -62,9 +64,12 @@ object AbstractInterpret {
     // the frame state and the *original* instruction, mapped to the *final* instruction
     val seenJumpTargets = mutable.Map.empty[(Frame, AbstractInsnNode), AbstractInsnNode]
 
-    def rec(currentInsn: AbstractInsnNode,
-            currentState: Frame,
-            finalInsnList: InsnList): InsnList = {
+    def recurse(currentInsn: AbstractInsnNode,
+                currentState: Frame): InsnList = rec(currentInsn, currentState, new InsnList)
+
+    @tailrec def rec(currentInsn: AbstractInsnNode,
+                     currentState: Frame,
+                     finalInsnList: InsnList): InsnList = {
 
       currentInsn match{
         case current: FieldInsnNode =>
@@ -105,32 +110,29 @@ object AbstractInterpret {
           finalInsnList.add(n)
           // only GOTOs are unconditional; all other jumps may or may not jump
           // to the target label
-          if (current.getOpcode != GOTO) rec(current.getNext, currentState, finalInsnList)
-          val jumped = rec(current.label, currentState, new InsnList)
+          if (current.getOpcode != GOTO) recurse(current.getNext, currentState)
+          val jumped = recurse(current.label, currentState)
           n.label = jumped.asInstanceOf[LabelNode]
           finalInsnList
 
         case current: LabelNode =>
           finalInsnList.add(new LabelNode())
           rec(current.getNext, currentState, finalInsnList)
-          finalInsnList
 
         case current: LdcInsnNode =>
           finalInsnList.add(new LdcInsnNode(current.cst))
           rec(current.getNext, currentState, finalInsnList)
-          finalInsnList
 
         case current: LineNumberNode =>
           finalInsnList.add(new LineNumberNode(current.line, current.start))
           rec(current.getNext, currentState, finalInsnList)
-          finalInsnList
 
         case current: LookupSwitchInsnNode =>
           val n = new LookupSwitchInsnNode(null, Array(), Array())
           finalInsnList.add(n)
-          n.dflt = rec(current.dflt, currentState, finalInsnList).asInstanceOf[LabelNode]
+          n.dflt = recurse(current.dflt, currentState).asInstanceOf[LabelNode]
           n.keys = current.keys
-          n.labels = current.labels.asScala.map(rec(_, currentState, finalInsnList).asInstanceOf[LabelNode]).asJava
+          n.labels = current.labels.asScala.map(recurse(_, currentState).asInstanceOf[LabelNode]).asJava
           finalInsnList
 
         case current: MethodInsnNode =>
@@ -148,8 +150,8 @@ object AbstractInterpret {
         case current: TableSwitchInsnNode =>
           val n = new TableSwitchInsnNode(current.min, current.max, null)
           finalInsnList.add(n)
-          n.dflt = rec(current.dflt, currentState, finalInsnList).asInstanceOf[LabelNode]
-          n.labels = current.labels.asScala.map(rec(_, currentState, finalInsnList).asInstanceOf[LabelNode]).asJava
+          n.dflt = recurse(current.dflt, currentState).asInstanceOf[LabelNode]
+          n.labels = current.labels.asScala.map(recurse(_, currentState).asInstanceOf[LabelNode]).asJava
           finalInsnList
 
         case current: TypeInsnNode =>
