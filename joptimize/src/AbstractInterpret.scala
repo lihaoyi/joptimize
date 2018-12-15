@@ -1,28 +1,17 @@
 package joptimize
 
-import java.util
 
 import collection.JavaConverters._
-import org.objectweb.asm.Label
+import org.objectweb.asm.{Label, Type}
+import org.objectweb.asm._
 import org.objectweb.asm.Opcodes._
 import org.objectweb.asm.tree._
 
 import scala.annotation.tailrec
 import scala.collection.mutable
 
-object AbstractInterpret {
-  class Frame(val locals: Array[Inferred],
-              val stack: Array[Inferred]){
-    override def hashCode() = {
-      locals.iterator.map(_.##).sum + stack.iterator.map(_.##).sum
-    }
-
-    override def equals(obj: scala.Any) = obj match{
-      case other: Frame =>
-        locals.sameElements(other.locals) && stack.sameElements(other.stack)
-      case _ => false
-    }
-  }
+class AbstractInterpret(isInterface: String => Boolean,
+                        visitedMethods: mutable.Map[(MethodSig, Option[Seq[Type]]), Type]) {
 
   def interpretMethod(insns: InsnList,
                       args: List[Inferred],
@@ -52,135 +41,196 @@ object AbstractInterpret {
     //     incoming state is by definition wider than all possible narrowed
     //     states
 
-    val initialFrame = new Frame(new Array(maxLocals), new Array(maxStack))
-    var i = 0
-    for(arg <- args){
-      for(_ <- 0 until arg.getSize){
-        initialFrame.locals(i) = arg
-        i += 1
+    val visitedBlocks = mutable.Map.empty[(AbstractInsnNode, Frame), InsnList]
+    val methodReturns = mutable.Buffer.empty[Inferred]
+    def walkBlock(currentInsn: AbstractInsnNode,
+                  currentState: Frame): InsnList = {
+      val finalInsnList = new InsnList
+
+      visitedBlocks((currentInsn, currentState)) = finalInsnList
+
+      /**
+        * Walks a single basic block, returning:
+        *
+        * - Instruction list of that basic block
+        */
+      @tailrec def walkBlockInsn(currentInsn: AbstractInsnNode, currentState: Frame): InsnList = {
+        val nextState = currentState.execute(currentInsn, Dataflow)
+        currentInsn match{
+          case current: FieldInsnNode =>
+            val n = new FieldInsnNode(current.getOpcode, current.owner, current.name, current.desc)
+            finalInsnList.add(n)
+            walkBlockInsn(current.getNext, nextState)
+
+          case current: FrameNode =>
+            val n = new FrameNode(
+              current.`type`,
+              current.local.size,
+              current.local.toArray,
+              current.stack.size,
+              current.stack.toArray
+            )
+            finalInsnList.add(n)
+            walkBlockInsn(current.getNext, nextState)
+
+          case current: IincInsnNode =>
+            val n = new IincInsnNode(current.`var`, current.incr)
+            finalInsnList.add(n)
+            walkBlockInsn(current.getNext, nextState)
+
+          case current: InsnNode =>
+            val n = new InsnNode(current.getOpcode)
+            finalInsnList.add(n)
+            n.getOpcode match{
+              case ARETURN => 
+                methodReturns.append(currentState.stack.last)
+                finalInsnList
+              case RETURN | DRETURN | FRETURN | IRETURN | LRETURN =>
+                finalInsnList
+              case _ => walkBlockInsn(current.getNext, nextState)
+            }
+            
+
+          case current: IntInsnNode =>
+            val n = new IntInsnNode(current.getOpcode, current.operand)
+            finalInsnList.add(n)
+            walkBlockInsn(current.getNext, nextState)
+
+          case current: InvokeDynamicInsnNode => ???
+
+          case current: JumpInsnNode =>
+            val n = new JumpInsnNode(current.getOpcode, null)
+            finalInsnList.add(n)
+            // only GOTOs are unconditional; all other jumps may or may not jump
+            // to the target label
+            if (current.getOpcode != GOTO) walkBlock(current.getNext, nextState)
+            val jumped = walkBlock(current.label, nextState)
+            n.label = jumped.getFirst.asInstanceOf[LabelNode]
+            finalInsnList
+
+          case current: LabelNode =>
+            finalInsnList.add(new LabelNode())
+            walkBlockInsn(current.getNext, nextState)
+
+          case current: LdcInsnNode =>
+            finalInsnList.add(new LdcInsnNode(current.cst))
+            walkBlockInsn(current.getNext, nextState)
+
+          case current: LineNumberNode =>
+            finalInsnList.add(new LineNumberNode(current.line, current.start))
+            walkBlockInsn(current.getNext, nextState)
+
+          case current: LookupSwitchInsnNode =>
+            val n = new LookupSwitchInsnNode(null, Array(), Array())
+            finalInsnList.add(n)
+            n.dflt = walkBlock(current.dflt, nextState).getFirst.asInstanceOf[LabelNode]
+            n.keys = current.keys
+            n.labels = current.labels.asScala.map(walkBlock(_, nextState).getFirst.asInstanceOf[LabelNode]).asJava
+            finalInsnList
+
+          case current: MethodInsnNode =>
+            val copy = new MethodInsnNode(
+              current.getOpcode, current.owner, current.name, current.desc, current.itf
+            )
+            val mangled = copy.getOpcode match{
+              case INVOKEVIRTUAL | INVOKEINTERFACE | INVOKESPECIAL =>
+                mangleInstruction(
+                  nextState, copy,
+                  static = false,
+                  recurse = ???
+                )
+              case INVOKESTATIC =>
+                mangleInstruction(
+                  nextState, copy,
+                  static = true,
+                  recurse = ???
+                )
+              case _ => ??? // do nothing
+            }
+            finalInsnList.add(mangled)
+            finalInsnList
+
+          case current: MultiANewArrayInsnNode =>
+            val n = new MultiANewArrayInsnNode(current.desc, current.dims)
+            finalInsnList.add(n)
+            walkBlockInsn(current.getNext, nextState)
+
+          case current: TableSwitchInsnNode =>
+            val n = new TableSwitchInsnNode(current.min, current.max, null)
+            finalInsnList.add(n)
+            n.dflt = walkBlock(current.dflt, nextState).getFirst.asInstanceOf[LabelNode]
+            n.labels = current.labels.asScala.map(walkBlock(_, nextState).getFirst.asInstanceOf[LabelNode]).asJava
+            finalInsnList
+
+          case current: TypeInsnNode =>
+            val n = new TypeInsnNode(current.getOpcode, current.desc)
+            finalInsnList.add(n)
+            walkBlockInsn(current.getNext, nextState)
+
+          case current: VarInsnNode =>
+            val n = new VarInsnNode(current.getOpcode, current.`var`)
+            finalInsnList.add(n)
+            walkBlockInsn(current.getNext, nextState)
+        }
       }
+      walkBlockInsn(currentInsn, currentState)
     }
 
-    // the frame state and the *original* instruction, mapped to the *final* instruction
-    val seenJumpTargets = mutable.Map.empty[(Frame, AbstractInsnNode), AbstractInsnNode]
-
-    def recurse(currentInsn: AbstractInsnNode,
-                currentState: Frame): InsnList = rec(currentInsn, currentState, new InsnList)
-
-    @tailrec def rec(currentInsn: AbstractInsnNode,
-                     currentState: Frame,
-                     finalInsnList: InsnList): InsnList = {
-
-      currentInsn match{
-        case current: FieldInsnNode =>
-          val n = new FieldInsnNode(current.getOpcode, current.owner, current.name, current.desc)
-          finalInsnList.add(n)
-          rec(current.getNext, currentState, finalInsnList)
-
-        case current: FrameNode =>
-          val n = new FrameNode(
-            current.`type`,
-            current.local.size,
-            current.local.toArray,
-            current.stack.size,
-            current.stack.toArray
-          )
-          finalInsnList.add(n)
-          rec(current.getNext, currentState, finalInsnList)
-
-        case current: IincInsnNode =>
-          val n = new IincInsnNode(current.`var`, current.incr)
-          finalInsnList.add(n)
-          rec(current.getNext, currentState, finalInsnList)
-
-        case current: InsnNode =>
-          val n = new InsnNode(current.getOpcode)
-          finalInsnList.add(n)
-          rec(current.getNext, currentState, finalInsnList)
-
-        case current: IntInsnNode =>
-          val n = new IntInsnNode(current.getOpcode, current.operand)
-          finalInsnList.add(n)
-          rec(current.getNext, currentState, finalInsnList)
-
-        case current: InvokeDynamicInsnNode => ???
-
-        case current: JumpInsnNode =>
-          val n = new JumpInsnNode(current.getOpcode, null)
-          finalInsnList.add(n)
-          // only GOTOs are unconditional; all other jumps may or may not jump
-          // to the target label
-          if (current.getOpcode != GOTO) recurse(current.getNext, currentState)
-          val jumped = recurse(current.label, currentState)
-          n.label = jumped.asInstanceOf[LabelNode]
-          finalInsnList
-
-        case current: LabelNode =>
-          finalInsnList.add(new LabelNode())
-          rec(current.getNext, currentState, finalInsnList)
-
-        case current: LdcInsnNode =>
-          finalInsnList.add(new LdcInsnNode(current.cst))
-          rec(current.getNext, currentState, finalInsnList)
-
-        case current: LineNumberNode =>
-          finalInsnList.add(new LineNumberNode(current.line, current.start))
-          rec(current.getNext, currentState, finalInsnList)
-
-        case current: LookupSwitchInsnNode =>
-          val n = new LookupSwitchInsnNode(null, Array(), Array())
-          finalInsnList.add(n)
-          n.dflt = recurse(current.dflt, currentState).asInstanceOf[LabelNode]
-          n.keys = current.keys
-          n.labels = current.labels.asScala.map(recurse(_, currentState).asInstanceOf[LabelNode]).asJava
-          finalInsnList
-
-        case current: MethodInsnNode =>
-          val n = new MethodInsnNode(
-            current.getOpcode, current.owner, current.name, current.desc, current.itf
-          )
-          finalInsnList.add(n)
-          finalInsnList
-
-        case current: MultiANewArrayInsnNode =>
-          val n = new MultiANewArrayInsnNode(current.desc, current.dims)
-          finalInsnList.add(n)
-          rec(current.getNext, currentState, finalInsnList)
-
-        case current: TableSwitchInsnNode =>
-          val n = new TableSwitchInsnNode(current.min, current.max, null)
-          finalInsnList.add(n)
-          n.dflt = recurse(current.dflt, currentState).asInstanceOf[LabelNode]
-          n.labels = current.labels.asScala.map(recurse(_, currentState).asInstanceOf[LabelNode]).asJava
-          finalInsnList
-
-        case current: TypeInsnNode =>
-          val n = new TypeInsnNode(current.getOpcode, current.desc)
-          finalInsnList.add(n)
-          rec(current.getNext, currentState, finalInsnList)
-
-        case current: VarInsnNode =>
-          val n = new VarInsnNode(current.getOpcode, current.`var`)
-          finalInsnList.add(n)
-          rec(current.getNext, currentState, finalInsnList)
-      }
-    }
-    rec(insns.getFirst, initialFrame, new InsnList())
+    walkBlock(insns.getFirst, Frame.initial(maxLocals, maxStack, args))
   }
 
-  def findLoops(insns: InsnList) = {
 
-    val queue = mutable.Queue(insns.getFirst)
-    val insnToIndex = mutable.Map.empty[AbstractInsnNode, Int]
-    val edges = mutable.Buffer.empty[AbstractInsnNode]
-    while(queue.nonEmpty){
-      val current = queue.dequeue()
-      insnToIndex.getOrElseUpdate(current, {
-        val newIndex = edges.length
-        current.getType
-        newIndex
-      })
+
+  def mangleInstruction(frame: Frame,
+                        insn: AbstractInsnNode,
+                        static: Boolean,
+                        recurse: (MethodSig, Option[Seq[Type]]) => Type): AbstractInsnNode = {
+    val called = insn.asInstanceOf[MethodInsnNode]
+
+    val calledDesc = Type.getType(called.desc)
+    val calledTypes = calledDesc.getArgumentTypes.toSeq
+
+    val stackTypes =
+      (frame.stack.length - calledTypes.map(_.getSize).sum)
+        .until(frame.stack.length)
+        .map(frame.stack(_).value)
+
+    val sig = MethodSig(called.owner, called.name, called.desc, static)
+
+    if (stackTypes == calledTypes) {
+      if (static) {
+        recurse(sig, None)
+        insn
+      } else if (Type.getObjectType(called.owner) != frame.stack(frame.stack.length - calledTypes.length).value){
+        val newOwner = frame.stack(frame.stack.length - calledTypes.map(_.getSize).sum - 1).value.getInternalName
+        (isInterface(called.owner), isInterface(newOwner)) match{
+          case (true, false) =>
+            val newNode = new MethodInsnNode(INVOKEVIRTUAL, newOwner, called.name, called.desc)
+
+            recurse(sig.copy(clsName = newOwner), None)
+            newNode
+          case (false, true) => ???
+          case _ =>
+            called.owner = newOwner
+            recurse(sig, None)
+            called
+        }
+      }else{
+        recurse(sig, None)
+        insn
+      }
+    } else {
+      val narrowReturnType = recurse(sig, Some(stackTypes))
+      val (mangledName, mangledDesc) = mangle(called.name, stackTypes, narrowReturnType)
+      called.name = mangledName
+      called.desc = mangledDesc
+      called
     }
   }
 
+  def mangle(name: String, stackTypes: Seq[Type], narrowReturnType: Type) = {
+    val mangledName = name + "__" + stackTypes.mkString("__").replace('/', '_').replace(';', '_')
+    val mangledDesc = Type.getMethodDescriptor(narrowReturnType, stackTypes:_*)
+    (mangledName, mangledDesc)
+  }
 }

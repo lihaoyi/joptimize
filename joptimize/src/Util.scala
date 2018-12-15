@@ -15,7 +15,7 @@ object Util{
     val sw = new StringWriter
     printer.print(new PrintWriter(sw))
     printer.getText.clear
-    sw.toString
+    sw.toString.stripSuffix("\n")
   }
 }
 

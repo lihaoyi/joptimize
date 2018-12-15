@@ -24,7 +24,7 @@ object Inferred{
   implicit def fromAsmType(value: org.objectweb.asm.Type): Inferred = Inferred(value)
 }
 
-class Dataflow() extends Interpreter[Inferred](ASM4){
+object Dataflow extends Interpreter[Inferred](ASM4){
   def newValue(tpe: org.objectweb.asm.Type) = tpe
 
   def newOperation(insn: AbstractInsnNode) = {
