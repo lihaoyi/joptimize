@@ -1,4 +1,4 @@
-package joptimize.examples.simple.exceptions;
+package joptimize.examples.simple;
 
 
 import java.io.IOException;

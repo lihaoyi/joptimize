@@ -1,4 +1,4 @@
-package joptimize.examples.simple.arrays;
+package joptimize.examples.simple;
 
 public class MultiDimArrays {
     public static int[][] make2D(int a, int b){

@@ -1,4 +1,4 @@
-package joptimize.examples.simple.controlflow;
+package joptimize.examples.simple;
 
 
 public class Switches {

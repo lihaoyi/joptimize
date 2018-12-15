@@ -1,6 +1,6 @@
-package joptimize.examples.narrow.parametricindirect
+package joptimize.examples.narrow
 
-object Main {
+object Parametric2 {
   def main(x: Int, y: Int): Int = {
     call(Bar, x) + call(Qux, y)
     // (x + 1) + (y + 2)
@@ -8,14 +8,4 @@ object Main {
 
   def call[T <: Foo](f: T, n: Int): Int = call2(f, n)
   def call2[T <: Foo](f: T, n: Int): Int = f.inc(n)
-}
-
-trait Foo{
-  def inc(n: Int): Int
-}
-object Bar extends Foo{
-  def inc(n: Int) = n + 1
-}
-object Qux extends Foo{
-  def inc(n: Int) = n + 2
 }

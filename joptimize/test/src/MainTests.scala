@@ -11,19 +11,19 @@ object MainTests extends TestSuite{
   val outRoot = os.Path("out/scratch", os.pwd)
   val testRoot = classesRoot / "joptimize" / "examples"
 
-  class Optimized(clsName: String,
-                  methodName: String,
-                  returnClass: Class[_],
+  class Optimized(returnClass: Class[_],
                   argClasses: Class[_]*)
                  (implicit tp: TestPath){
     val methodDesc = Type.getMethodDescriptor(
       Type.getType(returnClass), argClasses.map(Type.getType):_*
     )
+
     val outputFileMap = JOptimize.run(
-      os.walk(testRoot / tp.value)
+      os.walk(testRoot / tp.value.dropRight(2))
+        .filter(os.isFile)
         .map(p => (p.relativeTo(classesRoot).toString, os.read.bytes(p)))
         .toMap,
-      Seq(MethodSig(s"joptimize/examples/${tp.value.mkString("/")}/$clsName", methodName, methodDesc, static = true)),
+      Seq(MethodSig(s"joptimize/examples/${tp.value.dropRight(1).mkString("/")}", tp.value.last, methodDesc, static = true)),
       eliminateOldMethods = true
     )
 
@@ -37,8 +37,8 @@ object MainTests extends TestSuite{
       for ((args, expected) <- cases) {
         val cl = new URLClassLoader(Array((outRoot / tp.value.last).toNIO.toUri.toURL))
         try {
-          val cls = cl.loadClass(s"joptimize.examples.${tp.value.mkString(".")}.$clsName")
-          val method = cls.getMethod(methodName, argClasses: _*)
+          val cls = cl.loadClass(s"joptimize.examples.${tp.value.dropRight(1).mkString(".")}")
+          val method = cls.getMethod(tp.value.last, argClasses: _*)
           val argsList = args match {
             case () => Nil
             case p: Product => p.productIterator.toSeq
@@ -75,86 +75,75 @@ object MainTests extends TestSuite{
   }
 
   def classOf0[T: ClassTag] = implicitly[ClassTag[T]].runtimeClass
-  case class opt0[R: ClassTag]
-                 (cls: String, method: String)
-                 (implicit tp: TestPath) extends Optimized(cls, method, classOf0[R]){
+  case class opt0[R: ClassTag]()
+                 (implicit tp: TestPath) extends Optimized(classOf0[R]){
 
     def check(args: (Unit, R)*) = check0(args:_*)
   }
-  case class opt1[T1: ClassTag, R: ClassTag]
-                 (cls: String, method: String)
-                 (implicit tp: TestPath) extends Optimized(cls, method, classOf0[R], classOf0[T1]){
+  case class opt1[T1: ClassTag, R: ClassTag]()
+                 (implicit tp: TestPath) extends Optimized(classOf0[R], classOf0[T1]){
     def check(args: (T1, R)*) = check0(args:_*)
   }
-  case class opt2[T1: ClassTag, T2: ClassTag, R: ClassTag]
-                 (cls: String, method: String)
-                 (implicit tp: TestPath) extends Optimized(cls, method, classOf0[R], classOf0[T1], classOf0[T2]){
+  case class opt2[T1: ClassTag, T2: ClassTag, R: ClassTag]()
+                 (implicit tp: TestPath) extends Optimized(classOf0[R], classOf0[T1], classOf0[T2]){
     def check(args: ((T1, T2), R)*) = check0(args:_*)
   }
-  case class opt3[T1: ClassTag, T2: ClassTag, T3: ClassTag, R: ClassTag]
-                 (cls: String, method: String)
-                 (implicit tp: TestPath) extends Optimized(cls, method, classOf0[R], classOf0[T1], classOf0[T2], classOf0[T3]){
+  case class opt3[T1: ClassTag, T2: ClassTag, T3: ClassTag, R: ClassTag]()
+                 (implicit tp: TestPath) extends Optimized(classOf0[R], classOf0[T1], classOf0[T2], classOf0[T3]){
     def check(args: ((T1, T2, T3), R)*) = check0(args:_*)
   }
   def tests = Tests{
     'simple - {
-      'arrays - {
-        opt2[Int, Int, Array[Array[Int]]]("MultiDimArrays", "make2D")
-            .check((1, 2) -> Array.fill(1, 2)(0))
-        opt3[Int, Int, Int, Array[Array[Array[Int]]]]("MultiDimArrays", "make3D")
-            .check((1, 2, 3) -> Array.fill(1, 2, 3)(0))
-        opt0[Int]("MultiDimArrays", "getAndSet")
-          .check(() -> 900)
-      }
-      'controlflow - {
-        opt2[Int, Int, Int]("IfElse", "basicIf").check(
+      'IfElse - {
+        'basicIf - opt2[Int, Int, Int]().check(
           (10, 11) -> 10,
           (10, 9) -> -10
         )
-
-        opt1[Int, Int]("IfElse", "ifNonIntZero").check(
+        'ifNonIntZero - opt1[Int, Int]().check(
           10 -> 10,
           -9 -> 9
         )
-
-        opt2[Int, Int, Int]("IfElse", "ifNonIntBinary").check(
+        'ifNonIntBinary - opt2[Int, Int, Int]().check(
           (10, 11) -> -10,
           (10, 9) -> 10,
           (200, 200) -> -200
         )
-
-        opt2[Int, Int, Int]("IfElse", "ifElseIf").check(
+        'ifElseIf - opt2[Int, Int, Int]().check(
           (3, 2) -> 3,
           (2, 2) -> -2,
           (1, 2) -> 2
         )
-
-        opt2[Int, Int, Int]("IfElse", "ifElseIfBig").check(
+        'ifElseIfBig - opt2[Int, Int, Int]().check(
           (2, 1) -> 1,
           (13, 13) -> 2,
           (9, 9) -> 3,
           (11, 11) -> 4,
           (1, 10) -> 5
         )
-
-        opt1[Int, Int]("Loops", "basicFor").check(
+      }
+      'Loops - {
+        'basicFor - opt1[Int, Int]().check(
           5 -> 32
         )
-        opt1[Int, Int]("Loops", "basicWhile").check(
+
+        'basicWhile - opt1[Int, Int]().check(
           5 -> 8
         )
-        opt1[Double, Double]("Loops", "sqrtFinder").check(
+        'sqrtFinder - opt1[Double, Double]().check(
           121.0 -> 11.143835769253432
         )
 
-        opt1[Int, Int]("Switches", "smallSwitch").check(
+      }
+
+      'Switches - {
+        'smallSwitch - opt1[Int, Int]().check(
           0 -> 1,
           1 -> 0,
           2 -> 2,
           3 -> 2,
         )
 
-        opt1[Int, Double]("Switches", "bigDenseSwitch").check(
+        'bigDenseSwitch - opt1[Int, Double]().check(
           0 -> 1123.213,
           1 -> 3212.321,
           2 -> 123123.123,
@@ -189,7 +178,7 @@ object MainTests extends TestSuite{
           31 -> 123123.123123,
         )
 
-        opt1[Int, Double]("Switches", "bigSparseSwitch").check(
+        'bigSparseSwitch - opt1[Int, Double]().check(
           1 -> 3212.321,
           2 -> 123123.123,
           4 -> 123.312,
@@ -214,9 +203,7 @@ object MainTests extends TestSuite{
           2097152 -> 123123123.132123,
           -1 -> 123123.123123
         )
-
-
-        opt1[Char, Int]("Switches", "charSwitch").check(
+        'charSwitch - opt1[Char, Int]().check(
           'a' -> 1,
           'b' -> 2,
           'c' -> 3,
@@ -230,7 +217,7 @@ object MainTests extends TestSuite{
           'z' -> 10
         )
 
-        opt1[Byte, Int]("Switches", "byteSwitch").check(
+        'byteSwitch - opt1[Byte, Int]().check(
           1.toByte -> 1,
           2.toByte -> 2,
           4.toByte -> 3,
@@ -242,57 +229,72 @@ object MainTests extends TestSuite{
           3.toByte -> 10,
         )
       }
-      'statics - {
-        opt1[Int, Int]("Statics", "helloWorld").check(
+      'Statics - {
+        'helloWorld - opt1[Int, Int]().check(
           1 -> 2,
           2 -> 4
         )
-        opt1[Int, Int]("Statics", "timesTwo").check(
+        'timesTwo - opt1[Int, Int]().check(
           1 -> 2,
           2 -> 4
         )
-        opt2[Int, Int, Int]("Statics", "helloWorld2").check(
+        'helloWorld2 - opt2[Int, Int, Int]().check(
           (1, 1) -> 0,
           (5, 2) -> 6
         )
-        opt2[Int, Int, Int]("Statics", "timesTwo2").check(
+        'timesTwo2 - opt2[Int, Int, Int]().check(
           (1, 1) -> 0,
           (5, 2) -> 6
         )
-        opt1[Int, Int]("Statics", "tailFactorial").check(
+        'tailFactorial - opt1[Int, Int]().check(
           1 -> 1,
           2 -> 2,
           3 -> 6,
           4 -> 24
         )
-        opt1[Int, Int]("Statics", "fibonacci").check(
+        'fibonacci - opt1[Int, Int]().check(
           1 -> 1,
           2 -> 2,
           3 -> 3,
           4 -> 5,
           5 -> 8
         )
-        opt1[Int, Int]("Statics", "call").check(
+        'call - opt1[Int, Int]().check(
           1 -> 2,
           2 -> 3,
           3 -> 4
         )
-        opt1[Int, Int]("Statics", "callAtPhiBoundary").check(
+        'callAtPhiBoundary - opt1[Int, Int]().check(
           -1 -> 1,
           0 -> 1,
           1 -> 2
         )
       }
+      'MultiDimArrays - {
+        'make2D - opt2[Int, Int, Array[Array[Int]]]().check((1, 2) -> Array.fill(1, 2)(0))
+        'make3D - opt3[Int, Int, Int, Array[Array[Array[Int]]]]().check((1, 2, 3) -> Array.fill(1, 2, 3)(0))
+        'getAndSet - opt0[Int]().check(() -> 900)
+      }
     }
     'narrow - {
-      'supertype - opt2("Main", "main").check((1, 2) -> 6)
-      'supertypeindirect - opt2("Main", "main").check((1, 2) -> 6)
-      'parametric - opt2("Main", "main").check((1, 2) -> 6)
-      'parametricindirect - opt2("Main", "main").check((1, 2) -> 6)
-      'narrowreturn - opt2("Main", "main").check((1, 2) -> 6)
-      'forcewide - opt2("Main", "main").check((1, 2) -> 6)
-      //    'lambda - check()
-      //    'lambdaindirect - check()
+      'Supertype - {
+        'main - opt2[Int, Int, Int]().check((1, 2) -> 6)
+      }
+      'Parametric - {
+        'main - opt2[Int, Int, Int]().check((1, 2) -> 6)
+      }
+      'Supertype2 - {
+        'main - opt2[Int, Int, Int]().check((1, 2) -> 6)
+      }
+      'Parametric2 - {
+        'main - opt2[Int, Int, Int]().check((1, 2) -> 6)
+      }
+      'NarrowReturn - {
+        'main - opt2[Int, Int, Int]().check((1, 2) -> 6)
+      }
+      'ForceWide - {
+        'main - opt2[Int, Int, Int]().check((1, 2) -> 6)
+      }
     }
   }
 }

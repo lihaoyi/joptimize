@@ -1,4 +1,4 @@
-package joptimize.examples.simple.statics;
+package joptimize.examples.simple;
 
 public class Statics {
     public static int helloWorld(int n){

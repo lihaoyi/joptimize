@@ -1,10 +1,4 @@
-package joptimize.examples.simple.sudoku;
-
-import java.util.*;
-import java.math.BigInteger;
-import java.util.concurrent.atomic.*;
-import java.util.regex.*;
-import java.lang.reflect.Array;
+package joptimize.examples.simple;
 
 public class Sudoku {
   public static String run(){

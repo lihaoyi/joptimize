@@ -1,4 +1,4 @@
-package joptimize.examples.simple.classes;
+package joptimize.examples.simple;
 
 public class Inheritance {
     public static String implement(int n){
@@ -37,6 +37,7 @@ public class Inheritance {
                 Child1.overriden(); // Calls the method on child overriding the one from parent
     }
 }
+
 interface ParentInterface{
     public static int x = 30;
 }
@@ -50,7 +51,8 @@ class Parent{
         return 1337;
     }
 }
-class Child1 extends Parent{
+
+class Child1 extends Parent {
     public static int get(){
         return x;
     }
@@ -58,23 +60,28 @@ class Child1 extends Parent{
         return 31337;
     }
 }
+
 class Cowc{}
-class Child2 extends Cowc implements ParentInterface{
+
+class Child2 extends Cowc implements ParentInterface {
     public static int get(){
         return x;
     }
 }
-class Sheep implements Baas{
+
+class Sheep implements Baas {
     public String baa(int n){
         String s = "b";
         for(int i = 0; i < n; i++) s = s + "a";
         return s;
     }
 }
+
 interface Baas{
     public String baa(int n);
 }
-class Toyota extends Car{
+
+class Toyota extends Car {
     public Toyota(){
         this.cc = 10;
     }
@@ -86,7 +93,8 @@ class Toyota extends Car{
         return super.vStart();
     }
 }
-class Honda extends Car{
+
+class Honda extends Car {
     public int cc = 5;
     public String vStart(){
         return "v"  + cc + "r" + ((Car)this).cc + "r" + super.cc;
