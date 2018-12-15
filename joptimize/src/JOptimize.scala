@@ -27,7 +27,7 @@ object JOptimize{
 
     val visitedMethods = collection.mutable.Map.empty[(MethodSig, Seq[Type]), (Type, InsnList)]
 
-    val interp = new AbstractInterpret(
+    val interp = new AbstractInterpreter(
       s => (classNodeMap(s).access & Opcodes.ACC_INTERFACE) != 0,
       sig => originalMethods(sig),
       visitedMethods

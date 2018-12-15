@@ -10,9 +10,9 @@ import org.objectweb.asm.tree._
 import scala.annotation.tailrec
 import scala.collection.mutable
 
-class AbstractInterpret(isInterface: String => Boolean,
-                        lookupMethod: MethodSig => MethodNode,
-                        visitedMethods: mutable.Map[(MethodSig, Seq[Type]), (Type, InsnList)]) {
+class AbstractInterpreter(isInterface: String => Boolean,
+                          lookupMethod: MethodSig => MethodNode,
+                          visitedMethods: mutable.Map[(MethodSig, Seq[Type]), (Type, InsnList)]) {
 
   def interpretMethod(sig: MethodSig,
                       insns: InsnList,
