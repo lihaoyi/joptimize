@@ -94,6 +94,9 @@ object MainTests extends TestSuite{
         check((9, 9), 3, "IfElse", "ifElseIfBig", "(II)I", Seq(classOf[Int], classOf[Int]))
         check((11, 11), 4, "IfElse", "ifElseIfBig", "(II)I", Seq(classOf[Int], classOf[Int]))
         check((1, 10), 5, "IfElse", "ifElseIfBig", "(II)I", Seq(classOf[Int], classOf[Int]))
+
+        check(5, 32, "Loops", "basicFor", "(I)I", Seq(classOf[Int]))
+        check(5, 8, "Loops", "basicWhile", "(I)I", Seq(classOf[Int]))
       }
     }
     'narrow - {
