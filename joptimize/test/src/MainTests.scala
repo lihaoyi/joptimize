@@ -97,6 +97,8 @@ object MainTests extends TestSuite{
 
         check(5, 32, "Loops", "basicFor", "(I)I", Seq(classOf[Int]))
         check(5, 8, "Loops", "basicWhile", "(I)I", Seq(classOf[Int]))
+
+        check(121.0, 11.143835769253432, "Loops", "sqrtFinder", "(D)D", Seq(classOf[Double]))
       }
     }
     'narrow - {

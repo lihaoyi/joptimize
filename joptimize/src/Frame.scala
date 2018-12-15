@@ -49,7 +49,7 @@ class Frame(private val value: org.objectweb.asm.tree.analysis.Frame[Inferred]){
   override def toString = {
     def stringify(values: IndexedSeq[Inferred]) = {
       values
-        .map{case null => "" case x => x.value.getDescriptor}
+        .map{case null => " " case x => if (x.value == null) "_" else x.value.getDescriptor}
         .mkString
     }
     s"Frame(${stringify(locals)}, ${stringify(stack)})"
@@ -61,8 +61,9 @@ object Frame{
     val initialFrame0 = new org.objectweb.asm.tree.analysis.Frame[Inferred](maxLocals, maxStack)
     var i = 0
     for(arg <- args){
-      for(_ <- 0 until arg.getSize){
-        initialFrame0.setLocal(i, arg)
+      for(x <- 0 until arg.getSize){
+        if (x == 0) initialFrame0.setLocal(i, arg)
+        else initialFrame0.setLocal(i, Inferred(null))
         i += 1
       }
     }

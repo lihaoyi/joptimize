@@ -56,6 +56,7 @@ class AbstractInterpret(isInterface: String => Boolean,
           * - Instruction list of that basic block
           */
         @tailrec def walkBlockInsn(currentInsn: AbstractInsnNode, currentState: Frame): Unit = {
+//          println(Util.prettyprint(currentInsn))
           val nextState = currentState.execute(currentInsn, Dataflow)
           currentInsn match{
             case current: FieldInsnNode =>
@@ -194,11 +195,23 @@ class AbstractInterpret(isInterface: String => Boolean,
           }
         }
         if (!visitedBlocks.contains((currentInsn, currentState))){
+//          println("NEW BLOCK " + (currentInsn, currentState))
           visitedBlocks((currentInsn, currentState)) = finalInsnList
           walkBlockInsn(currentInsn, currentState)
+//          println("END BLOCK")
           finalInsnList
         }else{
-          visitedBlocks((currentInsn, currentState))
+//          println("OLD BLOCK")
+          val res = new InsnList()
+          val label = new LabelNode()
+          val jump = new JumpInsnNode(
+            GOTO,
+            visitedBlocks((currentInsn, currentState)).getFirst.asInstanceOf[LabelNode]
+          )
+          res.add(label)
+          res.add(jump)
+          visitedBlocks((label, currentState)) = res
+          res
         }
       }
 

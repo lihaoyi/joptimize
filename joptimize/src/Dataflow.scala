@@ -18,7 +18,7 @@ import org.objectweb.asm.tree._
   *   dead code elimination
   */
 case class Inferred(value: org.objectweb.asm.Type) extends org.objectweb.asm.tree.analysis.Value{
-  def getSize: Int = value.getSize
+  def getSize: Int = if (value == null) 0 else value.getSize
 }
 object Inferred{
   implicit def fromAsmType(value: org.objectweb.asm.Type): Inferred = Inferred(value)
