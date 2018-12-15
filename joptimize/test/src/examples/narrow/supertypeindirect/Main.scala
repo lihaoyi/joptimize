@@ -1,4 +1,4 @@
-package joptimize.examples.parametric
+package joptimize.examples.narrow.supertypeindirect
 
 object Main {
   def main(x: Int, y: Int): Int = {
@@ -6,7 +6,8 @@ object Main {
     // (x + 1) + (y + 2)
   }
 
-  def call[T <: Foo](f: T, n: Int): Int = f.inc(n)
+  def call(f: Foo, n: Int): Int = call2(f, n)
+  def call2(f: Foo, n: Int): Int = f.inc(n)
 }
 
 trait Foo{

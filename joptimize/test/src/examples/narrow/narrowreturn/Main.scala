@@ -1,4 +1,4 @@
-package joptimize.examples.narrowreturn
+package joptimize.examples.narrow.narrowreturn
 
 object Main {
   def main(x: Int, y: Int): Int = {

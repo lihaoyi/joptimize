@@ -1,4 +1,4 @@
-package joptimize.examples.lambdaindirect
+package joptimize.examples.narrow.lambdaindirect
 
 object Main {
   def main(x: Int, y: Int): Int = {

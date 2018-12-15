@@ -95,9 +95,7 @@ class Dataflow() extends Interpreter[Inferred](ASM4){
         LONG_TYPE
       case DALOAD | DADD | DSUB | DMUL | DDIV | DREM =>
         DOUBLE_TYPE
-      case AALOAD =>
-        // Dereference the array type
-        ???
+      case AALOAD => v1.value.getElementType
       case LCMP | FCMPL | FCMPG | DCMPL | DCMPG => INT_TYPE
       case IF_ICMPEQ | IF_ICMPNE | IF_ICMPLT | IF_ICMPGE | IF_ICMPGT | IF_ICMPLE | IF_ACMPEQ | IF_ACMPNE | PUTFIELD =>
         BasicInterpreter.NULL_TYPE

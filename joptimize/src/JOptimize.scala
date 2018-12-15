@@ -89,7 +89,7 @@ object JOptimize{
     for((cn, mn) <- newMethods) cn.methods.add(mn)
 
     for((k, cn) <- classFileMap) yield {
-      val cw = new ClassWriter(Opcodes.ASM6)
+      val cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES)
       cn.accept(cw)
       (k, cw.toByteArray)
     }
