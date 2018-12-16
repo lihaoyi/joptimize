@@ -251,14 +251,8 @@ class AbstractInterpreter(isInterface: JType.Cls => Boolean,
 
       val resultType =
         if (methodReturns.isEmpty) sig.desc.ret
-        else merge(methodReturns) match{
-          case IType.Intersect(classes) =>
-            classes.distinct match{
-              case Seq(singleton) => singleton
-              case _ => sig.desc.ret
-            }
-          case j: JType => j
-        }
+        else merge(methodReturns)
+
       val outputInsns = new InsnList
       visitedBlocks.valuesIterator.foreach(outputInsns.add)
 

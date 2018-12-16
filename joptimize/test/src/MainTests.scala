@@ -225,6 +225,10 @@ object MainTests extends TestSuite{
         'main - opt2[Int, Int, Int]()
           .check((2, 1) -> 1, (1, 2) -> 2)
       }
+      'IntersectionReturn - {
+        'main - opt2[Int, Int, Int]()
+          .check((2, 1) -> 1, (1, 2) -> 2)
+      }
       'ForceWide - {
         'main - opt2[Int, Int, Int]()
           .check((1, 2) -> 6)
