@@ -10,17 +10,17 @@ import scala.collection.mutable
 
 class AbstractInterpreter(isInterface: String => Boolean,
                           lookupMethod: MethodSig => Option[MethodNode],
-                          visitedMethods: mutable.Map[(MethodSig, Seq[Type]), (Type, InsnList)],
+                          visitedMethods: mutable.Map[(MethodSig, Seq[JType]), (JType, InsnList)],
                           findSubtypes: String => List[String],
                           isConcrete: MethodSig => Boolean,
                           dataflow: Dataflow) {
 
   def walkMethod(sig: MethodSig,
-                      insns: InsnList,
-                      args: Seq[Type],
-                      maxLocals: Int,
-                      maxStack: Int,
-                      seen0: Set[(MethodSig, Seq[Type])]): (Type, InsnList) = {
+                 insns: InsnList,
+                 args: Seq[JType],
+                 maxLocals: Int,
+                 maxStack: Int,
+                 seen0: Set[(MethodSig, Seq[JType])]): (JType, InsnList) = {
 
     visitedMethods.getOrElseUpdate((sig, args.drop(if (sig.static) 0 else 1)), {
       val seen = seen0 ++ Seq((sig, args))
@@ -49,7 +49,7 @@ class AbstractInterpreter(isInterface: String => Boolean,
       //     states
 
       val visitedBlocks = mutable.LinkedHashMap.empty[(AbstractInsnNode, Frame), InsnList]
-      val methodReturns = mutable.Buffer.empty[Type]
+      val methodReturns = mutable.Buffer.empty[JType]
       def walkBlock(currentInsn: AbstractInsnNode,
                     currentState: Frame): InsnList = {
         val finalInsnList = new InsnList
@@ -65,6 +65,19 @@ class AbstractInterpreter(isInterface: String => Boolean,
           val nextState = currentState.execute(currentInsn, dataflow)
           currentInsn match{
             case current: FieldInsnNode =>
+              val clinitSig = MethodSig(current.owner, "<clinit>", Desc.read("()V"), true)
+              if (!seen.contains((clinitSig, Nil))) {
+                for(clinit <- lookupMethod(clinitSig)){
+                  walkMethod(
+                    clinitSig,
+                    clinit.instructions,
+                    Nil,
+                    clinit.maxLocals,
+                    clinit.maxStack,
+                    seen ++ Seq((clinitSig, Nil))
+                  )
+                }
+              }
               val n = new FieldInsnNode(current.getOpcode, current.owner, current.name, current.desc)
               finalInsnList.add(n)
               if (currentInsn.getNext.isInstanceOf[LabelNode]) walkBlock(currentInsn.getNext, nextState)
@@ -251,12 +264,12 @@ class AbstractInterpreter(isInterface: String => Boolean,
                         insn: AbstractInsnNode,
                         static: Boolean,
                         special: Boolean,
-                        recurse: (MethodSig, Seq[Type]) => Type): AbstractInsnNode = {
+                        recurse: (MethodSig, Seq[JType]) => JType): AbstractInsnNode = {
     val called = insn.asInstanceOf[MethodInsnNode]
 
 
     val calledDesc = Desc.read(called.desc)
-    val calledSelf = if (static) Nil else Seq(Type.Cls(called.owner))
+    val calledSelf = if (static) Nil else Seq(JType.Cls(called.owner))
     val originalTypes = calledSelf ++ calledDesc.args.toSeq
 
     val inferredTypes =

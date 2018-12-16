@@ -32,7 +32,7 @@ object JOptimize{
       m <- cls.methods.iterator().asScala
     } yield (MethodSig(cls.name, m.name, Desc.read(m.desc), (m.access & Opcodes.ACC_STATIC) != 0), m)
 
-    val visitedMethods = collection.mutable.Map.empty[(MethodSig, Seq[Type]), (Type, InsnList)]
+    val visitedMethods = collection.mutable.Map.empty[(MethodSig, Seq[JType]), (JType, InsnList)]
 
     val interp = new AbstractInterpreter(
       isInterface = s => (classNodeMap(s).access & Opcodes.ACC_INTERFACE) != 0,
@@ -40,7 +40,18 @@ object JOptimize{
       visitedMethods = visitedMethods,
       findSubtypes = subtypeMap.getOrElse(_, Nil),
       isConcrete = sig => originalMethods(sig).instructions.size != 0,
-      new Dataflow(merge0 = (lhs, rhs) => {lhs})
+      new Dataflow(merge0 = (lhs, rhs) => {
+        if (lhs == rhs) lhs
+        else {
+          assert(lhs.isRef)
+          assert(rhs.isRef)
+          (lhs, rhs) match{
+            case (JType.Cls(l), JType.Cls(r)) => JType.Cls(l)
+            case _ => JType.Cls("java/lang/Object")
+
+          }
+        }
+      })
     )
 
     for(entrypoint <- entrypoints){

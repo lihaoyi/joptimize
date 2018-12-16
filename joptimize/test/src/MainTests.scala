@@ -221,6 +221,10 @@ object MainTests extends TestSuite{
           .checkRemoved("NarrowReturn$.call")
           .checkMangled("NarrowReturn$.call")
       }
+      'MergeReturn - {
+        'main - opt2[Int, Int, Int]()
+          .check((2, 1) -> 1, (1, 2) -> 2)
+      }
       'ForceWide - {
         'main - opt2[Int, Int, Int]()
           .check((1, 2) -> 6)
@@ -311,8 +315,8 @@ object MainTests extends TestSuite{
                   argClasses: Class[_]*)
                  (implicit tp: TestPath){
     val methodDesc = Desc(
-      argClasses.map(c => Type.fromJavaCls(c)),
-      Type.fromJavaCls(returnClass)
+      argClasses.map(c => JType.fromJavaCls(c)),
+      JType.fromJavaCls(returnClass)
     )
 
     val outputFileMap = JOptimize.run(

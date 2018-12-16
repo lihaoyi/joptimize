@@ -1,26 +1,24 @@
 package joptimize
 
-import org.objectweb.asm.tree.analysis.Value
-
 import collection.mutable
 import reflect.ClassTag
 
 
-object Type{
+object JType{
   implicit def strClsTypeShorthand(name: String): Cls = Cls(name)
-  def fromJavaCls(c: Class[_]): Type =
+  def fromJavaCls(c: Class[_]): JType =
     if (c.isPrimitive) Prim.allJava(c.getTypeName)
     else if (c.isArray) Arr(fromJavaCls(c.getComponentType))
     else Cls(c.getName)
 
-  def read(s: String): Type = s match{
+  def read(s: String): JType = s match{
     case x if Prim.all.contains(x(0)) => Prim.all(x(0))
     case s if s.startsWith("L") && s.endsWith(";") => Cls.apply(s.drop(1).dropRight(1))
     case s if s.startsWith("[") => Arr.read(s)
     case s => Cls.apply(s)
   }
 
-  def readJava(s: String): Type = s match {
+  def readJava(s: String): JType = s match {
     case x if Prim.allJava.contains(x) => Prim.allJava(x)
     case s if s.startsWith("[") => Arr.readJava(s)
     case s => Cls.apply(s)
@@ -29,13 +27,13 @@ object Type{
   /**
     * Reference types, which can either be Class or Array types
     */
-  trait Ref extends Type
+  trait Ref extends JType
   object Arr{
-    def read(s: String) = Arr(Type.read(s.drop(1)))
+    def read(s: String) = Arr(JType.read(s.drop(1)))
     def readJava(s: String) = Arr(s.drop(1) match {
       case x if Prim.all.contains(x(0)) => Prim.all(x(0))
       case x if x.startsWith("L") => Cls.apply(x.drop(1).dropRight(1))
-      case x => Type.readJava(x)
+      case x => JType.readJava(x)
     })
   }
 
@@ -43,7 +41,7 @@ object Type{
     * Array Types
     * @param innerType The type of the components of the array
     */
-  case class Arr(innerType: Type) extends Ref{
+  case class Arr(innerType: JType) extends Ref{
     def size = 1
     def name = "[" + innerType.name
     def realCls = innerType.realCls
@@ -93,7 +91,7 @@ object Type{
 
   abstract class Prim[T: ClassTag](val size: Int,
                                    val index: Int,
-                                   val javaName: String) extends Type{
+                                   val javaName: String) extends JType{
     def read(x: () => Int): T
     def write(x: T, out: Int => Unit): Unit
     def boxedClass: Class[_]
@@ -214,7 +212,7 @@ object Type{
 /**
   * Represents all variable types within the Metascala VM
   */
-sealed trait Type extends Value{
+sealed trait JType extends IType{
   /**
     * The JVMs internal representation
     * - V Z B C S I F J D
@@ -247,9 +245,8 @@ sealed trait Type extends Value{
     * 0, 1 or 2 for void, most things and double/long
     */
   def size: Int
-  def getSize: Int = size
 
-  def isRef: Boolean = this.isInstanceOf[Type.Ref]
+  def isRef: Boolean = this.isInstanceOf[JType.Ref]
 
 }
 
@@ -268,12 +265,12 @@ object Desc{
       args.append(argString.substring(index, split+1))
       index = split +1
     }
-    Desc(args.map(Type.read), Type.read(ret))
+    Desc(args.map(JType.read), JType.read(ret))
   }
-  def unparse(t: Type): String = {
+  def unparse(t: JType): String = {
     t match{
-      case t: Type.Cls => t.internalName
-      case t: Type.Arr => "[" + unparse(t.innerType)
+      case t: JType.Cls => t.internalName
+      case t: JType.Arr => "[" + unparse(t.innerType)
       case x => x.internalName
     }
   }
@@ -282,7 +279,7 @@ object Desc{
 /**
   * Represents the signature of a method.
   */
-case class Desc(args: Seq[Type], ret: Type) {
+case class Desc(args: Seq[JType], ret: JType) {
   def unparse = "(" + args.map(Desc.unparse).foldLeft("")(_ + _) + ")" + Desc.unparse(ret)
 
   override def toString = unparse

@@ -8,12 +8,12 @@ import org.objectweb.asm.tree.analysis.Interpreter
 /**
   * An immutable wrapper around [[org.objectweb.asm.tree.analysis.Frame]],
   */
-class Frame(private val value: org.objectweb.asm.tree.analysis.Frame[Type]){
-  val locals = new IndexedSeq[Type] {
+class Frame(private val value: org.objectweb.asm.tree.analysis.Frame[JType]){
+  val locals = new IndexedSeq[JType] {
     def length = value.getLocals
     def apply(idx: Int) = value.getLocal(idx)
   }
-  val stack = new IndexedSeq[Type] {
+  val stack = new IndexedSeq[JType] {
 
     def length = value.getStackSize
     def apply(idx: Int) = {
@@ -37,19 +37,19 @@ class Frame(private val value: org.objectweb.asm.tree.analysis.Frame[Type]){
         (0 until value.getStackSize).forall(i => value.getStack(i) == other.value.getStack(i))
     case _ => false
   }
-  def execute(insn: AbstractInsnNode, interpreter: Interpreter[Type]) = {
+  def execute(insn: AbstractInsnNode, interpreter: Interpreter[JType]) = {
     if (insn.getOpcode == -1) this
     else{
-      val newFrame = new org.objectweb.asm.tree.analysis.Frame[Type](value)
+      val newFrame = new org.objectweb.asm.tree.analysis.Frame[JType](value)
       newFrame.execute(insn, interpreter)
       new Frame(newFrame)
     }
   }
 
   override def toString = {
-    def stringify(values: IndexedSeq[Type]) = {
+    def stringify(values: IndexedSeq[JType]) = {
       values
-        .map{case null => " " case x => if (x == Type.Null) "_" else x.internalName}
+        .map{case null => " " case x => if (x == JType.Null) "_" else x.internalName}
         .mkString
     }
     s"Frame(${stringify(locals)}, ${stringify(stack)})"
@@ -57,13 +57,13 @@ class Frame(private val value: org.objectweb.asm.tree.analysis.Frame[Type]){
 }
 
 object Frame{
-  def initial(maxLocals: Int, maxStack: Int, args: Seq[Type]) = {
-    val initialFrame0 = new org.objectweb.asm.tree.analysis.Frame[Type](maxLocals, maxStack)
+  def initial(maxLocals: Int, maxStack: Int, args: Seq[JType]) = {
+    val initialFrame0 = new org.objectweb.asm.tree.analysis.Frame[JType](maxLocals, maxStack)
     var i = 0
     for(arg <- args){
       for(x <- 0 until arg.getSize){
         if (x == 0) initialFrame0.setLocal(i, arg)
-        else initialFrame0.setLocal(i, Type.Null)
+        else initialFrame0.setLocal(i, JType.Null)
         i += 1
       }
     }

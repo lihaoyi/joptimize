@@ -17,7 +17,7 @@ object Util{
     printer.getText.clear
     sw.toString.stripSuffix("\n")
   }
-  def mangle(name: String, stackTypes: Seq[Type], narrowReturnType: Type) = {
+  def mangle(name: String, stackTypes: Seq[JType], narrowReturnType: JType) = {
     val mangledName = name + "__" + stackTypes.mkString("__").replace('/', '_').replace(';', '_')
     val mangledDesc = Desc(stackTypes, narrowReturnType)
     (mangledName, mangledDesc)
