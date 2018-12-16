@@ -8,10 +8,10 @@ import org.objectweb.asm.tree._
 import scala.annotation.tailrec
 import scala.collection.mutable
 
-class AbstractInterpreter(isInterface: String => Boolean,
+class AbstractInterpreter(isInterface: JType.Cls => Boolean,
                           lookupMethod: MethodSig => Option[MethodNode],
                           visitedMethods: mutable.Map[(MethodSig, Seq[JType]), (JType, InsnList)],
-                          findSubtypes: String => List[String],
+                          findSubtypes: JType.Cls => List[JType.Cls],
                           isConcrete: MethodSig => Boolean,
                           dataflow: Dataflow) {
 
@@ -167,7 +167,7 @@ class AbstractInterpreter(isInterface: String => Boolean,
 
                     if (seen((staticSig, types))) staticSig.desc.ret
                     else {
-                      val clinitSig = MethodSig(staticSig.clsName, "<clinit>", Desc.read("()V"), true)
+                      val clinitSig = MethodSig(staticSig.cls, "<clinit>", Desc.read("()V"), true)
                       if (!seen.contains((clinitSig, Nil))) {
                         for(clinit <- lookupMethod(clinitSig)){
                           walkMethod(
@@ -282,8 +282,8 @@ class AbstractInterpreter(isInterface: String => Boolean,
     val (concreteSigs, abstractSigs) =
       if (special) (Seq(sig), Nil)
       else{
-        val subtypes = findSubtypes(sig.clsName)
-        val possibleSigs = subtypes.map(st => sig.copy(clsName = st)) ++ Seq(sig)
+        val subtypes = findSubtypes(sig.cls)
+        val possibleSigs = subtypes.map(st => sig.copy(cls = st)) ++ Seq(sig)
         possibleSigs.partition(isConcrete)
       }
 

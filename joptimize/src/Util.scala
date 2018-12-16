@@ -23,5 +23,3 @@ object Util{
     (mangledName, mangledDesc)
   }
 }
-
-case class MethodSig(clsName: String, name: String, desc: Desc, static: Boolean)

@@ -17,9 +17,9 @@ object JOptimize{
       (k, cn)
     }
 
-    val classNodeMap = classFileMap.map{case (k, v) => (v.name, v)}
+    val classNodeMap = classFileMap.map{case (k, v) => (JType.Cls(v.name), v)}
     val subtypeMap = {
-      val map = mutable.Map.empty[String, List[String]]
+      val map = mutable.Map.empty[JType.Cls, List[JType.Cls]]
       for{
         (k, v) <- classNodeMap
         sup <- v.interfaces.asScala ++ Option(v.superName)
@@ -86,7 +86,7 @@ object JOptimize{
       originalNode.accept(newNode)
       newNode.instructions = insns
       newNode.desc = Desc(inferredTypes, returnType).unparse
-      classNodeMap(sig.clsName) -> newNode
+      classNodeMap(sig.cls) -> newNode
     }
 
     if (eliminateOldMethods) {

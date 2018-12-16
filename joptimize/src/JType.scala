@@ -284,3 +284,5 @@ case class Desc(args: Seq[JType], ret: JType) {
 
   override def toString = unparse
 }
+
+case class MethodSig(cls: JType.Cls, name: String, desc: Desc, static: Boolean)
