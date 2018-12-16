@@ -28,7 +28,7 @@ object Util{
   def leastUpperBound[T](starts: Set[T])(edges: T => Seq[T]) = {
     // Walk up the graph from all starting locations
     val (seens, terminalss, backEdgess) =
-      starts.map(start => walk(Set(start), edges)).unzip3
+      starts.map(start => breadthFirstAggregation(Set(start), edges)).unzip3
 
     // Find the set of nodes which overlap all the transitive closures
     val overlap = seens.reduce(_.intersect(_))
@@ -45,12 +45,12 @@ object Util{
     } backMap(src) = dest :: backMap.getOrElse(src, Nil)
 
     val (backSeen, backTerminals, backBackEdges) =
-      walk[T](overlapTerminals, backMap.getOrElse(_, Nil))
+      breadthFirstAggregation[T](overlapTerminals, backMap.getOrElse(_, Nil))
 
     backTerminals
   }
 
-  def walk[T](start: Set[T], edges: T => Seq[T]): (Set[T], Set[T], Set[(T, T)]) = {
+  def breadthFirstAggregation[T](start: Set[T], edges: T => Seq[T]): (Set[T], Set[T], Set[(T, T)]) = {
     val queue = start.to[mutable.Queue]
     val seen = mutable.Set.empty[T]
     val terminals = mutable.Set.empty[T]

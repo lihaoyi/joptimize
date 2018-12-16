@@ -8,12 +8,12 @@ import org.objectweb.asm.tree._
 import scala.annotation.tailrec
 import scala.collection.mutable
 
-class AbstractInterpreter(isInterface: JType.Cls => Boolean,
-                          lookupMethod: MethodSig => Option[MethodNode],
-                          visitedMethods: mutable.Map[(MethodSig, Seq[IType]), (IType, InsnList)],
-                          findSubtypes: JType.Cls => List[JType.Cls],
-                          isConcrete: MethodSig => Boolean,
-                          merge: Seq[IType] => IType) {
+class Walker(isInterface: JType.Cls => Boolean,
+             lookupMethod: MethodSig => Option[MethodNode],
+             visitedMethods: mutable.Map[(MethodSig, Seq[IType]), (IType, InsnList)],
+             findSubtypes: JType.Cls => List[JType.Cls],
+             isConcrete: MethodSig => Boolean,
+             merge: Seq[IType] => IType) {
 
   def walkMethod(sig: MethodSig,
                  insns: InsnList,

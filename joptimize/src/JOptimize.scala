@@ -59,7 +59,7 @@ object JOptimize{
       }
     }
 
-    val interp = new AbstractInterpreter(
+    val interp = new Walker(
       isInterface = s => (classNodeMap(s).access & Opcodes.ACC_INTERFACE) != 0,
       lookupMethod = sig => originalMethods.get(sig),
       visitedMethods = visitedMethods,
