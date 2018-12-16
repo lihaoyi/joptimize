@@ -34,6 +34,15 @@ object JOptimize{
 
     val visitedMethods = collection.mutable.Map.empty[(MethodSig, Seq[IType]), (JType, InsnList)]
 
+    def leastUpperBound(classes: Seq[JType.Cls]) = {
+      Util.leastUpperBound(classes.toSet) { cls =>
+        classNodeMap.get(cls) match{
+          case None => Nil
+          case Some(cn) => (cn.interfaces.asScala ++ Option(cn.superName)).map(JType.Cls(_))
+        }
+      }.toSeq
+    }
+
     val interp = new AbstractInterpreter(
       isInterface = s => (classNodeMap(s).access & Opcodes.ACC_INTERFACE) != 0,
       lookupMethod = sig => originalMethods.get(sig),
@@ -46,11 +55,10 @@ object JOptimize{
           assert(lhs.isRef)
           assert(rhs.isRef)
           (lhs, rhs) match{
-            case (l: JType.Cls, r: JType.Cls) => IType.Intersect(Seq(l, r))
-            case (l: IType.Intersect, r: JType.Cls) => IType.Intersect(l.classes ++ Seq(r))
-            case (l: JType.Cls, r: IType.Intersect) => IType.Intersect(Seq(l) ++ r.classes)
+            case (l: JType.Cls, r: JType.Cls) => IType.Intersect(leastUpperBound(Seq(l, r)))
+            case (l: IType.Intersect, r: JType.Cls) => IType.Intersect(leastUpperBound(l.classes ++ Seq(r)))
+            case (l: JType.Cls, r: IType.Intersect) => IType.Intersect(leastUpperBound(Seq(l) ++ r.classes))
             case _ => JType.Cls("java/lang/Object")
-
           }
         }
       })
