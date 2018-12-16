@@ -22,6 +22,7 @@ class AbstractInterpreter(isInterface: String => Boolean,
                       maxLocals: Int,
                       maxStack: Int,
                       seen0: Set[(MethodSig, Seq[Inferred])]): (Type, InsnList) = {
+
     visitedMethods.getOrElseUpdate((sig, args.map(_.value).drop(if (sig.static) 0 else 1)), {
       val seen = seen0 ++ Seq((sig, args))
       // - One-pass walk through the instruction list of a method, starting from
@@ -209,8 +210,10 @@ class AbstractInterpreter(isInterface: String => Boolean,
           res
         }
       }
+//      pprint.log(sig -> insns.size)
 
       walkBlock(insns.getFirst, Frame.initial(maxLocals, maxStack, args))
+
 
       val resultType =
         if (methodReturns.isEmpty) Type.getMethodType(sig.desc).getReturnType
@@ -242,18 +245,20 @@ class AbstractInterpreter(isInterface: String => Boolean,
     val sig = MethodSig(called.owner, called.name, called.desc, static)
 
     val (concreteSigs, abstractSigs) =
-      if (special) (Seq(sig), Seq(sig))
+      if (special) (Seq(sig), Nil)
       else{
         val subtypes = findSubtypes(sig.clsName)
         val possibleSigs = subtypes.map(st => sig.copy(clsName = st)) ++ Seq(sig)
         possibleSigs.partition(isConcrete)
       }
+
     for(interfaceSig <- abstractSigs){
       visitedMethods((interfaceSig, originalTypes.drop(1))) = (
         Type.getMethodType(interfaceSig.desc).getReturnType,
         new InsnList
       )
     }
+
     val narrowReturnType = concreteSigs
       .map(recurse(_, inferredTypes))
       .reduce((l, r) => Dataflow.merge(Inferred(l), Inferred(r)).value)

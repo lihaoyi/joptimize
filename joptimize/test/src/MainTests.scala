@@ -7,130 +7,6 @@ import utest.framework.TestPath
 
 import scala.reflect.ClassTag
 object MainTests extends TestSuite{
-  val classesRoot = os.Path("out/joptimize/test/compile/dest/classes", os.pwd)
-  val outRoot = os.Path("out/scratch", os.pwd)
-  val testRoot = classesRoot / "joptimize" / "examples"
-
-  class Optimized(returnClass: Class[_],
-                  argClasses: Class[_]*)
-                 (implicit tp: TestPath){
-    val methodDesc = Type.getMethodDescriptor(
-      Type.getType(returnClass), argClasses.map(Type.getType):_*
-    )
-
-    val outputFileMap = JOptimize.run(
-      os.walk(testRoot / tp.value.dropRight(2))
-        .filter(os.isFile)
-        .map(p => (p.relativeTo(classesRoot).toString, os.read.bytes(p)))
-        .toMap,
-      Seq(MethodSig(s"joptimize/examples/${tp.value.dropRight(1).mkString("/")}", tp.value.last, methodDesc, static = true)),
-      eliminateOldMethods = true
-    )
-
-    os.remove.all(outRoot / tp.value.last)
-    for((k, bytes) <- outputFileMap){
-      os.write(outRoot / tp.value.last / os.RelPath(k), bytes, createFolders = true)
-    }
-
-    def checkWithClassloader(f: URLClassLoader => Any): this.type = {
-      val cl = new URLClassLoader(Array((outRoot / tp.value.last).toNIO.toUri.toURL))
-      try {
-        f(cl)
-      } finally {
-        cl.close()
-      }
-      this
-    }
-
-    def check0(cases: (Any, Any)*) = {
-      for ((args, expected) <- cases) checkWithClassloader{ cl =>
-        val cls = cl.loadClass(s"joptimize.examples.${tp.value.dropRight(1).mkString(".")}")
-        val method = cls.getMethod(tp.value.last, argClasses: _*)
-        val argsList = args match {
-          case () => Nil
-          case p: Product => p.productIterator.toSeq
-          case x => Seq(x)
-        }
-        val res = method.invoke(null, argsList.asInstanceOf[Seq[AnyRef]]: _*)
-
-        // Make sure the correct value is computed
-        (res, expected) match {
-          case (a: Array[AnyRef], b: Array[AnyRef]) =>
-            assert {
-              java.util.Arrays.deepEquals(a, b)
-            }
-          case _ => assert {
-            res == expected
-          }
-        }
-      }
-      this
-    }
-
-    def resolveMethod(sigString: String, cl: ClassLoader) = {
-
-      val (clsName, methodName) =
-        if (sigString.contains('#')){
-          val Array(clsName, methodName) = sigString.split('#')
-          val clsNameChunks = clsName.split('.')
-          (clsNameChunks.last, methodName)
-        }else{
-          val clsNameChunks0 = sigString.split('.')
-          val clsNameChunks = clsNameChunks0.dropRight(1)
-          val methodName = clsNameChunks0.last
-          (clsNameChunks.last, methodName)
-        }
-
-      val cls2 = cl.loadClass(
-        s"joptimize.examples.${tp.value.dropRight(2).mkString(".")}.$clsName"
-      )
-      (cls2, methodName)
-    }
-
-    def checkPresent(sigStrings: String*) = checkWithClassloader{ cl =>
-      for(sigString <- sigStrings) {
-        val (cls2, methodName) = resolveMethod(sigString, cl)
-        // That the previously-existing method has been removed
-        assert(cls2.getMethods.exists(_.getName == methodName))
-      }
-    }
-
-    def checkMangled(sigStrings: String*) = checkWithClassloader{ cl =>
-      for(sigString <- sigStrings) {
-        val (cls2, methodName) = resolveMethod(sigString, cl)
-        // That the previously-existing method has been removed
-        // And the n>=2 duplicate methods are in place (presumably being used)
-        assert(cls2.getMethods.count(_.getName.startsWith(methodName + "__")) >= 2)
-      }
-    }
-
-    def checkRemoved(sigStrings: String*) = checkWithClassloader{ cl =>
-      for(sigString <- sigStrings){
-        val (cls2, methodName) = resolveMethod(sigString, cl)
-        // That the previously-existing method has been removed
-        assert(!cls2.getMethods.exists(_.getName == methodName))
-      }
-    }
-  }
-
-  def classOf0[T: ClassTag] = implicitly[ClassTag[T]].runtimeClass
-  case class opt0[R: ClassTag]()
-                 (implicit tp: TestPath) extends Optimized(classOf0[R]){
-
-    def check(args: (Unit, R)*) = check0(args:_*)
-  }
-  case class opt1[T1: ClassTag, R: ClassTag]()
-                 (implicit tp: TestPath) extends Optimized(classOf0[R], classOf0[T1]){
-    def check(args: (T1, R)*) = check0(args:_*)
-  }
-  case class opt2[T1: ClassTag, T2: ClassTag, R: ClassTag]()
-                 (implicit tp: TestPath) extends Optimized(classOf0[R], classOf0[T1], classOf0[T2]){
-    def check(args: ((T1, T2), R)*) = check0(args:_*)
-  }
-  case class opt3[T1: ClassTag, T2: ClassTag, T3: ClassTag, R: ClassTag]()
-                 (implicit tp: TestPath) extends Optimized(classOf0[R], classOf0[T1], classOf0[T2], classOf0[T3]){
-    def check(args: ((T1, T2, T3), R)*) = check0(args:_*)
-  }
   def tests = Tests{
     'simple - {
       'IfElse - {
@@ -366,5 +242,130 @@ object MainTests extends TestSuite{
           .checkRemoved("SimpleDce$.call3")
       }
     }
+  }
+
+  val classesRoot = os.Path("out/joptimize/test/compile/dest/classes", os.pwd)
+  val outRoot = os.Path("out/scratch", os.pwd)
+  val testRoot = classesRoot / "joptimize" / "examples"
+
+  class Optimized(returnClass: Class[_],
+                  argClasses: Class[_]*)
+                 (implicit tp: TestPath){
+    val methodDesc = Type.getMethodDescriptor(
+      Type.getType(returnClass), argClasses.map(Type.getType):_*
+    )
+
+    val outputFileMap = JOptimize.run(
+      os.walk(testRoot / tp.value.dropRight(2))
+        .filter(os.isFile)
+        .map(p => (p.relativeTo(classesRoot).toString, os.read.bytes(p)))
+        .toMap,
+      Seq(MethodSig(s"joptimize/examples/${tp.value.dropRight(1).mkString("/")}", tp.value.last, methodDesc, static = true)),
+      eliminateOldMethods = true
+    )
+
+    os.remove.all(outRoot / tp.value.last)
+    for((k, bytes) <- outputFileMap){
+      os.write(outRoot / tp.value.last / os.RelPath(k), bytes, createFolders = true)
+    }
+
+    def checkWithClassloader(f: URLClassLoader => Any): this.type = {
+      val cl = new URLClassLoader(Array((outRoot / tp.value.last).toNIO.toUri.toURL))
+      try {
+        f(cl)
+      } finally {
+        cl.close()
+      }
+      this
+    }
+
+    def check0(cases: (Any, Any)*) = {
+      for ((args, expected) <- cases) checkWithClassloader{ cl =>
+        val cls = cl.loadClass(s"joptimize.examples.${tp.value.dropRight(1).mkString(".")}")
+        val method = cls.getMethod(tp.value.last, argClasses: _*)
+        val argsList = args match {
+          case () => Nil
+          case p: Product => p.productIterator.toSeq
+          case x => Seq(x)
+        }
+        val res = method.invoke(null, argsList.asInstanceOf[Seq[AnyRef]]: _*)
+
+        // Make sure the correct value is computed
+        (res, expected) match {
+          case (a: Array[AnyRef], b: Array[AnyRef]) =>
+            assert {
+              java.util.Arrays.deepEquals(a, b)
+            }
+          case _ => assert {
+            res == expected
+          }
+        }
+      }
+      this
+    }
+
+    def resolveMethod(sigString: String, cl: ClassLoader) = {
+
+      val (clsName, methodName) =
+        if (sigString.contains('#')){
+          val Array(clsName, methodName) = sigString.split('#')
+          val clsNameChunks = clsName.split('.')
+          (clsNameChunks.last, methodName)
+        }else{
+          val clsNameChunks0 = sigString.split('.')
+          val clsNameChunks = clsNameChunks0.dropRight(1)
+          val methodName = clsNameChunks0.last
+          (clsNameChunks.last, methodName)
+        }
+
+      val cls2 = cl.loadClass(
+        s"joptimize.examples.${tp.value.dropRight(2).mkString(".")}.$clsName"
+      )
+      (cls2, methodName)
+    }
+
+    def checkPresent(sigStrings: String*) = checkWithClassloader{ cl =>
+      for(sigString <- sigStrings) {
+        val (cls2, methodName) = resolveMethod(sigString, cl)
+        // That the previously-existing method has been removed
+        assert(cls2.getMethods.exists(_.getName == methodName))
+      }
+    }
+
+    def checkMangled(sigStrings: String*) = checkWithClassloader{ cl =>
+      for(sigString <- sigStrings) {
+        val (cls2, methodName) = resolveMethod(sigString, cl)
+        // That the previously-existing method has been removed
+        // And the n>=2 duplicate methods are in place (presumably being used)
+        assert(cls2.getMethods.count(_.getName.startsWith(methodName + "__")) >= 2)
+      }
+    }
+
+    def checkRemoved(sigStrings: String*) = checkWithClassloader{ cl =>
+      for(sigString <- sigStrings){
+        val (cls2, methodName) = resolveMethod(sigString, cl)
+        // That the previously-existing method has been removed
+        assert(!cls2.getMethods.exists(_.getName == methodName))
+      }
+    }
+  }
+
+  def classOf0[T: ClassTag] = implicitly[ClassTag[T]].runtimeClass
+  case class opt0[R: ClassTag]()
+                              (implicit tp: TestPath) extends Optimized(classOf0[R]){
+
+    def check(args: (Unit, R)*) = check0(args:_*)
+  }
+  case class opt1[T1: ClassTag, R: ClassTag]()
+                                            (implicit tp: TestPath) extends Optimized(classOf0[R], classOf0[T1]){
+    def check(args: (T1, R)*) = check0(args:_*)
+  }
+  case class opt2[T1: ClassTag, T2: ClassTag, R: ClassTag]()
+                                                          (implicit tp: TestPath) extends Optimized(classOf0[R], classOf0[T1], classOf0[T2]){
+    def check(args: ((T1, T2), R)*) = check0(args:_*)
+  }
+  case class opt3[T1: ClassTag, T2: ClassTag, T3: ClassTag, R: ClassTag]()
+                                                                        (implicit tp: TestPath) extends Optimized(classOf0[R], classOf0[T1], classOf0[T2], classOf0[T3]){
+    def check(args: ((T1, T2, T3), R)*) = check0(args:_*)
   }
 }
