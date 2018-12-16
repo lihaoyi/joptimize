@@ -2,8 +2,6 @@ package joptimize
 
 
 import collection.JavaConverters._
-import org.objectweb.asm.{Label, Type}
-import org.objectweb.asm._
 import org.objectweb.asm.Opcodes._
 import org.objectweb.asm.tree._
 
@@ -14,16 +12,17 @@ class AbstractInterpreter(isInterface: String => Boolean,
                           lookupMethod: MethodSig => Option[MethodNode],
                           visitedMethods: mutable.Map[(MethodSig, Seq[Type]), (Type, InsnList)],
                           findSubtypes: String => List[String],
-                          isConcrete: MethodSig => Boolean) {
+                          isConcrete: MethodSig => Boolean,
+                          dataflow: Dataflow) {
 
   def walkMethod(sig: MethodSig,
                       insns: InsnList,
-                      args: List[Inferred],
+                      args: Seq[Type],
                       maxLocals: Int,
                       maxStack: Int,
-                      seen0: Set[(MethodSig, Seq[Inferred])]): (Type, InsnList) = {
+                      seen0: Set[(MethodSig, Seq[Type])]): (Type, InsnList) = {
 
-    visitedMethods.getOrElseUpdate((sig, args.map(_.value).drop(if (sig.static) 0 else 1)), {
+    visitedMethods.getOrElseUpdate((sig, args.drop(if (sig.static) 0 else 1)), {
       val seen = seen0 ++ Seq((sig, args))
       // - One-pass walk through the instruction list of a method, starting from
       //   narrowed argument types
@@ -50,7 +49,7 @@ class AbstractInterpreter(isInterface: String => Boolean,
       //     states
 
       val visitedBlocks = mutable.LinkedHashMap.empty[(AbstractInsnNode, Frame), InsnList]
-      val methodReturns = mutable.Buffer.empty[Inferred]
+      val methodReturns = mutable.Buffer.empty[Type]
       def walkBlock(currentInsn: AbstractInsnNode,
                     currentState: Frame): InsnList = {
         val finalInsnList = new InsnList
@@ -63,7 +62,7 @@ class AbstractInterpreter(isInterface: String => Boolean,
         @tailrec def walkInsn(currentInsn: AbstractInsnNode, currentState: Frame): Unit = {
 //          println(Util.prettyprint(currentInsn))
 //          println(currentState)
-          val nextState = currentState.execute(currentInsn, Dataflow)
+          val nextState = currentState.execute(currentInsn, dataflow)
           currentInsn match{
             case current: FieldInsnNode =>
               val n = new FieldInsnNode(current.getOpcode, current.owner, current.name, current.desc)
@@ -153,9 +152,9 @@ class AbstractInterpreter(isInterface: String => Boolean,
                   special = copy.getOpcode == INVOKESPECIAL,
                   recurse = (staticSig, types) => {
 
-                    if (seen((staticSig, types.map(Inferred(_))))) Type.getMethodType(staticSig.desc).getReturnType
+                    if (seen((staticSig, types))) staticSig.desc.ret
                     else {
-                      val clinitSig = MethodSig(staticSig.clsName, "<clinit>", "()V", true)
+                      val clinitSig = MethodSig(staticSig.clsName, "<clinit>", Desc.read("()V"), true)
                       if (!seen.contains((clinitSig, Nil))) {
                         for(clinit <- lookupMethod(clinitSig)){
                           walkMethod(
@@ -172,7 +171,7 @@ class AbstractInterpreter(isInterface: String => Boolean,
                       walkMethod(
                         staticSig,
                         lookupMethod(staticSig).get.instructions,
-                        types.toList.map(Inferred(_)),
+                        types.toList,
                         lookupMethod(staticSig).get.maxLocals,
                         lookupMethod(staticSig).get.maxStack,
                         seen
@@ -182,8 +181,11 @@ class AbstractInterpreter(isInterface: String => Boolean,
                 )
 
               finalInsnList.add(mangled)
-              if (currentInsn.getNext.isInstanceOf[LabelNode]) walkBlock(currentInsn.getNext, currentState.execute(mangled, Dataflow))
-              else walkInsn(current.getNext, currentState.execute(mangled, Dataflow))
+              if (currentInsn.getNext.isInstanceOf[LabelNode]) {
+                walkBlock(currentInsn.getNext, currentState.execute(mangled, dataflow))
+              } else {
+                walkInsn(current.getNext, currentState.execute(mangled, dataflow))
+              }
 
             case current: MultiANewArrayInsnNode =>
               val n = new MultiANewArrayInsnNode(current.desc, current.dims)
@@ -236,8 +238,8 @@ class AbstractInterpreter(isInterface: String => Boolean,
 
 
       val resultType =
-        if (methodReturns.isEmpty) Type.getMethodType(sig.desc).getReturnType
-        else methodReturns.reduce(Dataflow.merge).value
+        if (methodReturns.isEmpty) sig.desc.ret
+        else methodReturns.reduce(dataflow.merge)
       val outputInsns = new InsnList
       visitedBlocks.valuesIterator.foreach(outputInsns.add)
       (resultType, outputInsns)
@@ -253,16 +255,16 @@ class AbstractInterpreter(isInterface: String => Boolean,
     val called = insn.asInstanceOf[MethodInsnNode]
 
 
-    val calledDesc = Type.getType(called.desc)
-    val calledSelf = if (static) Nil else Seq(Type.getObjectType(called.owner))
-    val originalTypes = calledSelf ++ calledDesc.getArgumentTypes.toSeq
+    val calledDesc = Desc.read(called.desc)
+    val calledSelf = if (static) Nil else Seq(Type.Cls(called.owner))
+    val originalTypes = calledSelf ++ calledDesc.args.toSeq
 
     val inferredTypes =
       (frame.stack.length - originalTypes.map(_.getSize).sum)
         .until(frame.stack.length)
-        .map(frame.stack(_).value)
+        .map(frame.stack(_))
 
-    val sig = MethodSig(called.owner, called.name, called.desc, static)
+    val sig = MethodSig(called.owner, called.name, Desc.read(called.desc), static)
 
     val (concreteSigs, abstractSigs) =
       if (special) (Seq(sig), Nil)
@@ -274,14 +276,14 @@ class AbstractInterpreter(isInterface: String => Boolean,
 
     for(interfaceSig <- abstractSigs){
       visitedMethods((interfaceSig, originalTypes.drop(1))) = (
-        Type.getMethodType(interfaceSig.desc).getReturnType,
+        interfaceSig.desc.ret,
         new InsnList
       )
     }
 
     val narrowReturnType = concreteSigs
       .map(recurse(_, inferredTypes))
-      .reduce((l, r) => Dataflow.merge(Inferred(l), Inferred(r)).value)
+      .reduce((l, r) => dataflow.merge(l, r))
 
     if (inferredTypes == originalTypes) insn // No narrowing
     else {
@@ -290,18 +292,18 @@ class AbstractInterpreter(isInterface: String => Boolean,
         (!static && inferredTypes.drop(1) != originalTypes.drop(1)) // ignore self type
 
       val (mangledName, mangledDesc) =
-        if (!descChanged) (called.name, called.desc)
+        if (!descChanged) (called.name, Desc.read(called.desc))
         else Util.mangle(called.name, if (static) inferredTypes else inferredTypes.drop(1), narrowReturnType)
 
       // Owner type changed! We may need to narrow from an invokeinterface to an invokevirtual
-      val newOwner = frame.stack(frame.stack.length - originalTypes.map(_.getSize).sum).value.getInternalName
+      val newOwner = frame.stack(frame.stack.length - originalTypes.map(_.getSize).sum).name
       (isInterface(called.owner), isInterface(newOwner)) match{
         case (false, true) => ??? // cannot widen interface into class!
-        case (true, false) => new MethodInsnNode(INVOKEVIRTUAL, newOwner, mangledName, mangledDesc)
+        case (true, false) => new MethodInsnNode(INVOKEVIRTUAL, newOwner, mangledName, mangledDesc.unparse)
         case _ =>
           called.owner = newOwner
           called.name = mangledName
-          called.desc = mangledDesc
+          called.desc = mangledDesc.unparse
           called
       }
     }

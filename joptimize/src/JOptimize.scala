@@ -1,6 +1,6 @@
 package joptimize
 
-import org.objectweb.asm.{ClassReader, ClassWriter, Opcodes, Type}
+import org.objectweb.asm.{ClassReader, ClassWriter, Opcodes}
 import org.objectweb.asm.tree._
 
 import collection.JavaConverters._
@@ -30,7 +30,7 @@ object JOptimize{
     val originalMethods = for{
       (k, cls) <- classNodeMap
       m <- cls.methods.iterator().asScala
-    } yield (MethodSig(cls.name, m.name, m.desc, (m.access & Opcodes.ACC_STATIC) != 0), m)
+    } yield (MethodSig(cls.name, m.name, Desc.read(m.desc), (m.access & Opcodes.ACC_STATIC) != 0), m)
 
     val visitedMethods = collection.mutable.Map.empty[(MethodSig, Seq[Type]), (Type, InsnList)]
 
@@ -39,7 +39,8 @@ object JOptimize{
       lookupMethod = sig => originalMethods.get(sig),
       visitedMethods = visitedMethods,
       findSubtypes = subtypeMap.getOrElse(_, Nil),
-      isConcrete = sig => originalMethods(sig).instructions.size != 0
+      isConcrete = sig => originalMethods(sig).instructions.size != 0,
+      new Dataflow(merge0 = (lhs, rhs) => {lhs})
     )
 
     for(entrypoint <- entrypoints){
@@ -47,7 +48,7 @@ object JOptimize{
       interp.walkMethod(
         entrypoint,
         mn.instructions,
-        Type.getType(mn.desc).getArgumentTypes.map(Inferred(_)).toList,
+        Desc.read(mn.desc).args,
         mn.maxLocals,
         mn.maxStack,
         Set()
@@ -55,25 +56,25 @@ object JOptimize{
     }
 
     val newMethods = visitedMethods.toList.map{case ((sig, inferredTypes), (returnType, insns)) =>
-      val args = Type.getMethodType(sig.desc).getArgumentTypes.toSeq
+      val args = sig.desc.args
 
       val originalNode = originalMethods(sig)
       val (mangledName, mangledDesc) =
-        if (args == inferredTypes) (originalNode.name, originalNode.desc)
+        if (args == inferredTypes) (originalNode.name, Desc.read(originalNode.desc))
         else Util.mangle(originalNode.name, inferredTypes, returnType)
 
       val newNode = new MethodNode(
         Opcodes.ASM6,
         originalNode.access,
         mangledName,
-        mangledDesc,
+        mangledDesc.unparse,
         originalNode.signature,
         originalNode.exceptions.asScala.toArray
       )
 
       originalNode.accept(newNode)
       newNode.instructions = insns
-      newNode.desc = Type.getMethodDescriptor(returnType, inferredTypes:_*)
+      newNode.desc = Desc(inferredTypes, returnType).unparse
       classNodeMap(sig.clsName) -> newNode
     }
 

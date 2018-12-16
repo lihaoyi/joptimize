@@ -1,6 +1,6 @@
 package joptimize
 
-import org.objectweb.asm.Type
+
 import org.objectweb.asm.tree.AbstractInsnNode
 import org.objectweb.asm.tree.analysis.Interpreter
 
@@ -8,12 +8,12 @@ import org.objectweb.asm.tree.analysis.Interpreter
 /**
   * An immutable wrapper around [[org.objectweb.asm.tree.analysis.Frame]],
   */
-class Frame(private val value: org.objectweb.asm.tree.analysis.Frame[Inferred]){
-  val locals = new IndexedSeq[Inferred] {
+class Frame(private val value: org.objectweb.asm.tree.analysis.Frame[Type]){
+  val locals = new IndexedSeq[Type] {
     def length = value.getLocals
     def apply(idx: Int) = value.getLocal(idx)
   }
-  val stack = new IndexedSeq[Inferred] {
+  val stack = new IndexedSeq[Type] {
 
     def length = value.getStackSize
     def apply(idx: Int) = {
@@ -37,19 +37,19 @@ class Frame(private val value: org.objectweb.asm.tree.analysis.Frame[Inferred]){
         (0 until value.getStackSize).forall(i => value.getStack(i) == other.value.getStack(i))
     case _ => false
   }
-  def execute(insn: AbstractInsnNode, interpreter: Interpreter[Inferred]) = {
+  def execute(insn: AbstractInsnNode, interpreter: Interpreter[Type]) = {
     if (insn.getOpcode == -1) this
     else{
-      val newFrame = new org.objectweb.asm.tree.analysis.Frame[Inferred](value)
+      val newFrame = new org.objectweb.asm.tree.analysis.Frame[Type](value)
       newFrame.execute(insn, interpreter)
       new Frame(newFrame)
     }
   }
 
   override def toString = {
-    def stringify(values: IndexedSeq[Inferred]) = {
+    def stringify(values: IndexedSeq[Type]) = {
       values
-        .map{case null => " " case x => if (x.value == null) "_" else x.value.getDescriptor}
+        .map{case null => " " case x => if (x == Type.Null) "_" else x.internalName}
         .mkString
     }
     s"Frame(${stringify(locals)}, ${stringify(stack)})"
@@ -57,13 +57,13 @@ class Frame(private val value: org.objectweb.asm.tree.analysis.Frame[Inferred]){
 }
 
 object Frame{
-  def initial(maxLocals: Int, maxStack: Int, args: List[Inferred]) = {
-    val initialFrame0 = new org.objectweb.asm.tree.analysis.Frame[Inferred](maxLocals, maxStack)
+  def initial(maxLocals: Int, maxStack: Int, args: Seq[Type]) = {
+    val initialFrame0 = new org.objectweb.asm.tree.analysis.Frame[Type](maxLocals, maxStack)
     var i = 0
     for(arg <- args){
       for(x <- 0 until arg.getSize){
         if (x == 0) initialFrame0.setLocal(i, arg)
-        else initialFrame0.setLocal(i, Inferred(null))
+        else initialFrame0.setLocal(i, Type.Null)
         i += 1
       }
     }

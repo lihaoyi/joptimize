@@ -1,7 +1,6 @@
 package joptimize
 import java.net.URLClassLoader
 
-import org.objectweb.asm.Type
 import utest._
 import utest.framework.TestPath
 
@@ -311,8 +310,9 @@ object MainTests extends TestSuite{
   class Optimized(returnClass: Class[_],
                   argClasses: Class[_]*)
                  (implicit tp: TestPath){
-    val methodDesc = Type.getMethodDescriptor(
-      Type.getType(returnClass), argClasses.map(Type.getType):_*
+    val methodDesc = Desc(
+      argClasses.map(c => Type.fromJavaCls(c)),
+      Type.fromJavaCls(returnClass)
     )
 
     val outputFileMap = JOptimize.run(
