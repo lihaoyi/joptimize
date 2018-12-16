@@ -240,6 +240,54 @@ object MainTests extends TestSuite{
           .check((1, 2) -> 8)
           .checkPresent("BarTwo.incA", "QuxTwo.incB")
           .checkRemoved("BarTwo.incB", "QuxTwo.incA")
+
+        'simple2 - opt2[Int, Int, Int]()
+          .check((1, 2) -> 6)
+          .checkPresent("BarTwo.incA", "BarTwo.incB")
+          .checkRemoved("QuxTwo.incA", "QuxTwo.incB")
+
+        'simple3 - opt2[Int, Int, Int]()
+          .check((1, 2) -> 10)
+          .checkPresent("QuxTwo.incA", "QuxTwo.incB")
+          .checkRemoved("BarTwo.incA", "BarTwo.incB")
+
+        'single1 - opt2[Int, Int, Int]()
+          .check((1, 2) -> 5)
+          .checkPresent("BarTwo.incA")
+          .checkRemoved("BarTwo.incB", "QuxTwo.incA", "QuxTwo.incB")
+
+        'single2 - opt2[Int, Int, Int]()
+          .check((1, 2) -> 7)
+          .checkPresent("BarTwo.incB")
+          .checkRemoved("BarTwo.incA", "QuxTwo.incA", "QuxTwo.incB")
+
+        'single3 - opt2[Int, Int, Int]()
+          .check((1, 2) -> 9)
+          .checkPresent("QuxTwo.incA")
+          .checkRemoved("QuxTwo.incB", "BarTwo.incA", "BarTwo.incB")
+
+        'single4 - opt2[Int, Int, Int]()
+          .check((1, 2) -> 11)
+          .checkPresent("QuxTwo.incB")
+          .checkRemoved("QuxTwo.incA", "BarTwo.incA", "BarTwo.incB")
+
+        'unknown1 - opt2[Int, Int, Int]()
+          .check((1, 2) -> 7)
+          .checkPresent("BarTwo.incA", "QuxTwo.incA", "FooTwo.incA")
+          .checkRemoved("BarTwo.incB", "QuxTwo.incB", "FooTwo.incB")
+
+        'unknown2 - opt2[Int, Int, Int]()
+          .check((1, 2) -> 9)
+          .checkPresent("BarTwo.incB", "QuxTwo.incB", "FooTwo.incB")
+          .checkRemoved("BarTwo.incA", "QuxTwo.incA", "FooTwo.incA")
+
+        'unknown3 - opt2[Int, Int, Int]()
+          .check((1, 2) -> 8)
+          .checkPresent(
+            "BarTwo.incA", "BarTwo.incB",
+            "QuxTwo.incA", "QuxTwo.incB",
+            "FooTwo.incA", "FooTwo.incB"
+          )
       }
     }
   }
@@ -356,14 +404,17 @@ object MainTests extends TestSuite{
 
     def check(args: (Unit, R)*) = check0(args:_*)
   }
+
   case class opt1[T1: ClassTag, R: ClassTag]()
                                             (implicit tp: TestPath) extends Optimized(classOf0[R], classOf0[T1]){
     def check(args: (T1, R)*) = check0(args:_*)
   }
+
   case class opt2[T1: ClassTag, T2: ClassTag, R: ClassTag]()
                                                           (implicit tp: TestPath) extends Optimized(classOf0[R], classOf0[T1], classOf0[T2]){
     def check(args: ((T1, T2), R)*) = check0(args:_*)
   }
+
   case class opt3[T1: ClassTag, T2: ClassTag, T3: ClassTag, R: ClassTag]()
                                                                         (implicit tp: TestPath) extends Optimized(classOf0[R], classOf0[T1], classOf0[T2], classOf0[T3]){
     def check(args: ((T1, T2, T3), R)*) = check0(args:_*)
