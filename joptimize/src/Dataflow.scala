@@ -51,7 +51,7 @@ object Dataflow extends Interpreter[Inferred](ASM4){
         }
       case JSR => BasicInterpreter.NULL_TYPE
       case GETSTATIC => getType(insn.asInstanceOf[FieldInsnNode].desc)
-      case NEW => getType(insn.asInstanceOf[TypeInsnNode].desc)
+      case NEW => getObjectType(insn.asInstanceOf[TypeInsnNode].desc)
     }
   }
 

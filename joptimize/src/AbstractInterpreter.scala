@@ -146,6 +146,7 @@ class AbstractInterpreter(isInterface: String => Boolean,
               val mangled = mangleInstruction(
                 currentState, copy,
                 static = copy.getOpcode == INVOKESTATIC,
+                special = copy.getOpcode == INVOKESPECIAL,
                 recurse = (staticSig, types) => {
                   if (seen((staticSig, types.map(Inferred(_))))) Type.getMethodType(staticSig.desc).getReturnType
                   else interpretMethod(
@@ -224,6 +225,7 @@ class AbstractInterpreter(isInterface: String => Boolean,
   def mangleInstruction(frame: Frame,
                         insn: AbstractInsnNode,
                         static: Boolean,
+                        special: Boolean,
                         recurse: (MethodSig, Seq[Type]) => Type): AbstractInsnNode = {
     val called = insn.asInstanceOf[MethodInsnNode]
 
@@ -239,10 +241,14 @@ class AbstractInterpreter(isInterface: String => Boolean,
 
     val sig = MethodSig(called.owner, called.name, called.desc, static)
 
-    val subtypes = findSubtypes(sig.clsName)
-    val possibleSigs = subtypes.map(st => sig.copy(clsName = st)) ++ Seq(sig)
-    val concreteSigs = possibleSigs.filter(isConcrete)
-    for(interfaceSig <- possibleSigs.filter(!isConcrete(_))){
+    val (concreteSigs, abstractSigs) =
+      if (special) (Seq(sig), Seq(sig))
+      else{
+        val subtypes = findSubtypes(sig.clsName)
+        val possibleSigs = subtypes.map(st => sig.copy(clsName = st)) ++ Seq(sig)
+        possibleSigs.partition(isConcrete)
+      }
+    for(interfaceSig <- abstractSigs){
       visitedMethods((interfaceSig, originalTypes.drop(1))) = (
         Type.getMethodType(interfaceSig.desc).getReturnType,
         new InsnList

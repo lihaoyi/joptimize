@@ -32,50 +32,84 @@ object MainTests extends TestSuite{
       os.write(outRoot / tp.value.last / os.RelPath(k), bytes, createFolders = true)
     }
 
-
-    def check0(cases: (Any, Any)*) = {
-      for ((args, expected) <- cases) {
-        val cl = new URLClassLoader(Array((outRoot / tp.value.last).toNIO.toUri.toURL))
-        try {
-          val cls = cl.loadClass(s"joptimize.examples.${tp.value.dropRight(1).mkString(".")}")
-          val method = cls.getMethod(tp.value.last, argClasses: _*)
-          val argsList = args match {
-            case () => Nil
-            case p: Product => p.productIterator.toSeq
-            case x => Seq(x)
-          }
-          val res = method.invoke(null, argsList.asInstanceOf[Seq[AnyRef]]: _*)
-
-          // Make sure the correct value is computed
-          (res, expected) match {
-            case (a: Array[AnyRef], b: Array[AnyRef]) =>
-              assert {
-                java.util.Arrays.deepEquals(a, b)
-              }
-            case _ => assert {
-              res == expected
-            }
-          }
-        } finally {
-          cl.close()
-        }
-      }
-      this
-    }
-    def checkRemoved(methodName: String) = {
+    def checkWithClassloader(f: URLClassLoader => Any): this.type = {
       val cl = new URLClassLoader(Array((outRoot / tp.value.last).toNIO.toUri.toURL))
       try {
-        val cls2 = cl.loadClass(s"joptimize.examples.${tp.value.dropRight(1).mkString(".")}$$")
-        assert(
-          // That the previously-existing method has been removed
-          !cls2.getMethods.exists(_.getName == "call"),
-          // And the n>=2 duplicate methods are in place (presumably being used)
-          cls2.getMethods.count(_.getName.startsWith("call")) >= 2
-        )
+        f(cl)
       } finally {
         cl.close()
       }
       this
+    }
+
+    def check0(cases: (Any, Any)*) = {
+      for ((args, expected) <- cases) checkWithClassloader{ cl =>
+        val cls = cl.loadClass(s"joptimize.examples.${tp.value.dropRight(1).mkString(".")}")
+        val method = cls.getMethod(tp.value.last, argClasses: _*)
+        val argsList = args match {
+          case () => Nil
+          case p: Product => p.productIterator.toSeq
+          case x => Seq(x)
+        }
+        val res = method.invoke(null, argsList.asInstanceOf[Seq[AnyRef]]: _*)
+
+        // Make sure the correct value is computed
+        (res, expected) match {
+          case (a: Array[AnyRef], b: Array[AnyRef]) =>
+            assert {
+              java.util.Arrays.deepEquals(a, b)
+            }
+          case _ => assert {
+            res == expected
+          }
+        }
+      }
+      this
+    }
+
+    def resolveMethod(sigString: String, cl: ClassLoader) = {
+
+      val (clsName, methodName) =
+        if (sigString.contains('#')){
+          val Array(clsName, methodName) = sigString.split('#')
+          val clsNameChunks = clsName.split('.')
+          (clsNameChunks.last, methodName)
+        }else{
+          val clsNameChunks0 = sigString.split('.')
+          val clsNameChunks = clsNameChunks0.dropRight(1)
+          val methodName = clsNameChunks0.last
+          (clsNameChunks.last, methodName)
+        }
+
+      val cls2 = cl.loadClass(
+        s"joptimize.examples.${tp.value.dropRight(2).mkString(".")}.$clsName"
+      )
+      (cls2, methodName)
+    }
+
+    def checkPresent(sigStrings: String*) = checkWithClassloader{ cl =>
+      for(sigString <- sigStrings) {
+        val (cls2, methodName) = resolveMethod(sigString, cl)
+        // That the previously-existing method has been removed
+        assert(cls2.getMethods.exists(_.getName == methodName))
+      }
+    }
+
+    def checkMangled(sigStrings: String*) = checkWithClassloader{ cl =>
+      for(sigString <- sigStrings) {
+        val (cls2, methodName) = resolveMethod(sigString, cl)
+        // That the previously-existing method has been removed
+        // And the n>=2 duplicate methods are in place (presumably being used)
+        assert(cls2.getMethods.count(_.getName.startsWith(methodName + "__")) >= 2)
+      }
+    }
+
+    def checkRemoved(sigStrings: String*) = checkWithClassloader{ cl =>
+      for(sigString <- sigStrings){
+        val (cls2, methodName) = resolveMethod(sigString, cl)
+        // That the previously-existing method has been removed
+        assert(!cls2.getMethods.exists(_.getName == methodName))
+      }
     }
   }
 
@@ -283,22 +317,53 @@ object MainTests extends TestSuite{
     }
     'narrow - {
       'Supertype - {
-        'main - opt2[Int, Int, Int]().check((1, 2) -> 6).checkRemoved("call")
+        'main - opt2[Int, Int, Int]()
+          .check((1, 2) -> 6)
+          .checkRemoved("Supertype$.call")
+          .checkMangled("Supertype$.call")
       }
       'Parametric - {
-        'main - opt2[Int, Int, Int]().check((1, 2) -> 6).checkRemoved("call")
+        'main - opt2[Int, Int, Int]()
+          .check((1, 2) -> 6)
+          .checkRemoved("Parametric$.call")
+          .checkMangled("Parametric$.call")
       }
       'Supertype2 - {
-        'main - opt2[Int, Int, Int]().check((1, 2) -> 6).checkRemoved("call")
+        'main - opt2[Int, Int, Int]()
+          .check((1, 2) -> 6)
+          .checkRemoved("Supertype2$.call")
+          .checkMangled("Supertype2$.call")
       }
       'Parametric2 - {
-        'main - opt2[Int, Int, Int]().check((1, 2) -> 6).checkRemoved("call")
+        'main - opt2[Int, Int, Int]()
+          .check((1, 2) -> 6)
+          .checkRemoved("Parametric2$.call")
+          .checkMangled("Parametric2$.call")
       }
       'NarrowReturn - {
-        'main - opt2[Int, Int, Int]().check((1, 2) -> 6).checkRemoved("call")
+        'main - opt2[Int, Int, Int]()
+          .check((1, 2) -> 6)
+          .checkRemoved("NarrowReturn$.call")
+          .checkMangled("NarrowReturn$.call")
       }
       'ForceWide - {
-        'main - opt2[Int, Int, Int]().check((1, 2) -> 6)
+        'main - opt2[Int, Int, Int]()
+          .check((1, 2) -> 6)
+          .checkPresent("ForceWide$.call")
+      }
+    }
+    'opt - {
+      'SimpleDce - {
+        'main - opt2[Int, Int, Int]()
+          .check((1, 2) -> 6)
+          .checkPresent("SimpleDce$.call1", "SimpleDce$.call2")
+          .checkRemoved("SimpleDce$.call3")
+      }
+      'InstanceDce - {
+        'simple1 - opt2[Int, Int, Int]()
+          .check((1, 2) -> 6)
+          .checkPresent("SimpleDce$.call1", "SimpleDce$.call2")
+          .checkRemoved("SimpleDce$.call3")
       }
     }
   }
