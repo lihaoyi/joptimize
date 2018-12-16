@@ -83,15 +83,32 @@ object JOptimize{
       }
     }
 
-    val grouped = newMethods.groupBy(_._1).mapValues(_.map(_._2)).toMap
-    for((cn, mns) <- grouped){
-      cn.methods.addAll(mns.asJava)
+    // Discover all interfaces implemented by the visited classes and find all
+    // their super-interfaces. We need to discover these separately as interfaces
+    // do not have an <init> method and if unused won't be picked up by the
+    // abstract interpreter, but still need to be present since they're
+    // implemented by the classes we do use
+    val visitedInterfaces = mutable.Set.empty[String]
+    val queue = newMethods.flatMap(_._1.interfaces.asScala).distinct.to[mutable.Queue]
+    while (queue.nonEmpty){
+      val current = queue.dequeue()
+      if (!visitedInterfaces.contains(current)){
+        visitedInterfaces.add(current)
+        queue.enqueue(classNodeMap(current).interfaces.asScala:_*)
+      }
     }
 
-    for((k, cn) <- classFileMap) yield {
+
+
+    val grouped =
+      visitedInterfaces.map(classNodeMap(_) -> Nil).toMap ++
+      newMethods.groupBy(_._1).mapValues(_.map(_._2))
+
+    for((cn, mns) <- grouped) yield {
+      cn.methods.addAll(mns.asJava)
       val cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES)
       cn.accept(cw)
-      (k, cw.toByteArray)
+      (cn.name + ".class", cw.toByteArray)
     }
   }
 }

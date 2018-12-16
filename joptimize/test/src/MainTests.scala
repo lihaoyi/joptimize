@@ -289,6 +289,18 @@ object MainTests extends TestSuite{
             "FooTwo.incA", "FooTwo.incB"
           )
       }
+      'InterfacePreservation - {
+        'shallow - opt1[Int, Int]()
+          .check(
+            1 -> 2,
+            2 -> 3
+          )
+        'deep - opt1[Int, Int]()
+          .check(
+            1 -> 3,
+            2 -> 4
+          )
+      }
     }
   }
 
@@ -312,13 +324,13 @@ object MainTests extends TestSuite{
       eliminateOldMethods = true
     )
 
-    os.remove.all(outRoot / tp.value.last)
+    os.remove.all(outRoot / tp.value)
     for((k, bytes) <- outputFileMap){
-      os.write(outRoot / tp.value.last / os.RelPath(k), bytes, createFolders = true)
+      os.write(outRoot / tp.value / os.RelPath(k), bytes, createFolders = true)
     }
 
     def checkWithClassloader(f: URLClassLoader => Any): this.type = {
-      val cl = new URLClassLoader(Array((outRoot / tp.value.last).toNIO.toUri.toURL))
+      val cl = new URLClassLoader(Array((outRoot / tp.value).toNIO.toUri.toURL))
       try {
         f(cl)
       } finally {
