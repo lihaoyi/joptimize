@@ -32,7 +32,7 @@ object JOptimize{
       m <- cls.methods.iterator().asScala
     } yield (MethodSig(cls.name, m.name, Desc.read(m.desc), (m.access & Opcodes.ACC_STATIC) != 0), m)
 
-    val visitedMethods = collection.mutable.Map.empty[(MethodSig, Seq[IType]), (JType, InsnList)]
+    val visitedMethods = collection.mutable.Map.empty[(MethodSig, Seq[IType]), (IType, InsnList)]
 
     def leastUpperBound(classes: Seq[JType.Cls]) = {
       Util.leastUpperBound(classes.toSet) { cls =>
@@ -43,25 +43,29 @@ object JOptimize{
       }.toSeq
     }
 
+    def merge(itypes: Seq[IType]): IType = {
+      val flattened = itypes.flatMap{
+        case IType.Intersect(values) => values
+        case j: JType => Seq(j)
+      }
+      if (flattened.distinct.length == 1) flattened.head
+      else{
+        assert(flattened.forall(_.isRef))
+        if (flattened.exists(_.isInstanceOf[JType.Arr])) JType.Cls("java/lang/Object")
+        else leastUpperBound(flattened.map(_.asInstanceOf[JType.Cls])) match{
+          case Seq(single) => single
+          case many => IType.Intersect(many)
+        }
+      }
+    }
+
     val interp = new AbstractInterpreter(
       isInterface = s => (classNodeMap(s).access & Opcodes.ACC_INTERFACE) != 0,
       lookupMethod = sig => originalMethods.get(sig),
       visitedMethods = visitedMethods,
       findSubtypes = subtypeMap.getOrElse(_, Nil),
       isConcrete = sig => originalMethods(sig).instructions.size != 0,
-      new Dataflow(merge0 = (lhs, rhs) => {
-        if (lhs == rhs) lhs
-        else {
-          assert(lhs.isRef)
-          assert(rhs.isRef)
-          (lhs, rhs) match{
-            case (l: JType.Cls, r: JType.Cls) => IType.Intersect(leastUpperBound(Seq(l, r)))
-            case (l: IType.Intersect, r: JType.Cls) => IType.Intersect(leastUpperBound(l.classes ++ Seq(r)))
-            case (l: JType.Cls, r: IType.Intersect) => IType.Intersect(leastUpperBound(Seq(l) ++ r.classes))
-            case _ => JType.Cls("java/lang/Object")
-          }
-        }
-      })
+      merge = merge
     )
 
     for(entrypoint <- entrypoints){
@@ -80,9 +84,11 @@ object JOptimize{
       val args = sig.desc.args
 
       val originalNode = originalMethods(sig)
+      val jTypeArgs = inferredTypes.zip(args).map(t => JType.fromIType(t._1, t._2))
+      val jTypeRet = JType.fromIType(returnType, sig.desc.ret)
       val (mangledName, mangledDesc) =
         if (args == inferredTypes) (originalNode.name, Desc.read(originalNode.desc))
-        else Util.mangle(originalNode.name, inferredTypes.map(JType.fromIType), returnType)
+        else Util.mangle(originalNode.name, jTypeArgs, jTypeRet)
 
       val newNode = new MethodNode(
         Opcodes.ASM6,
@@ -95,7 +101,7 @@ object JOptimize{
 
       originalNode.accept(newNode)
       newNode.instructions = insns
-      newNode.desc = Desc(inferredTypes.map(JType.fromIType), returnType).unparse
+      newNode.desc = Desc(jTypeArgs, jTypeRet).unparse
       classNodeMap(sig.cls) -> newNode
     }
 

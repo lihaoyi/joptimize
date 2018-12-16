@@ -5,7 +5,7 @@ import org.objectweb.asm.tree.analysis._
 import org.objectweb.asm.{Handle}
 import org.objectweb.asm.tree._
 
-class Dataflow(merge0: (IType, IType) => IType) extends Interpreter[IType](ASM4){
+object Dataflow extends Interpreter[IType](ASM4){
   def newValue(tpe: org.objectweb.asm.Type) = {
     if (tpe == null) JType.Null
     else JType.read(tpe.getInternalName)
@@ -96,5 +96,8 @@ class Dataflow(merge0: (IType, IType) => IType) extends Interpreter[IType](ASM4)
     }
   }
   def returnOperation(insn: AbstractInsnNode, value: IType, expected: IType) = {}
-  def merge(v1: IType, v2: IType) = merge0(v1, v2)
+
+  // We do not use this, since we do the walking
+  // and merging manually in AbstractInterpreter
+  def merge(v1: IType, v2: IType) = ???
 }

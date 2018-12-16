@@ -6,9 +6,9 @@ import reflect.ClassTag
 
 object JType{
   implicit def strClsTypeShorthand(name: String): Cls = Cls(name)
-  def fromIType(t: IType) = t match{
+  def fromIType(t: IType, fallback: JType): JType = t match{
     case j: JType => j
-    case IType.Intersect(classes) => ???
+    case IType.Intersect(classes) => fallback
   }
   def fromJavaCls(c: Class[_]): JType =
     if (c.isPrimitive) Prim.allJava(c.getTypeName)
