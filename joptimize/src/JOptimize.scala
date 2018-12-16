@@ -32,7 +32,7 @@ object JOptimize{
       m <- cls.methods.iterator().asScala
     } yield (MethodSig(cls.name, m.name, Desc.read(m.desc), (m.access & Opcodes.ACC_STATIC) != 0), m)
 
-    val visitedMethods = collection.mutable.Map.empty[(MethodSig, Seq[JType]), (JType, InsnList)]
+    val visitedMethods = collection.mutable.Map.empty[(MethodSig, Seq[IType]), (JType, InsnList)]
 
     val interp = new AbstractInterpreter(
       isInterface = s => (classNodeMap(s).access & Opcodes.ACC_INTERFACE) != 0,
@@ -46,7 +46,9 @@ object JOptimize{
           assert(lhs.isRef)
           assert(rhs.isRef)
           (lhs, rhs) match{
-            case (JType.Cls(l), JType.Cls(r)) => JType.Cls(l)
+            case (l: JType.Cls, r: JType.Cls) => IType.Intersect(Seq(l, r))
+            case (l: IType.Intersect, r: JType.Cls) => IType.Intersect(l.classes ++ Seq(r))
+            case (l: JType.Cls, r: IType.Intersect) => IType.Intersect(Seq(l) ++ r.classes)
             case _ => JType.Cls("java/lang/Object")
 
           }
@@ -72,7 +74,7 @@ object JOptimize{
       val originalNode = originalMethods(sig)
       val (mangledName, mangledDesc) =
         if (args == inferredTypes) (originalNode.name, Desc.read(originalNode.desc))
-        else Util.mangle(originalNode.name, inferredTypes, returnType)
+        else Util.mangle(originalNode.name, inferredTypes.map(JType.fromIType), returnType)
 
       val newNode = new MethodNode(
         Opcodes.ASM6,
@@ -85,7 +87,7 @@ object JOptimize{
 
       originalNode.accept(newNode)
       newNode.instructions = insns
-      newNode.desc = Desc(inferredTypes, returnType).unparse
+      newNode.desc = Desc(inferredTypes.map(JType.fromIType), returnType).unparse
       classNodeMap(sig.cls) -> newNode
     }
 

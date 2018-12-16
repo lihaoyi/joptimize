@@ -5,7 +5,7 @@ import org.objectweb.asm.tree.analysis._
 import org.objectweb.asm.{Handle}
 import org.objectweb.asm.tree._
 
-class Dataflow(merge0: (JType, JType) => JType) extends Interpreter[JType](ASM4){
+class Dataflow(merge0: (IType, IType) => IType) extends Interpreter[IType](ASM4){
   def newValue(tpe: org.objectweb.asm.Type) = {
     if (tpe == null) JType.Null
     else JType.read(tpe.getInternalName)
@@ -39,9 +39,9 @@ class Dataflow(merge0: (JType, JType) => JType) extends Interpreter[JType](ASM4)
     }
   }
 
-  def copyOperation(insn: AbstractInsnNode, value: JType) = value
+  def copyOperation(insn: AbstractInsnNode, value: IType) = value
 
-  def unaryOperation(insn: AbstractInsnNode, value: JType) = {
+  def unaryOperation(insn: AbstractInsnNode, value: IType) = {
     insn.getOpcode match {
       case INEG | IINC | L2I | F2I | D2I | I2B | I2C | I2S => JType.Prim.I
       case FNEG | I2F| L2F| D2F => JType.Prim.J
@@ -70,7 +70,7 @@ class Dataflow(merge0: (JType, JType) => JType) extends Interpreter[JType](ASM4)
       case MONITORENTER | MONITOREXIT | IFNULL | IFNONNULL => JType.Null
     }
   }
-  def binaryOperation(insn: AbstractInsnNode, v1: JType, v2: JType) = {
+  def binaryOperation(insn: AbstractInsnNode, v1: IType, v2: IType) = {
     insn.getOpcode match {
       case IALOAD | BALOAD | CALOAD | SALOAD | IADD | ISUB | IMUL | IDIV | IREM | ISHL | ISHR | IUSHR | IAND | IOR | IXOR =>
         JType.Prim.I
@@ -85,16 +85,16 @@ class Dataflow(merge0: (JType, JType) => JType) extends Interpreter[JType](ASM4)
         JType.Null
     }
   }
-  def ternaryOperation(insn: AbstractInsnNode, v1: JType, v2: JType, v3: JType) = {
+  def ternaryOperation(insn: AbstractInsnNode, v1: IType, v2: IType, v3: IType) = {
     JType.Null
   }
-  def naryOperation(insn: AbstractInsnNode, vs: java.util.List[_ <: JType]) = {
+  def naryOperation(insn: AbstractInsnNode, vs: java.util.List[_ <: IType]) = {
     insn.getOpcode match{
       case MULTIANEWARRAY => JType.read(insn.asInstanceOf[MultiANewArrayInsnNode].desc)
       case INVOKEDYNAMIC => Desc.read(insn.asInstanceOf[InvokeDynamicInsnNode].desc).ret
       case _ => Desc.read(insn.asInstanceOf[MethodInsnNode].desc).ret
     }
   }
-  def returnOperation(insn: AbstractInsnNode, value: JType, expected: JType) = {}
-  def merge(v1: JType, v2: JType) = merge0(v1, v2)
+  def returnOperation(insn: AbstractInsnNode, value: IType, expected: IType) = {}
+  def merge(v1: IType, v2: IType) = merge0(v1, v2)
 }

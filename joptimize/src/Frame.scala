@@ -8,12 +8,12 @@ import org.objectweb.asm.tree.analysis.Interpreter
 /**
   * An immutable wrapper around [[org.objectweb.asm.tree.analysis.Frame]],
   */
-class Frame(private val value: org.objectweb.asm.tree.analysis.Frame[JType]){
-  val locals = new IndexedSeq[JType] {
+class Frame(private val value: org.objectweb.asm.tree.analysis.Frame[IType]){
+  val locals = new IndexedSeq[IType] {
     def length = value.getLocals
     def apply(idx: Int) = value.getLocal(idx)
   }
-  val stack = new IndexedSeq[JType] {
+  val stack = new IndexedSeq[IType] {
 
     def length = value.getStackSize
     def apply(idx: Int) = {
@@ -37,17 +37,17 @@ class Frame(private val value: org.objectweb.asm.tree.analysis.Frame[JType]){
         (0 until value.getStackSize).forall(i => value.getStack(i) == other.value.getStack(i))
     case _ => false
   }
-  def execute(insn: AbstractInsnNode, interpreter: Interpreter[JType]) = {
+  def execute(insn: AbstractInsnNode, interpreter: Interpreter[IType]) = {
     if (insn.getOpcode == -1) this
     else{
-      val newFrame = new org.objectweb.asm.tree.analysis.Frame[JType](value)
+      val newFrame = new org.objectweb.asm.tree.analysis.Frame[IType](value)
       newFrame.execute(insn, interpreter)
       new Frame(newFrame)
     }
   }
 
   override def toString = {
-    def stringify(values: IndexedSeq[JType]) = {
+    def stringify(values: IndexedSeq[IType]) = {
       values
         .map{case null => " " case x => if (x == JType.Null) "_" else x.internalName}
         .mkString
@@ -57,8 +57,8 @@ class Frame(private val value: org.objectweb.asm.tree.analysis.Frame[JType]){
 }
 
 object Frame{
-  def initial(maxLocals: Int, maxStack: Int, args: Seq[JType]) = {
-    val initialFrame0 = new org.objectweb.asm.tree.analysis.Frame[JType](maxLocals, maxStack)
+  def initial(maxLocals: Int, maxStack: Int, args: Seq[IType]) = {
+    val initialFrame0 = new org.objectweb.asm.tree.analysis.Frame[IType](maxLocals, maxStack)
     var i = 0
     for(arg <- args){
       for(x <- 0 until arg.getSize){
