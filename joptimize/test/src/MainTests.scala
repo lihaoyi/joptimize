@@ -237,9 +237,9 @@ object MainTests extends TestSuite{
       }
       'InstanceDce - {
         'simple1 - opt2[Int, Int, Int]()
-          .check((1, 2) -> 6)
-          .checkPresent("SimpleDce$.call1", "SimpleDce$.call2")
-          .checkRemoved("SimpleDce$.call3")
+          .check((1, 2) -> 8)
+          .checkPresent("BarTwo.incA", "QuxTwo.incB")
+          .checkRemoved("BarTwo.incB", "QuxTwo.incA")
       }
     }
   }

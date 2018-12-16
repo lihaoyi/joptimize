@@ -11,7 +11,7 @@ import scala.annotation.tailrec
 import scala.collection.mutable
 
 class AbstractInterpreter(isInterface: String => Boolean,
-                          lookupMethod: MethodSig => MethodNode,
+                          lookupMethod: MethodSig => Option[MethodNode],
                           visitedMethods: mutable.Map[(MethodSig, Seq[Type]), (Type, InsnList)],
                           findSubtypes: String => List[String],
                           isConcrete: MethodSig => Boolean) {
@@ -144,22 +144,42 @@ class AbstractInterpreter(isInterface: String => Boolean,
               val copy = new MethodInsnNode(
                 current.getOpcode, current.owner, current.name, current.desc, current.itf
               )
-              val mangled = mangleInstruction(
-                currentState, copy,
-                static = copy.getOpcode == INVOKESTATIC,
-                special = copy.getOpcode == INVOKESPECIAL,
-                recurse = (staticSig, types) => {
-                  if (seen((staticSig, types.map(Inferred(_))))) Type.getMethodType(staticSig.desc).getReturnType
-                  else interpretMethod(
-                    staticSig,
-                    lookupMethod(staticSig).instructions,
-                    types.toList.map(Inferred(_)),
-                    lookupMethod(staticSig).maxLocals,
-                    lookupMethod(staticSig).maxStack,
-                    seen
-                  )._1
-                }
-              )
+
+              val mangled =
+                if (current.owner.startsWith("java/")) copy
+                else mangleInstruction(
+                  currentState, copy,
+                  static = copy.getOpcode == INVOKESTATIC,
+                  special = copy.getOpcode == INVOKESPECIAL,
+                  recurse = (staticSig, types) => {
+
+                    if (seen((staticSig, types.map(Inferred(_))))) Type.getMethodType(staticSig.desc).getReturnType
+                    else {
+                      val clinitSig = MethodSig(staticSig.clsName, "<clinit>", "()V", true)
+                      if (!seen.contains((clinitSig, Nil))) {
+                        for(clinit <- lookupMethod(clinitSig)){
+                          interpretMethod(
+                            clinitSig,
+                            clinit.instructions,
+                            Nil,
+                            clinit.maxLocals,
+                            clinit.maxStack,
+                            seen ++ Seq((clinitSig, Nil))
+                          )
+                        }
+                      }
+
+                      interpretMethod(
+                        staticSig,
+                        lookupMethod(staticSig).get.instructions,
+                        types.toList.map(Inferred(_)),
+                        lookupMethod(staticSig).get.maxLocals,
+                        lookupMethod(staticSig).get.maxStack,
+                        seen
+                      )._1
+                    }
+                  }
+                )
 
               finalInsnList.add(mangled)
               if (currentInsn.getNext.isInstanceOf[LabelNode]) walkBlock(currentInsn.getNext, currentState.execute(mangled, Dataflow))

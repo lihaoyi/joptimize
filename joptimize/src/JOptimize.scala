@@ -36,7 +36,7 @@ object JOptimize{
 
     val interp = new AbstractInterpreter(
       isInterface = s => (classNodeMap(s).access & Opcodes.ACC_INTERFACE) != 0,
-      lookupMethod = sig => originalMethods(sig),
+      lookupMethod = sig => originalMethods.get(sig),
       visitedMethods = visitedMethods,
       findSubtypes = subtypeMap.getOrElse(_, Nil),
       isConcrete = sig => originalMethods(sig).instructions.size != 0
@@ -79,7 +79,7 @@ object JOptimize{
 
     if (eliminateOldMethods) {
       for ((k, cn) <- classFileMap) {
-        cn.methods.removeIf { mn => mn.name != "<init>" && mn.name != "<clinit>" }
+        cn.methods.clear()
       }
     }
 
