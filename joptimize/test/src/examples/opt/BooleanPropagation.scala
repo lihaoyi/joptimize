@@ -1,13 +1,13 @@
-package examples.opt
+package joptimize.examples.opt
 
 object BooleanPropagation {
   def simple(x: Int, y: Int): Int = {
-    val b = true
-    val b1 = !b
-    if (b1) call1(x)
-    else call2(y)
+    call(true, x, y)
   }
-  def invert(b: Boolean): Boolean = !b
-  def call1(x: Int): Int = x + 1
-  def call2(y: Int): Int = y + 2
+  def call(b: Boolean, x: Int, y: Int) = {
+    if (b) leaf1(x)
+    else leaf2(y)
+  }
+  def leaf1(x: Int): Int = x + 1
+  def leaf2(y: Int): Int = y + 2
 }

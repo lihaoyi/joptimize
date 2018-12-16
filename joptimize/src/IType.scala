@@ -20,4 +20,10 @@ object IType{
     def internalName: String = "?"
     def isRef = true
   }
+  case class Bool(value: Boolean) extends IType{
+    pprint.log(value)
+    def size = 1
+    def isRef = false
+    def internalName = "Z"
+  }
 }
