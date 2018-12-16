@@ -44,7 +44,7 @@ object JOptimize{
 
     for(entrypoint <- entrypoints){
       val mn = originalMethods(entrypoint)
-      interp.interpretMethod(
+      interp.walkMethod(
         entrypoint,
         mn.instructions,
         Type.getType(mn.desc).getArgumentTypes.map(Inferred(_)).toList,

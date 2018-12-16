@@ -16,7 +16,7 @@ class AbstractInterpreter(isInterface: String => Boolean,
                           findSubtypes: String => List[String],
                           isConcrete: MethodSig => Boolean) {
 
-  def interpretMethod(sig: MethodSig,
+  def walkMethod(sig: MethodSig,
                       insns: InsnList,
                       args: List[Inferred],
                       maxLocals: Int,
@@ -158,7 +158,7 @@ class AbstractInterpreter(isInterface: String => Boolean,
                       val clinitSig = MethodSig(staticSig.clsName, "<clinit>", "()V", true)
                       if (!seen.contains((clinitSig, Nil))) {
                         for(clinit <- lookupMethod(clinitSig)){
-                          interpretMethod(
+                          walkMethod(
                             clinitSig,
                             clinit.instructions,
                             Nil,
@@ -169,7 +169,7 @@ class AbstractInterpreter(isInterface: String => Boolean,
                         }
                       }
 
-                      interpretMethod(
+                      walkMethod(
                         staticSig,
                         lookupMethod(staticSig).get.instructions,
                         types.toList.map(Inferred(_)),
