@@ -60,7 +60,7 @@ class AbstractInterpreter(isInterface: String => Boolean,
           *
           * - Instruction list of that basic block
           */
-        @tailrec def walkBlockInsn(currentInsn: AbstractInsnNode, currentState: Frame): Unit = {
+        @tailrec def walkInsn(currentInsn: AbstractInsnNode, currentState: Frame): Unit = {
 //          println(Util.prettyprint(currentInsn))
 //          println(currentState)
           val nextState = currentState.execute(currentInsn, Dataflow)
@@ -69,7 +69,7 @@ class AbstractInterpreter(isInterface: String => Boolean,
               val n = new FieldInsnNode(current.getOpcode, current.owner, current.name, current.desc)
               finalInsnList.add(n)
               if (currentInsn.getNext.isInstanceOf[LabelNode]) walkBlock(currentInsn.getNext, nextState)
-              else walkBlockInsn(current.getNext, nextState)
+              else walkInsn(current.getNext, nextState)
 
             case current: FrameNode =>
               val n = new FrameNode(
@@ -81,13 +81,13 @@ class AbstractInterpreter(isInterface: String => Boolean,
               )
               finalInsnList.add(n)
               if (currentInsn.getNext.isInstanceOf[LabelNode]) walkBlock(currentInsn.getNext, nextState)
-              else walkBlockInsn(current.getNext, nextState)
+              else walkInsn(current.getNext, nextState)
 
             case current: IincInsnNode =>
               val n = new IincInsnNode(current.`var`, current.incr)
               finalInsnList.add(n)
               if (currentInsn.getNext.isInstanceOf[LabelNode]) walkBlock(currentInsn.getNext, nextState)
-              else walkBlockInsn(current.getNext, nextState)
+              else walkInsn(current.getNext, nextState)
 
             case current: InsnNode =>
               val n = new InsnNode(current.getOpcode)
@@ -98,7 +98,7 @@ class AbstractInterpreter(isInterface: String => Boolean,
                 case RETURN | DRETURN | FRETURN | IRETURN | LRETURN =>
                 case _ =>
                   if (currentInsn.getNext.isInstanceOf[LabelNode]) walkBlock(currentInsn.getNext, nextState)
-                  else walkBlockInsn(current.getNext, nextState)
+                  else walkInsn(current.getNext, nextState)
               }
 
 
@@ -106,7 +106,7 @@ class AbstractInterpreter(isInterface: String => Boolean,
               val n = new IntInsnNode(current.getOpcode, current.operand)
               finalInsnList.add(n)
               if (currentInsn.getNext.isInstanceOf[LabelNode]) walkBlock(currentInsn.getNext, nextState)
-              else walkBlockInsn(current.getNext, nextState)
+              else walkInsn(current.getNext, nextState)
 
             case current: InvokeDynamicInsnNode => ???
 
@@ -121,17 +121,17 @@ class AbstractInterpreter(isInterface: String => Boolean,
 
             case current: LabelNode =>
               finalInsnList.add(new LabelNode())
-              walkBlockInsn(current.getNext, nextState)
+              walkInsn(current.getNext, nextState)
 
             case current: LdcInsnNode =>
               finalInsnList.add(new LdcInsnNode(current.cst))
               if (currentInsn.getNext.isInstanceOf[LabelNode]) walkBlock(currentInsn.getNext, nextState)
-              else walkBlockInsn(current.getNext, nextState)
+              else walkInsn(current.getNext, nextState)
 
             case current: LineNumberNode =>
               finalInsnList.add(new LineNumberNode(current.line, current.start))
               if (currentInsn.getNext.isInstanceOf[LabelNode]) walkBlock(currentInsn.getNext, nextState)
-              else walkBlockInsn(current.getNext, nextState)
+              else walkInsn(current.getNext, nextState)
 
             case current: LookupSwitchInsnNode =>
               val n = new LookupSwitchInsnNode(null, Array(), Array())
@@ -183,13 +183,13 @@ class AbstractInterpreter(isInterface: String => Boolean,
 
               finalInsnList.add(mangled)
               if (currentInsn.getNext.isInstanceOf[LabelNode]) walkBlock(currentInsn.getNext, currentState.execute(mangled, Dataflow))
-              else walkBlockInsn(current.getNext, currentState.execute(mangled, Dataflow))
+              else walkInsn(current.getNext, currentState.execute(mangled, Dataflow))
 
             case current: MultiANewArrayInsnNode =>
               val n = new MultiANewArrayInsnNode(current.desc, current.dims)
               finalInsnList.add(n)
               if (currentInsn.getNext.isInstanceOf[LabelNode]) walkBlock(currentInsn.getNext, nextState)
-              else walkBlockInsn(current.getNext, nextState)
+              else walkInsn(current.getNext, nextState)
 
             case current: TableSwitchInsnNode =>
               val n = new TableSwitchInsnNode(current.min, current.max, null)
@@ -201,19 +201,19 @@ class AbstractInterpreter(isInterface: String => Boolean,
               val n = new TypeInsnNode(current.getOpcode, current.desc)
               finalInsnList.add(n)
               if (currentInsn.getNext.isInstanceOf[LabelNode]) walkBlock(currentInsn.getNext, nextState)
-              else walkBlockInsn(current.getNext, nextState)
+              else walkInsn(current.getNext, nextState)
 
             case current: VarInsnNode =>
               val n = new VarInsnNode(current.getOpcode, current.`var`)
               finalInsnList.add(n)
               if (currentInsn.getNext.isInstanceOf[LabelNode]) walkBlock(currentInsn.getNext, nextState)
-              else walkBlockInsn(current.getNext, nextState)
+              else walkInsn(current.getNext, nextState)
           }
         }
         if (!visitedBlocks.contains((currentInsn, currentState))){
 //          println("NEW BLOCK " + (currentInsn, currentState))
           visitedBlocks((currentInsn, currentState)) = finalInsnList
-          walkBlockInsn(currentInsn, currentState)
+          walkInsn(currentInsn, currentState)
 //          println("END BLOCK")
           finalInsnList
         }else{
