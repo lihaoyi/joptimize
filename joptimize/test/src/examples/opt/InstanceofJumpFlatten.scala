@@ -7,11 +7,26 @@ object InstanceofJumpFlatten {
 
   def simpleQux(x: Int): Int = call(new InstanceImplC, x)
 
+  def simpleBarMatch(x: Int): Int = call(new InstanceImplA, x)
+
+  def simpleBazMatch(x: Int): Int = call(new InstanceImplB, x)
+
+  def simpleQuxMatch(x: Int): Int = call(new InstanceImplC, x)
+
   def call(b: InstanceTrait, x: Int) = {
     if (b.isInstanceOf[InstanceImplA]) leaf1(x)
     else if (b.isInstanceOf[InstanceImplB]) leaf2(x)
     else if (b.isInstanceOf[InstanceImplC]) leaf3(x)
     else 0
+  }
+
+  def callMatch(b: InstanceTrait, x: Int) = {
+    b match{
+      case _: InstanceImplA => leaf1(x)
+      case _: InstanceImplB => leaf2(x)
+      case _: InstanceImplC => leaf3(x)
+      case _ => 0
+    }
   }
 
   def leaf1(x: Int): Int = x + 1

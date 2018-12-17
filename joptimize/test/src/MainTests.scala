@@ -268,6 +268,21 @@ object MainTests extends TestSuite{
           .check(1 -> 4)
           .checkPresent("InstanceofJumpFlatten$.leaf3")
           .checkRemoved("InstanceofJumpFlatten$.leaf1", "InstanceofJumpFlatten$.leaf2")
+
+        'simpleBarMatch - opt1[Int, Int]()
+          .check(1 -> 2)
+          .checkPresent("InstanceofJumpFlatten$.leaf1")
+          .checkRemoved("InstanceofJumpFlatten$.leaf2", "InstanceofJumpFlatten$.leaf3")
+
+        'simpleBazMatch - opt1[Int, Int]()
+          .check(1 -> 3)
+          .checkPresent("InstanceofJumpFlatten$.leaf2")
+          .checkRemoved("InstanceofJumpFlatten$.leaf1", "InstanceofJumpFlatten$.leaf3")
+
+        'simpleQuxMatch - opt1[Int, Int]()
+          .check(1 -> 4)
+          .checkPresent("InstanceofJumpFlatten$.leaf3")
+          .checkRemoved("InstanceofJumpFlatten$.leaf1", "InstanceofJumpFlatten$.leaf2")
       }
       'BooleanWidening - {
         'simple - opt1[Boolean, Int]()
