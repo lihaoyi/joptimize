@@ -5,7 +5,7 @@ import org.objectweb.asm.tree.analysis._
 import org.objectweb.asm.{Handle}
 import org.objectweb.asm.tree._
 
-object Dataflow extends Interpreter[IType](ASM4){
+class Dataflow(merge0: Seq[IType] => IType) extends Interpreter[IType](ASM4){
   def newValue(tpe: org.objectweb.asm.Type) = {
     if (tpe == null) JType.Null
     else JType.read(tpe.getInternalName)
@@ -94,7 +94,13 @@ object Dataflow extends Interpreter[IType](ASM4){
       case ARRAYLENGTH => JType.Prim.I
       case ATHROW => JType.Null
       case CHECKCAST => JType.read(insn.asInstanceOf[TypeInsnNode].desc)
-      case INSTANCEOF => JType.Prim.Z
+      case INSTANCEOF =>
+        (insn, value) match{
+          case (typeInsn: TypeInsnNode, cls: JType.Cls) =>
+            val desiredType = JType.read(typeInsn.desc)
+            IType.I(if (merge0(Seq(desiredType, cls)) == desiredType) 1 else 0)
+          case _ => JType.Prim.Z
+        }
       case MONITORENTER | MONITOREXIT | IFNULL | IFNONNULL => JType.Null
     }
   }

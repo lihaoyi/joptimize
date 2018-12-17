@@ -243,10 +243,31 @@ object MainTests extends TestSuite{
           .checkRemoved("SimpleDce$.call3")
       }
       'BooleanJumpFlatten - {
-        'simple - opt2[Int, Int, Int]()
+        'simpleTrue - opt2[Int, Int, Int]()
           .check((1, 2) -> 2)
           .checkPresent("BooleanJumpFlatten$.leaf1")
           .checkRemoved("BooleanJumpFlatten$.leaf2")
+
+        'simpleFalse - opt2[Int, Int, Int]()
+          .check((1, 2) -> 4)
+          .checkPresent("BooleanJumpFlatten$.leaf2")
+          .checkRemoved("BooleanJumpFlatten$.leaf1")
+      }
+      'InstanceofJumpFlatten - {
+        'simpleBar - opt1[Int, Int]()
+          .check(1 -> 2)
+          .checkPresent("InstanceofJumpFlatten$.leaf1")
+          .checkRemoved("InstanceofJumpFlatten$.leaf2", "InstanceofJumpFlatten$.leaf3")
+
+        'simpleBaz - opt1[Int, Int]()
+          .check(1 -> 3)
+          .checkPresent("InstanceofJumpFlatten$.leaf2")
+          .checkRemoved("InstanceofJumpFlatten$.leaf1", "InstanceofJumpFlatten$.leaf3")
+
+        'simpleQux - opt1[Int, Int]()
+          .check(1 -> 4)
+          .checkPresent("InstanceofJumpFlatten$.leaf3")
+          .checkRemoved("InstanceofJumpFlatten$.leaf1", "InstanceofJumpFlatten$.leaf2")
       }
       'BooleanWidening - {
         'simple - opt1[Boolean, Int]()

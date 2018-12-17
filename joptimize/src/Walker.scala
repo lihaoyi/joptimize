@@ -11,9 +11,11 @@ import scala.collection.mutable
 class Walker(isInterface: JType.Cls => Boolean,
              lookupMethod: MethodSig => Option[MethodNode],
              visitedMethods: mutable.Map[(MethodSig, Seq[IType]), (IType, InsnList)],
+             visitedClasses: mutable.Set[JType.Cls],
              findSubtypes: JType.Cls => List[JType.Cls],
              isConcrete: MethodSig => Boolean,
-             merge: Seq[IType] => IType) {
+             merge: Seq[IType] => IType,
+             dataflow: Dataflow) {
 
   def walkMethod(sig: MethodSig,
                  insns: InsnList,
@@ -67,7 +69,7 @@ class Walker(isInterface: JType.Cls => Boolean,
         @tailrec def walkInsn(currentInsn: AbstractInsnNode, currentState: Frame): Unit = {
 //          println(Util.prettyprint(currentInsn))
 //          println("    " + currentState)
-          val nextState = currentState.execute(currentInsn, Dataflow)
+          val nextState = currentState.execute(currentInsn, dataflow)
           currentInsn match{
             case current: FieldInsnNode =>
               val clinitSig = MethodSig(current.owner, "<clinit>", Desc.read("()V"), true)
@@ -255,9 +257,9 @@ class Walker(isInterface: JType.Cls => Boolean,
 
               finalInsnList.add(mangled)
               if (currentInsn.getNext.isInstanceOf[LabelNode]) {
-                walkBlock(currentInsn.getNext, currentState.execute(mangled, Dataflow), seenBlocks)
+                walkBlock(currentInsn.getNext, currentState.execute(mangled, dataflow), seenBlocks)
               } else {
-                walkInsn(current.getNext, currentState.execute(mangled, Dataflow))
+                walkInsn(current.getNext, currentState.execute(mangled, dataflow))
               }
 
             case current: MultiANewArrayInsnNode =>
@@ -273,6 +275,7 @@ class Walker(isInterface: JType.Cls => Boolean,
               n.labels = current.labels.asScala.map(walkBlock(_, nextState, seenBlocks).getFirst.asInstanceOf[LabelNode]).asJava
 
             case current: TypeInsnNode =>
+              visitedClasses.add(JType.Cls(current.desc))
               val n = new TypeInsnNode(current.getOpcode, current.desc)
               finalInsnList.add(n)
               if (currentInsn.getNext.isInstanceOf[LabelNode]) walkBlock(currentInsn.getNext, nextState, seenBlocks)
@@ -314,6 +317,8 @@ class Walker(isInterface: JType.Cls => Boolean,
 //      pprint.log(sig -> insns.size)
 
       walkBlock(insns.getFirst, Frame.initial(maxLocals, maxStack, args), Set())
+
+//      pprint.log(sig -> "END")
 
       val resultType =
         if (methodReturns.isEmpty) sig.desc.ret

@@ -59,13 +59,16 @@ object JOptimize{
       }
     }
 
+    val visitedClasses = mutable.Set.empty[JType.Cls]
     val interp = new Walker(
       isInterface = s => (classNodeMap(s).access & Opcodes.ACC_INTERFACE) != 0,
       lookupMethod = sig => originalMethods.get(sig),
       visitedMethods = visitedMethods,
+      visitedClasses = visitedClasses,
       findSubtypes = subtypeMap.getOrElse(_, Nil),
       isConcrete = sig => originalMethods(sig).instructions.size != 0,
-      merge = merge
+      merge = merge,
+      dataflow = new Dataflow(merge)
     )
 
     for(entrypoint <- entrypoints){
@@ -127,7 +130,7 @@ object JOptimize{
 
 
     val grouped =
-      visitedInterfaces.map(classNodeMap(_) -> Nil).toMap ++
+      (visitedInterfaces ++ visitedClasses.map(_.name)).map(classNodeMap(_) -> Nil).toMap ++
       newMethods.groupBy(_._1).mapValues(_.map(_._2))
 
     for((cn, mns) <- grouped) yield {
