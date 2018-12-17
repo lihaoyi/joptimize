@@ -186,7 +186,7 @@ object MainTests extends TestSuite{
       }
       'MultiDimArrays - {
         'make2D - opt[Int, Int, Array[Array[Int]]].check((1, 2) -> Array.fill(1, 2)(0))
-        'make3D - opt3[Int, Int, Int, Array[Array[Array[Int]]]].check((1, 2, 3) -> Array.fill(1, 2, 3)(0))
+        'make3D - opt[Int, Int, Int, Array[Array[Array[Int]]]].check((1, 2, 3) -> Array.fill(1, 2, 3)(0))
         'getAndSet - opt[Int].check(() -> 900)
       }
     }
@@ -473,29 +473,24 @@ object MainTests extends TestSuite{
 
   def classOf0[T: ClassTag] = implicitly[ClassTag[T]].runtimeClass
   object opt{
-    def apply[R: ClassTag](implicit tp: TestPath) = opt0[R]()
-    def apply[T1: ClassTag, R: ClassTag](implicit tp: TestPath) = opt1[T1, R]()
-    def apply[T1: ClassTag, T2: ClassTag, R: ClassTag](implicit tp: TestPath) = opt2[T1, T2, R]()
-    def apply[T1: ClassTag, T2: ClassTag, T3: ClassTag, R: ClassTag](implicit tp: TestPath) = opt3[T1, T2, T3, R]()
-  }
-  case class opt0[R: ClassTag]()
-                              (implicit tp: TestPath) extends Optimized(classOf0[R]){
+    def apply[R: ClassTag](implicit tp: TestPath) =
+      new Optimized(classOf0[R]){
+        def check(args: (Unit, R)*) = check0(args:_*)
+      }
 
-    def check(args: (Unit, R)*) = check0(args:_*)
-  }
+    def apply[T1: ClassTag, R: ClassTag](implicit tp: TestPath) =
+      new Optimized(classOf0[R], classOf0[T1]){
+        def check(args: (T1, R)*) = check0(args:_*)
+      }
 
-  case class opt1[T1: ClassTag, R: ClassTag]()
-                                            (implicit tp: TestPath) extends Optimized(classOf0[R], classOf0[T1]){
-    def check(args: (T1, R)*) = check0(args:_*)
-  }
+    def apply[T1: ClassTag, T2: ClassTag, R: ClassTag](implicit tp: TestPath) =
+      new Optimized(classOf0[R], classOf0[T1], classOf0[T2]){
+        def check(args: ((T1, T2), R)*) = check0(args:_*)
+      }
 
-  case class opt2[T1: ClassTag, T2: ClassTag, R: ClassTag]()
-                                                          (implicit tp: TestPath) extends Optimized(classOf0[R], classOf0[T1], classOf0[T2]){
-    def check(args: ((T1, T2), R)*) = check0(args:_*)
-  }
-
-  case class opt3[T1: ClassTag, T2: ClassTag, T3: ClassTag, R: ClassTag]()
-                                                                        (implicit tp: TestPath) extends Optimized(classOf0[R], classOf0[T1], classOf0[T2], classOf0[T3]){
-    def check(args: ((T1, T2, T3), R)*) = check0(args:_*)
+    def apply[T1: ClassTag, T2: ClassTag, T3: ClassTag, R: ClassTag](implicit tp: TestPath) =
+      new Optimized(classOf0[R], classOf0[T1], classOf0[T2], classOf0[T3]){
+        def check(args: ((T1, T2, T3), R)*) = check0(args:_*)
+      }
   }
 }
