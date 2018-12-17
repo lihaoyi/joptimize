@@ -128,42 +128,69 @@ class Walker(isInterface: JType.Cls => Boolean,
             case current: InvokeDynamicInsnNode => ???
 
             case current: JumpInsnNode =>
-              val n = new JumpInsnNode(current.getOpcode, null)
-              finalInsnList.add(n)
-              // only GOTOs are unconditional; all other jumps may or may not jump
-              // to the target label
-              if (current.getOpcode != GOTO) walkBlock(current.getNext, nextState, seenBlocks)
-              val jumped = walkBlock(current.label, nextState, seenBlocks)
-              n.label = jumped.getFirst.asInstanceOf[LabelNode]
+              def jumpBlock(pred: Boolean, pop: Int): Boolean = {
+                if (pred){
+                  val jumped = walkBlock(current.label, nextState, seenBlocks)
+                  for(_ <- 0 until pop){
+                    finalInsnList.add(new InsnNode(POP))
+                  }
+                  val n = new JumpInsnNode(GOTO, null)
+                  finalInsnList.add(n)
+                  n.label = jumped.getFirst.asInstanceOf[LabelNode]
+                }
+                pred
+              }
+              (
+                current.getOpcode,
+                currentState.stack.lift(currentState.stack.length - 1),
+                currentState.stack.lift(currentState.stack.length - 2)
+              ) match{
+                case (IFEQ, Some(IType.I(i)), _) =>
+                  if (!jumpBlock(i == 0, 1)) walkInsn(current.getNext, nextState)
 
-//              (
-//                current.getOpcode,
-//                currentState.stack.last,
-//                currentState.stack.lift(currentState.stack.length - 1)
-//              ) match{
-//                case (IFEQ, IType.I(i), _) =>
-//                case (IFNE, IType.I(i), _) =>
-//                case (IFLT, IType.I(i), _) =>
-//                case (IFGE, IType.I(i), _) =>
-//                case (IFGT, IType.I(i), _) =>
-//                case (IFLE, IType.I(i), _) =>
-//                case (IF_ICMPEQ, IType.I(i1), Some(IType.I(i2))) =>
-//                case (IF_ICMPNE, IType.I(i1), Some(IType.I(i2))) =>
-//                case (IF_ICMPLT, IType.I(i1), Some(IType.I(i2))) =>
-//                case (IF_ICMPGE, IType.I(i1), Some(IType.I(i2))) =>
-//                case (IF_ICMPGT, IType.I(i1), Some(IType.I(i2))) =>
-//                case (IF_ICMPLE, IType.I(i1), Some(IType.I(i2))) =>
-//                case (IF_ACMPEQ, IType.I(i1), Some(IType.I(i2))) =>
-//                case (IF_ACMPNE, IType.I(i1), Some(IType.I(i2))) =>
-//                case (GOTO, _, _) => // GOTOs are unconditional
-//                  val jumped = walkBlock(current.label, nextState)
-//                  n.label = jumped.getFirst.asInstanceOf[LabelNode]
-//                case _ => // JSR, IFNULL, IFNONNULL, anything else
-//                  // We don't know how to handle these, so walk both cases
-//                  walkBlock(current.getNext, nextState)
-//                  val jumped = walkBlock(current.label, nextState)
-//                  n.label = jumped.getFirst.asInstanceOf[LabelNode]
-//              }
+                case (IFNE, Some(IType.I(i)), _) =>
+                  if (!jumpBlock(i != 0, 1)) walkInsn(current.getNext, nextState)
+
+                case (IFLT, Some(IType.I(i)), _) =>
+                  if (!jumpBlock(i < 0, 1)) walkInsn(current.getNext, nextState)
+
+                case (IFGE, Some(IType.I(i)), _) =>
+                  if (!jumpBlock(i >= 0, 1)) walkInsn(current.getNext, nextState)
+
+                case (IFGT, Some(IType.I(i)), _) =>
+                  if (!jumpBlock(i > 0, 1)) walkInsn(current.getNext, nextState)
+
+                case (IFLE, Some(IType.I(i)), _) =>
+                  if (!jumpBlock(i <= 0, 1)) walkInsn(current.getNext, nextState)
+
+                case (IF_ICMPEQ, Some(IType.I(i1)), Some(IType.I(i2))) =>
+                  if (!jumpBlock(i1 == i2, 2)) walkInsn(current.getNext, nextState)
+
+                case (IF_ICMPNE, Some(IType.I(i1)), Some(IType.I(i2))) =>
+                  if (!jumpBlock(i1 != i2, 2)) walkInsn(current.getNext, nextState)
+
+                case (IF_ICMPLT, Some(IType.I(i1)), Some(IType.I(i2))) =>
+                  if (!jumpBlock(i1 > i2, 2)) walkInsn(current.getNext, nextState)
+
+                case (IF_ICMPGE, Some(IType.I(i1)), Some(IType.I(i2))) =>
+                  if (!jumpBlock(i1 <= i2, 2)) walkInsn(current.getNext, nextState)
+
+                case (IF_ICMPGT, Some(IType.I(i1)), Some(IType.I(i2))) =>
+                  if (!jumpBlock(i1 <= i2, 2)) walkInsn(current.getNext, nextState)
+
+                case (IF_ICMPLE, Some(IType.I(i1)), Some(IType.I(i2))) =>
+                  if (!jumpBlock(i1 >= i2, 2)) walkInsn(current.getNext, nextState)
+
+                case (GOTO, _, _) => jumpBlock(true, 0)
+
+                case _ => // JSR, IFNULL, IFNONNULL, IF_ACMPEQ, IF_ACMPNE, anything else
+                  // We don't know how to handle these, so walk both cases
+                  walkBlock(current.getNext, nextState, seenBlocks)
+                  val n = new JumpInsnNode(current.getOpcode, null)
+                  finalInsnList.add(n)
+                  val jumped = walkBlock(current.label, nextState, seenBlocks)
+                  n.label = jumped.getFirst.asInstanceOf[LabelNode]
+              }
             case current: LabelNode =>
               finalInsnList.add(new LabelNode())
               walkInsn(current.getNext, nextState)
@@ -192,7 +219,7 @@ class Walker(isInterface: JType.Cls => Boolean,
 
               val mangled =
                 if (current.owner.startsWith("java/")) copy
-                else mangleInstruction(
+                else mangleMethodCallInsn(
                   currentState, copy,
                   static = copy.getOpcode == INVOKESTATIC,
                   special = copy.getOpcode == INVOKESPECIAL,
@@ -300,11 +327,11 @@ class Walker(isInterface: JType.Cls => Boolean,
   }
 
 
-  def mangleInstruction(frame: Frame,
-                        insn: AbstractInsnNode,
-                        static: Boolean,
-                        special: Boolean,
-                        recurse: (MethodSig, Seq[IType]) => IType): AbstractInsnNode = {
+  def mangleMethodCallInsn(frame: Frame,
+                           insn: AbstractInsnNode,
+                           static: Boolean,
+                           special: Boolean,
+                           recurse: (MethodSig, Seq[IType]) => IType): AbstractInsnNode = {
     val called = insn.asInstanceOf[MethodInsnNode]
 
 

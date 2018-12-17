@@ -1,6 +1,6 @@
 package joptimize.examples.opt
 
-object BooleanPropagation {
+object BooleanJumpFlatten {
   def simple(x: Int, y: Int): Int = {
     call(true, x, y)
   }

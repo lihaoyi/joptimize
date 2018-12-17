@@ -242,11 +242,11 @@ object MainTests extends TestSuite{
           .checkPresent("SimpleDce$.call1", "SimpleDce$.call2")
           .checkRemoved("SimpleDce$.call3")
       }
-      'BooleanPropagation - {
+      'BooleanJumpFlatten - {
         'simple - opt2[Int, Int, Int]()
           .check((1, 2) -> 2)
-          .checkPresent("BooleanPropagation$.leaf1")
-          .checkRemoved("BooleanPropagation$.leaf2")
+          .checkPresent("BooleanJumpFlatten$.leaf1")
+          .checkRemoved("BooleanJumpFlatten$.leaf2")
       }
       'BooleanWidening - {
         'simple - opt1[Boolean, Int]()
