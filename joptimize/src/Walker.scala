@@ -131,11 +131,11 @@ class Walker(isInterface: JType.Cls => Boolean,
 
             case current: JumpInsnNode =>
               def jumpBlock(pred: Boolean, pop: Int): Boolean = {
+                for(_ <- 0 until pop){
+                  finalInsnList.add(new InsnNode(POP))
+                }
                 if (pred){
                   val jumped = walkBlock(current.label, nextState, seenBlocks)
-                  for(_ <- 0 until pop){
-                    finalInsnList.add(new InsnNode(POP))
-                  }
                   val n = new JumpInsnNode(GOTO, null)
                   finalInsnList.add(n)
                   n.label = jumped.getFirst.asInstanceOf[LabelNode]
