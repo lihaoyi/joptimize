@@ -296,8 +296,16 @@ class Walker(isInterface: JType.Cls => Boolean,
 
             case current: TypeInsnNode =>
               visitedClasses.add(JType.Cls(current.desc))
-              val n = new TypeInsnNode(current.getOpcode, current.desc)
-              finalInsnList.add(n)
+              (current.getOpcode, nextState.stack.last) match{
+                case (INSTANCEOF, IType.I(b)) =>
+                  finalInsnList.add(new InsnNode(POP))
+                  finalInsnList.add(new InsnNode(b match{ case 1 => ICONST_1 case 0 => ICONST_0}))
+
+                case _ =>
+                  val n = new TypeInsnNode(current.getOpcode, current.desc)
+                  finalInsnList.add(n)
+              }
+
               if (currentInsn.getNext.isInstanceOf[LabelNode]) walkNextBlock(currentInsn.getNext, nextState)
               else walkInsn(current.getNext, nextState)
 
