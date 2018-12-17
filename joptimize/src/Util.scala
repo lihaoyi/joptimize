@@ -19,10 +19,16 @@ object Util{
     printer.getText.clear
     sw.toString.stripSuffix("\n")
   }
-  def mangle(name: String, stackTypes: Seq[JType], narrowReturnType: JType) = {
-    val mangledName = name + "__" + stackTypes.mkString("__").replace('/', '_').replace(';', '_')
-    val mangledDesc = Desc(stackTypes, narrowReturnType)
-    (mangledName, mangledDesc)
+  def mangle(name: String,
+             inferredTypes: Seq[IType],
+             originalTypes: Seq[JType],
+             narrowReturnType: IType,
+             originalReturnType: JType) = {
+    val mangledName = name + "__" + inferredTypes.map(_.name).mkString("__").replace('/', '_')
+    val jTypeArgs = inferredTypes.zip(originalTypes).map(t => JType.fromIType(t._1, t._2))
+    val jTypeRet = JType.fromIType(narrowReturnType, originalReturnType)
+    val mangledJTypeDesc = Desc(jTypeArgs, jTypeRet)
+    (mangledName, mangledJTypeDesc)
   }
 
   def leastUpperBound[T](starts: Set[T])(edges: T => Seq[T]) = {

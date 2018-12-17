@@ -67,7 +67,7 @@ object JType{
 
   /**
     * Class Types
-    * @param name the fuly qualified name of the class
+    * @param name the fully qualified name of the class
     */
   class Cls private (val name: String) extends Ref {
     def size = 1

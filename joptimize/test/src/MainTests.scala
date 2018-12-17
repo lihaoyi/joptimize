@@ -249,9 +249,15 @@ object MainTests extends TestSuite{
           .checkRemoved("BooleanPropagation$.leaf2")
       }
       'BooleanWidening - {
-        'simple - opt2[Int, Int, Int]()
-          .check((1, 2) -> 1, (2, 1) -> 1)
+        'simple - opt1[Boolean, Int]()
+          .check(true -> 2, false -> 1)
           .checkPresent("BooleanWidening$.invert")
+      }
+      'BooleanSpecialization - {
+        'simple - opt1[Boolean, Int]()
+          .check(true -> 1, false -> 2)
+          .checkMangled("BooleanSpecialization$.call")
+          .checkRemoved("BooleanSpecialization$.call")
       }
       'InstanceDce - {
         'simple1 - opt2[Int, Int, Int]()

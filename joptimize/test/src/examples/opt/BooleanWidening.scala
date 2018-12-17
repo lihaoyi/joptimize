@@ -1,8 +1,8 @@
 package joptimize.examples.opt
 
 object BooleanWidening{
-  def simple(x: Int, y: Int): Int = {
-    if(invert(x > y)) x else y
+  def simple(b: Boolean): Int = {
+    if(invert(b)) 1 else 2
   }
   def invert(b: Boolean): Boolean = {
     !b

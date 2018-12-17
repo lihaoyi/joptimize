@@ -81,14 +81,12 @@ object JOptimize{
     }
 
     val newMethods = visitedMethods.toList.map{case ((sig, inferredTypes), (returnType, insns)) =>
-      val originalTypes = sig.desc.args
 
       val originalNode = originalMethods(sig)
-      val jTypeArgs = inferredTypes.zip(originalTypes).map(t => JType.fromIType(t._1, t._2))
-      val jTypeRet = JType.fromIType(returnType, sig.desc.ret)
+
       val (mangledName, mangledDesc) =
-        if (Util.isCompatible(inferredTypes, originalTypes)) (originalNode.name, Desc.read(originalNode.desc))
-        else Util.mangle(originalNode.name, jTypeArgs, jTypeRet)
+        if (Util.isCompatible(inferredTypes, sig.desc.args)) (originalNode.name, Desc.read(originalNode.desc))
+        else Util.mangle(originalNode.name, inferredTypes, sig.desc.args, returnType, sig.desc.ret)
 
       val newNode = new MethodNode(
         Opcodes.ASM6,

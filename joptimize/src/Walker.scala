@@ -66,7 +66,7 @@ class Walker(isInterface: JType.Cls => Boolean,
           */
         @tailrec def walkInsn(currentInsn: AbstractInsnNode, currentState: Frame): Unit = {
 //          println(Util.prettyprint(currentInsn))
-//          println(currentState)
+//          println("    " + currentState)
           val nextState = currentState.execute(currentInsn, Dataflow)
           currentInsn match{
             case current: FieldInsnNode =>
@@ -270,7 +270,13 @@ class Walker(isInterface: JType.Cls => Boolean,
           val label = new LabelNode()
           val jump = new JumpInsnNode(
             GOTO,
-            visitedBlocks((currentInsn, currentState)).getFirst.asInstanceOf[LabelNode]
+            visitedBlocks((currentInsn, currentState)).getFirst match{
+              case l: LabelNode => l
+              case _ =>
+                val newLabel = new LabelNode()
+                visitedBlocks((currentInsn, currentState)).insert(newLabel)
+                newLabel
+            }
           )
           res.add(label)
           res.add(jump)
@@ -341,11 +347,12 @@ class Walker(isInterface: JType.Cls => Boolean,
       val (mangledName, mangledDesc) =
         if (!descChanged) (called.name, Desc.read(called.desc))
         else {
-          val zipped = inferredTypes.zip(originalTypes)
           Util.mangle(
             called.name,
-            (if (static) zipped else zipped.drop(1)).map(t => JType.fromIType(t._1, t._2)),
-            JType.fromIType(narrowReturnType, sig.desc.ret)
+            if (static) inferredTypes else inferredTypes.drop(1),
+            if (static) originalTypes else originalTypes.drop(1),
+            narrowReturnType,
+            calledDesc.ret
           )
         }
 

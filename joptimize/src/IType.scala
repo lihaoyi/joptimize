@@ -12,6 +12,7 @@ trait IType extends Value{
   def isRef: Boolean
   def internalName: String
   def getSize: Int = size
+  def name: String
 
   /**
     * Forget any information about concrete values encoded in this type, and
@@ -24,6 +25,7 @@ object IType{
   case class Intersect(classes: Seq[JType.Cls]) extends IType{
     def size = 1
     def internalName: String = "?"
+    def name = s"R${classes.length}${classes.map(_.name.replace('/', '_')).mkString("__")}"
     def isRef = true
     def widen = this
   }
@@ -31,24 +33,28 @@ object IType{
     def size = 1
     def isRef = false
     def internalName = s"TI$value;"
+    def name = s"TI$value"
     def widen = JType.Prim.I
   }
   case class J(value: Long) extends IType{
     def size = 2
     def isRef = false
     def internalName = s"TJ$value;"
+    def name = s"TJ$value"
     def widen = JType.Prim.J
   }
   case class F(value: Float) extends IType{
     def size = 1
     def isRef = false
     def internalName = s"TF$value;"
+    def name = s"TF$value"
     def widen = JType.Prim.F
   }
   case class D(value: Double) extends IType{
     def size = 2
     def isRef = false
     def internalName = s"TD$value;"
+    def name = s"TD$value"
     def widen = JType.Prim.D
   }
 }
