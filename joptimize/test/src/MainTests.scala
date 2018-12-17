@@ -9,25 +9,25 @@ object MainTests extends TestSuite{
   def tests = Tests{
     'simple - {
       'IfElse - {
-        'basicIf - opt2[Int, Int, Int]().check(
+        'basicIf - opt[Int, Int, Int].check(
           (10, 11) -> 10,
           (10, 9) -> -10
         )
-        'ifNonIntZero - opt1[Int, Int]().check(
+        'ifNonIntZero - opt[Int, Int].check(
           10 -> 10,
           -9 -> 9
         )
-        'ifNonIntBinary - opt2[Int, Int, Int]().check(
+        'ifNonIntBinary - opt[Int, Int, Int].check(
           (10, 11) -> -10,
           (10, 9) -> 10,
           (200, 200) -> -200
         )
-        'ifElseIf - opt2[Int, Int, Int]().check(
+        'ifElseIf - opt[Int, Int, Int].check(
           (3, 2) -> 3,
           (2, 2) -> -2,
           (1, 2) -> 2
         )
-        'ifElseIfBig - opt2[Int, Int, Int]().check(
+        'ifElseIfBig - opt[Int, Int, Int].check(
           (2, 1) -> 1,
           (13, 13) -> 2,
           (9, 9) -> 3,
@@ -36,28 +36,28 @@ object MainTests extends TestSuite{
         )
       }
       'Loops - {
-        'basicFor - opt1[Int, Int]().check(
+        'basicFor - opt[Int, Int].check(
           5 -> 32
         )
 
-        'basicWhile - opt1[Int, Int]().check(
+        'basicWhile - opt[Int, Int].check(
           5 -> 8
         )
-        'sqrtFinder - opt1[Double, Double]().check(
+        'sqrtFinder - opt[Double, Double].check(
           121.0 -> 11.143835769253432
         )
 
       }
 
       'Switches - {
-        'smallSwitch - opt1[Int, Int]().check(
+        'smallSwitch - opt[Int, Int].check(
           0 -> 1,
           1 -> 0,
           2 -> 2,
           3 -> 2,
         )
 
-        'bigDenseSwitch - opt1[Int, Double]().check(
+        'bigDenseSwitch - opt[Int, Double].check(
           0 -> 1123.213,
           1 -> 3212.321,
           2 -> 123123.123,
@@ -92,7 +92,7 @@ object MainTests extends TestSuite{
           31 -> 123123.123123,
         )
 
-        'bigSparseSwitch - opt1[Int, Double]().check(
+        'bigSparseSwitch - opt[Int, Double].check(
           1 -> 3212.321,
           2 -> 123123.123,
           4 -> 123.312,
@@ -117,7 +117,7 @@ object MainTests extends TestSuite{
           2097152 -> 123123123.132123,
           -1 -> 123123.123123
         )
-        'charSwitch - opt1[Char, Int]().check(
+        'charSwitch - opt[Char, Int].check(
           'a' -> 1,
           'b' -> 2,
           'c' -> 3,
@@ -131,7 +131,7 @@ object MainTests extends TestSuite{
           'z' -> 10
         )
 
-        'byteSwitch - opt1[Byte, Int]().check(
+        'byteSwitch - opt[Byte, Int].check(
           1.toByte -> 1,
           2.toByte -> 2,
           4.toByte -> 3,
@@ -144,204 +144,204 @@ object MainTests extends TestSuite{
         )
       }
       'Statics - {
-        'helloWorld - opt1[Int, Int]().check(
+        'helloWorld - opt[Int, Int].check(
           1 -> 2,
           2 -> 4
         )
-        'timesTwo - opt1[Int, Int]().check(
+        'timesTwo - opt[Int, Int].check(
           1 -> 2,
           2 -> 4
         )
-        'helloWorld2 - opt2[Int, Int, Int]().check(
+        'helloWorld2 - opt[Int, Int, Int].check(
           (1, 1) -> 0,
           (5, 2) -> 6
         )
-        'timesTwo2 - opt2[Int, Int, Int]().check(
+        'timesTwo2 - opt[Int, Int, Int].check(
           (1, 1) -> 0,
           (5, 2) -> 6
         )
-        'tailFactorial - opt1[Int, Int]().check(
+        'tailFactorial - opt[Int, Int].check(
           1 -> 1,
           2 -> 2,
           3 -> 6,
           4 -> 24
         )
-        'fibonacci - opt1[Int, Int]().check(
+        'fibonacci - opt[Int, Int].check(
           1 -> 1,
           2 -> 2,
           3 -> 3,
           4 -> 5,
           5 -> 8
         )
-        'call - opt1[Int, Int]().check(
+        'call - opt[Int, Int].check(
           1 -> 2,
           2 -> 3,
           3 -> 4
         )
-        'callAtPhiBoundary - opt1[Int, Int]().check(
+        'callAtPhiBoundary - opt[Int, Int].check(
           -1 -> 1,
           0 -> 1,
           1 -> 2
         )
       }
       'MultiDimArrays - {
-        'make2D - opt2[Int, Int, Array[Array[Int]]]().check((1, 2) -> Array.fill(1, 2)(0))
-        'make3D - opt3[Int, Int, Int, Array[Array[Array[Int]]]]().check((1, 2, 3) -> Array.fill(1, 2, 3)(0))
-        'getAndSet - opt0[Int]().check(() -> 900)
+        'make2D - opt[Int, Int, Array[Array[Int]]].check((1, 2) -> Array.fill(1, 2)(0))
+        'make3D - opt3[Int, Int, Int, Array[Array[Array[Int]]]].check((1, 2, 3) -> Array.fill(1, 2, 3)(0))
+        'getAndSet - opt[Int].check(() -> 900)
       }
     }
     'narrow - {
       'Supertype - {
-        'main - opt2[Int, Int, Int]()
+        'main - opt[Int, Int, Int]
           .check((1, 2) -> 6)
           .checkRemoved("Supertype$.call")
           .checkMangled("Supertype$.call")
       }
       'Parametric - {
-        'main - opt2[Int, Int, Int]()
+        'main - opt[Int, Int, Int]
           .check((1, 2) -> 6)
           .checkRemoved("Parametric$.call")
           .checkMangled("Parametric$.call")
       }
       'Supertype2 - {
-        'main - opt2[Int, Int, Int]()
+        'main - opt[Int, Int, Int]
           .check((1, 2) -> 6)
           .checkRemoved("Supertype2$.call")
           .checkMangled("Supertype2$.call")
       }
       'Parametric2 - {
-        'main - opt2[Int, Int, Int]()
+        'main - opt[Int, Int, Int]
           .check((1, 2) -> 6)
           .checkRemoved("Parametric2$.call")
           .checkMangled("Parametric2$.call")
       }
       'NarrowReturn - {
-        'main - opt2[Int, Int, Int]()
+        'main - opt[Int, Int, Int]
           .check((1, 2) -> 6)
           .checkRemoved("NarrowReturn$.call")
           .checkMangled("NarrowReturn$.call")
       }
       'MergeReturn - {
-        'main - opt2[Int, Int, Int]()
+        'main - opt[Int, Int, Int]
           .check((2, 1) -> 1, (1, 2) -> 2)
       }
       'IntersectionReturn - {
-        'main - opt2[Int, Int, Int]()
+        'main - opt[Int, Int, Int]
           .check((2, 1) -> 1, (1, 2) -> 2)
       }
       'ForceWide - {
-        'main - opt2[Int, Int, Int]()
+        'main - opt[Int, Int, Int]
           .check((1, 2) -> 6)
           .checkPresent("ForceWide$.call")
       }
     }
     'opt - {
       'SimpleDce - {
-        'main - opt2[Int, Int, Int]()
+        'main - opt[Int, Int, Int]
           .check((1, 2) -> 6)
           .checkPresent("SimpleDce$.call1", "SimpleDce$.call2")
           .checkRemoved("SimpleDce$.call3")
       }
       'BooleanJumpFlatten - {
-        'simpleTrue - opt2[Int, Int, Int]()
+        'simpleTrue - opt[Int, Int, Int]
           .check((1, 2) -> 2)
           .checkPresent("BooleanJumpFlatten$.leaf1")
           .checkRemoved("BooleanJumpFlatten$.leaf2")
 
-        'simpleFalse - opt2[Int, Int, Int]()
+        'simpleFalse - opt[Int, Int, Int]
           .check((1, 2) -> 4)
           .checkPresent("BooleanJumpFlatten$.leaf2")
           .checkRemoved("BooleanJumpFlatten$.leaf1")
       }
       'InstanceofJumpFlatten - {
-        'simpleBar - opt1[Int, Int]()
+        'simpleBar - opt[Int, Int]
           .check(1 -> 2)
           .checkPresent("InstanceofJumpFlatten$.leaf1")
           .checkRemoved("InstanceofJumpFlatten$.leaf2", "InstanceofJumpFlatten$.leaf3")
 
-        'simpleBaz - opt1[Int, Int]()
+        'simpleBaz - opt[Int, Int]
           .check(1 -> 3)
           .checkPresent("InstanceofJumpFlatten$.leaf2")
           .checkRemoved("InstanceofJumpFlatten$.leaf1", "InstanceofJumpFlatten$.leaf3")
 
-        'simpleQux - opt1[Int, Int]()
+        'simpleQux - opt[Int, Int]
           .check(1 -> 4)
           .checkPresent("InstanceofJumpFlatten$.leaf3")
           .checkRemoved("InstanceofJumpFlatten$.leaf1", "InstanceofJumpFlatten$.leaf2")
 
-        'simpleBarMatch - opt1[Int, Int]()
+        'simpleBarMatch - opt[Int, Int]
           .check(1 -> 2)
           .checkPresent("InstanceofJumpFlatten$.leaf1")
           .checkRemoved("InstanceofJumpFlatten$.leaf2", "InstanceofJumpFlatten$.leaf3")
 
-        'simpleBazMatch - opt1[Int, Int]()
+        'simpleBazMatch - opt[Int, Int]
           .check(1 -> 3)
           .checkPresent("InstanceofJumpFlatten$.leaf2")
           .checkRemoved("InstanceofJumpFlatten$.leaf1", "InstanceofJumpFlatten$.leaf3")
 
-        'simpleQuxMatch - opt1[Int, Int]()
+        'simpleQuxMatch - opt[Int, Int]
           .check(1 -> 4)
           .checkPresent("InstanceofJumpFlatten$.leaf3")
           .checkRemoved("InstanceofJumpFlatten$.leaf1", "InstanceofJumpFlatten$.leaf2")
       }
       'BooleanWidening - {
-        'simple - opt1[Boolean, Int]()
+        'simple - opt[Boolean, Int]
           .check(true -> 2, false -> 1)
           .checkPresent("BooleanWidening$.invert")
       }
       'BooleanSpecialization - {
-        'simple - opt1[Boolean, Int]()
+        'simple - opt[Boolean, Int]
           .check(true -> 1, false -> 2)
           .checkMangled("BooleanSpecialization$.call")
           .checkRemoved("BooleanSpecialization$.call")
       }
       'InstanceDce - {
-        'simple1 - opt2[Int, Int, Int]()
+        'simple1 - opt[Int, Int, Int]
           .check((1, 2) -> 8)
           .checkPresent("BarTwo.incA", "QuxTwo.incB")
           .checkRemoved("BarTwo.incB", "QuxTwo.incA")
 
-        'simple2 - opt2[Int, Int, Int]()
+        'simple2 - opt[Int, Int, Int]
           .check((1, 2) -> 6)
           .checkPresent("BarTwo.incA", "BarTwo.incB")
           .checkRemoved("QuxTwo.incA", "QuxTwo.incB")
 
-        'simple3 - opt2[Int, Int, Int]()
+        'simple3 - opt[Int, Int, Int]
           .check((1, 2) -> 10)
           .checkPresent("QuxTwo.incA", "QuxTwo.incB")
           .checkRemoved("BarTwo.incA", "BarTwo.incB")
 
-        'single1 - opt2[Int, Int, Int]()
+        'single1 - opt[Int, Int, Int]
           .check((1, 2) -> 5)
           .checkPresent("BarTwo.incA")
           .checkRemoved("BarTwo.incB", "QuxTwo.incA", "QuxTwo.incB")
 
-        'single2 - opt2[Int, Int, Int]()
+        'single2 - opt[Int, Int, Int]
           .check((1, 2) -> 7)
           .checkPresent("BarTwo.incB")
           .checkRemoved("BarTwo.incA", "QuxTwo.incA", "QuxTwo.incB")
 
-        'single3 - opt2[Int, Int, Int]()
+        'single3 - opt[Int, Int, Int]
           .check((1, 2) -> 9)
           .checkPresent("QuxTwo.incA")
           .checkRemoved("QuxTwo.incB", "BarTwo.incA", "BarTwo.incB")
 
-        'single4 - opt2[Int, Int, Int]()
+        'single4 - opt[Int, Int, Int]
           .check((1, 2) -> 11)
           .checkPresent("QuxTwo.incB")
           .checkRemoved("QuxTwo.incA", "BarTwo.incA", "BarTwo.incB")
 
-        'unknown1 - opt2[Int, Int, Int]()
+        'unknown1 - opt[Int, Int, Int]
           .check((1, 2) -> 7)
           .checkPresent("BarTwo.incA", "QuxTwo.incA", "FooTwo.incA")
           .checkRemoved("BarTwo.incB", "QuxTwo.incB", "FooTwo.incB")
 
-        'unknown2 - opt2[Int, Int, Int]()
+        'unknown2 - opt[Int, Int, Int]
           .check((1, 2) -> 9)
           .checkPresent("BarTwo.incB", "QuxTwo.incB", "FooTwo.incB")
           .checkRemoved("BarTwo.incA", "QuxTwo.incA", "FooTwo.incA")
 
-        'unknown3 - opt2[Int, Int, Int]()
+        'unknown3 - opt[Int, Int, Int]
           .check((1, 2) -> 8)
           .checkPresent(
             "BarTwo.incA", "BarTwo.incB",
@@ -350,12 +350,12 @@ object MainTests extends TestSuite{
           )
       }
       'InterfacePreservation - {
-        'shallow - opt1[Int, Int]()
+        'shallow - opt[Int, Int]
           .check(
             1 -> 2,
             2 -> 3
           )
-        'deep - opt1[Int, Int]()
+        'deep - opt[Int, Int]
           .check(
             1 -> 3,
             2 -> 4
@@ -472,6 +472,12 @@ object MainTests extends TestSuite{
   }
 
   def classOf0[T: ClassTag] = implicitly[ClassTag[T]].runtimeClass
+  object opt{
+    def apply[R: ClassTag](implicit tp: TestPath) = opt0[R]()
+    def apply[T1: ClassTag, R: ClassTag](implicit tp: TestPath) = opt1[T1, R]()
+    def apply[T1: ClassTag, T2: ClassTag, R: ClassTag](implicit tp: TestPath) = opt2[T1, T2, R]()
+    def apply[T1: ClassTag, T2: ClassTag, T3: ClassTag, R: ClassTag](implicit tp: TestPath) = opt3[T1, T2, T3, R]()
+  }
   case class opt0[R: ClassTag]()
                               (implicit tp: TestPath) extends Optimized(classOf0[R]){
 
