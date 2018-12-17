@@ -51,16 +51,42 @@ class Walker(isInterface: JType.Cls => Boolean,
       //     states
 
       val visitedBlocks = mutable.LinkedHashMap.empty[(AbstractInsnNode, Frame), InsnList]
+      var lastBlock: Option[(AbstractInsnNode, Frame)] = None
       val methodReturns = mutable.Buffer.empty[IType]
-      def walkBlock(currentInsn: AbstractInsnNode,
-                    currentState0: Frame,
+      def walkBlock(blockStart: AbstractInsnNode,
+                    blockState0: Frame,
                     seenBlocks0: Set[AbstractInsnNode]): (Boolean, InsnList) = {
-        val currentState =
-          if (!seenBlocks0.contains(currentInsn)) currentState0
-          else currentState0.widen
-        val seenBlocks = seenBlocks0 + currentInsn
+        val blockState =
+          if (!seenBlocks0.contains(blockStart)) blockState0
+          else blockState0.widen
+        val seenBlocks = seenBlocks0 + blockStart
         val finalInsnList = new InsnList
 
+        def walkNextBlock(destBlockStart: AbstractInsnNode, destBlockState: Frame) = {
+          /**
+            * Walk another block. Automatically inserts a GOTO if the next block isn't
+            * going to be immediately after the current block, and elides the GOTO otherwise
+            *
+            * Shouldn't be used if there isn't any possibility of the next block
+            * seamlessly following the current, e.g. in the case of switches where
+            * every branch needs a jump.
+            */
+          val preWalkLastBlock = lastBlock
+          val (fresh, jumped) = walkBlock(destBlockStart, destBlockState, seenBlocks)
+          if (!fresh || !preWalkLastBlock.exists(_._1 != (destBlockStart, blockState))){
+            val l = jumped.getFirst match{
+              case l: LabelNode => l
+              case _ =>
+                val l = new LabelNode()
+                jumped.insert(l)
+                l
+            }
+
+            finalInsnList.add(new JumpInsnNode(GOTO, l))
+          }
+          jumped
+        }
+        
         /**
           * Walks a single basic block, returning:
           *
@@ -70,6 +96,7 @@ class Walker(isInterface: JType.Cls => Boolean,
 //          println(Util.prettyprint(currentInsn))
 //          println("    " + currentState)
           val nextState = currentState.execute(currentInsn, dataflow)
+
           currentInsn match{
             case current: FieldInsnNode =>
               val clinitSig = MethodSig(current.owner, "<clinit>", Desc.read("()V"), true)
@@ -87,7 +114,7 @@ class Walker(isInterface: JType.Cls => Boolean,
               }
               val n = new FieldInsnNode(current.getOpcode, current.owner, current.name, current.desc)
               finalInsnList.add(n)
-              if (currentInsn.getNext.isInstanceOf[LabelNode]) walkBlock(currentInsn.getNext, nextState, seenBlocks)
+              if (currentInsn.getNext.isInstanceOf[LabelNode]) walkNextBlock(currentInsn.getNext, nextState)
               else walkInsn(current.getNext, nextState)
 
             case current: FrameNode =>
@@ -99,13 +126,13 @@ class Walker(isInterface: JType.Cls => Boolean,
                 current.stack.toArray
               )
               finalInsnList.add(n)
-              if (currentInsn.getNext.isInstanceOf[LabelNode]) walkBlock(currentInsn.getNext, nextState, seenBlocks)
+              if (currentInsn.getNext.isInstanceOf[LabelNode]) walkNextBlock(currentInsn.getNext, nextState)
               else walkInsn(current.getNext, nextState)
 
             case current: IincInsnNode =>
               val n = new IincInsnNode(current.`var`, current.incr)
               finalInsnList.add(n)
-              if (currentInsn.getNext.isInstanceOf[LabelNode]) walkBlock(currentInsn.getNext, nextState, seenBlocks)
+              if (currentInsn.getNext.isInstanceOf[LabelNode]) walkNextBlock(currentInsn.getNext, nextState)
               else walkInsn(current.getNext, nextState)
 
             case current: InsnNode =>
@@ -116,7 +143,7 @@ class Walker(isInterface: JType.Cls => Boolean,
                   methodReturns.append(currentState.stack.last)
                 case RETURN | DRETURN | FRETURN | IRETURN | LRETURN =>
                 case _ =>
-                  if (currentInsn.getNext.isInstanceOf[LabelNode]) walkBlock(currentInsn.getNext, nextState, seenBlocks)
+                  if (currentInsn.getNext.isInstanceOf[LabelNode]) walkNextBlock(currentInsn.getNext, nextState)
                   else walkInsn(current.getNext, nextState)
               }
 
@@ -124,23 +151,15 @@ class Walker(isInterface: JType.Cls => Boolean,
             case current: IntInsnNode =>
               val n = new IntInsnNode(current.getOpcode, current.operand)
               finalInsnList.add(n)
-              if (currentInsn.getNext.isInstanceOf[LabelNode]) walkBlock(currentInsn.getNext, nextState, seenBlocks)
+              if (currentInsn.getNext.isInstanceOf[LabelNode]) walkNextBlock(currentInsn.getNext, nextState)
               else walkInsn(current.getNext, nextState)
 
             case current: InvokeDynamicInsnNode => ???
 
             case current: JumpInsnNode =>
               def jumpBlock(pred: Boolean, pop: Int): Boolean = {
-                for(_ <- 0 until pop){
-                  finalInsnList.add(new InsnNode(POP))
-                }
-                if (pred){
-                  val (fresh, jumped) = walkBlock(current.label, nextState, seenBlocks)
-                  if (!fresh){
-                    val n = new JumpInsnNode(GOTO, jumped.getFirst.asInstanceOf[LabelNode])
-                    finalInsnList.add(n)
-                  }
-                }
+                for(_ <- 0 until pop) finalInsnList.add(new InsnNode(POP))
+                if (pred) walkNextBlock(current.label, nextState)
                 pred
               }
               (
@@ -149,63 +168,63 @@ class Walker(isInterface: JType.Cls => Boolean,
                 currentState.stack.lift(currentState.stack.length - 2)
               ) match{
                 case (IFEQ, Some(IType.I(i)), _) =>
-                  if (!jumpBlock(i == 0, 1)) walkInsn(current.getNext, nextState)
+                  if (!jumpBlock(i == 0, 1)) walkNextBlock(current.getNext, nextState)
 
                 case (IFNE, Some(IType.I(i)), _) =>
-                  if (!jumpBlock(i != 0, 1)) walkInsn(current.getNext, nextState)
+                  if (!jumpBlock(i != 0, 1)) walkNextBlock(current.getNext, nextState)
 
                 case (IFLT, Some(IType.I(i)), _) =>
-                  if (!jumpBlock(i < 0, 1)) walkInsn(current.getNext, nextState)
+                  if (!jumpBlock(i < 0, 1)) walkNextBlock(current.getNext, nextState)
 
                 case (IFGE, Some(IType.I(i)), _) =>
-                  if (!jumpBlock(i >= 0, 1)) walkInsn(current.getNext, nextState)
+                  if (!jumpBlock(i >= 0, 1)) walkNextBlock(current.getNext, nextState)
 
                 case (IFGT, Some(IType.I(i)), _) =>
-                  if (!jumpBlock(i > 0, 1)) walkInsn(current.getNext, nextState)
+                  if (!jumpBlock(i > 0, 1)) walkNextBlock(current.getNext, nextState)
 
                 case (IFLE, Some(IType.I(i)), _) =>
-                  if (!jumpBlock(i <= 0, 1)) walkInsn(current.getNext, nextState)
+                  if (!jumpBlock(i <= 0, 1)) walkNextBlock(current.getNext, nextState)
 
                 case (IF_ICMPEQ, Some(IType.I(i1)), Some(IType.I(i2))) =>
-                  if (!jumpBlock(i1 == i2, 2)) walkInsn(current.getNext, nextState)
+                  if (!jumpBlock(i1 == i2, 2)) walkNextBlock(current.getNext, nextState)
 
                 case (IF_ICMPNE, Some(IType.I(i1)), Some(IType.I(i2))) =>
-                  if (!jumpBlock(i1 != i2, 2)) walkInsn(current.getNext, nextState)
+                  if (!jumpBlock(i1 != i2, 2)) walkNextBlock(current.getNext, nextState)
 
                 case (IF_ICMPLT, Some(IType.I(i1)), Some(IType.I(i2))) =>
-                  if (!jumpBlock(i1 > i2, 2)) walkInsn(current.getNext, nextState)
+                  if (!jumpBlock(i1 > i2, 2)) walkNextBlock(current.getNext, nextState)
 
                 case (IF_ICMPGE, Some(IType.I(i1)), Some(IType.I(i2))) =>
-                  if (!jumpBlock(i1 <= i2, 2)) walkInsn(current.getNext, nextState)
+                  if (!jumpBlock(i1 <= i2, 2)) walkNextBlock(current.getNext, nextState)
 
                 case (IF_ICMPGT, Some(IType.I(i1)), Some(IType.I(i2))) =>
-                  if (!jumpBlock(i1 <= i2, 2)) walkInsn(current.getNext, nextState)
+                  if (!jumpBlock(i1 <= i2, 2)) walkNextBlock(current.getNext, nextState)
 
                 case (IF_ICMPLE, Some(IType.I(i1)), Some(IType.I(i2))) =>
-                  if (!jumpBlock(i1 >= i2, 2)) walkInsn(current.getNext, nextState)
+                  if (!jumpBlock(i1 >= i2, 2)) walkNextBlock(current.getNext, nextState)
 
                 case (GOTO, _, _) => jumpBlock(true, 0)
 
                 case _ => // JSR, IFNULL, IFNONNULL, IF_ACMPEQ, IF_ACMPNE, anything else
                   // We don't know how to handle these, so walk both cases
-                  walkBlock(current.getNext, nextState, seenBlocks)
                   val n = new JumpInsnNode(current.getOpcode, null)
                   finalInsnList.add(n)
+                  walkNextBlock(current.getNext, nextState)
                   val (fresh, jumped) = walkBlock(current.label, nextState, seenBlocks)
                   n.label = jumped.getFirst.asInstanceOf[LabelNode]
               }
             case current: LabelNode =>
               finalInsnList.add(new LabelNode())
-              walkInsn(current.getNext, nextState)
+              walkNextBlock(current.getNext, nextState)
 
             case current: LdcInsnNode =>
               finalInsnList.add(new LdcInsnNode(current.cst))
-              if (currentInsn.getNext.isInstanceOf[LabelNode]) walkBlock(currentInsn.getNext, nextState, seenBlocks)
+              if (currentInsn.getNext.isInstanceOf[LabelNode]) walkNextBlock(currentInsn.getNext, nextState)
               else walkInsn(current.getNext, nextState)
 
             case current: LineNumberNode =>
               finalInsnList.add(new LineNumberNode(current.line, current.start))
-              if (currentInsn.getNext.isInstanceOf[LabelNode]) walkBlock(currentInsn.getNext, nextState, seenBlocks)
+              if (currentInsn.getNext.isInstanceOf[LabelNode]) walkNextBlock(currentInsn.getNext, nextState)
               else walkInsn(current.getNext, nextState)
 
             case current: LookupSwitchInsnNode =>
@@ -258,7 +277,7 @@ class Walker(isInterface: JType.Cls => Boolean,
 
               finalInsnList.add(mangled)
               if (currentInsn.getNext.isInstanceOf[LabelNode]) {
-                walkBlock(currentInsn.getNext, currentState.execute(mangled, dataflow), seenBlocks)
+                walkNextBlock(currentInsn.getNext, currentState.execute(mangled, dataflow))
               } else {
                 walkInsn(current.getNext, currentState.execute(mangled, dataflow))
               }
@@ -266,7 +285,7 @@ class Walker(isInterface: JType.Cls => Boolean,
             case current: MultiANewArrayInsnNode =>
               val n = new MultiANewArrayInsnNode(current.desc, current.dims)
               finalInsnList.add(n)
-              if (currentInsn.getNext.isInstanceOf[LabelNode]) walkBlock(currentInsn.getNext, nextState, seenBlocks)
+              if (currentInsn.getNext.isInstanceOf[LabelNode]) walkNextBlock(currentInsn.getNext, nextState)
               else walkInsn(current.getNext, nextState)
 
             case current: TableSwitchInsnNode =>
@@ -279,20 +298,21 @@ class Walker(isInterface: JType.Cls => Boolean,
               visitedClasses.add(JType.Cls(current.desc))
               val n = new TypeInsnNode(current.getOpcode, current.desc)
               finalInsnList.add(n)
-              if (currentInsn.getNext.isInstanceOf[LabelNode]) walkBlock(currentInsn.getNext, nextState, seenBlocks)
+              if (currentInsn.getNext.isInstanceOf[LabelNode]) walkNextBlock(currentInsn.getNext, nextState)
               else walkInsn(current.getNext, nextState)
 
             case current: VarInsnNode =>
               val n = new VarInsnNode(current.getOpcode, current.`var`)
               finalInsnList.add(n)
-              if (currentInsn.getNext.isInstanceOf[LabelNode]) walkBlock(currentInsn.getNext, nextState, seenBlocks)
+              if (currentInsn.getNext.isInstanceOf[LabelNode]) walkNextBlock(currentInsn.getNext, nextState)
               else walkInsn(current.getNext, nextState)
           }
         }
-        if (!visitedBlocks.contains((currentInsn, currentState))){
+        if (!visitedBlocks.contains((blockStart, blockState))){
 //          println("NEW BLOCK " + (currentInsn, currentState))
-          visitedBlocks((currentInsn, currentState)) = finalInsnList
-          walkInsn(currentInsn, currentState)
+          visitedBlocks((blockStart, blockState)) = finalInsnList
+          lastBlock = Some((blockStart, blockState))
+          walkInsn(blockStart, blockState)
 //          println("END BLOCK")
           (true, finalInsnList)
         }else{
@@ -301,17 +321,17 @@ class Walker(isInterface: JType.Cls => Boolean,
           val label = new LabelNode()
           val jump = new JumpInsnNode(
             GOTO,
-            visitedBlocks((currentInsn, currentState)).getFirst match{
+            visitedBlocks((blockStart, blockState)).getFirst match{
               case l: LabelNode => l
               case _ =>
                 val newLabel = new LabelNode()
-                visitedBlocks((currentInsn, currentState)).insert(newLabel)
+                visitedBlocks((blockStart, blockState)).insert(newLabel)
                 newLabel
             }
           )
           res.add(label)
           res.add(jump)
-          visitedBlocks((label, currentState)) = res
+          visitedBlocks((label, blockState)) = res
           (false, res)
         }
       }
