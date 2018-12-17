@@ -299,7 +299,7 @@ class Walker(isInterface: JType.Cls => Boolean,
       concreteSigs.map(recurse(_, inferredTypes))
     )
 
-    if (inferredTypes == originalTypes) insn // No narrowing
+    if (Util.isCompatible(inferredTypes, originalTypes)) insn // No narrowing
     else {
       val descChanged =
         (static && inferredTypes != originalTypes) ||

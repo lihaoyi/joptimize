@@ -289,4 +289,8 @@ case class Desc(args: Seq[JType], ret: JType) {
   override def toString = unparse
 }
 
-case class MethodSig(cls: JType.Cls, name: String, desc: Desc, static: Boolean)
+case class MethodSig(cls: JType.Cls, name: String, desc: Desc, static: Boolean){
+  override def toString = {
+    cls.javaName + (if (static) "." else "#") + name + desc.unparse
+  }
+}

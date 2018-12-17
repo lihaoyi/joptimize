@@ -69,4 +69,12 @@ object Util{
     }
     (seen.toSet, terminals.toSet, backEdges.toSet)
   }
+  def isCompatible(inferredTypes: Seq[IType], originalTypes: Seq[JType]): Boolean = {
+    inferredTypes.length == originalTypes.length &&
+    inferredTypes.iterator.zip(originalTypes.iterator).forall{
+      case (JType.Prim.I, JType.Prim.Z | JType.Prim.B | JType.Prim.S) => true
+      case (inf: JType, orig: JType) => inf == orig
+      case (IType.Intersect(classes), orig: JType) => ???
+    }
+  }
 }
