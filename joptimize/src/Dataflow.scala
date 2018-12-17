@@ -98,7 +98,11 @@ class Dataflow(merge0: Seq[IType] => IType) extends Interpreter[IType](ASM4){
         (insn, value) match{
           case (typeInsn: TypeInsnNode, cls: JType.Cls) =>
             val desiredType = JType.read(typeInsn.desc)
-            IType.I(if (merge0(Seq(desiredType, cls)) == desiredType) 1 else 0)
+            val merged = merge0(Seq(desiredType, cls))
+            if (merged == desiredType) IType.I(1)
+            else if (merged == cls) JType.Prim.Z
+            else IType.I(0)
+
           case _ => JType.Prim.Z
         }
       case MONITORENTER | MONITOREXIT | IFNULL | IFNONNULL => JType.Null
