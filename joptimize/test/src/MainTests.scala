@@ -251,6 +251,7 @@ object MainTests extends TestSuite{
       'BooleanWidening - {
         'simple - opt2[Int, Int, Int]()
           .check((1, 2) -> 1, (2, 1) -> 1)
+          .checkPresent("BooleanWidening$.invert")
       }
       'InstanceDce - {
         'simple1 - opt2[Int, Int, Int]()
