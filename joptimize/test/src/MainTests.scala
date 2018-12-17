@@ -376,27 +376,32 @@ object MainTests extends TestSuite{
       JType.fromJavaCls(returnClass)
     )
 
+    val inputFileMap = os.walk(testRoot / tp.value.dropRight(2))
+      .filter(os.isFile)
+      .map(p => (p.relativeTo(classesRoot).toString, os.read.bytes(p)))
+      .toMap
+
     val outputFileMap = JOptimize.run(
-      os.walk(testRoot / tp.value.dropRight(2))
-        .filter(os.isFile)
-        .map(p => (p.relativeTo(classesRoot).toString, os.read.bytes(p)))
-        .toMap,
+      inputFileMap,
       Seq(MethodSig(s"joptimize/examples/${tp.value.dropRight(1).mkString("/")}", tp.value.last, methodDesc, static = true)),
       eliminateOldMethods = true
     )
+
+    val Seq(inputBytes, outputBytes) =
+      Seq(inputFileMap, outputFileMap).map(_.values.map(_.length).sum)
 
     os.remove.all(outRoot / tp.value)
     for((k, bytes) <- outputFileMap){
       os.write(outRoot / tp.value / os.RelPath(k), bytes, createFolders = true)
     }
+    override def toString() = {
+      s"Optimized(inputFiles=${inputFileMap.size}, inputBytes=$inputBytes, outputFiles=${outputFileMap.size}, outputBytes=$outputBytes)"
+    }
 
     def checkWithClassloader(f: URLClassLoader => Any): this.type = {
       val cl = new URLClassLoader(Array((outRoot / tp.value).toNIO.toUri.toURL))
-      try {
-        f(cl)
-      } finally {
-        cl.close()
-      }
+      try f(cl)
+      finally cl.close()
       this
     }
 
