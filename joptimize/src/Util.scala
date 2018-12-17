@@ -73,6 +73,10 @@ object Util{
     inferredTypes.length == originalTypes.length &&
     inferredTypes.iterator.zip(originalTypes.iterator).forall{
       case (JType.Prim.I, JType.Prim.Z | JType.Prim.B | JType.Prim.S) => true
+      case (IType.I(_), x) => x == JType.Prim.I
+      case (IType.J(_), x) => x == JType.Prim.J
+      case (IType.F(_), x) => x == JType.Prim.F
+      case (IType.D(_), x) => x == JType.Prim.D
       case (inf: JType, orig: JType) => inf == orig
       case (IType.Intersect(classes), orig: JType) => ???
     }

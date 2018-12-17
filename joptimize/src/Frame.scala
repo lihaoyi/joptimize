@@ -23,6 +23,20 @@ class Frame(private val value: org.objectweb.asm.tree.analysis.Frame[IType]){
       }
     }
   }
+
+  def widen = {
+    val newValue = new org.objectweb.asm.tree.analysis.Frame[IType](
+      value.getLocals,
+      value.getMaxStackSize
+    )
+
+    for(i <- 0 until newValue.getLocals) {
+      val local = locals(i)
+      if (local != null) newValue.setLocal(i, local.widen)
+    }
+    for(i <- 0 until newValue.getStackSize) newValue.push(newValue.getLocal(i).widen)
+    new Frame(newValue)
+  }
   override def hashCode() = {
     (
       (0 until value.getLocals).map(value.getLocal),

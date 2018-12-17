@@ -8,6 +8,10 @@ object JType{
   implicit def strClsTypeShorthand(name: String): Cls = Cls(name)
   def fromIType(t: IType, fallback: JType): JType = t match{
     case j: JType => j
+    case IType.I(_) => JType.Prim.I
+    case IType.J(_) => JType.Prim.J
+    case IType.F(_) => JType.Prim.F
+    case IType.D(_) => JType.Prim.D
     case IType.Intersect(classes) => fallback
   }
   def fromJavaCls(c: Class[_]): JType =
@@ -252,6 +256,7 @@ sealed trait JType extends IType{
 
   def isRef: Boolean = this.isInstanceOf[JType.Ref]
 
+  def widen = this
 }
 
 object Desc{

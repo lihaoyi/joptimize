@@ -14,17 +14,26 @@ object Dataflow extends Interpreter[IType](ASM4){
   def newOperation(insn: AbstractInsnNode) = {
     insn.getOpcode match{
       case ACONST_NULL => JType.Null
-      case ICONST_M1 | ICONST_0 | ICONST_1 | ICONST_2 | ICONST_3 | ICONST_4 | ICONST_5 =>
-        JType.Prim.I
-      case LCONST_0 | LCONST_1 => JType.Prim.J
-      case FCONST_0 | FCONST_1 | FCONST_2 => JType.Prim.F
-      case DCONST_0 | DCONST_1 => JType.Prim.D
-      case BIPUSH | SIPUSH => JType.Prim.I
+      case ICONST_M1 => IType.I(-1)
+      case ICONST_0 => IType.I(0)
+      case ICONST_1 => IType.I(1)
+      case ICONST_2 => IType.I(2)
+      case ICONST_3 => IType.I(3)
+      case ICONST_4 => IType.I(4)
+      case ICONST_5 => IType.I(5)
+      case LCONST_0 => IType.J(0)
+      case LCONST_1 => IType.J(1)
+      case FCONST_0 => IType.F(0)
+      case FCONST_1 => IType.F(1)
+      case FCONST_2 => IType.F(2)
+      case DCONST_0 => IType.D(0)
+      case DCONST_1 => IType.D(1)
+      case BIPUSH | SIPUSH => IType.I(insn.asInstanceOf[IntInsnNode].operand)
       case LDC =>
         insn.asInstanceOf[LdcInsnNode].cst match{
-          case _: java.lang.Integer => JType.Prim.I
-          case _: java.lang.Float => JType.Prim.F
-          case _: java.lang.Double => JType.Prim.D
+          case i: java.lang.Integer => IType.I(i)
+          case f: java.lang.Float => IType.F(f)
+          case d: java.lang.Double => IType.D(d)
           case _: java.lang.String => JType.Cls("java/lang/String")
           case value: org.objectweb.asm.Type =>
             value.getSort match{
@@ -43,10 +52,29 @@ object Dataflow extends Interpreter[IType](ASM4){
 
   def unaryOperation(insn: AbstractInsnNode, value: IType) = {
     insn.getOpcode match {
-      case INEG | IINC | L2I | F2I | D2I | I2B | I2C | I2S => JType.Prim.I
-      case FNEG | I2F| L2F| D2F => JType.Prim.J
-      case LNEG | I2L | F2L | D2L => JType.Prim.J
-      case DNEG | I2D | L2D | F2D => JType.Prim.D
+      case INEG => value match{ case IType.I(i) => IType.I(-i) case _ => JType.Prim.I}
+      case IINC => value match{ case IType.I(i) => IType.I(i + 1) case _ => JType.Prim.I}
+      case L2I => value match{ case IType.J(i) => IType.I(i.toInt) case _ => JType.Prim.I}
+      case F2I => value match{ case IType.F(i) => IType.I(i.toInt) case _ => JType.Prim.I}
+      case D2I => value match{ case IType.D(i) => IType.I(i.toInt) case _ => JType.Prim.I}
+      case I2B => value match{ case IType.I(i) => IType.I(i.toByte) case _ => JType.Prim.I}
+      case I2C => value match{ case IType.I(i) => IType.I(i.toChar) case _ => JType.Prim.I}
+      case I2S => value match{ case IType.I(i) => IType.I(i.toShort) case _ => JType.Prim.I}
+
+      case FNEG => value match{ case IType.F(i) => IType.F(-i) case _ => JType.Prim.F}
+      case I2F => value match{ case IType.I(i) => IType.F(i) case _ => JType.Prim.F}
+      case L2F => value match{ case IType.J(i) => IType.F(i) case _ => JType.Prim.F}
+      case D2F => value match{ case IType.D(i) => IType.F(i.toFloat) case _ => JType.Prim.F}
+
+      case LNEG => value match{ case IType.J(i) => IType.J(-i) case _ => JType.Prim.J}
+      case I2L => value match{ case IType.I(i) => IType.J(i) case _ => JType.Prim.J}
+      case F2L => value match{ case IType.F(i) => IType.J(i.toLong) case _ => JType.Prim.J}
+      case D2L => value match{ case IType.D(i) => IType.J(i.toLong) case _ => JType.Prim.J}
+
+      case DNEG => value match{ case IType.D(i) => IType.D(-i) case _ => JType.Prim.D}
+      case I2D => value match{ case IType.I(i) => IType.D(i) case _ => JType.Prim.D}
+      case L2D => value match{ case IType.J(i) => IType.D(-i) case _ => JType.Prim.D}
+      case F2D => value match{ case IType.F(i) => IType.D(-i) case _ => JType.Prim.D}
       case IFEQ | IFNE | IFLT | IFGE | IFGT | IFLE | TABLESWITCH | LOOKUPSWITCH |
            IRETURN | LRETURN | FRETURN | DRETURN | ARETURN | PUTSTATIC =>
         JType.Null
@@ -72,13 +100,46 @@ object Dataflow extends Interpreter[IType](ASM4){
   }
   def binaryOperation(insn: AbstractInsnNode, v1: IType, v2: IType) = {
     insn.getOpcode match {
-      case IALOAD | BALOAD | CALOAD | SALOAD | IADD | ISUB | IMUL | IDIV | IREM | ISHL | ISHR | IUSHR | IAND | IOR | IXOR =>
-        JType.Prim.I
-      case FALOAD | FADD | FSUB | FMUL | FDIV | FREM => JType.Prim.F
-      case LALOAD | LADD | LSUB | LMUL | LDIV | LREM | LSHL | LSHR | LUSHR | LAND | LOR | LXOR =>
-        JType.Prim.J
-      case DALOAD | DADD | DSUB | DMUL | DDIV | DREM =>
-        JType.Prim.D
+      case IALOAD | BALOAD | CALOAD | SALOAD => JType.Prim.I
+      case IADD => (v1, v2) match{ case (IType.I(i1), IType.I(i2)) => IType.I(i1 + i2) case _ => JType.Prim.I}
+      case ISUB => (v1, v2) match{ case (IType.I(i1), IType.I(i2)) => IType.I(i1 - i2) case _ => JType.Prim.I}
+      case IMUL => (v1, v2) match{ case (IType.I(i1), IType.I(i2)) => IType.I(i1 * i2) case _ => JType.Prim.I}
+      case IDIV => (v1, v2) match{ case (IType.I(i1), IType.I(i2)) => IType.I(i1 / i2) case _ => JType.Prim.I}
+      case IREM => (v1, v2) match{ case (IType.I(i1), IType.I(i2)) => IType.I(i1 % i2) case _ => JType.Prim.I}
+      case ISHL => (v1, v2) match{ case (IType.I(i1), IType.I(i2)) => IType.I(i1 << i2) case _ => JType.Prim.I}
+      case ISHR => (v1, v2) match{ case (IType.I(i1), IType.I(i2)) => IType.I(i1 >> i2) case _ => JType.Prim.I}
+      case IUSHR => (v1, v2) match{ case (IType.I(i1), IType.I(i2)) => IType.I(i1 >>> i2) case _ => JType.Prim.I}
+      case IAND => (v1, v2) match{ case (IType.I(i1), IType.I(i2)) => IType.I(i1 & i2) case _ => JType.Prim.I}
+      case IOR => (v1, v2) match{ case (IType.I(i1), IType.I(i2)) => IType.I(i1 | i2) case _ => JType.Prim.I}
+      case IXOR => (v1, v2) match{ case (IType.I(i1), IType.I(i2)) => IType.I(i1 ^ i2) case _ => JType.Prim.I}
+
+      case FALOAD => JType.Prim.F
+      case FADD => (v1, v2) match{ case (IType.F(i1), IType.F(i2)) => IType.F(i1 + i2) case _ => JType.Prim.F}
+      case FSUB => (v1, v2) match{ case (IType.F(i1), IType.F(i2)) => IType.F(i1 - i2) case _ => JType.Prim.F}
+      case FMUL => (v1, v2) match{ case (IType.F(i1), IType.F(i2)) => IType.F(i1 * i2) case _ => JType.Prim.F}
+      case FDIV => (v1, v2) match{ case (IType.F(i1), IType.F(i2)) => IType.F(i1 / i2) case _ => JType.Prim.F}
+      case FREM =>  (v1, v2) match{ case (IType.F(i1), IType.F(i2)) => IType.F(i1 % i2) case _ => JType.Prim.F}
+
+      case LALOAD => JType.Prim.J
+      case LADD => (v1, v2) match{ case (IType.J(i1), IType.J(i2)) => IType.J(i1 + i2) case _ => JType.Prim.J}
+      case LSUB => (v1, v2) match{ case (IType.J(i1), IType.J(i2)) => IType.J(i1 - i2) case _ => JType.Prim.J}
+      case LMUL => (v1, v2) match{ case (IType.J(i1), IType.J(i2)) => IType.J(i1 * i2) case _ => JType.Prim.J}
+      case LDIV => (v1, v2) match{ case (IType.J(i1), IType.J(i2)) => IType.J(i1 / i2) case _ => JType.Prim.J}
+      case LREM => (v1, v2) match{ case (IType.J(i1), IType.J(i2)) => IType.J(i1 % i2) case _ => JType.Prim.J}
+      case LSHL => (v1, v2) match{ case (IType.J(i1), IType.J(i2)) => IType.J(i1 << i2) case _ => JType.Prim.J}
+      case LSHR => (v1, v2) match{ case (IType.J(i1), IType.J(i2)) => IType.J(i1 >> i2) case _ => JType.Prim.J}
+      case LUSHR => (v1, v2) match{ case (IType.J(i1), IType.J(i2)) => IType.J(i1 >>> i2) case _ => JType.Prim.J}
+      case LAND => (v1, v2) match{ case (IType.J(i1), IType.J(i2)) => IType.J(i1 & i2) case _ => JType.Prim.J}
+      case LOR => (v1, v2) match{ case (IType.J(i1), IType.J(i2)) => IType.J(i1 | i2) case _ => JType.Prim.J}
+      case LXOR => (v1, v2) match{ case (IType.J(i1), IType.J(i2)) => IType.J(i1 ^ i2) case _ => JType.Prim.J}
+
+      case DALOAD => JType.Prim.D
+      case DADD => (v1, v2) match{ case (IType.D(i1), IType.D(i2)) => IType.D(i1 + i2) case _ => JType.Prim.D}
+      case DSUB => (v1, v2) match{ case (IType.D(i1), IType.D(i2)) => IType.D(i1 - i2) case _ => JType.Prim.D}
+      case DMUL => (v1, v2) match{ case (IType.D(i1), IType.D(i2)) => IType.D(i1 * i2) case _ => JType.Prim.D}
+      case DDIV => (v1, v2) match{ case (IType.D(i1), IType.D(i2)) => IType.D(i1 / i2) case _ => JType.Prim.D}
+      case DREM => (v1, v2) match{ case (IType.D(i1), IType.D(i2)) => IType.D(i1 % i2) case _ => JType.Prim.D}
+
       case AALOAD => v1.asInstanceOf[JType.Arr].innerType
       case LCMP | FCMPL | FCMPG | DCMPL | DCMPG => JType.Prim.I
       case IF_ICMPEQ | IF_ICMPNE | IF_ICMPLT | IF_ICMPGE | IF_ICMPGT | IF_ICMPLE | IF_ACMPEQ | IF_ACMPNE | PUTFIELD =>
