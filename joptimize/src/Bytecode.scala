@@ -5,7 +5,7 @@ import org.objectweb.asm.Opcodes._
   */
 object Bytecode {
   sealed trait StackChange
-  case class Fixed(removed: Int, added: Int) extends StackChange
+  case class Fixed(pop: Int, push: Int) extends StackChange
   case object MultiANewArray extends StackChange
   case class Invoke(static: Boolean) extends StackChange
   case class InvokeDynamic() extends StackChange

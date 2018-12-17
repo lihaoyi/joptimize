@@ -1,4 +1,4 @@
-Primary Tasks
+# Primary Tasks
 
 - Dead code elimination
 
@@ -6,7 +6,7 @@ Primary Tasks
 
 - Obfuscation (Mostly just renaming things)
 
-Optimization Plan
+# Optimization Plan
 
 - Specialize methods by duplicating them based on narrow callsite-types of
   arguments
@@ -42,3 +42,20 @@ Optimization Plan
 
 - Probably not possible to optimize:
   - Fusing collection traversal (changes semantics in presence of exceptions)
+    but probably can fuse iterator traversal.
+
+# Optimization internals
+
+- Single pass dataflow-ordered abstract interpretation
+  - Dead code elimination
+  - Partial evaluation
+  - Specialization
+  - Constant folding (replace instructions with pops + const)
+  - Purity analysis
+
+- Post-single-pass liveness cleanup (backwards dataflow order)
+  - Walk backwards from method terminals (returns + impure method calls) to find
+    all live values/instructions
+  - Remove all other instructions!
+  - Pure methods do not count as terminals; if their return value is not used,
+    they can be eliminated
