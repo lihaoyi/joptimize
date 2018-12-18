@@ -55,6 +55,7 @@ class Walker(isInterface: JType.Cls => Boolean,
       val visitedBlocks = mutable.LinkedHashMap.empty[(AbstractInsnNode, Frame), InsnList]
       var lastBlock: Option[(AbstractInsnNode, Frame)] = None
       val methodReturns = mutable.Buffer.empty[IType]
+      val labelMapping = mutable.Map.empty[LabelNode, List[LabelNode]]
       def walkBlock(blockStart: AbstractInsnNode,
                     blockState0: Frame,
                     seenBlocks0: Set[AbstractInsnNode]): (Boolean, InsnList) = {
@@ -170,7 +171,9 @@ class Walker(isInterface: JType.Cls => Boolean,
                 walkNextBlock, currentState, nextState, current
               )
             case current: LabelNode =>
-              finalInsnList.add(new LabelNode())
+              val newLabel = new LabelNode()
+              labelMapping(current) = newLabel :: labelMapping.getOrElse(current, Nil)
+              finalInsnList.add(newLabel)
               walkNextBlock(current.getNext, nextState)
 
             case current: LdcInsnNode =>
@@ -178,7 +181,9 @@ class Walker(isInterface: JType.Cls => Boolean,
               if (!walkNextLabel()) walkInsn(current.getNext, nextState)
 
             case current: LineNumberNode =>
-              finalInsnList.add(new LineNumberNode(current.line, current.start))
+              for(newLabel <- labelMapping.getOrElse(current.start, Nil)){
+                finalInsnList.add(new LineNumberNode(current.line, newLabel))
+              }
               if (!walkNextLabel()) walkInsn(current.getNext, nextState)
 
             case current: LookupSwitchInsnNode =>
