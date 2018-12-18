@@ -128,12 +128,18 @@ object JOptimize{
     }
 
 
-
     val grouped =
       (visitedInterfaces ++ visitedClasses.map(_.name)).map(classNodeMap(_) -> Nil).toMap ++
       newMethods.groupBy(_._1).mapValues(_.map(_._2))
 
     for((cn, mns) <- grouped) yield {
+
+      if (cn.attrs != null) Util.removeFromJavaList(cn.attrs)(_.`type` == "ScalaSig")
+      if (cn.attrs != null) Util.removeFromJavaList(cn.attrs)(_.`type` == "ScalaInlineInfo")
+      if (cn.visibleAnnotations != null) {
+        Util.removeFromJavaList(cn.visibleAnnotations )(_.desc == "Lscala/reflect/ScalaSignature;")
+      }
+
       cn.methods.addAll(mns.asJava)
       val cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES)
       cn.accept(cw)

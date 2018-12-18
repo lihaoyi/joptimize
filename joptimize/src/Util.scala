@@ -12,6 +12,13 @@ object Util{
   private val printer = new Textifier
   private val methodPrinter = new TraceMethodVisitor(printer)
 
+  def removeFromJavaList[T](list: java.util.List[T])(pred: T => Boolean) = {
+    import collection.JavaConverters._
+    list.iterator.asScala.indexWhere(pred) match{
+      case -1 => // do nothing
+      case n => list.remove(n)
+    }
+  }
   def prettyprint(insnNode: AbstractInsnNode) = {
     insnNode.accept(methodPrinter)
     val sw = new StringWriter
