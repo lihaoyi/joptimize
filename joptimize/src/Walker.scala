@@ -256,31 +256,17 @@ class Walker(isInterface: JType.Cls => Boolean,
               if (!walkNextLabel()) walkInsn(current.getNext, nextState)
           }
         }
-        if (!visitedBlocks.contains((blockStart, blockState))){
+        visitedBlocks.get((blockStart, blockState)) match{
+          case Some(v) =>
+          //          println("OLD BLOCK")
+            (false, v)
+          case None =>
 //          println("NEW BLOCK " + (currentInsn, currentState))
-          visitedBlocks((blockStart, blockState)) = finalInsnList
-          lastBlock = Some((blockStart, blockState))
-          walkInsn(blockStart, blockState)
-//          println("END BLOCK")
-          (true, finalInsnList)
-        }else{
-//          println("OLD BLOCK")
-          val res = new InsnList()
-          val label = new LabelNode()
-          val jump = new JumpInsnNode(
-            GOTO,
-            visitedBlocks((blockStart, blockState)).getFirst match{
-              case l: LabelNode => l
-              case _ =>
-                val newLabel = new LabelNode()
-                visitedBlocks((blockStart, blockState)).insert(newLabel)
-                newLabel
-            }
-          )
-          res.add(label)
-          res.add(jump)
-          visitedBlocks((label, blockState)) = res
-          (false, res)
+            visitedBlocks((blockStart, blockState)) = finalInsnList
+            lastBlock = Some((blockStart, blockState))
+            walkInsn(blockStart, blockState)
+  //          println("END BLOCK")
+            (true, finalInsnList)
         }
       }
 //      pprint.log(sig -> insns.size)
