@@ -48,14 +48,30 @@
 
 - Single pass dataflow-ordered abstract interpretation
   - Dead code elimination
+
   - Partial evaluation
+
   - Specialization
+
   - Constant folding (replace instructions with pops + const)
+
   - Purity analysis
 
-- Post-single-pass liveness cleanup (backwards dataflow order)
+- Post-single-pass instruction-level liveness cleanup (backwards dataflow order)
   - Walk backwards from method terminals (returns + impure method calls) to find
     all live values/instructions
+
   - Remove all other instructions!
+
   - Pure methods do not count as terminals; if their return value is not used,
     they can be eliminated
+
+  - Liveness cleanup doesn't feed back into DCE/specialization: instructions
+    cleaned up here can only be dataflow-upstream of other liveness-cleaned-up
+    instructions, which will get also eliminated automatically
+
+- Post-liveness method-level DCE
+  - Delete any methods which were reachable but failed during liveness analysis
+
+  - Doesn't feed back into DCE/specialization or instruction-level liveness
+    cleanup

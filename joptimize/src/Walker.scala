@@ -64,18 +64,19 @@ class Walker(isInterface: JType.Cls => Boolean,
         val seenBlocks = seenBlocks0 + blockStart
         val finalInsnList = new InsnList
 
+        /**
+          * Walk another block. Automatically inserts a GOTO if the next block isn't
+          * going to be immediately after the current block, and elides the GOTO otherwise
+          *
+          * Shouldn't be used if there isn't any possibility of the next block
+          * seamlessly following the current, e.g. in the case of switches where
+          * every branch needs a jump.
+          */
         def walkNextBlock(destBlockStart: AbstractInsnNode, destBlockState: Frame) = {
-          /**
-            * Walk another block. Automatically inserts a GOTO if the next block isn't
-            * going to be immediately after the current block, and elides the GOTO otherwise
-            *
-            * Shouldn't be used if there isn't any possibility of the next block
-            * seamlessly following the current, e.g. in the case of switches where
-            * every branch needs a jump.
-            */
+
           val preWalkLastBlock = lastBlock
           val (fresh, jumped) = walkBlock(destBlockStart, destBlockState, seenBlocks)
-          if (!fresh || !preWalkLastBlock.exists(_._1 != (destBlockStart, blockState))){
+          if (!fresh || !preWalkLastBlock.exists(_ != (destBlockStart, blockState))){
             val l = jumped.getFirst match{
               case l: LabelNode => l
               case _ =>
@@ -100,69 +101,15 @@ class Walker(isInterface: JType.Cls => Boolean,
           val nextState = currentState.execute(currentInsn, dataflow)
 
           /**
-            * JOptimize's constant folding simply replaces all instructions with
-            * known outputs by a constant (ICONST, LCONST, LDC, ...) preceded by
-            * the correct number of pops. We are not able to remove the
-            * instruction because we cannot tell during the initial
-            * dataflow-ordered pass which instruction's output ends up getting
-            * used in future.
-            *
-            * A second pass in reverse-dataflow order can then trivially
-            * collapse all the unused instructions later (TBD)
+            * Walk the next instruction as a new block, if it is a label. If not
+            * then return `false` so we can tail-recursively walk it as a simple
+            * instruction
             */
-          def constantFold(newInsn: AbstractInsnNode) = {
-            val stackEffect = Bytecode.stackEffect(currentInsn.getOpcode).asInstanceOf[Fixed]
-            if (stackEffect.push == 1){
-              nextState.stack.last match{
-                case IType.I(v) =>
-                  for(i <- 0 until stackEffect.pop) finalInsnList.add(new InsnNode(POP))
-                  finalInsnList.add(
-                    v match{
-                      case -1 => new InsnNode(ICONST_M1)
-                      case 0 => new InsnNode(ICONST_0)
-                      case 1 => new InsnNode(ICONST_1)
-                      case 2 => new InsnNode(ICONST_2)
-                      case 3 => new InsnNode(ICONST_3)
-                      case 4 => new InsnNode(ICONST_4)
-                      case 5 => new InsnNode(ICONST_5)
-                      case _ => new LdcInsnNode(java.lang.Integer.valueOf(v))
-                    }
-                  )
-                case IType.J(v) =>
-                  for(i <- 0 until stackEffect.pop) finalInsnList.add(new InsnNode(POP))
-                  finalInsnList.add(
-                    v match{
-                      case 0 => new InsnNode(LCONST_0)
-                      case 1 => new InsnNode(LCONST_1)
-                      case _ => new LdcInsnNode(java.lang.Long.valueOf(v))
-                    }
-                  )
-                case IType.F(v) =>
-                  for(i <- 0 until stackEffect.pop) finalInsnList.add(new InsnNode(POP))
-                  finalInsnList.add(
-                    v match{
-                      case 0 => new InsnNode(FCONST_0)
-                      case 1 => new InsnNode(FCONST_1)
-                      case 2 => new InsnNode(FCONST_2)
-                      case _ => new LdcInsnNode(java.lang.Float.valueOf(v))
-                    }
-                  )
-                case IType.D(v) =>
-                  for(i <- 0 until stackEffect.pop) finalInsnList.add(new InsnNode(POP))
-                  finalInsnList.add(
-                    v match{
-                      case 0 => new InsnNode(DCONST_0)
-                      case 1 => new InsnNode(DCONST_1)
-                      case _ => new LdcInsnNode(java.lang.Double.valueOf(v))
-                    }
-                  )
-
-                case _ =>
-                  finalInsnList.add(newInsn)
-              }
-            }else{
-              finalInsnList.add(newInsn)
-            }
+          def walkNextLabel(nextState1: Frame = nextState) = {
+            if (currentInsn.getNext.isInstanceOf[LabelNode]) {
+              walkNextBlock(currentInsn.getNext, nextState1)
+              true
+            } else false
           }
 
           currentInsn match{
@@ -182,8 +129,7 @@ class Walker(isInterface: JType.Cls => Boolean,
               }
               val n = new FieldInsnNode(current.getOpcode, current.owner, current.name, current.desc)
               finalInsnList.add(n)
-              if (currentInsn.getNext.isInstanceOf[LabelNode]) walkNextBlock(currentInsn.getNext, nextState)
-              else walkInsn(current.getNext, nextState)
+              if (!walkNextLabel()) walkInsn(current.getNext, nextState)
 
             case current: FrameNode =>
               val n = new FrameNode(
@@ -194,17 +140,13 @@ class Walker(isInterface: JType.Cls => Boolean,
                 current.stack.toArray
               )
               finalInsnList.add(n)
-              if (currentInsn.getNext.isInstanceOf[LabelNode]) walkNextBlock(currentInsn.getNext, nextState)
-              else walkInsn(current.getNext, nextState)
+              if (!walkNextLabel()) walkInsn(current.getNext, nextState)
 
             case current: IincInsnNode =>
-              val n = new IincInsnNode(current.`var`, current.incr)
-              finalInsnList.add(n)
-              if (currentInsn.getNext.isInstanceOf[LabelNode]) walkNextBlock(currentInsn.getNext, nextState)
-              else walkInsn(current.getNext, nextState)
+              finalInsnList.add(new IincInsnNode(current.`var`, current.incr))
+              if (!walkNextLabel()) walkInsn(current.getNext, nextState)
 
             case current: InsnNode =>
-
               current.getOpcode match{
                 case ARETURN =>
                   finalInsnList.add(new InsnNode(current.getOpcode))
@@ -212,92 +154,32 @@ class Walker(isInterface: JType.Cls => Boolean,
                 case RETURN | DRETURN | FRETURN | IRETURN | LRETURN =>
                   finalInsnList.add(new InsnNode(current.getOpcode))
                 case _ =>
-                  constantFold(new InsnNode(current.getOpcode))
-                  if (currentInsn.getNext.isInstanceOf[LabelNode]) walkNextBlock(currentInsn.getNext, nextState)
-                  else walkInsn(current.getNext, nextState)
+                  constantFold(currentInsn, new InsnNode(current.getOpcode), nextState, finalInsnList)
+                  if (!walkNextLabel()) walkInsn(current.getNext, nextState)
               }
 
-
             case current: IntInsnNode =>
-              val n = new IntInsnNode(current.getOpcode, current.operand)
-              finalInsnList.add(n)
-              if (currentInsn.getNext.isInstanceOf[LabelNode]) walkNextBlock(currentInsn.getNext, nextState)
-              else walkInsn(current.getNext, nextState)
+              finalInsnList.add(new IntInsnNode(current.getOpcode, current.operand))
+              if (!walkNextLabel()) walkInsn(current.getNext, nextState)
 
             case current: InvokeDynamicInsnNode => ???
 
             case current: JumpInsnNode =>
-              def jumpBlock(pred: Boolean): Boolean = {
-                for(_ <- 0 until Bytecode.stackEffect(current.getOpcode).asInstanceOf[Fixed].pop) {
-                  finalInsnList.add(new InsnNode(POP))
-                }
-                if (pred) walkNextBlock(current.label, nextState)
-                pred
-              }
-              (
-                current.getOpcode,
-                currentState.stack.lift(currentState.stack.length - 1),
-                currentState.stack.lift(currentState.stack.length - 2)
-              ) match{
-                case (IFEQ, Some(IType.I(i)), _) =>
-                  if (!jumpBlock(i == 0)) walkNextBlock(current.getNext, nextState)
-
-                case (IFNE, Some(IType.I(i)), _) =>
-                  if (!jumpBlock(i != 0)) walkNextBlock(current.getNext, nextState)
-
-                case (IFLT, Some(IType.I(i)), _) =>
-                  if (!jumpBlock(i < 0)) walkNextBlock(current.getNext, nextState)
-
-                case (IFGE, Some(IType.I(i)), _) =>
-                  if (!jumpBlock(i >= 0)) walkNextBlock(current.getNext, nextState)
-
-                case (IFGT, Some(IType.I(i)), _) =>
-                  if (!jumpBlock(i > 0)) walkNextBlock(current.getNext, nextState)
-
-                case (IFLE, Some(IType.I(i)), _) =>
-                  if (!jumpBlock(i <= 0)) walkNextBlock(current.getNext, nextState)
-
-                case (IF_ICMPEQ, Some(IType.I(i1)), Some(IType.I(i2))) =>
-                  if (!jumpBlock(i1 == i2)) walkNextBlock(current.getNext, nextState)
-
-                case (IF_ICMPNE, Some(IType.I(i1)), Some(IType.I(i2))) =>
-                  if (!jumpBlock(i1 != i2)) walkNextBlock(current.getNext, nextState)
-
-                case (IF_ICMPLT, Some(IType.I(i1)), Some(IType.I(i2))) =>
-                  if (!jumpBlock(i1 > i2)) walkNextBlock(current.getNext, nextState)
-
-                case (IF_ICMPGE, Some(IType.I(i1)), Some(IType.I(i2))) =>
-                  if (!jumpBlock(i1 <= i2)) walkNextBlock(current.getNext, nextState)
-
-                case (IF_ICMPGT, Some(IType.I(i1)), Some(IType.I(i2))) =>
-                  if (!jumpBlock(i1 <= i2)) walkNextBlock(current.getNext, nextState)
-
-                case (IF_ICMPLE, Some(IType.I(i1)), Some(IType.I(i2))) =>
-                  if (!jumpBlock(i1 >= i2)) walkNextBlock(current.getNext, nextState)
-
-                case (GOTO, _, _) => jumpBlock(true)
-
-                case _ => // JSR, IFNULL, IFNONNULL, IF_ACMPEQ, IF_ACMPNE, anything else
-                  // We don't know how to handle these, so walk both cases
-                  val n = new JumpInsnNode(current.getOpcode, null)
-                  finalInsnList.add(n)
-                  walkNextBlock(current.getNext, nextState)
-                  val (fresh, jumped) = walkBlock(current.label, nextState, seenBlocks)
-                  n.label = jumped.getFirst.asInstanceOf[LabelNode]
-              }
+              walkJump(
+                walkBlock(_, _, seenBlocks), finalInsnList,
+                walkNextBlock, currentState, nextState, current
+              )
             case current: LabelNode =>
               finalInsnList.add(new LabelNode())
               walkNextBlock(current.getNext, nextState)
 
             case current: LdcInsnNode =>
               finalInsnList.add(new LdcInsnNode(current.cst))
-              if (currentInsn.getNext.isInstanceOf[LabelNode]) walkNextBlock(currentInsn.getNext, nextState)
-              else walkInsn(current.getNext, nextState)
+              if (!walkNextLabel()) walkInsn(current.getNext, nextState)
 
             case current: LineNumberNode =>
               finalInsnList.add(new LineNumberNode(current.line, current.start))
-              if (currentInsn.getNext.isInstanceOf[LabelNode]) walkNextBlock(currentInsn.getNext, nextState)
-              else walkInsn(current.getNext, nextState)
+              if (!walkNextLabel()) walkInsn(current.getNext, nextState)
 
             case current: LookupSwitchInsnNode =>
               val n = new LookupSwitchInsnNode(null, Array(), Array())
@@ -348,17 +230,13 @@ class Walker(isInterface: JType.Cls => Boolean,
                 )
 
               finalInsnList.add(mangled)
-              if (currentInsn.getNext.isInstanceOf[LabelNode]) {
-                walkNextBlock(currentInsn.getNext, currentState.execute(mangled, dataflow))
-              } else {
-                walkInsn(current.getNext, currentState.execute(mangled, dataflow))
-              }
+
+              val nextState1 = currentState.execute(mangled, dataflow)
+              if (!walkNextLabel(nextState1)) walkInsn(current.getNext, nextState1)
 
             case current: MultiANewArrayInsnNode =>
-              val n = new MultiANewArrayInsnNode(current.desc, current.dims)
-              finalInsnList.add(n)
-              if (currentInsn.getNext.isInstanceOf[LabelNode]) walkNextBlock(currentInsn.getNext, nextState)
-              else walkInsn(current.getNext, nextState)
+              finalInsnList.add(new MultiANewArrayInsnNode(current.desc, current.dims))
+              if (!walkNextLabel()) walkInsn(current.getNext, nextState)
 
             case current: TableSwitchInsnNode =>
               val n = new TableSwitchInsnNode(current.min, current.max, null)
@@ -368,16 +246,14 @@ class Walker(isInterface: JType.Cls => Boolean,
 
             case current: TypeInsnNode =>
               visitedClasses.add(JType.Cls(current.desc))
-              constantFold(new TypeInsnNode(current.getOpcode, current.desc))
+              constantFold(currentInsn, new TypeInsnNode(current.getOpcode, current.desc), nextState, finalInsnList)
 
-              if (currentInsn.getNext.isInstanceOf[LabelNode]) walkNextBlock(currentInsn.getNext, nextState)
-              else walkInsn(current.getNext, nextState)
+              if (!walkNextLabel()) walkInsn(current.getNext, nextState)
 
             case current: VarInsnNode =>
-              constantFold(new VarInsnNode(current.getOpcode, current.`var`))
+              constantFold(currentInsn, new VarInsnNode(current.getOpcode, current.`var`), nextState, finalInsnList)
 
-              if (currentInsn.getNext.isInstanceOf[LabelNode]) walkNextBlock(currentInsn.getNext, nextState)
-              else walkInsn(current.getNext, nextState)
+              if (!walkNextLabel()) walkInsn(current.getNext, nextState)
           }
         }
         if (!visitedBlocks.contains((blockStart, blockState))){
@@ -424,6 +300,122 @@ class Walker(isInterface: JType.Cls => Boolean,
     })
   }
 
+  /**
+    * Removes a jump if we already statically know the destination, replacing
+    * it with POPs and an optional GOTO directly to the end destination.
+    *
+    * If we do not know the destination, we simply emit the jump in the final
+    * bytecode, and walk the two jump targets to make sure we have somewhere
+    * to jump to
+    */
+  def walkJump(walkBlock: (AbstractInsnNode, Frame) => (Boolean, InsnList),
+               finalInsnList: InsnList,
+               walkNextBlock: (AbstractInsnNode, Frame) => InsnList,
+               currentState: Frame,
+               nextState: Frame,
+               current: JumpInsnNode) = {
+    def jumpBlock(pred: Boolean): Unit = {
+      popN(finalInsnList, Bytecode.stackEffect(current.getOpcode).asInstanceOf[Fixed].pop)
+      walkNextBlock(if (pred) current.label else current.getNext, nextState)
+    }
+
+    (
+      current.getOpcode,
+      currentState.stack.lift(currentState.stack.length - 1),
+      currentState.stack.lift(currentState.stack.length - 2)
+    ) match {
+      case (IFEQ, Some(IType.I(i)), _) => jumpBlock(i == 0)
+      case (IFNE, Some(IType.I(i)), _) => jumpBlock(i != 0)
+      case (IFLT, Some(IType.I(i)), _) => jumpBlock(i < 0)
+      case (IFGE, Some(IType.I(i)), _) => jumpBlock(i >= 0)
+      case (IFGT, Some(IType.I(i)), _) => jumpBlock(i > 0)
+      case (IFLE, Some(IType.I(i)), _) => jumpBlock(i <= 0)
+      case (IF_ICMPEQ, Some(IType.I(i1)), Some(IType.I(i2))) => jumpBlock(i1 == i2)
+      case (IF_ICMPNE, Some(IType.I(i1)), Some(IType.I(i2))) => jumpBlock(i1 != i2)
+      case (IF_ICMPLT, Some(IType.I(i1)), Some(IType.I(i2))) => jumpBlock(i1 > i2)
+      case (IF_ICMPGE, Some(IType.I(i1)), Some(IType.I(i2))) => jumpBlock(i1 <= i2)
+      case (IF_ICMPGT, Some(IType.I(i1)), Some(IType.I(i2))) => jumpBlock(i1 <= i2)
+      case (IF_ICMPLE, Some(IType.I(i1)), Some(IType.I(i2))) => jumpBlock(i1 >= i2)
+      case (GOTO, _, _) => jumpBlock(true)
+
+      case _ => // JSR, IFNULL, IFNONNULL, IF_ACMPEQ, IF_ACMPNE, anything else
+        // We don't know how to handle these, so walk both cases
+        val n = new JumpInsnNode(current.getOpcode, null)
+        finalInsnList.add(n)
+        walkNextBlock(current.getNext, nextState)
+
+        val (fresh, jumped) = walkBlock(current.label, nextState)
+        n.label = jumped.getFirst.asInstanceOf[LabelNode]
+    }
+  }
+  def popN(finalInsnList: InsnList, n: Int) = {
+    for(_ <- 0 until n) finalInsnList.add(new InsnNode(POP))
+  }
+  /**
+    * JOptimize's constant folding simply replaces all instructions with
+    * known outputs by a constant (ICONST, LCONST, LDC, ...) preceded by
+    * the correct number of pops. We are not able to remove the
+    * instruction because we cannot tell during the initial
+    * dataflow-ordered pass which instruction's output ends up getting
+    * used in future.
+    *
+    * A second pass in reverse-dataflow order can then trivially
+    * collapse all the unused instructions later (TBD)
+    */
+  def constantFold(currentInsn: AbstractInsnNode,
+                   newInsn: AbstractInsnNode,
+                   nextState: Frame,
+                   finalInsnList: InsnList) = {
+    val stackEffect = Bytecode.stackEffect(currentInsn.getOpcode).asInstanceOf[Fixed]
+    if (stackEffect.push == 1){
+      nextState.stack.last match{
+        case IType.I(v) =>
+          popN(finalInsnList, stackEffect.pop)
+          finalInsnList.add(
+            v match{
+              case -1 => new InsnNode(ICONST_M1)
+              case 0 => new InsnNode(ICONST_0)
+              case 1 => new InsnNode(ICONST_1)
+              case 2 => new InsnNode(ICONST_2)
+              case 3 => new InsnNode(ICONST_3)
+              case 4 => new InsnNode(ICONST_4)
+              case 5 => new InsnNode(ICONST_5)
+              case _ => new LdcInsnNode(java.lang.Integer.valueOf(v))
+            }
+          )
+        case IType.J(v) =>
+          popN(finalInsnList, stackEffect.pop)
+          finalInsnList.add(
+            v match{
+              case 0 => new InsnNode(LCONST_0)
+              case 1 => new InsnNode(LCONST_1)
+              case _ => new LdcInsnNode(java.lang.Long.valueOf(v))
+            }
+          )
+        case IType.F(v) =>
+          popN(finalInsnList, stackEffect.pop)
+          finalInsnList.add(
+            v match{
+              case 0 => new InsnNode(FCONST_0)
+              case 1 => new InsnNode(FCONST_1)
+              case 2 => new InsnNode(FCONST_2)
+              case _ => new LdcInsnNode(java.lang.Float.valueOf(v))
+            }
+          )
+        case IType.D(v) =>
+          popN(finalInsnList, stackEffect.pop)
+          finalInsnList.add(
+            v match{
+              case 0 => new InsnNode(DCONST_0)
+              case 1 => new InsnNode(DCONST_1)
+              case _ => new LdcInsnNode(java.lang.Double.valueOf(v))
+            }
+          )
+
+        case _ => finalInsnList.add(newInsn)
+      }
+    }else finalInsnList.add(newInsn)
+  }
 
   def mangleMethodCallInsn(frame: Frame,
                            insn: AbstractInsnNode,
