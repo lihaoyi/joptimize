@@ -27,7 +27,7 @@ class Walker(isInterface: JType.Cls => Boolean,
                  maxLocals: Int,
                  maxStack: Int,
                  seenMethods: Set[(MethodSig, Seq[IType])]): Walker.MethodResult = {
-                                                              //inferred-returntype, methodbody
+
     visitedMethods.getOrElseUpdate((sig, args.drop(if (sig.static) 0 else 1)), {
       val seen = seenMethods ++ Seq((sig, args))
       // - One-pass walk through the instruction list of a method, starting from
@@ -54,12 +54,12 @@ class Walker(isInterface: JType.Cls => Boolean,
       //     incoming state is by definition wider than all possible narrowed
       //     states
 
-      val visitedBlocks = mutable.LinkedHashMap.empty[(AbstractInsnNode, Frame), InsnList]
-      var lastBlock: Option[(AbstractInsnNode, Frame)] = None
-      val methodReturns = mutable.Buffer.empty[IType]
+      val visitedBlocks = mutable.LinkedHashMap.empty[(AbstractInsnNode, Frame[IType]), (InsnList, Frame[LValue])]
+      var lastBlock: Option[(AbstractInsnNode, Frame[LValue])] = None
+      val methodReturns = mutable.Buffer.empty[LValue]
       val labelMapping = mutable.Map.empty[LabelNode, List[LabelNode]]
       def walkBlock(blockStart: AbstractInsnNode,
-                    blockState0: Frame,
+                    blockState0: Frame[LValue],
                     seenBlocks0: Set[AbstractInsnNode]): (Boolean, InsnList) = {
         val blockState =
           if (!seenBlocks0.contains(blockStart)) blockState0
@@ -75,7 +75,7 @@ class Walker(isInterface: JType.Cls => Boolean,
           * seamlessly following the current, e.g. in the case of switches where
           * every branch needs a jump.
           */
-        def walkNextBlock(destBlockStart: AbstractInsnNode, destBlockState: Frame) = {
+        def walkNextBlock(destBlockStart: AbstractInsnNode, destBlockState: Frame[LValue]) = {
 
           val preWalkLastBlock = lastBlock
           val (fresh, jumped) = walkBlock(destBlockStart, destBlockState, seenBlocks)
@@ -98,7 +98,7 @@ class Walker(isInterface: JType.Cls => Boolean,
           *
           * - Instruction list of that basic block
           */
-        @tailrec def walkInsn(currentInsn: AbstractInsnNode, currentState: Frame): Unit = {
+        @tailrec def walkInsn(currentInsn: AbstractInsnNode, currentState: Frame[LValue]): Unit = {
 //          println(Util.prettyprint(currentInsn))
 //          println("    " + currentState)
           val nextState = currentState.execute(currentInsn, dataflow)
@@ -108,7 +108,7 @@ class Walker(isInterface: JType.Cls => Boolean,
             * then return `false` so we can tail-recursively walk it as a simple
             * instruction
             */
-          def walkNextLabel(nextState1: Frame = nextState) = {
+          def walkNextLabel(nextState1: Frame[LValue] = nextState) = {
             if (currentInsn.getNext.isInstanceOf[LabelNode]) {
               walkNextBlock(currentInsn.getNext, nextState1)
               true
@@ -263,13 +263,18 @@ class Walker(isInterface: JType.Cls => Boolean,
               if (!walkNextLabel()) walkInsn(current.getNext, nextState)
           }
         }
-        visitedBlocks.get((blockStart, blockState)) match{
-          case Some(v) =>
+        val typeState = blockState.map(_.tpe)
+        visitedBlocks.get((blockStart, typeState)) match{
+          case Some((insns, frame)) =>
           //          println("OLD BLOCK")
-            (false, v)
+            visitedBlocks((blockStart, typeState)) = (
+              insns,
+              frame.zipWith(blockState){(x1, x2) => x1.merge(x2)}
+            )
+            (false, insns)
           case None =>
 //          println("NEW BLOCK " + (currentInsn, currentState))
-            visitedBlocks((blockStart, blockState)) = finalInsnList
+            visitedBlocks((blockStart, typeState)) = (finalInsnList, blockState)
             lastBlock = Some((blockStart, blockState))
             walkInsn(blockStart, blockState)
   //          println("END BLOCK")
@@ -278,16 +283,24 @@ class Walker(isInterface: JType.Cls => Boolean,
       }
 //      pprint.log(sig -> insns.size)
 
-      walkBlock(insns.getFirst, Frame.initial(maxLocals, maxStack, args), Set())
+      walkBlock(
+        insns.getFirst,
+        Frame.initial(
+          maxLocals, maxStack,
+          args.map(new LValue(_, None, Nil)),
+          new LValue(JType.Null, None, Nil)
+        ),
+        Set()
+      )
 
 //      pprint.log(sig -> "END")
 
       val resultType =
         if (methodReturns.isEmpty) sig.desc.ret
-        else merge(methodReturns)
+        else merge(methodReturns.map(_.tpe))
 
       val outputInsns = new InsnList
-      visitedBlocks.valuesIterator.foreach(outputInsns.add)
+      visitedBlocks.valuesIterator.foreach(x => outputInsns.add(x._1))
 
       Walker.MethodResult(sig.desc.args.map(_ => true), resultType, outputInsns)
     })
@@ -301,11 +314,11 @@ class Walker(isInterface: JType.Cls => Boolean,
     * bytecode, and walk the two jump targets to make sure we have somewhere
     * to jump to
     */
-  def walkJump(walkBlock: (AbstractInsnNode, Frame) => (Boolean, InsnList),
+  def walkJump(walkBlock: (AbstractInsnNode, Frame[LValue]) => (Boolean, InsnList),
                finalInsnList: InsnList,
-               walkNextBlock: (AbstractInsnNode, Frame) => InsnList,
-               currentState: Frame,
-               nextState: Frame,
+               walkNextBlock: (AbstractInsnNode, Frame[LValue]) => InsnList,
+               currentState: Frame[LValue],
+               nextState: Frame[LValue],
                current: JumpInsnNode) = {
     def jumpBlock(pred: Boolean): Unit = {
       popN(finalInsnList, Bytecode.stackEffect(current.getOpcode).asInstanceOf[Fixed].pop)
@@ -314,8 +327,8 @@ class Walker(isInterface: JType.Cls => Boolean,
 
     (
       current.getOpcode,
-      currentState.stack.lift(currentState.stack.length - 1),
-      currentState.stack.lift(currentState.stack.length - 2)
+      currentState.stack.lift(currentState.stack.length - 1).map(_.tpe),
+      currentState.stack.lift(currentState.stack.length - 2).map(_.tpe)
     ) match {
       case (IFEQ, Some(IType.I(i)), _) => jumpBlock(i == 0)
       case (IFNE, Some(IType.I(i)), _) => jumpBlock(i != 0)
@@ -357,11 +370,11 @@ class Walker(isInterface: JType.Cls => Boolean,
     */
   def constantFold(currentInsn: AbstractInsnNode,
                    newInsn: AbstractInsnNode,
-                   nextState: Frame,
+                   nextState: Frame[LValue],
                    finalInsnList: InsnList) = {
     val stackEffect = Bytecode.stackEffect(currentInsn.getOpcode).asInstanceOf[Fixed]
     if (stackEffect.push == 1){
-      nextState.stack.last match{
+      nextState.stack.last.tpe match{
         case IType.I(v) =>
           popN(finalInsnList, stackEffect.pop)
           finalInsnList.add(
@@ -410,7 +423,7 @@ class Walker(isInterface: JType.Cls => Boolean,
     }else finalInsnList.add(newInsn)
   }
 
-  def mangleMethodCallInsn(frame: Frame,
+  def mangleMethodCallInsn(frame: Frame[LValue],
                            insn: AbstractInsnNode,
                            static: Boolean,
                            special: Boolean,
@@ -425,7 +438,7 @@ class Walker(isInterface: JType.Cls => Boolean,
     val inferredTypes =
       (frame.stack.length - originalTypes.map(_.getSize).sum)
         .until(frame.stack.length)
-        .map(frame.stack(_))
+        .map(frame.stack(_).tpe)
 
     val sig = MethodSig(called.owner, called.name, Desc.read(called.desc), static)
 
@@ -469,8 +482,10 @@ class Walker(isInterface: JType.Cls => Boolean,
 
       // Owner type changed! We may need to narrow from an invokeinterface to an invokevirtual
       val newOwner = JType.fromIType(
-        frame.stack(frame.stack.length - originalTypes.map(_.getSize).sum), JType.Cls(called.owner)
+        frame.stack(frame.stack.length - originalTypes.map(_.getSize).sum).tpe,
+        JType.Cls(called.owner)
       ).name
+
       (isInterface(called.owner), isInterface(newOwner)) match{
         case (false, true) => ??? // cannot widen interface into class!
         case (true, false) => new MethodInsnNode(INVOKEVIRTUAL, newOwner, mangledName, mangledDesc.unparse)

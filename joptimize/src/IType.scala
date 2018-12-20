@@ -1,19 +1,40 @@
 package joptimize
 
+import org.objectweb.asm.tree.AbstractInsnNode
 import org.objectweb.asm.tree.analysis.Value
 
+trait Frameable[T <: Frameable[T]] extends Value{
+  def widen: T
+  def isEmpty: Boolean
+  def internalName: String
+
+}
+class LValue(val tpe: IType,
+             val insn: Option[AbstractInsnNode],
+             val upstream: Seq[LValue]) extends Frameable[LValue]{
+  def getSize = tpe.size
+  def widen = new LValue(tpe.widen, insn, upstream)
+  def isEmpty = tpe.isEmpty
+  def internalName = tpe.internalName
+
+  def merge(other: LValue) = {
+    assert(tpe == other.tpe)
+    new LValue(tpe, insn, upstream ++ other.upstream)
+  }
+}
 /**
   * Represents an inferred type in the joptimize type system.
   *
   * Can be a concrete JType, an intersection type, or a concrete value
   */
-trait IType extends Value{
+trait IType extends Frameable[IType]{
   def size: Int
   def isRef: Boolean
   def internalName: String
   def getSize: Int = size
   def name: String
 
+  def isEmpty = this == JType.Null
   /**
     * Forget any information about concrete values encoded in this type, and
     * widen it into a type as represented purely by JVM classes
