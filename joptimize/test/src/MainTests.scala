@@ -37,10 +37,20 @@ object MainTests extends TestSuite{
       }
       'Loops - {
         'basicFor - opt[Int, Int].check(
+          0 -> 1,
+          1 -> 2,
+          2 -> 4,
+          3 -> 8,
+          4 -> 16,
           5 -> 32
         )
 
         'basicWhile - opt[Int, Int].check(
+          0 -> 1,
+          1 -> 1,
+          2 -> 2,
+          3 -> 4,
+          4 -> 4,
           5 -> 8
         )
         'sqrtFinder - opt[Double, Double].check(
