@@ -12,7 +12,7 @@ trait Frameable[T <: Frameable[T]] extends Value{
 
 }
 class LValue(val tpe: IType,
-             val insn: Option[AbstractInsnNode],
+             val insn: Either[Int, AbstractInsnNode],
              val upstream: mutable.Buffer[Seq[LValue]]) extends Frameable[LValue]{
   def getSize = tpe.size
   def widen = new LValue(tpe.widen, insn, upstream)
@@ -24,6 +24,8 @@ class LValue(val tpe: IType,
     upstream ++= other.upstream
     this
   }
+
+  override def toString = s"LValue@${Integer.toHexString(System.identityHashCode(this))}($tpe, $insn)"
 }
 /**
   * Represents an inferred type in the joptimize type system.

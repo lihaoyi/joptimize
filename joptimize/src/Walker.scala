@@ -63,9 +63,9 @@ class Walker(isInterface: JType.Cls => Boolean,
       // LinkedHashMap#lastOption isn't optimized and so is O(n) instead of O(1)
       var lastBlock: Option[(AbstractInsnNode, Frame[LValue])] = None
       val methodReturns = mutable.Buffer.empty[LValue]
-      val escapingValues = mutable.Buffer.empty[LValue]
+      val terminalInsns = mutable.Buffer.empty[(Seq[LValue], AbstractInsnNode, Option[IType])]
       val labelMapping = mutable.Map.empty[LabelNode, List[LabelNode]]
-      var pure: Boolean = true
+      var pure: Boolean = sig.name != "<init>" && sig.name != "<clinit>"
       def walkBlock(blockStart: AbstractInsnNode,
                     blockState0: Frame[LValue],
                     seenBlocks0: Set[AbstractInsnNode]): (Boolean, InsnList) = {
@@ -162,12 +162,14 @@ class Walker(isInterface: JType.Cls => Boolean,
                 case ARETURN =>
                   finalInsnList.add(new InsnNode(current.getOpcode))
                   methodReturns.append(currentState.stack.last)
-                  escapingValues.append(currentState.stack.last)
+                  terminalInsns.append((Seq(currentState.stack.last), current, None))
                 case DRETURN | FRETURN | IRETURN | LRETURN =>
                   finalInsnList.add(new InsnNode(current.getOpcode))
-                  escapingValues.append(currentState.stack.last)
+                  terminalInsns.append((Seq(currentState.stack.last), current, None))
+                  println("IRETURN ADD TERMINAL " + current + " " + terminalInsns.last)
                 case RETURN =>
                   finalInsnList.add(new InsnNode(current.getOpcode))
+                  terminalInsns.append((Seq(), current, None))
                 case _ =>
                   constantFold(currentInsn, new InsnNode(current.getOpcode), nextState, finalInsnList)
                   if (!walkNextLabel()) walkInsn(current.getNext, nextState)
@@ -211,52 +213,68 @@ class Walker(isInterface: JType.Cls => Boolean,
               val copy = new MethodInsnNode(
                 current.getOpcode, current.owner, current.name, current.desc, current.itf
               )
-              val argOutCount = Desc.read(current.desc).args.length + (if (current.getOpcode == INVOKESPECIAL) 0 else 1)
 
+              val argOutCount = Desc.read(current.desc).args.length + (if (current.getOpcode == INVOKESTATIC) 0 else 1)
               val mangled =
                 if (current.owner.startsWith("java/")) {
                   pure = false
-                  escapingValues.appendAll(currentState.stack.takeRight(argOutCount))
+                  terminalInsns.append((
+                    currentState.stack.takeRight(argOutCount),
+                    current,
+                    Some(Desc.read(current.desc).ret)
+                  ))
+
                   copy
-                } else mangleMethodCallInsn(
-                  currentState, copy,
-                  static = copy.getOpcode == INVOKESTATIC,
-                  special = copy.getOpcode == INVOKESPECIAL,
-                  recurse = (staticSig, types) => {
+                } else {
+                  var methodPure = true
+                  val (narrowRet, mangled) = mangleMethodCallInsn(
+                    currentState, copy,
+                    static = copy.getOpcode == INVOKESTATIC,
+                    special = copy.getOpcode == INVOKESPECIAL,
+                    recurse = (staticSig, types) => {
 
-                    if (seen((staticSig, types))) staticSig.desc.ret
-                    else {
-                      val clinitSig = MethodSig(staticSig.cls, "<clinit>", Desc.read("()V"), true)
-                      if (!seen.contains((clinitSig, Nil))) {
-                        for(clinit <- lookupMethod(clinitSig)){
-                          walkMethod(
-                            clinitSig,
-                            clinit.instructions,
-                            Nil,
-                            clinit.maxLocals,
-                            clinit.maxStack,
-                            seen ++ Seq((clinitSig, Nil))
-                          )
+                      if (seen((staticSig, types))) staticSig.desc.ret
+                      else {
+                        val clinitSig = MethodSig(staticSig.cls, "<clinit>", Desc.read("()V"), true)
+                        if (!seen.contains((clinitSig, Nil))) {
+                          for(clinit <- lookupMethod(clinitSig)){
+                            walkMethod(
+                              clinitSig,
+                              clinit.instructions,
+                              Nil,
+                              clinit.maxLocals,
+                              clinit.maxStack,
+                              seen ++ Seq((clinitSig, Nil))
+                            )
+                          }
                         }
-                      }
 
-                      val walked = walkMethod(
-                        staticSig,
-                        lookupMethod(staticSig).get.instructions,
-                        types.toList,
-                        lookupMethod(staticSig).get.maxLocals,
-                        lookupMethod(staticSig).get.maxStack,
-                        seen
-                      )
+                        val walked = walkMethod(
+                          staticSig,
+                          lookupMethod(staticSig).get.instructions,
+                          types.toList,
+                          lookupMethod(staticSig).get.maxLocals,
+                          lookupMethod(staticSig).get.maxStack,
+                          seen
+                        )
 
-                      pure &= walked.pure
-                      if (!walked.pure){
-                        escapingValues.appendAll(currentState.stack.takeRight(argOutCount))
+                        val walkedPure = walked.pure
+                        pure &= walkedPure
+                        methodPure &= walkedPure
+
+                        walked.inferredReturn
                       }
-                      walked.inferredReturn
                     }
+                  )
+                  if (!methodPure){
+                    terminalInsns.append((
+                      currentState.stack.takeRight(argOutCount),
+                      mangled,
+                      Some(narrowRet)
+                    ))
                   }
-                )
+                  mangled
+                }
 
               finalInsnList.add(mangled)
 
@@ -312,8 +330,8 @@ class Walker(isInterface: JType.Cls => Boolean,
         insns.getFirst,
         Frame.initial(
           maxLocals, maxStack,
-          args.map(new LValue(_, None, mutable.Buffer())),
-          new LValue(JType.Null, None, mutable.Buffer())
+          args.zipWithIndex.map{case (a, i) => new LValue(a, Left(i), mutable.Buffer())},
+          new LValue(JType.Null, Left(-1), mutable.Buffer())
         ),
         Set()
       )
@@ -324,9 +342,14 @@ class Walker(isInterface: JType.Cls => Boolean,
         if (methodReturns.isEmpty) sig.desc.ret
         else merge(methodReturns.map(_.tpe))
 
-      val outputInsns = new InsnList
-      visitedBlocks.valuesIterator.foreach(x => outputInsns.add(x._1))
-      Walker.MethodResult(sig.desc.args.map(_ => true), resultType, outputInsns, false)
+      val postLivenessInsns = Liveness(sig, visitedBlocks.values.map(_._1).toSeq, terminalInsns)
+
+      Walker.MethodResult(
+        sig.desc.args.map(_ => true),
+        resultType,
+        postLivenessInsns,
+        pure
+      )
     })
   }
 
@@ -451,7 +474,7 @@ class Walker(isInterface: JType.Cls => Boolean,
                            insn: AbstractInsnNode,
                            static: Boolean,
                            special: Boolean,
-                           recurse: (MethodSig, Seq[IType]) => IType): AbstractInsnNode = {
+                           recurse: (MethodSig, Seq[IType]) => IType): (IType, AbstractInsnNode) = {
     val called = insn.asInstanceOf[MethodInsnNode]
 
 
@@ -487,7 +510,7 @@ class Walker(isInterface: JType.Cls => Boolean,
       concreteSigs.map(recurse(_, inferredTypes))
     )
 
-    if (Util.isCompatible(inferredTypes, originalTypes)) insn // No narrowing
+    if (Util.isCompatible(inferredTypes, originalTypes)) (narrowReturnType, insn) // No narrowing
     else {
       val descChanged =
         (static && inferredTypes != originalTypes) ||
@@ -511,7 +534,8 @@ class Walker(isInterface: JType.Cls => Boolean,
         JType.Cls(called.owner)
       ).name
 
-      (isInterface(called.owner), isInterface(newOwner)) match{
+
+      (narrowReturnType, (isInterface(called.owner), isInterface(newOwner)) match{
         case (false, true) => ??? // cannot widen interface into class!
         case (true, false) => new MethodInsnNode(INVOKEVIRTUAL, newOwner, mangledName, mangledDesc.unparse)
         case _ =>
@@ -519,7 +543,7 @@ class Walker(isInterface: JType.Cls => Boolean,
           called.name = mangledName
           called.desc = mangledDesc.unparse
           called
-      }
+      })
     }
   }
 }

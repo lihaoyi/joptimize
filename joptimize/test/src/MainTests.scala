@@ -5,6 +5,7 @@ import utest._
 import utest.framework.TestPath
 
 import scala.reflect.ClassTag
+
 object MainTests extends TestSuite{
   def tests = Tests{
     'simple - {
@@ -376,6 +377,7 @@ object MainTests extends TestSuite{
 
   val classesRoot = os.Path("out/joptimize/test/compile/dest/classes", os.pwd)
   val outRoot = os.Path("out/scratch", os.pwd)
+  val originalRoot = os.Path("out/original", os.pwd)
   val testRoot = classesRoot / "joptimize" / "examples"
 
   class Optimized(returnClass: Class[_],
@@ -391,6 +393,11 @@ object MainTests extends TestSuite{
       .map(p => (p.relativeTo(classesRoot).toString, os.read.bytes(p)))
       .toMap
 
+    os.remove.all(originalRoot / tp.value)
+    for((k, bytes) <- inputFileMap){
+      os.write(originalRoot / tp.value / os.RelPath(k), bytes, createFolders = true)
+    }
+
     val outputFileMap = JOptimize.run(
       inputFileMap,
       Seq(MethodSig(s"joptimize/examples/${tp.value.dropRight(1).mkString("/")}", tp.value.last, methodDesc, static = true)),
@@ -404,6 +411,7 @@ object MainTests extends TestSuite{
     for((k, bytes) <- outputFileMap){
       os.write(outRoot / tp.value / os.RelPath(k), bytes, createFolders = true)
     }
+
     override def toString() = {
       s"Optimized(inputFiles=${inputFileMap.size}, inputBytes=$inputBytes, outputFiles=${outputFileMap.size}, outputBytes=$outputBytes)"
     }

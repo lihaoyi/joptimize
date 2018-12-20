@@ -81,3 +81,51 @@
 
   - Doesn't feed back into DCE/specialization or instruction-level liveness
     cleanup
+
+# Liveness cleanup
+
+- Core considerations:
+    - Returned values must be computed with the same input
+    - Side effects (both reads & writes!) must happen in the same order
+
+Stack/Local bytecode -> Dataflow graph -> Stack/Local bytecode
+
+- Capture dataflow graph of `LValue`s depending on each other, in
+  `Interpreter[LValue]`
+
+- Convert flat list of instructions into controlflow graph of basic blocks
+
+- Within each basic block, each side effecting instruction must be called
+  and in the same original order with the same arguments
+
+- Traverse the dataflow graph upstream from all terminal instructions to
+  find the set of live `LValue`s:
+
+    - *RETURN VALUE
+    - Method calls to non-pure methods (ARGS...)
+    - PUTSTATIC VALUE
+    - PUTFIELD VALUE, *ASTORE VALUE for escaping objects only
+    - RETURN
+
+- Re-generate the basic block, in order of terminal instructions, in order
+  to ensure each terminal instruction is called with the correct LValues,
+  and the necessary LValues are left on the stack/locals for downstream
+  basic blocks.
+    - Walk dataflow graph upstream from that terminal instruction and find its
+      transitive closure
+        - For terminal instructions which do not require input, they can simply
+          be emitted immediately!
+
+    - Find expressions: segments of the subgraph which are tree-shaped:
+      all nodes in the graph have only one downstream use case, except the
+      terminal node which may have one or more.
+
+    - Every expression can be evaluated purely on the stack, loading and
+      evaluating sub-expressions smallest-to-largest starting from the left-most
+      smallest expression
+
+    - Evaluation between expressions cannot be evaluated purely on the stack,
+      and must use either local variables, or DUP bytecodes
+
+- Any un-used input arguments are removed from the method signature, and that
+  change propagated to the caller method's callsite.

@@ -10,8 +10,8 @@ import scala.collection.mutable
 
 class Dataflow(merge0: Seq[IType] => IType) extends Interpreter[LValue](ASM4){
   def newValue(tpe: org.objectweb.asm.Type) = {
-    if (tpe == null) new LValue(JType.Null, None, mutable.Buffer(Seq()))
-    else new LValue(JType.read(tpe.getInternalName), None, mutable.Buffer(Seq()))
+    if (tpe == null) new LValue(JType.Null, Left(-1), mutable.Buffer(Seq()))
+    else new LValue(JType.read(tpe.getInternalName), Left(-1), mutable.Buffer(Seq()))
   }
 
   def newOperation(insn: AbstractInsnNode) = new LValue(
@@ -48,15 +48,16 @@ class Dataflow(merge0: Seq[IType] => IType) extends Interpreter[LValue](ASM4){
       case JSR => JType.Null
       case GETSTATIC => JType.read(insn.asInstanceOf[FieldInsnNode].desc)
       case NEW => JType.read(insn.asInstanceOf[TypeInsnNode].desc)
-    }
-    ,
-    None,
+    },
+    Right(insn),
     mutable.Buffer(Seq())
   )
 
-  def copyOperation(insn: AbstractInsnNode, value: LValue) = {
-    new LValue(value.tpe, None, mutable.Buffer(Seq(value)))
-  }
+  // We do not record any of the copy operations in the LValue dataflow graph
+  // that we construct during abstract interpretation. Those do not meaningfully
+  // affect the shape of the graph, and we will generate our own copy operations
+  // as-necessary when serializing the graph back out to bytecode
+  def copyOperation(insn: AbstractInsnNode, value: LValue) = value
 
   def unaryOperation(insn: AbstractInsnNode, value: LValue) = new LValue(
     insn.getOpcode match {
@@ -115,7 +116,7 @@ class Dataflow(merge0: Seq[IType] => IType) extends Interpreter[LValue](ASM4){
         }
       case MONITORENTER | MONITOREXIT | IFNULL | IFNONNULL => JType.Null
     },
-    Some(insn),
+    Right(insn),
     mutable.Buffer(Seq(value))
   )
   def binaryOperation(insn: AbstractInsnNode, v1: LValue, v2: LValue) = new LValue(
@@ -165,12 +166,12 @@ class Dataflow(merge0: Seq[IType] => IType) extends Interpreter[LValue](ASM4){
       case IF_ICMPEQ | IF_ICMPNE | IF_ICMPLT | IF_ICMPGE | IF_ICMPGT | IF_ICMPLE | IF_ACMPEQ | IF_ACMPNE | PUTFIELD =>
         JType.Null
     },
-    Some(insn),
+    Right(insn),
     mutable.Buffer(Seq(v1, v2))
   )
 
   def ternaryOperation(insn: AbstractInsnNode, v1: LValue, v2: LValue, v3: LValue) = {
-    new LValue(JType.Null, Some(insn), mutable.Buffer(Seq(v1, v2, v3)))
+    new LValue(JType.Null, Right(insn), mutable.Buffer(Seq(v1, v2, v3)))
   }
   def naryOperation(insn: AbstractInsnNode, vs: java.util.List[_ <: LValue]) = {
     new LValue(
@@ -179,7 +180,7 @@ class Dataflow(merge0: Seq[IType] => IType) extends Interpreter[LValue](ASM4){
         case INVOKEDYNAMIC => Desc.read(insn.asInstanceOf[InvokeDynamicInsnNode].desc).ret
         case _ => Desc.read(insn.asInstanceOf[MethodInsnNode].desc).ret
       },
-      Some(insn),
+      Right(insn),
       mutable.Buffer(vs.asScala)
     )
   }
