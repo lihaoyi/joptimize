@@ -139,6 +139,11 @@ class Walker(isInterface: JType.Cls => Boolean,
                 }
               }
               val n = new FieldInsnNode(current.getOpcode, current.owner, current.name, current.desc)
+              current.getOpcode match{
+                case PUTFIELD | PUTSTATIC => terminalInsns.append((Seq(currentState.stack.last), n, None))
+                case GETFIELD | GETSTATIC => terminalInsns.append((Nil, n, None))
+              }
+//
               finalInsnList.add(n)
               if (!walkNextLabel()) walkInsn(current.getNext, nextState)
 
@@ -159,6 +164,11 @@ class Walker(isInterface: JType.Cls => Boolean,
 
             case current: InsnNode =>
               current.getOpcode match{
+                case IASTORE | LASTORE | FASTORE | DASTORE | AASTORE | BASTORE | CASTORE | SASTORE |
+                     IALOAD | LALOAD | FALOAD | DALOAD | AALOAD | BALOAD | CALOAD | SALOAD =>
+                  constantFold(currentInsn, new InsnNode(current.getOpcode), nextState, finalInsnList)
+                  terminalInsns.append((Seq(currentState.stack.last), current, None))
+                  if (!walkNextLabel()) walkInsn(current.getNext, nextState)
                 case ARETURN =>
                   finalInsnList.add(new InsnNode(current.getOpcode))
                   methodReturns.append(currentState.stack.last)
@@ -166,7 +176,6 @@ class Walker(isInterface: JType.Cls => Boolean,
                 case DRETURN | FRETURN | IRETURN | LRETURN =>
                   finalInsnList.add(new InsnNode(current.getOpcode))
                   terminalInsns.append((Seq(currentState.stack.last), current, None))
-                  println("IRETURN ADD TERMINAL " + current + " " + terminalInsns.last)
                 case RETURN =>
                   finalInsnList.add(new InsnNode(current.getOpcode))
                   terminalInsns.append((Seq(), current, None))

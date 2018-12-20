@@ -57,18 +57,13 @@ object Liveness {
   def apply(sig: MethodSig,
             basicBlocks: Seq[InsnList],
             allTerminals: Seq[(Seq[LValue], AbstractInsnNode, Option[IType])]): InsnList = {
-    println("="*20 +sig + "="*20)
+//    println("="*20 +sig + "="*20)
 
     // Three states for a node:
     // - Not visited at all
     // - Visited, and delegated to a local
     // - Visited, but not delegated to a local
     val localsMap = mutable.LinkedHashMap.empty[Either[Int, AbstractInsnNode], Option[Int]]
-    if (sig.name == "simpleBaz" && sig.static){
-      import collection.JavaConverters._
-      pprint.log(basicBlocks.map(_.iterator().asScala.toArray))
-      pprint.log(allTerminals.map(_._2))
-    }
 
     val terminalUpstream = allTerminals.map(x => (x._2, x._1)).toMap
     val (_, roots, downstreamEdges) = Util.breadthFirstAggregation[Either[LValue, AbstractInsnNode]](
@@ -79,8 +74,6 @@ object Liveness {
       }
     )
 
-    pprint.log(roots)
-    pprint.log(downstreamEdges)
     for (root <- roots) toInsn(root)match{
       case Left(n) => localsMap(toInsn(root)) = Some(n)
       case _ =>
@@ -91,11 +84,8 @@ object Liveness {
     val downstream = downstreamEdges.map{case (k, v) => (toInsn(k), toInsn(v))}.toSeq.groupBy(_._1).mapValues(_.map(_._2)).toMap
     val insnDownstream = downstream.map{case (k, v) => (k, v)}
 
-    pprint.log(downstream)
-    pprint.log(insnDownstream)
     val outputInsns = new InsnList
     def saveToLocal(insn: Either[Int, AbstractInsnNode]) = {
-      pprint.log(insn -> localsMap.size)
       insnDownstream.get(insn) match{
         case Some(x) if x.size >= 2 => localsMap(insn) = Some(localsMap.size); localsMap(insn)
         case Some(x) => localsMap(insn) = None; None
@@ -103,7 +93,7 @@ object Liveness {
       }
     }
     for((terminalValues, terminalInsn, terminalTypeOpt) <- allTerminals){
-      println("=" * 10 + "WALKING TERMINAL " + terminalInsn + "=" * 10)
+//      println("=" * 10 + "WALKING TERMINAL " + terminalInsn + "=" * 10)
       generateBlockTerminalInsns(
         sig,
         terminalValues,
