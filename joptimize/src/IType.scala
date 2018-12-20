@@ -3,6 +3,8 @@ package joptimize
 import org.objectweb.asm.tree.AbstractInsnNode
 import org.objectweb.asm.tree.analysis.Value
 
+import scala.collection.mutable
+
 trait Frameable[T <: Frameable[T]] extends Value{
   def widen: T
   def isEmpty: Boolean
@@ -11,15 +13,16 @@ trait Frameable[T <: Frameable[T]] extends Value{
 }
 class LValue(val tpe: IType,
              val insn: Option[AbstractInsnNode],
-             val upstream: Seq[LValue]) extends Frameable[LValue]{
+             val upstream: mutable.Buffer[Seq[LValue]]) extends Frameable[LValue]{
   def getSize = tpe.size
   def widen = new LValue(tpe.widen, insn, upstream)
   def isEmpty = tpe.isEmpty
   def internalName = tpe.internalName
 
-  def merge(other: LValue) = {
+  def mergeIntoThis(other: LValue) = {
     assert(tpe == other.tpe)
-    new LValue(tpe, insn, upstream ++ other.upstream)
+    upstream ++= other.upstream
+    this
   }
 }
 /**

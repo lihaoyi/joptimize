@@ -58,6 +58,9 @@ class Walker(isInterface: JType.Cls => Boolean,
       //     states
 
       val visitedBlocks = mutable.LinkedHashMap.empty[(AbstractInsnNode, Frame[IType]), (InsnList, Frame[LValue])]
+
+      // Equivalent to visitedBlocks.lastOption, but faster because
+      // LinkedHashMap#lastOption isn't optimized and so is O(n) instead of O(1)
       var lastBlock: Option[(AbstractInsnNode, Frame[LValue])] = None
       val methodReturns = mutable.Buffer.empty[LValue]
       val escapingValues = mutable.Buffer.empty[LValue]
@@ -291,7 +294,7 @@ class Walker(isInterface: JType.Cls => Boolean,
             // those already saved earlier
             visitedBlocks((blockStart, typeState)) = (
               insns,
-              frame.zipWith(blockState){(x1, x2) => x1.merge(x2)}
+              frame.zipWith(blockState){(x1, x2) => x1.mergeIntoThis(x2)}
             )
             (false, insns)
           case None =>
@@ -309,8 +312,8 @@ class Walker(isInterface: JType.Cls => Boolean,
         insns.getFirst,
         Frame.initial(
           maxLocals, maxStack,
-          args.map(new LValue(_, None, Nil)),
-          new LValue(JType.Null, None, Nil)
+          args.map(new LValue(_, None, mutable.Buffer())),
+          new LValue(JType.Null, None, mutable.Buffer())
         ),
         Set()
       )

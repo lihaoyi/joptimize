@@ -2,14 +2,16 @@ package joptimize
 import org.objectweb.asm.Opcodes._
 import org.objectweb.asm.Type._
 import org.objectweb.asm.tree.analysis._
-import org.objectweb.asm.{Handle}
+import org.objectweb.asm.Handle
 import org.objectweb.asm.tree._
+
 import collection.JavaConverters._
+import scala.collection.mutable
 
 class Dataflow(merge0: Seq[IType] => IType) extends Interpreter[LValue](ASM4){
   def newValue(tpe: org.objectweb.asm.Type) = {
-    if (tpe == null) new LValue(JType.Null, None, Nil)
-    else new LValue(JType.read(tpe.getInternalName), None, Nil)
+    if (tpe == null) new LValue(JType.Null, None, mutable.Buffer(Seq()))
+    else new LValue(JType.read(tpe.getInternalName), None, mutable.Buffer(Seq()))
   }
 
   def newOperation(insn: AbstractInsnNode) = new LValue(
@@ -49,10 +51,12 @@ class Dataflow(merge0: Seq[IType] => IType) extends Interpreter[LValue](ASM4){
     }
     ,
     None,
-    Nil
+    mutable.Buffer(Seq())
   )
 
-  def copyOperation(insn: AbstractInsnNode, value: LValue) = new LValue(value.tpe, None, Seq(value))
+  def copyOperation(insn: AbstractInsnNode, value: LValue) = {
+    new LValue(value.tpe, None, mutable.Buffer(Seq(value)))
+  }
 
   def unaryOperation(insn: AbstractInsnNode, value: LValue) = new LValue(
     insn.getOpcode match {
@@ -112,7 +116,7 @@ class Dataflow(merge0: Seq[IType] => IType) extends Interpreter[LValue](ASM4){
       case MONITORENTER | MONITOREXIT | IFNULL | IFNONNULL => JType.Null
     },
     Some(insn),
-    Seq(value)
+    mutable.Buffer(Seq(value))
   )
   def binaryOperation(insn: AbstractInsnNode, v1: LValue, v2: LValue) = new LValue(
     insn.getOpcode match {
@@ -162,11 +166,11 @@ class Dataflow(merge0: Seq[IType] => IType) extends Interpreter[LValue](ASM4){
         JType.Null
     },
     Some(insn),
-    Seq(v1, v2)
+    mutable.Buffer(Seq(v1, v2))
   )
 
   def ternaryOperation(insn: AbstractInsnNode, v1: LValue, v2: LValue, v3: LValue) = {
-    new LValue(JType.Null, Some(insn), Seq(v1, v2, v3))
+    new LValue(JType.Null, Some(insn), mutable.Buffer(Seq(v1, v2, v3)))
   }
   def naryOperation(insn: AbstractInsnNode, vs: java.util.List[_ <: LValue]) = {
     new LValue(
@@ -176,7 +180,7 @@ class Dataflow(merge0: Seq[IType] => IType) extends Interpreter[LValue](ASM4){
         case _ => Desc.read(insn.asInstanceOf[MethodInsnNode].desc).ret
       },
       Some(insn),
-      vs.asScala
+      mutable.Buffer(vs.asScala)
     )
   }
   def returnOperation(insn: AbstractInsnNode, value: LValue, expected: LValue) = {}
