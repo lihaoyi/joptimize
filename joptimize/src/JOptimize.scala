@@ -32,7 +32,7 @@ object JOptimize{
       m <- cls.methods.iterator().asScala
     } yield (MethodSig(cls.name, m.name, Desc.read(m.desc), (m.access & Opcodes.ACC_STATIC) != 0), m)
 
-    val visitedMethods = collection.mutable.Map.empty[(MethodSig, Seq[IType]), (IType, InsnList)]
+    val visitedMethods = collection.mutable.Map.empty[(MethodSig, Seq[IType]), Walker.MethodResult]
 
     def leastUpperBound(classes: Seq[JType.Cls]) = {
       Util.leastUpperBound(classes.toSet) { cls =>
@@ -83,27 +83,28 @@ object JOptimize{
       )
     }
 
-    val newMethods = visitedMethods.toList.map{case ((sig, inferredTypes), (returnType, insns)) =>
+    val newMethods = visitedMethods.toList.map{
+      case ((sig, inferredTypes), Walker.MethodResult(liveArgs, returnType, insns)) =>
 
-      val originalNode = originalMethods(sig)
+        val originalNode = originalMethods(sig)
 
-      val (mangledName, mangledDesc) =
-        if (Util.isCompatible(inferredTypes, sig.desc.args)) (originalNode.name, Desc.read(originalNode.desc))
-        else Util.mangle(originalNode.name, inferredTypes, sig.desc.args, returnType, sig.desc.ret)
+        val (mangledName, mangledDesc) =
+          if (Util.isCompatible(inferredTypes, sig.desc.args)) (originalNode.name, Desc.read(originalNode.desc))
+          else Util.mangle(originalNode.name, inferredTypes, sig.desc.args, returnType, sig.desc.ret)
 
-      val newNode = new MethodNode(
-        Opcodes.ASM6,
-        originalNode.access,
-        mangledName,
-        mangledDesc.unparse,
-        originalNode.signature,
-        originalNode.exceptions.asScala.toArray
-      )
+        val newNode = new MethodNode(
+          Opcodes.ASM6,
+          originalNode.access,
+          mangledName,
+          mangledDesc.unparse,
+          originalNode.signature,
+          originalNode.exceptions.asScala.toArray
+        )
 
-      originalNode.accept(newNode)
-      newNode.instructions = insns
-      newNode.desc = mangledDesc.unparse
-      classNodeMap(sig.cls) -> newNode
+        originalNode.accept(newNode)
+        newNode.instructions = insns
+        newNode.desc = mangledDesc.unparse
+        classNodeMap(sig.cls) -> newNode
     }
 
     if (eliminateOldMethods) {

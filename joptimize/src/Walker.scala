@@ -9,10 +9,12 @@ import org.objectweb.asm.tree._
 
 import scala.annotation.tailrec
 import scala.collection.mutable
-
+object Walker{
+  case class MethodResult(liveArgs: Seq[Boolean], inferredReturn: IType, methodBody: InsnList)
+}
 class Walker(isInterface: JType.Cls => Boolean,
              lookupMethod: MethodSig => Option[MethodNode],
-             visitedMethods: mutable.Map[(MethodSig, Seq[IType]), (IType, InsnList)],
+             visitedMethods: mutable.Map[(MethodSig, Seq[IType]), Walker.MethodResult],
              visitedClasses: mutable.Set[JType.Cls],
              findSubtypes: JType.Cls => List[JType.Cls],
              isConcrete: MethodSig => Boolean,
@@ -24,8 +26,8 @@ class Walker(isInterface: JType.Cls => Boolean,
                  args: Seq[IType],
                  maxLocals: Int,
                  maxStack: Int,
-                 seenMethods: Set[(MethodSig, Seq[IType])]): (IType, InsnList) = {
-
+                 seenMethods: Set[(MethodSig, Seq[IType])]): Walker.MethodResult = {
+                                                              //inferred-returntype, methodbody
     visitedMethods.getOrElseUpdate((sig, args.drop(if (sig.static) 0 else 1)), {
       val seen = seenMethods ++ Seq((sig, args))
       // - One-pass walk through the instruction list of a method, starting from
@@ -229,7 +231,7 @@ class Walker(isInterface: JType.Cls => Boolean,
                         lookupMethod(staticSig).get.maxLocals,
                         lookupMethod(staticSig).get.maxStack,
                         seen
-                      )._1
+                      ).inferredReturn
                     }
                   }
                 )
@@ -287,7 +289,7 @@ class Walker(isInterface: JType.Cls => Boolean,
       val outputInsns = new InsnList
       visitedBlocks.valuesIterator.foreach(outputInsns.add)
 
-      (resultType, outputInsns)
+      Walker.MethodResult(sig.desc.args.map(_ => true), resultType, outputInsns)
     })
   }
 
@@ -436,7 +438,8 @@ class Walker(isInterface: JType.Cls => Boolean,
       }
 
     for(interfaceSig <- abstractSigs){
-      visitedMethods((interfaceSig, originalTypes.drop(1))) = (
+      visitedMethods((interfaceSig, originalTypes.drop(1))) = Walker.MethodResult(
+        Array.fill(originalTypes.length - 1)(true),
         interfaceSig.desc.ret,
         new InsnList
       )

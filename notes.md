@@ -57,7 +57,8 @@
 
   - Purity analysis
 
-- Post-single-pass instruction-level liveness cleanup (backwards dataflow order)
+- Post-single-pass method-level instruction-level liveness cleanup (backwards
+  dataflow order)
   - Walk backwards from method terminals (returns + impure method calls) to find
     all live values/instructions
 
@@ -69,6 +70,11 @@
   - Liveness cleanup doesn't feed back into DCE/specialization: instructions
     cleaned up here can only be dataflow-upstream of other liveness-cleaned-up
     instructions, which will get also eliminated automatically
+
+  - Unused arguments can be eliminated from the method signature, and the
+    eliminated arguments can then be returned to the caller: they will be
+    eliminated from the callsite, and used in the caller's analysis to
+    participate in it's liveness cleanup
 
 - Post-liveness method-level DCE
   - Delete any methods which were reachable but failed during liveness analysis
