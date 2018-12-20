@@ -10,7 +10,10 @@ import org.objectweb.asm.tree._
 import scala.annotation.tailrec
 import scala.collection.mutable
 object Walker{
-  case class MethodResult(liveArgs: Seq[Boolean], inferredReturn: IType, methodBody: InsnList)
+  case class MethodResult(liveArgs: Seq[Boolean],
+                          inferredReturn: IType,
+                          methodBody: InsnList,
+                          pure: Boolean)
 }
 class Walker(isInterface: JType.Cls => Boolean,
              lookupMethod: MethodSig => Option[MethodNode],
@@ -57,7 +60,9 @@ class Walker(isInterface: JType.Cls => Boolean,
       val visitedBlocks = mutable.LinkedHashMap.empty[(AbstractInsnNode, Frame[IType]), (InsnList, Frame[LValue])]
       var lastBlock: Option[(AbstractInsnNode, Frame[LValue])] = None
       val methodReturns = mutable.Buffer.empty[LValue]
+      val escapingValues = mutable.Buffer.empty[LValue]
       val labelMapping = mutable.Map.empty[LabelNode, List[LabelNode]]
+      var pure: Boolean = true
       def walkBlock(blockStart: AbstractInsnNode,
                     blockState0: Frame[LValue],
                     seenBlocks0: Set[AbstractInsnNode]): (Boolean, InsnList) = {
@@ -154,7 +159,11 @@ class Walker(isInterface: JType.Cls => Boolean,
                 case ARETURN =>
                   finalInsnList.add(new InsnNode(current.getOpcode))
                   methodReturns.append(currentState.stack.last)
-                case RETURN | DRETURN | FRETURN | IRETURN | LRETURN =>
+                  escapingValues.append(currentState.stack.last)
+                case DRETURN | FRETURN | IRETURN | LRETURN =>
+                  finalInsnList.add(new InsnNode(current.getOpcode))
+                  escapingValues.append(currentState.stack.last)
+                case RETURN =>
                   finalInsnList.add(new InsnNode(current.getOpcode))
                 case _ =>
                   constantFold(currentInsn, new InsnNode(current.getOpcode), nextState, finalInsnList)
@@ -199,10 +208,14 @@ class Walker(isInterface: JType.Cls => Boolean,
               val copy = new MethodInsnNode(
                 current.getOpcode, current.owner, current.name, current.desc, current.itf
               )
+              val argOutCount = Desc.read(current.desc).args.length + (if (current.getOpcode == INVOKESPECIAL) 0 else 1)
 
               val mangled =
-                if (current.owner.startsWith("java/")) copy
-                else mangleMethodCallInsn(
+                if (current.owner.startsWith("java/")) {
+                  pure = false
+                  escapingValues.appendAll(currentState.stack.takeRight(argOutCount))
+                  copy
+                } else mangleMethodCallInsn(
                   currentState, copy,
                   static = copy.getOpcode == INVOKESTATIC,
                   special = copy.getOpcode == INVOKESPECIAL,
@@ -224,14 +237,20 @@ class Walker(isInterface: JType.Cls => Boolean,
                         }
                       }
 
-                      walkMethod(
+                      val walked = walkMethod(
                         staticSig,
                         lookupMethod(staticSig).get.instructions,
                         types.toList,
                         lookupMethod(staticSig).get.maxLocals,
                         lookupMethod(staticSig).get.maxStack,
                         seen
-                      ).inferredReturn
+                      )
+
+                      pure &= walked.pure
+                      if (!walked.pure){
+                        escapingValues.appendAll(currentState.stack.takeRight(argOutCount))
+                      }
+                      walked.inferredReturn
                     }
                   }
                 )
@@ -267,6 +286,9 @@ class Walker(isInterface: JType.Cls => Boolean,
         visitedBlocks.get((blockStart, typeState)) match{
           case Some((insns, frame)) =>
           //          println("OLD BLOCK")
+            // When we jump back to a previously visited block with the same
+            // typestate, aggregate the upstream LValues of the new jump with
+            // those already saved earlier
             visitedBlocks((blockStart, typeState)) = (
               insns,
               frame.zipWith(blockState){(x1, x2) => x1.merge(x2)}
@@ -301,8 +323,7 @@ class Walker(isInterface: JType.Cls => Boolean,
 
       val outputInsns = new InsnList
       visitedBlocks.valuesIterator.foreach(x => outputInsns.add(x._1))
-
-      Walker.MethodResult(sig.desc.args.map(_ => true), resultType, outputInsns)
+      Walker.MethodResult(sig.desc.args.map(_ => true), resultType, outputInsns, false)
     })
   }
 
@@ -454,7 +475,8 @@ class Walker(isInterface: JType.Cls => Boolean,
       visitedMethods((interfaceSig, originalTypes.drop(1))) = Walker.MethodResult(
         Array.fill(originalTypes.length - 1)(true),
         interfaceSig.desc.ret,
-        new InsnList
+        new InsnList,
+        false
       )
     }
 

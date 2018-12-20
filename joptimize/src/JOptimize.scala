@@ -84,7 +84,7 @@ object JOptimize{
     }
 
     val newMethods = visitedMethods.toList.map{
-      case ((sig, inferredTypes), Walker.MethodResult(liveArgs, returnType, insns)) =>
+      case ((sig, inferredTypes), Walker.MethodResult(liveArgs, returnType, insns, pure)) =>
 
         val originalNode = originalMethods(sig)
 
