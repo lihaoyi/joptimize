@@ -57,6 +57,9 @@ object Liveness {
   def apply(sig: MethodSig,
             basicBlocks: Seq[InsnList],
             allTerminals: Seq[(Seq[LValue], AbstractInsnNode, Option[IType])]): InsnList = {
+    import collection.JavaConverters._
+    pprint.log(basicBlocks.map(_.iterator().asScala.toSeq.map(Util.prettyprint)))
+    pprint.log(allTerminals)
 //    println("="*20 +sig + "="*20)
 
     // Three states for a node:

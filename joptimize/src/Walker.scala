@@ -199,7 +199,7 @@ class Walker(isInterface: JType.Cls => Boolean,
               val newLabel = new LabelNode()
               labelMapping(current) = newLabel :: labelMapping.getOrElse(current, Nil)
               finalInsnList.add(newLabel)
-              walkNextBlock(current.getNext, nextState)
+              if (!walkNextLabel()) walkInsn(current.getNext, nextState)
 
             case current: LdcInsnNode =>
               finalInsnList.add(new LdcInsnNode(current.cst))
