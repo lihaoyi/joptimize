@@ -94,21 +94,26 @@ object Util{
       case (IType.Intersect(classes), orig: JType) => ???
     }
   }
-  def clone(input: AbstractInsnNode) = input match{
-    case i: FieldInsnNode => new FieldInsnNode(i.getOpcode, i.owner, i.name, i.desc)
-    case i: FrameNode => new FrameNode(i.`type`, i.local.size, i.local.asScala.toArray, i.stack.size, i.stack.asScala.toArray)
-    case i: IincInsnNode => new IincInsnNode(i.`var`, i.incr)
-    case i: InsnNode => new InsnNode(i.getOpcode)
-    case i: IntInsnNode => new IntInsnNode(i.getOpcode, i.operand)
-    case i: InvokeDynamicInsnNode => new InvokeDynamicInsnNode(i.name, i.desc, i.bsm, i.bsmArgs.clone())
-    case i: JumpInsnNode => new JumpInsnNode(i.getOpcode, i.label)
-    case i: LdcInsnNode => new LdcInsnNode(i.getOpcode, i.cst)
-    case i: LineNumberNode => new LineNumberNode(i.line, i.start)
-    case i: LookupSwitchInsnNode => new LookupSwitchInsnNode(i.dflt, i.keys.asScala.toArray.map(_.intValue()), i.labels.asScala.toArray)
-    case i: MethodInsnNode => new MethodInsnNode(i.getOpcode, i.owner, i.name, i.desc, i.itf)
-    case i: MultiANewArrayInsnNode => new MultiANewArrayInsnNode(i.desc, i.dims)
-    case i: TableSwitchInsnNode => new TableSwitchInsnNode(i.min, i.max, i.dflt, i.labels.asScala.toArray:_*)
-    case i: VarInsnNode => new VarInsnNode(i.getOpcode, i.`var`)
-    case i: TypeInsnNode => new TypeInsnNode(i.getOpcode, i.desc)
+  def clone(input: AbstractInsnNode, labelMapping: mutable.Map[AbstractInsnNode, AbstractInsnNode]) = {
+    labelMapping.getOrElseUpdate(input,
+      input match{
+        case i: FieldInsnNode => new FieldInsnNode(i.getOpcode, i.owner, i.name, i.desc)
+        case i: FrameNode => new FrameNode(i.`type`, i.local.size, i.local.asScala.toArray, i.stack.size, i.stack.asScala.toArray)
+        case i: IincInsnNode => new IincInsnNode(i.`var`, i.incr)
+        case i: InsnNode => new InsnNode(i.getOpcode)
+        case i: IntInsnNode => new IntInsnNode(i.getOpcode, i.operand)
+        case i: InvokeDynamicInsnNode => new InvokeDynamicInsnNode(i.name, i.desc, i.bsm, i.bsmArgs.clone())
+        case i: JumpInsnNode => new JumpInsnNode(i.getOpcode, i.label)
+        case i: LabelNode =>  new LabelNode()
+        case i: LdcInsnNode => new LdcInsnNode(i.getOpcode, i.cst)
+        case i: LineNumberNode => new LineNumberNode(i.line, i.start)
+        case i: LookupSwitchInsnNode => new LookupSwitchInsnNode(i.dflt, i.keys.asScala.toArray.map(_.intValue()), i.labels.asScala.toArray)
+        case i: MethodInsnNode => new MethodInsnNode(i.getOpcode, i.owner, i.name, i.desc, i.itf)
+        case i: MultiANewArrayInsnNode => new MultiANewArrayInsnNode(i.desc, i.dims)
+        case i: TableSwitchInsnNode => new TableSwitchInsnNode(i.min, i.max, i.dflt, i.labels.asScala.toArray:_*)
+        case i: VarInsnNode => new VarInsnNode(i.getOpcode, i.`var`)
+        case i: TypeInsnNode => new TypeInsnNode(i.getOpcode, i.desc)
+      }
+    )
   }
 }

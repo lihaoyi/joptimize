@@ -1,7 +1,7 @@
 package joptimize
 
 import org.objectweb.asm.Opcodes
-import org.objectweb.asm.tree.{AbstractInsnNode, InsnList, InsnNode, VarInsnNode}
+import org.objectweb.asm.tree._
 
 import scala.collection.mutable
 
@@ -58,8 +58,6 @@ object Liveness {
             basicBlocks: Seq[InsnList],
             allTerminals: Seq[(Seq[LValue], AbstractInsnNode, Option[IType])]): InsnList = {
     import collection.JavaConverters._
-    pprint.log(basicBlocks.map(_.iterator().asScala.toSeq.map(Util.prettyprint)))
-    pprint.log(allTerminals)
 //    println("="*20 +sig + "="*20)
 
     // Three states for a node:
@@ -95,6 +93,7 @@ object Liveness {
         case None => None
       }
     }
+    val oldNewInsnMapping = mutable.Map.empty[AbstractInsnNode, AbstractInsnNode]
     for((terminalValues, terminalInsn, terminalTypeOpt) <- allTerminals){
 //      println("=" * 10 + "WALKING TERMINAL " + terminalInsn + "=" * 10)
       generateBlockTerminalInsns(
@@ -102,7 +101,8 @@ object Liveness {
         terminalValues,
         saveToLocal = lv => saveToLocal(lv.insn),
         loadFromLocal = lv => lv.insn.fold(i => Some(Some(i)), c => localsMap.get(Right(c))),
-        outputInsns
+        outputInsns,
+        oldNewInsnMapping
       )
 
       saveToLocal(Right(terminalInsn)).foreach{ i =>
@@ -122,9 +122,20 @@ object Liveness {
           )
         }
       }
-      outputInsns.add(Util.clone(terminalInsn))
+      outputInsns.add(Util.clone(terminalInsn, oldNewInsnMapping))
     }
 
+
+    pprint.log(oldNewInsnMapping)
+    oldNewInsnMapping.collect{ case (oldInsn: JumpInsnNode, newInsn: JumpInsnNode) =>
+      pprint.log(newInsn.label -> oldNewInsnMapping(newInsn.label))
+      newInsn.label = oldNewInsnMapping(oldInsn.label).asInstanceOf[LabelNode]
+    }
+    pprint.log(outputInsns.iterator().asScala.toSeq.map{
+      case j: JumpInsnNode => (j, j.label)
+      case x => x
+    })
+    pprint.log(outputInsns.iterator().asScala.map(Util.prettyprint).toSeq)
     outputInsns
   }
 
@@ -137,17 +148,16 @@ object Liveness {
                                  terminalValues: Seq[LValue],
                                  saveToLocal: LValue => Option[Int],
                                  loadFromLocal: LValue => Option[Option[Int]],
-                                 outputInsns: InsnList): Unit = {
+                                 outputInsns: InsnList,
+                                 oldNewInsnMapping: mutable.Map[AbstractInsnNode, AbstractInsnNode]): Unit = {
     def rec(value: LValue): Unit = {
-
-
       loadFromLocal(value) match{
         // if the value is available in a local, just load it
         case Some(Some(i)) =>
           outputInsns.add(new VarInsnNode(
             value.tpe.widen match{
               case JType.Prim.I => Opcodes.ILOAD
-              case JType.Prim.J => Opcodes.LSTORE
+              case JType.Prim.J => Opcodes.LLOAD
               case JType.Prim.F => Opcodes.FLOAD
               case JType.Prim.D => Opcodes.DLOAD
               case _ => Opcodes.ALOAD
@@ -161,8 +171,9 @@ object Liveness {
           for(valueList <- value.upstream) valueList.foreach(rec)
 
           // compute this value using it's instruction
-
-          value.insn.foreach(i => outputInsns.add(Util.clone(i)))
+          value.insn.foreach(i =>
+            outputInsns.add(Util.clone(i, oldNewInsnMapping))
+          )
 
           // and save it to a local if necessary
           saveToLocal(value).foreach{ i =>

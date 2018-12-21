@@ -92,6 +92,7 @@ class Walker(isInterface: JType.Cls => Boolean,
               case l: LabelNode => l
               case _ =>
                 val l = new LabelNode()
+                pprint.log(l)
                 jumped.insert(l)
                 l
             }
@@ -192,14 +193,16 @@ class Walker(isInterface: JType.Cls => Boolean,
 
             case current: JumpInsnNode =>
               walkJump(
-                walkBlock(_, _, seenBlocks), finalInsnList,
-                walkNextBlock, currentState, nextState, current
+                walkBlock(_, _, seenBlocks), finalInsnList, walkNextBlock,
+                currentState, nextState, current
               )
             case current: LabelNode =>
               val newLabel = new LabelNode()
+              pprint.log(current -> newLabel)
               labelMapping(current) = newLabel :: labelMapping.getOrElse(current, Nil)
               finalInsnList.add(newLabel)
-              if (!walkNextLabel()) walkInsn(current.getNext, nextState)
+              val nextState1 = nextState.map(lv => new LValue(lv.tpe, Right(newLabel), mutable.Buffer(Seq(lv))))
+              if (!walkNextLabel(nextState1)) walkInsn(current.getNext, nextState1)
 
             case current: LdcInsnNode =>
               finalInsnList.add(new LdcInsnNode(current.cst))
@@ -313,9 +316,11 @@ class Walker(isInterface: JType.Cls => Boolean,
           }
         }
         val typeState = blockState.map(_.tpe)
+//        pprint.log("VISITING BLOCK" + Util.prettyprint(blockStart))
         visitedBlocks.get((blockStart, typeState)) match{
           case Some((insns, frame)) =>
-          //          println("OLD BLOCK")
+
+//            println("OLD BLOCK")
             // When we jump back to a previously visited block with the same
             // typestate, aggregate the upstream LValues of the new jump with
             // those already saved earlier
@@ -325,6 +330,7 @@ class Walker(isInterface: JType.Cls => Boolean,
             )
             (false, insns)
           case None =>
+            println("OLD BLOCK")
 //          println("NEW BLOCK " + (currentInsn, currentState))
             visitedBlocks((blockStart, typeState)) = (finalInsnList, blockState)
             lastBlock = Some((blockStart, blockState))
@@ -374,11 +380,14 @@ class Walker(isInterface: JType.Cls => Boolean,
                finalInsnList: InsnList,
                walkNextBlock: (AbstractInsnNode, Frame[LValue]) => InsnList,
                currentState: Frame[LValue],
-               nextState: Frame[LValue],
+               nextState0: Frame[LValue],
                current: JumpInsnNode) = {
+    def nextState(newInsn: AbstractInsnNode) = {
+      nextState0.map(lv => new LValue(lv.tpe, Right(newInsn), mutable.Buffer(Seq(lv))))
+    }
     def jumpBlock(pred: Boolean): Unit = {
       popN(finalInsnList, Bytecode.stackEffect(current.getOpcode).asInstanceOf[Fixed].pop)
-      walkNextBlock(if (pred) current.label else current.getNext, nextState)
+      walkNextBlock(if (pred) current.label else current.getNext, nextState0)
     }
 
     (
@@ -404,9 +413,10 @@ class Walker(isInterface: JType.Cls => Boolean,
         // We don't know how to handle these, so walk both cases
         val n = new JumpInsnNode(current.getOpcode, null)
         finalInsnList.add(n)
-        walkNextBlock(current.getNext, nextState)
+        walkNextBlock(current.getNext, nextState(n))
 
-        val (fresh, jumped) = walkBlock(current.label, nextState)
+        val (fresh, jumped) = walkBlock(current.label, nextState(n))
+
         n.label = jumped.getFirst.asInstanceOf[LabelNode]
     }
   }
