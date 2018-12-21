@@ -63,7 +63,7 @@ class Walker(isInterface: JType.Cls => Boolean,
       // LinkedHashMap#lastOption isn't optimized and so is O(n) instead of O(1)
       var lastBlock: Option[(AbstractInsnNode, Frame[LValue])] = None
       val methodReturns = mutable.Buffer.empty[LValue]
-      val terminalInsns = mutable.Buffer.empty[(Seq[LValue], AbstractInsnNode, Option[IType])]
+      val terminalInsns = mutable.Buffer.empty[Terminal]
       val labelMapping = mutable.Map.empty[LabelNode, List[LabelNode]]
       var pure: Boolean = sig.name != "<init>" && sig.name != "<clinit>"
       def walkBlock(blockStart: AbstractInsnNode,
@@ -92,7 +92,6 @@ class Walker(isInterface: JType.Cls => Boolean,
               case l: LabelNode => l
               case _ =>
                 val l = new LabelNode()
-                pprint.log(l)
                 jumped.insert(l)
                 l
             }
@@ -127,6 +126,8 @@ class Walker(isInterface: JType.Cls => Boolean,
           currentInsn match{
             case current: FieldInsnNode =>
               val clinitSig = MethodSig(current.owner, "<clinit>", Desc.read("()V"), true)
+
+              val n = new FieldInsnNode(current.getOpcode, current.owner, current.name, current.desc)
               if (!seen.contains((clinitSig, Nil))) {
                 for(clinit <- lookupMethod(clinitSig)){
                   walkMethod(
@@ -139,10 +140,9 @@ class Walker(isInterface: JType.Cls => Boolean,
                   )
                 }
               }
-              val n = new FieldInsnNode(current.getOpcode, current.owner, current.name, current.desc)
               current.getOpcode match{
-                case PUTFIELD | PUTSTATIC => terminalInsns.append((Seq(currentState.stack.last), n, None))
-                case GETFIELD | GETSTATIC => terminalInsns.append((Nil, n, None))
+                case PUTFIELD | PUTSTATIC => terminalInsns.append(Terminal(n, Seq(currentState.stack.last), None))
+                case GETFIELD | GETSTATIC => terminalInsns.append(Terminal(n, Nil, None))
               }
 //
               finalInsnList.add(n)
@@ -168,18 +168,18 @@ class Walker(isInterface: JType.Cls => Boolean,
                 case IASTORE | LASTORE | FASTORE | DASTORE | AASTORE | BASTORE | CASTORE | SASTORE |
                      IALOAD | LALOAD | FALOAD | DALOAD | AALOAD | BALOAD | CALOAD | SALOAD =>
                   constantFold(currentInsn, new InsnNode(current.getOpcode), nextState, finalInsnList)
-                  terminalInsns.append((Seq(currentState.stack.last), current, None))
+                  terminalInsns.append(Terminal(current, Seq(currentState.stack.last), None))
                   if (!walkNextLabel()) walkInsn(current.getNext, nextState)
                 case ARETURN =>
                   finalInsnList.add(new InsnNode(current.getOpcode))
                   methodReturns.append(currentState.stack.last)
-                  terminalInsns.append((Seq(currentState.stack.last), current, None))
+                  terminalInsns.append(Terminal(current, Seq(currentState.stack.last), None))
                 case DRETURN | FRETURN | IRETURN | LRETURN =>
                   finalInsnList.add(new InsnNode(current.getOpcode))
-                  terminalInsns.append((Seq(currentState.stack.last), current, None))
+                  terminalInsns.append(Terminal(current, Seq(currentState.stack.last), None))
                 case RETURN =>
                   finalInsnList.add(new InsnNode(current.getOpcode))
-                  terminalInsns.append((Seq(), current, None))
+                  terminalInsns.append(Terminal(current, Seq(), None))
                 case _ =>
                   constantFold(currentInsn, new InsnNode(current.getOpcode), nextState, finalInsnList)
                   if (!walkNextLabel()) walkInsn(current.getNext, nextState)
@@ -198,7 +198,6 @@ class Walker(isInterface: JType.Cls => Boolean,
               )
             case current: LabelNode =>
               val newLabel = new LabelNode()
-              pprint.log(current -> newLabel)
               labelMapping(current) = newLabel :: labelMapping.getOrElse(current, Nil)
               finalInsnList.add(newLabel)
               val nextState1 = nextState.map(lv => new LValue(lv.tpe, Right(newLabel), mutable.Buffer(Seq(lv))))
@@ -230,9 +229,9 @@ class Walker(isInterface: JType.Cls => Boolean,
               val mangled =
                 if (current.owner.startsWith("java/")) {
                   pure = false
-                  terminalInsns.append((
-                    currentState.stack.takeRight(argOutCount),
+                  terminalInsns.append(Terminal(
                     current,
+                    currentState.stack.takeRight(argOutCount),
                     Some(Desc.read(current.desc).ret)
                   ))
 
@@ -279,9 +278,9 @@ class Walker(isInterface: JType.Cls => Boolean,
                     }
                   )
                   if (!methodPure){
-                    terminalInsns.append((
-                      currentState.stack.takeRight(argOutCount),
+                    terminalInsns.append(Terminal(
                       mangled,
+                      currentState.stack.takeRight(argOutCount),
                       Some(narrowRet)
                     ))
                   }
@@ -330,7 +329,6 @@ class Walker(isInterface: JType.Cls => Boolean,
             )
             (false, insns)
           case None =>
-            println("OLD BLOCK")
 //          println("NEW BLOCK " + (currentInsn, currentState))
             visitedBlocks((blockStart, typeState)) = (finalInsnList, blockState)
             lastBlock = Some((blockStart, blockState))
@@ -341,11 +339,14 @@ class Walker(isInterface: JType.Cls => Boolean,
       }
 //      pprint.log(sig -> insns.size)
 
+      val initialArgumentLValues = args
+        .zipWithIndex
+        .map{case (a, i) => new LValue(a, Left(i), mutable.Buffer())}
       walkBlock(
         insns.getFirst,
         Frame.initial(
           maxLocals, maxStack,
-          args.zipWithIndex.map{case (a, i) => new LValue(a, Left(i), mutable.Buffer())},
+          initialArgumentLValues,
           new LValue(JType.Null, Left(-1), mutable.Buffer())
         ),
         Set()
@@ -357,7 +358,12 @@ class Walker(isInterface: JType.Cls => Boolean,
         if (methodReturns.isEmpty) sig.desc.ret
         else merge(methodReturns.map(_.tpe))
 
-      val postLivenessInsns = Liveness(sig, visitedBlocks.values.map(_._1).toSeq, terminalInsns)
+      val postLivenessInsns = Liveness(
+        sig,
+        visitedBlocks.values.map(_._1).toSeq,
+        terminalInsns,
+        initialArgumentLValues
+      )
 
       Walker.MethodResult(
         sig.desc.args.map(_ => true),

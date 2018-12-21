@@ -2,6 +2,7 @@ package joptimize
 
 import org.objectweb.asm.Opcodes
 import org.objectweb.asm.tree._
+import collection.JavaConverters._
 
 import scala.collection.mutable
 
@@ -53,89 +54,97 @@ Stack/Local bytecode -> Dataflow graph -> Stack/Local bytecode
 - Any un-used input arguments are removed from the method signature, and that
   change propagated to the caller method's callsite.
 */
+
+/**
+  * Terminal instructions have an instruction, its inputs, and an optional
+  * return type.
+  *
+  * The terminal instruction's return value is not kept track of specially; we
+  * only need to ensure that the terminal instruction is called with the input
+  * in the right order, not that anything in particular happens to the return
+  * value. Anyone who needs the return value will depend on it like any other
+  * LValue in the dataflow graph
+  *
+  * Note that we cannot model terminals as their returned LValue, because some
+  * terminals such as RETURN or void method INVOKEs return nothing.
+  */
+case class Terminal(insn: AbstractInsnNode, inputs: Seq[LValue], ret: Option[IType])
 object Liveness {
   def apply(sig: MethodSig,
             basicBlocks: Seq[InsnList],
-            allTerminals: Seq[(Seq[LValue], AbstractInsnNode, Option[IType])]): InsnList = {
-    import collection.JavaConverters._
-//    println("="*20 +sig + "="*20)
+            allTerminals: Seq[Terminal],
+            initialArgumentLValues: Seq[LValue]): InsnList = {
 
+    for(b <- basicBlocks){
+      pprint.log(b.iterator().asScala.toSeq.map(Util.prettyprint))
+    }
     // Three states for a node:
     // - Not visited at all
     // - Visited, and delegated to a local
     // - Visited, but not delegated to a local
-    val localsMap = mutable.LinkedHashMap.empty[Either[Int, AbstractInsnNode], Option[Int]]
+    val localsMap = mutable.LinkedHashMap.empty[LValue, Option[Int]]
+    for((lv, i) <- initialArgumentLValues.zipWithIndex)localsMap(lv) = Some(i)
 
-    val terminalUpstream = allTerminals.map(x => (x._2, x._1)).toMap
-    val (_, roots, downstreamEdges) = Util.breadthFirstAggregation[Either[LValue, AbstractInsnNode]](
-      allTerminals.map(x => Right(x._2)).toSet ++ allTerminals.flatMap(_._1.map(Left(_))).toSet,
-      {
-        case Left(x) => x.upstream.flatten.map(Left[LValue, AbstractInsnNode](_))
-        case Right(y) => terminalUpstream(y).map(Left[LValue, AbstractInsnNode](_))
+    val (_, roots, downstreamEdges) =
+      Util.breadthFirstAggregation[Either[LValue, Terminal]](allTerminals.map(Right(_)).toSet){
+        case Left(x) => x.upstream.flatten.map(Left[LValue, Terminal])
+        case Right(y) => y.inputs.map(Left[LValue, Terminal])
       }
-    )
 
-    for (root <- roots) toInsn(root)match{
-      case Left(n) => localsMap(toInsn(root)) = Some(n)
-      case _ =>
-    }
-
-    def toInsn(x: Either[LValue, AbstractInsnNode]) = x.left.flatMap(_.insn)
-
-    val downstream = downstreamEdges.map{case (k, v) => (toInsn(k), toInsn(v))}.toSeq.groupBy(_._1).mapValues(_.map(_._2)).toMap
-    val insnDownstream = downstream.map{case (k, v) => (k, v)}
+    // Downstream edges from an LValue to either an LValue or a terminal instruction.
+    val downstream = downstreamEdges
+      .groupBy(_._1.left.get)
+      .mapValues(_.map(_._2))
+      .toMap
 
     val outputInsns = new InsnList
-    def saveToLocal(insn: Either[Int, AbstractInsnNode]) = {
-      insnDownstream.get(insn) match{
-        case Some(x) if x.size >= 2 => localsMap(insn) = Some(localsMap.size); localsMap(insn)
-        case Some(x) => localsMap(insn) = None; None
+
+    def saveToLocal(lv: LValue) = localsMap.getOrElseUpdate(lv, {
+      downstream.get(lv) match{
+        case Some(x) if x.size >= 2 => localsMap(lv) = Some(localsMap.size); localsMap(lv)
+        case Some(x) => localsMap(lv) = None; None
         case None => None
       }
-    }
+    })
+
     val oldNewInsnMapping = mutable.Map.empty[AbstractInsnNode, AbstractInsnNode]
-    for((terminalValues, terminalInsn, terminalTypeOpt) <- allTerminals){
+
+    for(terminal <- allTerminals){
 //      println("=" * 10 + "WALKING TERMINAL " + terminalInsn + "=" * 10)
       generateBlockTerminalInsns(
         sig,
-        terminalValues,
-        saveToLocal = lv => saveToLocal(lv.insn),
-        loadFromLocal = lv => lv.insn.fold(i => Some(Some(i)), c => localsMap.get(Right(c))),
+        terminal.inputs,
+        saveToLocal = saveToLocal,
+        loadFromLocal = localsMap.get,
         outputInsns,
         oldNewInsnMapping
       )
 
-      saveToLocal(Right(terminalInsn)).foreach{ i =>
-        terminalTypeOpt.foreach{ terminalType =>
-          outputInsns.add(new InsnNode(Opcodes.DUP))
-          outputInsns.add(
-            new VarInsnNode(
-              terminalType.widen match{
-                case JType.Prim.I => Opcodes.ISTORE
-                case JType.Prim.J => Opcodes.LSTORE
-                case JType.Prim.F => Opcodes.FSTORE
-                case JType.Prim.D => Opcodes.DSTORE
-                case _ => Opcodes.ASTORE
-              },
-              i
-            )
-          )
-        }
-      }
-      outputInsns.add(Util.clone(terminalInsn, oldNewInsnMapping))
+//      saveToLocal(Right(terminal.insn)).foreach{ i =>
+//        terminal.ret.foreach{ terminalType =>
+//          outputInsns.add(new InsnNode(Opcodes.DUP))
+//          outputInsns.add(
+//            new VarInsnNode(
+//              terminalType.widen match{
+//                case JType.Prim.I => Opcodes.ISTORE
+//                case JType.Prim.J => Opcodes.LSTORE
+//                case JType.Prim.F => Opcodes.FSTORE
+//                case JType.Prim.D => Opcodes.DSTORE
+//                case _ => Opcodes.ASTORE
+//              },
+//              i
+//            )
+//          )
+//        }
+//      }
+      val terminalInsn = Util.clone(terminal.insn, oldNewInsnMapping)
+      outputInsns.add(terminalInsn)
     }
 
-
-    pprint.log(oldNewInsnMapping)
     oldNewInsnMapping.collect{ case (oldInsn: JumpInsnNode, newInsn: JumpInsnNode) =>
-      pprint.log(newInsn.label -> oldNewInsnMapping(newInsn.label))
       newInsn.label = oldNewInsnMapping(oldInsn.label).asInstanceOf[LabelNode]
     }
-    pprint.log(outputInsns.iterator().asScala.toSeq.map{
-      case j: JumpInsnNode => (j, j.label)
-      case x => x
-    })
-    pprint.log(outputInsns.iterator().asScala.map(Util.prettyprint).toSeq)
+    outputInsns.iterator().asScala.foreach(p => println(Util.prettyprint(p)))
     outputInsns
   }
 
@@ -154,7 +163,7 @@ object Liveness {
       loadFromLocal(value) match{
         // if the value is available in a local, just load it
         case Some(Some(i)) =>
-          outputInsns.add(new VarInsnNode(
+          val loadInsn = new VarInsnNode(
             value.tpe.widen match{
               case JType.Prim.I => Opcodes.ILOAD
               case JType.Prim.J => Opcodes.LLOAD
@@ -163,20 +172,26 @@ object Liveness {
               case _ => Opcodes.ALOAD
             },
             i
-          ))
+          )
+          outputInsns.add(loadInsn)
         case Some(None) =>
-
         case None =>
+
           // Otherwise, compute the arguments necessary for this value
           for(valueList <- value.upstream) valueList.foreach(rec)
 
           // compute this value using it's instruction
-          value.insn.foreach(i =>
-            outputInsns.add(Util.clone(i, oldNewInsnMapping))
-          )
+          value.insn.foreach { i =>
+            val newInsn = Util.clone(i, oldNewInsnMapping)
+            if (!outputInsns.contains(newInsn)){
+              outputInsns.add(newInsn)
+            }
+          }
 
+          val stl = saveToLocal(value)
+          pprint.log(value -> stl)
           // and save it to a local if necessary
-          saveToLocal(value).foreach{ i =>
+          stl.foreach{ i =>
             outputInsns.add(new InsnNode(Opcodes.DUP))
             outputInsns.add(
               new VarInsnNode(

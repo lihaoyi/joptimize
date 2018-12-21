@@ -41,7 +41,7 @@ object Util{
   def leastUpperBound[T](starts: Set[T])(edges: T => Seq[T]) = {
     // Walk up the graph from all starting locations
     val (seens, terminalss, backEdgess) =
-      starts.map(start => breadthFirstAggregation(Set(start), edges)).unzip3
+      starts.map(start => breadthFirstAggregation(Set(start))(edges)).unzip3
 
     // Find the set of nodes which overlap all the transitive closures
     val overlap = seens.reduce(_.intersect(_))
@@ -58,16 +58,16 @@ object Util{
     } backMap(src) = dest :: backMap.getOrElse(src, Nil)
 
     val (backSeen, backTerminals, backBackEdges) =
-      breadthFirstAggregation[T](overlapTerminals, backMap.getOrElse(_, Nil))
+      breadthFirstAggregation[T](overlapTerminals)(backMap.getOrElse(_, Nil))
 
     backTerminals
   }
 
-  def breadthFirstAggregation[T](start: Set[T], edges: T => Seq[T]): (Set[T], Set[T], Set[(T, T)]) = {
+  def breadthFirstAggregation[T](start: Set[T])(edges: T => Seq[T]): (Set[T], Set[T], Seq[(T, T)]) = {
     val queue = start.to[mutable.Queue]
     val seen = mutable.Set.empty[T]
     val terminals = mutable.Set.empty[T]
-    val backEdges = mutable.Set.empty[(T, T)]
+    val backEdges = mutable.Buffer.empty[(T, T)]
     while(queue.nonEmpty){
       val current = queue.dequeue()
       if (!seen(current)){
@@ -76,11 +76,11 @@ object Util{
         if (next.isEmpty) terminals.add(current)
         for(n <- next){
           queue.enqueue(n)
-          backEdges.add((n, current))
+          backEdges.append((n, current))
         }
       }
     }
-    (seen.toSet, terminals.toSet, backEdges.toSet)
+    (seen.toSet, terminals.toSet, backEdges)
   }
   def isCompatible(inferredTypes: Seq[IType], originalTypes: Seq[JType]): Boolean = {
     inferredTypes.length == originalTypes.length &&

@@ -116,6 +116,10 @@ Stack/Local bytecode -> Dataflow graph -> Stack/Local bytecode
         - For terminal instructions which do not require input, they can simply
           be emitted immediately!
 
+        - We treat conditional jumps as a transformation on all values in the
+          frame that passes through it, in order to force them to be included
+          within the dataflow graph. Unconditional jumps are discarded.
+
     - Find expressions: segments of the subgraph which are tree-shaped:
       all nodes in the graph have only one downstream use case, except the
       terminal node which may have one or more.

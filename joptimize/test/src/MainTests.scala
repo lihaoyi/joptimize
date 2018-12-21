@@ -159,6 +159,11 @@ object MainTests extends TestSuite{
           1 -> 2,
           2 -> 4
         )
+        'add - opt[Int, Int, Int].check(
+          (1, 1) -> 2,
+          (1, 2) -> 3,
+          (2, 1) -> 3
+        )
         'timesTwo - opt[Int, Int].check(
           1 -> 2,
           2 -> 4
