@@ -358,6 +358,7 @@ class Walker(isInterface: JType.Cls => Boolean,
         else merge(methodReturns.map(_.tpe))
 
       val postLivenessInsns = Liveness(
+        maxLocals, maxStack,
         sig,
         visitedBlocks.values.map(_._1).toSeq,
         terminalInsns,

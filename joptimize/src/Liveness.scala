@@ -6,54 +6,6 @@ import collection.JavaConverters._
 
 import scala.collection.mutable
 
-/*
-- Core considerations:
-    - Returned values must be computed with the same input
-    - Side effects (both reads & writes!) must happen in the same order
-        - This includes side effects happening in loops, or after conditionals
-
-Stack/Local bytecode -> Dataflow graph -> Stack/Local bytecode
-
-- Capture dataflow graph of `LValue`s depending on each other, in
-  `Interpreter[LValue]`
-
-- Convert flat list of instructions into controlflow graph of basic blocks
-
-- Within each basic block, each side effecting instruction must be called
-  and in the same original order with the same arguments
-
-- Traverse the dataflow graph upstream from all terminal instructions to
-  find the set of live `LValue`s:
-
-    - *RETURN VALUE
-    - Method calls to non-pure methods (ARGS...)
-    - PUTSTATIC VALUE
-    - PUTFIELD VALUE, *ASTORE VALUE for escaping objects only
-    - RETURN
-
-- Re-generate each basic block, in order of terminal instructions, in order
-  to ensure each terminal instruction is called with the correct LValues,
-  and the necessary LValues are left on the stack/locals for downstream
-  basic blocks.
-    - Walk dataflow graph upstream from that terminal instruction and find its
-      transitive closure
-        - For terminal instructions which do not require input, they can simply
-          be emitted immediately!
-
-    - Find expressions: segments of the subgraph which are tree-shaped:
-      all nodes in the graph have only one downstream use case, except the
-      terminal node which may have one or more.
-
-    - Every expression can be evaluated purely on the stack, loading and
-      evaluating sub-expressions smallest-to-largest starting from the left-most
-      smallest expression
-
-    - Evaluation between expressions cannot be evaluated purely on the stack,
-      and must use either local variables, or DUP bytecodes
-
-- Any un-used input arguments are removed from the method signature, and that
-  change propagated to the caller method's callsite.
-*/
 object Liveness {
   def tabulateLineNumbers(insns: Seq[AbstractInsnNode]) = {
     val insnToLineNumber = mutable.Map.empty[AbstractInsnNode, Int]
@@ -69,23 +21,43 @@ object Liveness {
     insnToLineNumber.toMap
   }
 
-  def apply(sig: MethodSig,
+  def apply(maxLocals: Int,
+            maxStack: Int,
+            sig: MethodSig,
             basicBlocks: Seq[InsnList],
             allTerminals: Seq[Terminal],
             initialArgumentLValues: Seq[LValue]): InsnList = {
 
-    for(bb <- basicBlocks){
+    // Graph of jumps or transitions between basic blocks; will have cycles in
+    // the case of loops or similar!
+    val blockGraphEdges = for{
+      (b1, i1) <- basicBlocks.zipWithIndex
+      (b2, i2) <- basicBlocks.zipWithIndex
+      if ((b1.getLast, b2.getFirst) match{
+        case (j: JumpInsnNode, l: LabelNode) if j.label == l => true
+        case (lhs, _)
+          if i2 == i1 + 1
+          && lhs.getOpcode != Opcodes.GOTO
+          && lhs.getOpcode != Opcodes.RETURN
+          && lhs.getOpcode != Opcodes.IRETURN
+          && lhs.getOpcode != Opcodes.FRETURN
+          && lhs.getOpcode != Opcodes.LRETURN
+          && lhs.getOpcode != Opcodes.DRETURN
+          && lhs.getOpcode != Opcodes.ARETURN
+          && lhs.getOpcode != Opcodes.ATHROW =>
+          true
+        case _ => false
+      })
+    } yield (i1, i2)
 
+    val blockGraphDownstream = blockGraphEdges.groupBy(_._1).mapValues(_.map(_._2)).toMap
 
-      pprint.log(bb.iterator().asScala.toSeq.map(Util.prettyprint).mkString("\n"))
-    }
+    val blockGraphUpstream = blockGraphEdges.groupBy(_._2).mapValues(_.map(_._1)).toMap
 
-    // Three states for a node:
-    // - Not visited at all
-    // - Visited, and delegated to a local
-    // - Visited, but not delegated to a local
-    val localsMap = mutable.LinkedHashMap.empty[LValue, Option[Int]]
-    for((lv, i) <- initialArgumentLValues.zipWithIndex)localsMap(lv) = Some(i)
+    val insnToBlockLookup = basicBlocks
+      .zipWithIndex
+      .flatMap{case (bb, i) => bb.iterator().asScala.map(_ -> i)}
+      .toMap
 
     val (allVertices, roots, downstreamEdges) =
       Util.breadthFirstAggregation[Either[LValue, Terminal]](allTerminals.map(Right(_)).toSet){
@@ -93,12 +65,17 @@ object Liveness {
         case Right(y) => y.inputs.map(Left[LValue, Terminal])
       }
 
-    val jumpTargets = basicBlocks.flatMap(_.iterator().asScala.toSeq).flatMap{
-      case j: JumpInsnNode => Seq(j.label)
-      case j: TableSwitchInsnNode => Option(j.dflt).toSeq ++ j.labels.asScala
-      case j: LookupSwitchInsnNode => Option(j.dflt).toSeq ++ j.labels.asScala
-      case _ => Nil
-    }.toSet
+    val allLValues = allVertices.collect{case Left(lv) => lv}
+
+    // Left means it's a method arg, Right means it's a block index
+    val lvalueToBlock = allLValues.map{lv => lv -> lv.insn.map(insnToBlockLookup)}.toMap
+
+    // Three states for a node:
+    // - Not visited at all
+    // - Visited, and delegated to a local
+    // - Visited, but not delegated to a local
+    val localsMap = mutable.LinkedHashMap.empty[LValue, Option[Int]]
+    for((lv, i) <- initialArgumentLValues.zipWithIndex)localsMap(lv) = Some(i)
 
     // Downstream edges from an LValue to either an LValue or a terminal instruction.
     val downstream = downstreamEdges
@@ -118,45 +95,67 @@ object Liveness {
 
     val oldNewInsnMapping = mutable.Map.empty[AbstractInsnNode, AbstractInsnNode]
 
-    for(terminal <- allTerminals){
-      println("=" * 10 + "WALKING TERMINAL " + Util.prettyprint(terminal.insn).trim + "=" * 10)
-      generateBlockTerminalInsns(
-        sig,
-        terminal.inputs,
-        saveToLocal = saveToLocal,
-        loadFromLocal = localsMap.get,
-        outputInsns,
-        oldNewInsnMapping
-      )
+    val terminalInsns = allTerminals.map(_.insn).toSet
+    val insnsToTerminals = allTerminals.map(t => t.insn -> t).toMap
 
-//      saveToLocal(Right(terminal.insn)).foreach{ i =>
-//        terminal.ret.foreach{ terminalType =>
-//          outputInsns.add(new InsnNode(Opcodes.DUP))
-//          outputInsns.add(
-//            new VarInsnNode(
-//              terminalType.widen match{
-//                case JType.Prim.I => Opcodes.ISTORE
-//                case JType.Prim.J => Opcodes.LSTORE
-//                case JType.Prim.F => Opcodes.FSTORE
-//                case JType.Prim.D => Opcodes.DSTORE
-//                case _ => Opcodes.ASTORE
-//              },
-//              i
-//            )
-//          )
-//        }
-//      }
-      val terminalInsn = Util.clone(terminal.insn, oldNewInsnMapping)
-      outputInsns.add(terminalInsn)
+    val terminalBlocks = allTerminals.map(t => insnToBlockLookup(t.insn)).distinct
+    val seenBlockIndices = mutable.Set.empty[Int]
+
+    // Walk over every basic block in arbitrary order (cannot do topological
+    // due to presence of loops), as long as they are reachable from one of the
+    // blocks containing terminal instructions
+    def recurseBlock(nextBlockIndex: Int): Frame[LValue] = {
+      if (!seenBlockIndices(nextBlockIndex)) ???
+      else {
+        seenBlockIndices.add(nextBlockIndex)
+        val startFrame = blockGraphUpstream(nextBlockIndex).map(recurseBlock) match{
+          case Nil =>
+            Frame.initial[LValue](
+              maxLocals, maxStack,
+              initialArgumentLValues,
+              new LValue(JType.Null, Left(-1), mutable.Buffer())
+            )
+          case Seq(single) => single
+          case multiple =>
+            // somehow merge the disparate frames together; probably need to
+            // shuffle things around on the stack or in locals
+            ???
+        }
+
+        val blockInsns = walkBasicBlock(
+          blockTerminals = basicBlocks(nextBlockIndex)
+            .iterator()
+            .asScala
+            .filter(terminalInsns)
+            .toSeq
+            .map(insnsToTerminals),
+
+          // We already know all the LValues that need to be computed in this
+          // method as a whole, so we can trivially filter for the LValues that
+          // need to be computed by instructions in this particular basic block
+          downstreamLValues = allLValues
+            .filter(_.insn.exists(basicBlocks(nextBlockIndex).contains))
+        )
+
+        blockInsns.iterator().asScala.foldLeft(startFrame)(_.execute(_, ???))
+      }
     }
 
-    oldNewInsnMapping.collect{ case (oldInsn: JumpInsnNode, newInsn: JumpInsnNode) =>
-      newInsn.label = oldNewInsnMapping(oldInsn.label).asInstanceOf[LabelNode]
-    }
-
-    pprint.log(outputInsns.iterator().asScala.toSeq.map(Util.prettyprint))
+    terminalBlocks.foreach(recurseBlock)
 
     outputInsns
+  }
+
+  /**
+    * Each basic block is walked starting from its terminals that need to
+    * be run (in order) as well as the LValues that downstream basic blocks
+    * require (unordered). We assume the set of necessary LValues is precomputed
+    *
+    * It then returns its own instruction list.
+    */
+  def walkBasicBlock(blockTerminals: Seq[Terminal],
+                     downstreamLValues: Set[LValue]): InsnList = {
+
   }
 
   /**
