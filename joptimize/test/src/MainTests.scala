@@ -389,6 +389,16 @@ object MainTests extends TestSuite{
           .check(1 -> 2, 2 -> 3)
           .checkPresent("Liveness$.main")
           .checkRemoved("Liveness$.pureButNotConstant")
+
+        'main2a - opt[Int, Int]
+          .check(1 -> 0, 2 -> 1)
+          .checkPresent("Liveness$.main2a", "Liveness$.pureButNotConstant")
+          .checkRemoved("Liveness$.pureButNotConstant2")
+
+        'main2b - opt[Int, Int]
+          .check(1 -> 2, 2 -> 3)
+          .checkPresent("Liveness$.main2b", "Liveness$.pureButNotConstant2")
+          .checkRemoved("Liveness$.pureButNotConstant")
       }
     }
   }
