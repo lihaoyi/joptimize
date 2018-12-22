@@ -85,44 +85,34 @@ object Liveness {
 
     val outputInsns = new InsnList
 
-    def saveToLocal(lv: LValue) = localsMap.getOrElseUpdate(lv, {
-      downstream.get(lv) match{
-        case Some(x) if x.size >= 2 => localsMap(lv) = Some(localsMap.size); localsMap(lv)
-        case Some(x) => localsMap(lv) = None; None
-        case None => None
-      }
-    })
-
     val oldNewInsnMapping = mutable.Map.empty[AbstractInsnNode, AbstractInsnNode]
 
     val terminalInsns = allTerminals.map(_.insn).toSet
     val insnsToTerminals = allTerminals.map(t => t.insn -> t).toMap
 
-    val terminalBlocks = allTerminals.map(t => insnToBlockLookup(t.insn)).distinct
-    val seenBlockIndices = mutable.Set.empty[Int]
+    val terminalBlocks = terminalInsns.map(insnToBlockLookup)
+    val seenBlockIndices = mutable.Map.empty[Int, Frame[LValue]]
 
     // Walk over every basic block in arbitrary order (cannot do topological
     // due to presence of loops), as long as they are reachable from one of the
     // blocks containing terminal instructions
     def recurseBlock(nextBlockIndex: Int): Frame[LValue] = {
-      if (!seenBlockIndices(nextBlockIndex)) ???
-      else {
-        seenBlockIndices.add(nextBlockIndex)
-        val startFrame = blockGraphUpstream(nextBlockIndex).map(recurseBlock) match{
-          case Nil =>
+      seenBlockIndices.getOrElseUpdate(nextBlockIndex, {
+        val startFrame = blockGraphUpstream.getOrElse(nextBlockIndex, Nil) match{
+          case Nil => // entrypoint of this method, no parents
             Frame.initial[LValue](
               maxLocals, maxStack,
               initialArgumentLValues,
               new LValue(JType.Null, Left(-1), mutable.Buffer())
             )
-          case Seq(single) => single
+          case Seq(single) => recurseBlock(single) // single parent (not necessarily single child)
           case multiple =>
-            // somehow merge the disparate frames together; probably need to
-            // shuffle things around on the stack or in locals
+            // multiple parents; somehow merge the disparate frames together;
+            // probably need to shuffle things around on the stack or in locals
             ???
         }
 
-        val blockInsns = walkBasicBlock(
+        val (blockInsns, endFrame) = walkBasicBlock(
           blockTerminals = basicBlocks(nextBlockIndex)
             .iterator()
             .asScala
@@ -134,11 +124,13 @@ object Liveness {
           // method as a whole, so we can trivially filter for the LValues that
           // need to be computed by instructions in this particular basic block
           downstreamLValues = allLValues
-            .filter(_.insn.exists(basicBlocks(nextBlockIndex).contains))
+            .filter(_.insn.exists(basicBlocks(nextBlockIndex).contains)),
+
+          startFrame
         )
 
-        blockInsns.iterator().asScala.foldLeft(startFrame)(_.execute(_, ???))
-      }
+        endFrame
+      })
     }
 
     terminalBlocks.foreach(recurseBlock)
@@ -154,8 +146,9 @@ object Liveness {
     * It then returns its own instruction list.
     */
   def walkBasicBlock(blockTerminals: Seq[Terminal],
-                     downstreamLValues: Set[LValue]): InsnList = {
-
+                     downstreamLValues: Set[LValue],
+                     startFrame: Frame[LValue]): (InsnList, Frame[LValue]) = {
+    ???
   }
 
   /**
