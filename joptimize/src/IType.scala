@@ -11,6 +11,14 @@ trait Frameable[T <: Frameable[T]] extends Value{
   def internalName: String
 
 }
+
+/**
+  * Models an abstract or concrete value. Unlike a simple [[IType]], a [[LValue]]
+  * also tracks the provenance of this value: what instruction computed it, which
+  * other values it was computed from, any dataflow merges. This allows you to
+  * analyze the dataflow of LValues to figure out exactly how this value was
+  * computed
+  */
 class LValue(val tpe: IType,
              val insn: Either[Int, AbstractInsnNode],
              val upstream: Seq[LValue],

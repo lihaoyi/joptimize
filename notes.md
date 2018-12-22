@@ -28,12 +28,8 @@
   and forwards along arguments, the downstream methods are also duplicated based
   on the narrowed types of the arguments
 
-- Optimize based on the now duplicated code
-  - Inlining
-  - Constant folding
-  - Allocation Sinking
-  - Partial Evaluation
-  - Dead Code Elimination
+- Optimize based on the now duplicated code to improve perf further, bring down
+  the size-penalty of duplication
 
 - Possible to optimize:
   - Chains of Options
@@ -46,172 +42,83 @@
 
 # Optimization internals
 
-- Single pass dataflow-ordered abstract interpretation
-  - Dead code elimination
+Four primary passes:
 
-  - Partial evaluation
+First pass: control-flow-ordered abstract interpretation & specialization
+Second pass: method-level liveness analysis interleaved with first pass
+Third pass: whole-program DCE for things left behind in second pass
+Fourth pass: method-level bytecode cleanup
 
-  - Specialization
+## First pass: control-flow-ordered abstract interpretation & specialization
 
-  - Constant folding (replace instructions with pops + const)
+- Dead code elimination: anything (bytecodes, methods, classes) that's not
+  reachable is ignored.
 
-  - Purity analysis
+- Partial evaluation: we perform an abstract interpretation using the most
+  specific types available. Often these are concrete: e.g. ICONST_* instructions,
+  ISINSTANCE for known types, etc. and we propagate the concrete constant-type
+  instead of the abstract type
 
-- Post-single-pass method-level instruction-level liveness cleanup (backwards
-  dataflow order)
-  - Walk backwards from method terminals (returns + impure method calls) to find
-    all live values/instructions
+- Specialization: duplicate methods according to the narrower inferred types of
+  their arguments.
 
-  - Remove all other instructions!
+- Constant folding: stub out instructions with constant results, using POPs +
+  CONST. Chains of instructions with constant results become long chains of
+  redundant POPs + CONSTs
 
-  - Pure methods do not count as terminals; if their return value is not used,
-    they can be eliminated
+- Purity analysis: if a method has no side effects (field read, field write,
+  exceptions, IO, calls to impure methods) they are marked as pure for further
+  analysis
 
-  - Liveness cleanup doesn't feed back into DCE/specialization: instructions
-    cleaned up here can only be dataflow-upstream of other liveness-cleaned-up
-    instructions, which will get also eliminated automatically
+- Flow-sensitive inference: called methods have their return types narrowed
+  according to their input types, and the narrowed return types are then fed
+  downstream and become the narrowed input types of downstream functions
 
-  - Unused arguments can be eliminated from the method signature, and the
-    eliminated arguments can then be returned to the caller: they will be
-    eliminated from the callsite, and used in the caller's analysis to
-    participate in it's liveness cleanup
+## Second pass: method-level liveness analysis interleaved with first pass
 
-- Post-liveness method-level DCE
-  - Delete any methods which were reachable but failed during liveness analysis
+- Walk backwards from method terminals (returns + impure method calls)
 
-  - Doesn't feed back into DCE/specialization or instruction-level liveness
-    cleanup
+- Any instructions that do not turn up in that traversal are not live, and
+  can be stubbed out with POPs + CONST
 
-# Liveness cleanup
+- Pure methods do not count as terminals; if their return value is not used,
+  they can be eliminated
 
-- Core considerations:
-    - Returned values must be computed with the same input
-    - Side effects (both reads & writes!) must happen in the same order
+- Liveness cleanup doesn't feed back into DCE/specialization: instructions
+  cleaned up here can only be dataflow-upstream of other liveness-cleaned-up
+  instructions, which will get also eliminated automatically
 
-Stack/Local bytecode -> Dataflow graph -> Stack/Local bytecode
+- Unused arguments can be eliminated from the method signature, and the
+  eliminated arguments can then be returned to the caller: they will be
+  eliminated from the callsite, and used in the caller's analysis to
+  participate in it's liveness cleanup
 
-- Capture dataflow graph of `LValue`s depending on each other, in
-  `Interpreter[LValue]`
+- Does not feed back into first pass, but does need to take place in a post
+  order traversal similar to the first-pass's pre-order traversal, so it's
+  natural to place it interleaved with the first pass running on every processed
+  method body
 
-- Convert flat list of instructions into controlflow graph of basic blocks
+## Third pass: whole-program DCE for things left behind in second pass
 
-- Within each basic block, each side effecting instruction must be called
-  and in the same original order with the same arguments
+- Delete any methods which were reachable but failed during liveness analysis.
+  We cannot perform this during the first or second passes, because we need all
+  liveness analysis to be finished before we have this information
 
-- Traverse the dataflow graph upstream from all terminal instructions to
-  find the set of live `LValue`s:
+- Doesn't feed back into DCE/specialization or instruction-level liveness
+  cleanup: anything deleted here is already known to be
 
-    - *RETURN VALUE
-    - Method calls to non-pure methods (ARGS...)
-    - PUTSTATIC VALUE
-    - PUTFIELD VALUE, *ASTORE VALUE for escaping objects only
-    - RETURN
+## Fourth pass: method-level bytecode cleanup
 
-- Re-generate the basic block, in order of terminal instructions, in order
-  to ensure each terminal instruction is called with the correct LValues,
-  and the necessary LValues are left on the stack/locals for downstream
-  basic blocks.
-    - Walk dataflow graph upstream from that terminal instruction and find its
-      transitive closure
-        - For terminal instructions which do not require input, they can simply
-          be emitted immediately!
+- Clean up messy bytecodes we left behind in the First and Second passes
 
-        - We treat conditional jumps as a transformation on all values in the
-          frame that passes through it, in order to force them to be included
-          within the dataflow graph. Unconditional jumps are discarded.
+- We performed no significant transformation of the bytecode during those two
+  passes: mostly just omission (e.g. ignoring dead code in the first pass, dead
+  methods in the third), duplication (method-level and block-level specialization
+  in the first pass) or stubbing (constant folding in the first pass, un-live
+  code during the second pass).
 
-    - Find expressions: segments of the subgraph which are tree-shaped:
-      all nodes in the graph have only one downstream use case, except the
-      terminal node which may have one or more.
+- Earlier passes do their job fine without bytecode-level cleanup: specialization,
+  constant folding & method-level liveness analysis. This lets us leave bytecode
+  cleanup to its own phase that specializes in bytecode wrangling
 
-    - Every expression can be evaluated purely on the stack, loading and
-      evaluating sub-expressions smallest-to-largest starting from the left-most
-      smallest expression
-
-    - Evaluation between expressions cannot be evaluated purely on the stack,
-      and must use either local variables, or DUP bytecodes
-
-- Any un-used input arguments are removed from the method signature, and that
-  change propagated to the caller method's callsite.
-
-# Liveness analysis for simple basic-block program:
-
-`add` input:
-
-```
-   L0
-    LINENUMBER 13 L0
-    ILOAD 0
-    ILOAD 1
-    IADD
-    IRETURN (termiinal)
-```
-
-LValues:
-
-
-```
-Local(0)------@IADD-----@IRETURN
-Local(1)------@
-```
-
-
-`simpleIf` Input:
-
-```
-   L0
-    ILOAD 0
-    ILOAD 1
-    IF_ICMPGE L1
-
-    ILOAD 0
-    IRETURN (terminal)
-
-   L1
-    ILOAD 0
-    INEG
-    IRETURN (terminal)
-```
-
-LValues:
-
-```
-Local(1)------@IF_ICMPGE
-Local(0)------@
-STATE0--------@
-
-Local(0)---@IRETURN
-STATE1-----@
-
-Local(0)---@INEG---@IRETURN
-STATE1-------------@
-```
-
-`basicFor` Input:
-
-```
-   L0
-    ICONST_0
-    ISTORE 1
-   L1
-    ICONST_0
-    ISTORE 2
-
-   L2
-    ILOAD 2
-    ILOAD 0
-    IF_ICMPLE L3
-
-    IINC 1 1
-    IINC 2 1
-    GOTO L2
-
-   L3
-    ILOAD 1
-    IRETURN (termiinal)
-```
-
-```
-I(0)----
-I(0)----
-```
+- Can take place on every method independently, in parallel if necessary
