@@ -361,15 +361,9 @@ object MainTests extends TestSuite{
       }
       'InterfacePreservation - {
         'shallow - opt[Int, Int]
-          .check(
-            1 -> 2,
-            2 -> 3
-          )
+          .check(1 -> 2, 2 -> 3)
         'deep - opt[Int, Int]
-          .check(
-            1 -> 3,
-            2 -> 4
-          )
+          .check(1 -> 3, 2 -> 4)
       }
       'ConstantMethod - {
         'int - opt[Boolean, Int]
@@ -388,6 +382,13 @@ object MainTests extends TestSuite{
           .check(true -> false, false -> true)
           .checkPresent("ConstantMethod$.impure")
           .checkMangled("ConstantMethod$.callImpure")
+      }
+
+      'Liveness - {
+        'main - opt[Int, Int]
+          .check(1 -> 2, 2 -> 3)
+          .checkPresent("Liveness$.main")
+          .checkRemoved("Liveness$.pureButNotConstant")
       }
     }
   }
