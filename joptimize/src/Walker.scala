@@ -85,6 +85,7 @@ class Walker(isInterface: JType.Cls => Boolean,
       val terminalInsns = mutable.Buffer.empty[Terminal]
       val labelMapping = mutable.Map.empty[LabelNode, List[LabelNode]]
       var pure: Boolean = sig.name != "<init>" && sig.name != "<clinit>"
+      val subCallArgLiveness = mutable.Map.empty[AbstractInsnNode, Seq[Boolean]]
       def walkBlock(blockStart: AbstractInsnNode,
                     blockState0: Frame[LValue],
                     seenBlocks0: Set[AbstractInsnNode]): (Boolean, InsnList) = {
@@ -266,6 +267,7 @@ class Walker(isInterface: JType.Cls => Boolean,
                   currentFrame.execute(copy, dataflow)
                 } else {
                   var methodPure = true
+                  val argLivenesses = mutable.Buffer.empty[Seq[Boolean]]
                   val (narrowRet, mangled) = mangleMethodCallInsn(
                     currentFrame, copy,
                     static = copy.getOpcode == INVOKESTATIC,
@@ -297,6 +299,13 @@ class Walker(isInterface: JType.Cls => Boolean,
                           seen
                         )
 
+                        if (copy.getOpcode == INVOKESTATIC) argLivenesses.append(walked.liveArgs)
+                        else {
+                          argLivenesses.append(
+                            if (walked.liveArgs.length > 0) walked.liveArgs.updated(0, true)
+                            else Seq(true)
+                          )
+                        }
                         val walkedPure = walked.pure
                         pure &= walkedPure
                         methodPure &= walkedPure
@@ -305,6 +314,8 @@ class Walker(isInterface: JType.Cls => Boolean,
                       }
                     }
                   )
+
+
                   if (!methodPure){
                     terminalInsns.append(Terminal(
                       mangled,
@@ -318,7 +329,10 @@ class Walker(isInterface: JType.Cls => Boolean,
                     insns.foreach(finalInsnList.add)
                     insns.foldLeft(currentFrame)(_.execute(_, dataflow))
                   }else{
+                    val finalArgLiveness = argLivenesses.transpose.map(_.reduce(_ || _))
+                    subCallArgLiveness(mangled.asInstanceOf[MethodInsnNode]) = finalArgLiveness
                     finalInsnList.add(mangled)
+
                     currentFrame.execute(mangled, dataflow)
                   }
                 }
@@ -407,11 +421,15 @@ class Walker(isInterface: JType.Cls => Boolean,
         }else{
           val outputInsns = new InsnList
           visitedBlocks.valuesIterator.foreach(t => outputInsns.add(t._1))
-          Liveness(outputInsns, terminalInsns)
+          Liveness(outputInsns, terminalInsns, subCallArgLiveness.toMap)
         }
 
+      val liveArgs =
+        if (sig.static) sig.desc.args.indices.map(liveArguments)
+        else Seq(true) ++ sig.desc.args.indices.map(_+1).map(liveArguments)
+
       Walker.MethodResult(
-        sig.desc.args.indices.map(liveArguments),
+        liveArgs,
         resultType,
         outputInsns,
         pure

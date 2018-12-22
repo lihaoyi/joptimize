@@ -15,12 +15,28 @@ import collection.JavaConverters._
   */
 object Liveness {
   def apply(insns: InsnList,
-            allTerminals: Seq[Terminal]): (InsnList, Set[Int]) = {
+            allTerminals: Seq[Terminal],
+            subCallArgLiveness: Map[AbstractInsnNode, scala.Seq[Boolean]]): (InsnList, Set[Int]) = {
 
     val (allVertices, roots, downstreamEdges) =
       Util.breadthFirstAggregation[Either[LValue, Terminal]](allTerminals.map(Right(_)).toSet){
-        case Left(x) => (x.upstream ++ x.merges).map(Left[LValue, Terminal])
-        case Right(y) => y.inputs.map(Left[LValue, Terminal])
+        case Left(x) =>
+          x.insn match{
+            case Left(i) => (x.upstream ++ x.merges).map(Left[LValue, Terminal])
+            case Right(insn) =>
+              subCallArgLiveness.get(insn) match{
+                case None => (x.upstream ++ x.merges).map(Left[LValue, Terminal])
+                case Some(liveness) =>
+                  (x.upstream.zip(liveness).collect{case (k, true) => k} ++ x.merges).map(Left[LValue, Terminal])
+              }
+          }
+        case Right(y) =>
+          subCallArgLiveness.get(y.insn) match{
+            case None => y.inputs.map(Left[LValue, Terminal])
+            case Some(liveness) =>
+              y.inputs.zip(liveness).collect{case (k, true) => k}.map(Left[LValue, Terminal])
+          }
+
       }
 
     val allLiveMethodInsns = allVertices
