@@ -8,7 +8,7 @@ import scala.collection.mutable
 object JOptimize{
   def run(classFiles: Map[String, Array[Byte]],
           entrypoints: Seq[MethodSig],
-          eliminateOldMethods: Boolean) = {
+          eliminateOldMethods: Boolean): Map[String, Array[Byte]] = {
 
     val classFileMap = for((k, v) <- classFiles) yield {
       val cr = new ClassReader(v)
@@ -122,21 +122,7 @@ object JOptimize{
       }
     }
 
-    // Discover all interfaces implemented by the visited classes and find all
-    // their super-interfaces. We need to discover these separately as interfaces
-    // do not have an <init> method and if unused won't be picked up by the
-    // abstract interpreter, but still need to be present since they're
-    // implemented by the classes we do use
-    val visitedInterfaces = mutable.Set.empty[String]
-    val queue = newMethods.flatMap(_._1.interfaces.asScala).distinct.to[mutable.Queue]
-    while (queue.nonEmpty){
-      val current = queue.dequeue()
-      if (!visitedInterfaces.contains(current)){
-        visitedInterfaces.add(current)
-        queue.enqueue(classNodeMap(current).interfaces.asScala:_*)
-      }
-    }
-
+    val visitedInterfaces = Util.findSeenInterfaces(classNodeMap, newMethods.map(_._1))
 
     val grouped =
       (visitedInterfaces ++ visitedClasses.map(_.name)).map(classNodeMap(_) -> Nil).toMap ++
@@ -151,9 +137,21 @@ object JOptimize{
       }
 
       cn.methods.addAll(mns.asJava)
-      val cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES)
-      cn.accept(cw)
-      (cn.name + ".class", cw.toByteArray)
     }
+
+    val outClasses = PostLivenessDCE(
+      entrypoints,
+      grouped.keys.toSeq,
+      findSubtypes = subtypeMap.getOrElse(_, Nil),
+      classNodeMap
+    )
+
+    outClasses
+      .map{cn =>
+        val cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES)
+        cn.accept(cw)
+        (cn.name + ".class", cw.toByteArray)
+      }
+      .toMap
   }
 }

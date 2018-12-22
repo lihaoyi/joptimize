@@ -116,4 +116,22 @@ object Util{
       }
     )
   }
+
+  def findSeenInterfaces(classNodeMap: Map[JType.Cls, ClassNode], classNodes: List[ClassNode]) = {
+    // Discover all interfaces implemented by the visited classes and find all
+    // their super-interfaces. We need to discover these separately as interfaces
+    // do not have an <init> method and if unused won't be picked up by the
+    // abstract interpreter, but still need to be present since they're
+    // implemented by the classes we do use
+    val visitedInterfaces = mutable.Set.empty[String]
+    val queue = classNodes.flatMap(_.interfaces.asScala).distinct.to[mutable.Queue]
+    while (queue.nonEmpty) {
+      val current = queue.dequeue()
+      if (!visitedInterfaces.contains(current)) {
+        visitedInterfaces.add(current)
+        queue.enqueue(classNodeMap(current).interfaces.asScala: _*)
+      }
+    }
+    visitedInterfaces
+  }
 }
