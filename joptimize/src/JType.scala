@@ -257,6 +257,7 @@ sealed trait JType extends IType{
   def isRef: Boolean = this.isInstanceOf[JType.Ref]
 
   def widen = this
+  def isConstant = false
 }
 
 object Desc{

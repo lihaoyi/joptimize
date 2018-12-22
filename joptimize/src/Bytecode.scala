@@ -1,14 +1,31 @@
 package joptimize
 import org.objectweb.asm.Opcodes._
+import org.objectweb.asm.tree.{AbstractInsnNode, MethodInsnNode, MultiANewArrayInsnNode}
 /**
-  * Table of stack effects of each bytecode instruction
+  * Table of stack effects of each bytecode instruction. Note that ASM treats
+  * doubles and longs as one slot in the stack, rather than two.
   */
 object Bytecode {
-  sealed trait StackChange
-  case class Fixed(pop: Int, push: Int) extends StackChange
-  case object MultiANewArray extends StackChange
-  case class Invoke(static: Boolean) extends StackChange
-  case class InvokeDynamic() extends StackChange
+  sealed trait StackChange{
+    def push(node: AbstractInsnNode): Int
+    def pop(node: AbstractInsnNode): Int
+  }
+  case class Fixed(pop: Int, push: Int) extends StackChange{
+    def push(node: AbstractInsnNode): Int = push
+    def pop(node: AbstractInsnNode): Int = pop
+  }
+  case object MultiANewArray extends StackChange{
+    def push(node: AbstractInsnNode): Int = 1
+    def pop(node: AbstractInsnNode): Int = node.asInstanceOf[MultiANewArrayInsnNode].dims
+  }
+  case class Invoke(static: Boolean) extends StackChange{
+    def push(node: AbstractInsnNode): Int = 1
+    def pop(node: AbstractInsnNode): Int = Desc.read(node.asInstanceOf[MethodInsnNode].desc).args.size
+  }
+  case class InvokeDynamic() extends StackChange{
+    def push(node: AbstractInsnNode): Int = ???
+    def pop(node: AbstractInsnNode): Int = ???
+  }
   val stackEffect = Map[Int, StackChange](
     (NOP, Fixed(0, 0)),// visitInsn
     (ACONST_NULL, Fixed(0, 1)),// -

@@ -175,14 +175,10 @@ class Walker(isInterface: JType.Cls => Boolean,
                   newInsns.foreach(finalInsnList.add)
                   terminalInsns.append(Terminal(newInsns.last, Seq(currentFrame.stack.last), None))
                   if (!walkNextLabel(nextFrame)) walkInsn(current.getNext, nextFrame)
-                case ARETURN =>
+                case ARETURN | DRETURN | FRETURN | IRETURN | LRETURN =>
                   val n = new InsnNode(current.getOpcode)
                   finalInsnList.add(n)
                   methodReturns.append(currentFrame.stack.last)
-                  terminalInsns.append(Terminal(n, Seq(currentFrame.stack.last), None))
-                case DRETURN | FRETURN | IRETURN | LRETURN =>
-                  val n = new InsnNode(current.getOpcode)
-                  finalInsnList.add(n)
                   terminalInsns.append(Terminal(n, Seq(currentFrame.stack.last), None))
                 case RETURN =>
                   val n = new InsnNode(current.getOpcode)
@@ -238,7 +234,7 @@ class Walker(isInterface: JType.Cls => Boolean,
               )
 
               val argOutCount = Desc.read(current.desc).args.length + (if (current.getOpcode == INVOKESTATIC) 0 else 1)
-              val mangled =
+              val nextFrame1 =
                 if (current.owner.startsWith("java/")) {
                   pure = false
                   terminalInsns.append(Terminal(
@@ -246,8 +242,8 @@ class Walker(isInterface: JType.Cls => Boolean,
                     currentFrame.stack.takeRight(argOutCount),
                     Some(Desc.read(current.desc).ret)
                   ))
-
-                  copy
+                  finalInsnList.add(copy)
+                  currentFrame.execute(copy, dataflow)
                 } else {
                   var methodPure = true
                   val (narrowRet, mangled) = mangleMethodCallInsn(
@@ -296,12 +292,18 @@ class Walker(isInterface: JType.Cls => Boolean,
                       Some(narrowRet)
                     ))
                   }
-                  mangled
+
+                  if (methodPure && narrowRet.isConstant){
+                    val insns = popN(argOutCount) ++ Seq(constantToInstruction(narrowRet.asInstanceOf[IType.Constant]))
+                    insns.foreach(finalInsnList.add)
+                    insns.foldLeft(currentFrame)(_.execute(_, dataflow))
+                  }else{
+                    finalInsnList.add(mangled)
+                    currentFrame.execute(mangled, dataflow)
+                  }
                 }
 
-              finalInsnList.add(mangled)
 
-              val nextFrame1 = currentFrame.execute(mangled, dataflow)
               if (!walkNextLabel(nextFrame1)) walkInsn(current.getNext, nextFrame1)
 
             case current: MultiANewArrayInsnNode =>
@@ -369,12 +371,13 @@ class Walker(isInterface: JType.Cls => Boolean,
 
 //      pprint.log(sig -> "END")
 
+//      pprint.log((sig, pure, methodReturns))
       val resultType =
-        if (methodReturns.isEmpty) sig.desc.ret
+        if (methodReturns.isEmpty) sig.desc.ret // abstract methods have no return insn
         else merge(methodReturns.map(_.tpe))
 
       val outputInsns =
-        if(false){
+        if(true){
           val outputInsns = new InsnList
           visitedBlocks.valuesIterator.foreach(t => outputInsns.add(t._1))
           outputInsns
@@ -388,6 +391,7 @@ class Walker(isInterface: JType.Cls => Boolean,
             initialArgumentLValues
           )
         }
+
 
 
       Walker.MethodResult(
@@ -468,54 +472,51 @@ class Walker(isInterface: JType.Cls => Boolean,
     */
   def constantFold(currentInsn: AbstractInsnNode,
                    currentFrame: Frame[LValue]): (Seq[AbstractInsnNode], Frame[LValue]) = {
-    val stackEffect = Bytecode.stackEffect(currentInsn.getOpcode).asInstanceOf[Fixed]
+    val stackEffect = Bytecode.stackEffect(currentInsn.getOpcode)
     val tentativeNextFrame = currentFrame.execute(currentInsn, dataflow)
     val newInsns =
-      if (stackEffect.push == 1){
+      if (stackEffect.push(currentInsn) == 1){
         tentativeNextFrame.stack.last.tpe match{
-          case IType.I(v) =>
-            popN(stackEffect.pop) ++ Seq(
-              v match{
-                case -1 => new InsnNode(ICONST_M1)
-                case 0 => new InsnNode(ICONST_0)
-                case 1 => new InsnNode(ICONST_1)
-                case 2 => new InsnNode(ICONST_2)
-                case 3 => new InsnNode(ICONST_3)
-                case 4 => new InsnNode(ICONST_4)
-                case 5 => new InsnNode(ICONST_5)
-                case _ => new LdcInsnNode(java.lang.Integer.valueOf(v))
-              }
-            )
-          case IType.J(v) =>
-            popN(stackEffect.pop) ++ Seq(
-              v match{
-                case 0 => new InsnNode(LCONST_0)
-                case 1 => new InsnNode(LCONST_1)
-                case _ => new LdcInsnNode(java.lang.Long.valueOf(v))
-              }
-            )
-          case IType.F(v) =>
-            popN(stackEffect.pop) ++ Seq(
-              v match{
-                case 0 => new InsnNode(FCONST_0)
-                case 1 => new InsnNode(FCONST_1)
-                case 2 => new InsnNode(FCONST_2)
-                case _ => new LdcInsnNode(java.lang.Float.valueOf(v))
-              }
-            )
-          case IType.D(v) =>
-            popN(stackEffect.pop) ++ Seq(
-              v match{
-                case 0 => new InsnNode(DCONST_0)
-                case 1 => new InsnNode(DCONST_1)
-                case _ => new LdcInsnNode(java.lang.Double.valueOf(v))
-              }
-            )
-
+          case const: IType.Constant => popN(stackEffect.pop(currentInsn)) ++ Seq(constantToInstruction(const))
           case _ => Seq(Util.clone(currentInsn, mutable.Map.empty))
         }
       }else Seq(Util.clone(currentInsn, mutable.Map.empty))
     (newInsns, newInsns.foldLeft(currentFrame)(_.execute(_, dataflow)))
+  }
+
+  def constantToInstruction(tpe: IType.Constant) = {
+    tpe match{
+      case IType.I(v) =>
+        v match{
+          case -1 => new InsnNode(ICONST_M1)
+          case 0 => new InsnNode(ICONST_0)
+          case 1 => new InsnNode(ICONST_1)
+          case 2 => new InsnNode(ICONST_2)
+          case 3 => new InsnNode(ICONST_3)
+          case 4 => new InsnNode(ICONST_4)
+          case 5 => new InsnNode(ICONST_5)
+          case _ => new LdcInsnNode(java.lang.Integer.valueOf(v))
+        }
+      case IType.J(v) =>
+        v match{
+          case 0 => new InsnNode(LCONST_0)
+          case 1 => new InsnNode(LCONST_1)
+          case _ => new LdcInsnNode(java.lang.Long.valueOf(v))
+        }
+      case IType.F(v) =>
+        v match{
+          case 0 => new InsnNode(FCONST_0)
+          case 1 => new InsnNode(FCONST_1)
+          case 2 => new InsnNode(FCONST_2)
+          case _ => new LdcInsnNode(java.lang.Float.valueOf(v))
+        }
+      case IType.D(v) =>
+        v match{
+          case 0 => new InsnNode(DCONST_0)
+          case 1 => new InsnNode(DCONST_1)
+          case _ => new LdcInsnNode(java.lang.Double.valueOf(v))
+        }
+    }
   }
 
   def mangleMethodCallInsn(frame: Frame[LValue],

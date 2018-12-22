@@ -305,12 +305,6 @@ object MainTests extends TestSuite{
           .check(true -> 2, false -> 1)
           .checkPresent("BooleanWidening$.invert")
       }
-      'BooleanSpecialization - {
-        'simple - opt[Boolean, Int]
-          .check(true -> 1, false -> 2)
-          .checkMangled("BooleanSpecialization$.call")
-          .checkRemoved("BooleanSpecialization$.call")
-      }
       'InstanceDce - {
         'simple1 - opt[Int, Int, Int]
           .check((1, 2) -> 8)
@@ -376,6 +370,24 @@ object MainTests extends TestSuite{
             1 -> 3,
             2 -> 4
           )
+      }
+      'ConstantMethod - {
+        'int - opt[Boolean, Int]
+          .check(true -> 1, false -> 2)
+          .checkPresent("ConstantMethod$.int")
+          .checkRemoved("ConstantMethod$.callInt")
+          .checkNotMangled("ConstantMethod$.callInt")
+
+        'bool - opt[Boolean, Boolean]
+          .check(true -> false, false -> true)
+          .checkPresent("ConstantMethod$.bool")
+          .checkRemoved("ConstantMethod$.callBool")
+          .checkNotMangled("ConstantMethod$.callBool")
+
+        'impure - opt[Boolean, Boolean]
+          .check(true -> false, false -> true)
+          .checkPresent("ConstantMethod$.impure")
+          .checkMangled("ConstantMethod$.callImpure")
       }
     }
   }
@@ -487,6 +499,15 @@ object MainTests extends TestSuite{
         // That the previously-existing method has been removed
         // And the n>=2 duplicate methods are in place (presumably being used)
         assert(cls2.getMethods.count(_.getName.startsWith(methodName + "__")) >= 2)
+      }
+    }
+
+    def checkNotMangled(sigStrings: String*) = checkWithClassloader{ cl =>
+      for(sigString <- sigStrings) {
+        val (cls2, methodName) = resolveMethod(sigString, cl)
+        // That the previously-existing method has been removed
+        // And the n>=2 duplicate methods are in place (presumably being used)
+        assert(cls2.getMethods.count(_.getName.startsWith(methodName + "__")) == 0)
       }
     }
 

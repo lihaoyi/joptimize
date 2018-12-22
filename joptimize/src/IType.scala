@@ -45,6 +45,7 @@ trait IType extends Frameable[IType]{
     * widen it into a type as represented purely by JVM classes
     */
   def widen: IType
+  def isConstant: Boolean
 }
 
 object IType{
@@ -54,29 +55,33 @@ object IType{
     def name = s"R${classes.length}${classes.map(_.name.replace('/', '_')).mkString("__")}"
     def isRef = true
     def widen = this
+    def isConstant = false
   }
-  case class I(value: Int) extends IType{
+  trait Constant extends IType{
+    def isConstant = true
+  }
+  case class I(value: Int) extends Constant{
     def size = 1
     def isRef = false
     def internalName = s"TI$value;"
     def name = s"TI$value"
     def widen = JType.Prim.I
   }
-  case class J(value: Long) extends IType{
+  case class J(value: Long) extends Constant{
     def size = 2
     def isRef = false
     def internalName = s"TJ$value;"
     def name = s"TJ$value"
     def widen = JType.Prim.J
   }
-  case class F(value: Float) extends IType{
+  case class F(value: Float) extends Constant{
     def size = 1
     def isRef = false
     def internalName = s"TF$value;"
     def name = s"TF$value"
     def widen = JType.Prim.F
   }
-  case class D(value: Double) extends IType{
+  case class D(value: Double) extends Constant{
     def size = 2
     def isRef = false
     def internalName = s"TD$value;"

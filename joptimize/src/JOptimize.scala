@@ -46,17 +46,25 @@ object JOptimize{
     def merge(itypes: Seq[IType]): IType = {
       val flattened = itypes.flatMap{
         case IType.Intersect(values) => values
-        case j: JType => Seq(j)
-      }
-      if (flattened.distinct.length == 1) flattened.head
-      else{
-        assert(flattened.forall(_.isRef))
+        case j => Seq(j)
+      }.distinct
+      if (flattened.length == 1) flattened.head
+      else if (flattened.forall(_.isRef)){
         if (flattened.exists(_.isInstanceOf[JType.Arr])) JType.Cls("java/lang/Object")
         else leastUpperBound(flattened.map(_.asInstanceOf[JType.Cls])) match{
           case Seq(single) => single
           case many => IType.Intersect(many)
         }
       }
+      else if(flattened.forall(_.widen == JType.Prim.Z)) JType.Prim.Z
+      else if(flattened.forall(_.widen == JType.Prim.B)) JType.Prim.B
+      else if(flattened.forall(_.widen == JType.Prim.C)) JType.Prim.C
+      else if(flattened.forall(_.widen == JType.Prim.S)) JType.Prim.S
+      else if(flattened.forall(_.widen == JType.Prim.I)) JType.Prim.I
+      else if(flattened.forall(_.widen == JType.Prim.F)) JType.Prim.F
+      else if(flattened.forall(_.widen == JType.Prim.J)) JType.Prim.J
+      else if(flattened.forall(_.widen == JType.Prim.D)) JType.Prim.D
+      else throw new Exception(flattened.toString)
     }
 
     val visitedClasses = mutable.Set.empty[JType.Cls]
@@ -83,8 +91,9 @@ object JOptimize{
       )
     }
 
-    val newMethods = visitedMethods.toList.map{
-      case ((sig, inferredTypes), Walker.MethodResult(liveArgs, returnType, insns, pure)) =>
+    val newMethods = visitedMethods.toList.collect{
+      case ((sig, inferredTypes), Walker.MethodResult(liveArgs, returnType, insns, pure))
+        if !(pure && returnType.isConstant)=>
 
         val originalNode = originalMethods(sig)
 
