@@ -133,3 +133,85 @@ Stack/Local bytecode -> Dataflow graph -> Stack/Local bytecode
 
 - Any un-used input arguments are removed from the method signature, and that
   change propagated to the caller method's callsite.
+
+# Liveness analysis for simple basic-block program:
+
+`add` input:
+
+```
+   L0
+    LINENUMBER 13 L0
+    ILOAD 0
+    ILOAD 1
+    IADD
+    IRETURN (termiinal)
+```
+
+LValues:
+
+
+```
+Local(0)------@IADD-----@IRETURN
+Local(1)------@
+```
+
+
+`simpleIf` Input:
+
+```
+   L0
+    ILOAD 0
+    ILOAD 1
+    IF_ICMPGE L1
+
+    ILOAD 0
+    IRETURN (terminal)
+
+   L1
+    ILOAD 0
+    INEG
+    IRETURN (terminal)
+```
+
+LValues:
+
+```
+Local(1)------@IF_ICMPGE
+Local(0)------@
+STATE0--------@
+
+Local(0)---@IRETURN
+STATE1-----@
+
+Local(0)---@INEG---@IRETURN
+STATE1-------------@
+```
+
+`basicFor` Input:
+
+```
+   L0
+    ICONST_0
+    ISTORE 1
+   L1
+    ICONST_0
+    ISTORE 2
+
+   L2
+    ILOAD 2
+    ILOAD 0
+    IF_ICMPLE L3
+
+    IINC 1 1
+    IINC 2 1
+    GOTO L2
+
+   L3
+    ILOAD 1
+    IRETURN (termiinal)
+```
+
+```
+I(0)----
+I(0)----
+```

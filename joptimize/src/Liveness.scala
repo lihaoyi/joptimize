@@ -54,30 +54,32 @@ Stack/Local bytecode -> Dataflow graph -> Stack/Local bytecode
 - Any un-used input arguments are removed from the method signature, and that
   change propagated to the caller method's callsite.
 */
-
-/**
-  * Terminal instructions have an instruction, its inputs, and an optional
-  * return type.
-  *
-  * The terminal instruction's return value is not kept track of specially; we
-  * only need to ensure that the terminal instruction is called with the input
-  * in the right order, not that anything in particular happens to the return
-  * value. Anyone who needs the return value will depend on it like any other
-  * LValue in the dataflow graph
-  *
-  * Note that we cannot model terminals as their returned LValue, because some
-  * terminals such as RETURN or void method INVOKEs return nothing.
-  */
-case class Terminal(insn: AbstractInsnNode, inputs: Seq[LValue], ret: Option[IType])
 object Liveness {
+  def tabulateLineNumbers(insns: Seq[AbstractInsnNode]) = {
+    val insnToLineNumber = mutable.Map.empty[AbstractInsnNode, Int]
+    var currentLineNumber = -1
+    val labelToLineNumber = insns.collect{ case l: LineNumberNode => l.start -> l.line}.toMap
+    insns.foreach{
+      case l: LabelNode if labelToLineNumber.contains(l) =>
+        currentLineNumber = labelToLineNumber(l)
+        insnToLineNumber(l) = currentLineNumber
+      case n => insnToLineNumber(n) = currentLineNumber
+    }
+
+    insnToLineNumber.toMap
+  }
+
   def apply(sig: MethodSig,
             basicBlocks: Seq[InsnList],
             allTerminals: Seq[Terminal],
             initialArgumentLValues: Seq[LValue]): InsnList = {
 
-    for(b <- basicBlocks){
-      pprint.log(b.iterator().asScala.toSeq.map(Util.prettyprint))
+    for(bb <- basicBlocks){
+
+
+      pprint.log(bb.iterator().asScala.toSeq.map(Util.prettyprint).mkString("\n"))
     }
+
     // Three states for a node:
     // - Not visited at all
     // - Visited, and delegated to a local
@@ -85,11 +87,18 @@ object Liveness {
     val localsMap = mutable.LinkedHashMap.empty[LValue, Option[Int]]
     for((lv, i) <- initialArgumentLValues.zipWithIndex)localsMap(lv) = Some(i)
 
-    val (_, roots, downstreamEdges) =
+    val (allVertices, roots, downstreamEdges) =
       Util.breadthFirstAggregation[Either[LValue, Terminal]](allTerminals.map(Right(_)).toSet){
         case Left(x) => x.upstream.flatten.map(Left[LValue, Terminal])
         case Right(y) => y.inputs.map(Left[LValue, Terminal])
       }
+
+    val jumpTargets = basicBlocks.flatMap(_.iterator().asScala.toSeq).flatMap{
+      case j: JumpInsnNode => Seq(j.label)
+      case j: TableSwitchInsnNode => Option(j.dflt).toSeq ++ j.labels.asScala
+      case j: LookupSwitchInsnNode => Option(j.dflt).toSeq ++ j.labels.asScala
+      case _ => Nil
+    }.toSet
 
     // Downstream edges from an LValue to either an LValue or a terminal instruction.
     val downstream = downstreamEdges
@@ -110,7 +119,7 @@ object Liveness {
     val oldNewInsnMapping = mutable.Map.empty[AbstractInsnNode, AbstractInsnNode]
 
     for(terminal <- allTerminals){
-//      println("=" * 10 + "WALKING TERMINAL " + terminalInsn + "=" * 10)
+      println("=" * 10 + "WALKING TERMINAL " + Util.prettyprint(terminal.insn).trim + "=" * 10)
       generateBlockTerminalInsns(
         sig,
         terminal.inputs,
@@ -144,7 +153,9 @@ object Liveness {
     oldNewInsnMapping.collect{ case (oldInsn: JumpInsnNode, newInsn: JumpInsnNode) =>
       newInsn.label = oldNewInsnMapping(oldInsn.label).asInstanceOf[LabelNode]
     }
-    outputInsns.iterator().asScala.foreach(p => println(Util.prettyprint(p)))
+
+    pprint.log(outputInsns.iterator().asScala.toSeq.map(Util.prettyprint))
+
     outputInsns
   }
 
@@ -159,10 +170,12 @@ object Liveness {
                                  loadFromLocal: LValue => Option[Option[Int]],
                                  outputInsns: InsnList,
                                  oldNewInsnMapping: mutable.Map[AbstractInsnNode, AbstractInsnNode]): Unit = {
-    def rec(value: LValue): Unit = {
+    def rec(value: LValue, depth: Int): Unit = {
+      println(fansi.Color.Cyan("REC " + "    " * depth + value.insn.map(Util.prettyprint(_).trim)))
       loadFromLocal(value) match{
         // if the value is available in a local, just load it
         case Some(Some(i)) =>
+          pprint.log("A")
           val loadInsn = new VarInsnNode(
             value.tpe.widen match{
               case JType.Prim.I => Opcodes.ILOAD
@@ -174,11 +187,11 @@ object Liveness {
             i
           )
           outputInsns.add(loadInsn)
-        case Some(None) =>
+        case Some(None) => pprint.log("B")
         case None =>
-
+          pprint.log("C")
           // Otherwise, compute the arguments necessary for this value
-          for(valueList <- value.upstream) valueList.foreach(rec)
+          for(valueList <- value.upstream) valueList.foreach(rec(_, depth + 1))
 
           // compute this value using it's instruction
           value.insn.foreach { i =>
@@ -189,7 +202,6 @@ object Liveness {
           }
 
           val stl = saveToLocal(value)
-          pprint.log(value -> stl)
           // and save it to a local if necessary
           stl.foreach{ i =>
             outputInsns.add(new InsnNode(Opcodes.DUP))
@@ -209,7 +221,23 @@ object Liveness {
       }
     }
 
-    terminalValues.foreach(rec)
+    terminalValues.foreach(rec(_, 0))
   }
 }
+
+
+/**
+  * Terminal instructions have an instruction, its inputs, and an optional
+  * return type.
+  *
+  * The terminal instruction's return value is not kept track of specially; we
+  * only need to ensure that the terminal instruction is called with the input
+  * in the right order, not that anything in particular happens to the return
+  * value. Anyone who needs the return value will depend on it like any other
+  * LValue in the dataflow graph
+  *
+  * Note that we cannot model terminals as their returned LValue, because some
+  * terminals such as RETURN or void method INVOKEs return nothing.
+  */
+case class Terminal(insn: AbstractInsnNode, inputs: Seq[LValue], ret: Option[IType])
 

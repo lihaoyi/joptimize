@@ -106,19 +106,19 @@ class Walker(isInterface: JType.Cls => Boolean,
           *
           * - Instruction list of that basic block
           */
-        @tailrec def walkInsn(currentInsn: AbstractInsnNode, currentState: Frame[LValue]): Unit = {
+        @tailrec def walkInsn(currentInsn: AbstractInsnNode, currentFrame: Frame[LValue]): Unit = {
 //          println(Util.prettyprint(currentInsn))
-//          println("    " + currentState)
-          val nextState = currentState.execute(currentInsn, dataflow)
+//          println("    " + currentFrame)
+          val nextFrame = currentFrame.execute(currentInsn, dataflow)
 
           /**
             * Walk the next instruction as a new block, if it is a label. If not
             * then return `false` so we can tail-recursively walk it as a simple
             * instruction
             */
-          def walkNextLabel(nextState1: Frame[LValue] = nextState) = {
+          def walkNextLabel(nextFrame1: Frame[LValue] = nextFrame) = {
             if (currentInsn.getNext.isInstanceOf[LabelNode]) {
-              walkNextBlock(currentInsn.getNext, nextState1)
+              walkNextBlock(currentInsn.getNext, nextFrame1)
               true
             } else false
           }
@@ -141,12 +141,12 @@ class Walker(isInterface: JType.Cls => Boolean,
                 }
               }
               current.getOpcode match{
-                case PUTFIELD | PUTSTATIC => terminalInsns.append(Terminal(n, Seq(currentState.stack.last), None))
+                case PUTFIELD | PUTSTATIC => terminalInsns.append(Terminal(n, Seq(currentFrame.stack.last), None))
                 case GETFIELD | GETSTATIC => terminalInsns.append(Terminal(n, Nil, None))
               }
 //
               finalInsnList.add(n)
-              if (!walkNextLabel()) walkInsn(current.getNext, nextState)
+              if (!walkNextLabel()) walkInsn(current.getNext, nextFrame)
 
             case current: FrameNode =>
               val n = new FrameNode(
@@ -157,68 +157,67 @@ class Walker(isInterface: JType.Cls => Boolean,
                 current.stack.toArray
               )
               finalInsnList.add(n)
-              if (!walkNextLabel()) walkInsn(current.getNext, nextState)
+              if (!walkNextLabel()) walkInsn(current.getNext, nextFrame)
 
             case current: IincInsnNode =>
               finalInsnList.add(new IincInsnNode(current.`var`, current.incr))
-              if (!walkNextLabel()) walkInsn(current.getNext, nextState)
+              if (!walkNextLabel()) walkInsn(current.getNext, nextFrame)
 
             case current: InsnNode =>
               current.getOpcode match{
                 case IASTORE | LASTORE | FASTORE | DASTORE | AASTORE | BASTORE | CASTORE | SASTORE |
                      IALOAD | LALOAD | FALOAD | DALOAD | AALOAD | BALOAD | CALOAD | SALOAD =>
-                  constantFold(currentInsn, new InsnNode(current.getOpcode), nextState, finalInsnList)
-                  terminalInsns.append(Terminal(current, Seq(currentState.stack.last), None))
-                  if (!walkNextLabel()) walkInsn(current.getNext, nextState)
+                  constantFold(currentInsn, new InsnNode(current.getOpcode), nextFrame, finalInsnList)
+                  terminalInsns.append(Terminal(current, Seq(currentFrame.stack.last), None))
+                  if (!walkNextLabel()) walkInsn(current.getNext, nextFrame)
                 case ARETURN =>
                   finalInsnList.add(new InsnNode(current.getOpcode))
-                  methodReturns.append(currentState.stack.last)
-                  terminalInsns.append(Terminal(current, Seq(currentState.stack.last), None))
+                  methodReturns.append(currentFrame.stack.last)
+                  terminalInsns.append(Terminal(current, Seq(currentFrame.stack.last), None))
                 case DRETURN | FRETURN | IRETURN | LRETURN =>
                   finalInsnList.add(new InsnNode(current.getOpcode))
-                  terminalInsns.append(Terminal(current, Seq(currentState.stack.last), None))
+                  terminalInsns.append(Terminal(current, Seq(currentFrame.stack.last), None))
                 case RETURN =>
                   finalInsnList.add(new InsnNode(current.getOpcode))
                   terminalInsns.append(Terminal(current, Seq(), None))
                 case _ =>
-                  constantFold(currentInsn, new InsnNode(current.getOpcode), nextState, finalInsnList)
-                  if (!walkNextLabel()) walkInsn(current.getNext, nextState)
+                  constantFold(currentInsn, new InsnNode(current.getOpcode), nextFrame, finalInsnList)
+                  if (!walkNextLabel()) walkInsn(current.getNext, nextFrame)
               }
 
             case current: IntInsnNode =>
               finalInsnList.add(new IntInsnNode(current.getOpcode, current.operand))
-              if (!walkNextLabel()) walkInsn(current.getNext, nextState)
+              if (!walkNextLabel()) walkInsn(current.getNext, nextFrame)
 
             case current: InvokeDynamicInsnNode => ???
 
             case current: JumpInsnNode =>
               walkJump(
                 walkBlock(_, _, seenBlocks), finalInsnList, walkNextBlock,
-                currentState, nextState, current
+                currentFrame, nextFrame, current
               )
             case current: LabelNode =>
               val newLabel = new LabelNode()
               labelMapping(current) = newLabel :: labelMapping.getOrElse(current, Nil)
               finalInsnList.add(newLabel)
-              val nextState1 = nextState.map(lv => new LValue(lv.tpe, Right(newLabel), mutable.Buffer(Seq(lv))))
-              if (!walkNextLabel(nextState1)) walkInsn(current.getNext, nextState1)
+              if (!walkNextLabel(nextFrame)) walkInsn(current.getNext, nextFrame)
 
             case current: LdcInsnNode =>
               finalInsnList.add(new LdcInsnNode(current.cst))
-              if (!walkNextLabel()) walkInsn(current.getNext, nextState)
+              if (!walkNextLabel()) walkInsn(current.getNext, nextFrame)
 
             case current: LineNumberNode =>
               for(newLabel <- labelMapping.getOrElse(current.start, Nil)){
                 finalInsnList.add(new LineNumberNode(current.line, newLabel))
               }
-              if (!walkNextLabel()) walkInsn(current.getNext, nextState)
+              if (!walkNextLabel()) walkInsn(current.getNext, nextFrame)
 
             case current: LookupSwitchInsnNode =>
               val n = new LookupSwitchInsnNode(null, Array(), Array())
               finalInsnList.add(n)
-              n.dflt = walkBlock(current.dflt, nextState, seenBlocks)._2.getFirst.asInstanceOf[LabelNode]
+              n.dflt = walkBlock(current.dflt, nextFrame, seenBlocks)._2.getFirst.asInstanceOf[LabelNode]
               n.keys = current.keys
-              n.labels = current.labels.asScala.map(walkBlock(_, nextState, seenBlocks)._2.getFirst.asInstanceOf[LabelNode]).asJava
+              n.labels = current.labels.asScala.map(walkBlock(_, nextFrame, seenBlocks)._2.getFirst.asInstanceOf[LabelNode]).asJava
 
             case current: MethodInsnNode =>
               val copy = new MethodInsnNode(
@@ -231,7 +230,7 @@ class Walker(isInterface: JType.Cls => Boolean,
                   pure = false
                   terminalInsns.append(Terminal(
                     current,
-                    currentState.stack.takeRight(argOutCount),
+                    currentFrame.stack.takeRight(argOutCount),
                     Some(Desc.read(current.desc).ret)
                   ))
 
@@ -239,7 +238,7 @@ class Walker(isInterface: JType.Cls => Boolean,
                 } else {
                   var methodPure = true
                   val (narrowRet, mangled) = mangleMethodCallInsn(
-                    currentState, copy,
+                    currentFrame, copy,
                     static = copy.getOpcode == INVOKESTATIC,
                     special = copy.getOpcode == INVOKESPECIAL,
                     recurse = (staticSig, types) => {
@@ -280,7 +279,7 @@ class Walker(isInterface: JType.Cls => Boolean,
                   if (!methodPure){
                     terminalInsns.append(Terminal(
                       mangled,
-                      currentState.stack.takeRight(argOutCount),
+                      currentFrame.stack.takeRight(argOutCount),
                       Some(narrowRet)
                     ))
                   }
@@ -289,29 +288,29 @@ class Walker(isInterface: JType.Cls => Boolean,
 
               finalInsnList.add(mangled)
 
-              val nextState1 = currentState.execute(mangled, dataflow)
-              if (!walkNextLabel(nextState1)) walkInsn(current.getNext, nextState1)
+              val nextFrame1 = currentFrame.execute(mangled, dataflow)
+              if (!walkNextLabel(nextFrame1)) walkInsn(current.getNext, nextFrame1)
 
             case current: MultiANewArrayInsnNode =>
               finalInsnList.add(new MultiANewArrayInsnNode(current.desc, current.dims))
-              if (!walkNextLabel()) walkInsn(current.getNext, nextState)
+              if (!walkNextLabel()) walkInsn(current.getNext, nextFrame)
 
             case current: TableSwitchInsnNode =>
               val n = new TableSwitchInsnNode(current.min, current.max, null)
               finalInsnList.add(n)
-              n.dflt = walkBlock(current.dflt, nextState, seenBlocks)._2.getFirst.asInstanceOf[LabelNode]
-              n.labels = current.labels.asScala.map(walkBlock(_, nextState, seenBlocks)._2.getFirst.asInstanceOf[LabelNode]).asJava
+              n.dflt = walkBlock(current.dflt, nextFrame, seenBlocks)._2.getFirst.asInstanceOf[LabelNode]
+              n.labels = current.labels.asScala.map(walkBlock(_, nextFrame, seenBlocks)._2.getFirst.asInstanceOf[LabelNode]).asJava
 
             case current: TypeInsnNode =>
               visitedClasses.add(JType.Cls(current.desc))
-              constantFold(currentInsn, new TypeInsnNode(current.getOpcode, current.desc), nextState, finalInsnList)
+              constantFold(currentInsn, new TypeInsnNode(current.getOpcode, current.desc), nextFrame, finalInsnList)
 
-              if (!walkNextLabel()) walkInsn(current.getNext, nextState)
+              if (!walkNextLabel()) walkInsn(current.getNext, nextFrame)
 
             case current: VarInsnNode =>
-              constantFold(currentInsn, new VarInsnNode(current.getOpcode, current.`var`), nextState, finalInsnList)
+              constantFold(currentInsn, new VarInsnNode(current.getOpcode, current.`var`), nextFrame, finalInsnList)
 
-              if (!walkNextLabel()) walkInsn(current.getNext, nextState)
+              if (!walkNextLabel()) walkInsn(current.getNext, nextFrame)
           }
         }
         val typeState = blockState.map(_.tpe)
@@ -329,7 +328,7 @@ class Walker(isInterface: JType.Cls => Boolean,
             )
             (false, insns)
           case None =>
-//          println("NEW BLOCK " + (currentInsn, currentState))
+//          println("NEW BLOCK " + (currentInsn, currentFrame))
             visitedBlocks((blockStart, typeState)) = (finalInsnList, blockState)
             lastBlock = Some((blockStart, blockState))
             walkInsn(blockStart, blockState)
@@ -385,21 +384,18 @@ class Walker(isInterface: JType.Cls => Boolean,
   def walkJump(walkBlock: (AbstractInsnNode, Frame[LValue]) => (Boolean, InsnList),
                finalInsnList: InsnList,
                walkNextBlock: (AbstractInsnNode, Frame[LValue]) => InsnList,
-               currentState: Frame[LValue],
-               nextState0: Frame[LValue],
+               currentFrame: Frame[LValue],
+               nextFrame: Frame[LValue],
                current: JumpInsnNode) = {
-    def nextState(newInsn: AbstractInsnNode) = {
-      nextState0.map(lv => new LValue(lv.tpe, Right(newInsn), mutable.Buffer(Seq(lv))))
-    }
     def jumpBlock(pred: Boolean): Unit = {
       popN(finalInsnList, Bytecode.stackEffect(current.getOpcode).asInstanceOf[Fixed].pop)
-      walkNextBlock(if (pred) current.label else current.getNext, nextState0)
+      walkNextBlock(if (pred) current.label else current.getNext, nextFrame)
     }
 
     (
       current.getOpcode,
-      currentState.stack.lift(currentState.stack.length - 1).map(_.tpe),
-      currentState.stack.lift(currentState.stack.length - 2).map(_.tpe)
+      currentFrame.stack.lift(currentFrame.stack.length - 1).map(_.tpe),
+      currentFrame.stack.lift(currentFrame.stack.length - 2).map(_.tpe)
     ) match {
       case (IFEQ, Some(IType.I(i)), _) => jumpBlock(i == 0)
       case (IFNE, Some(IType.I(i)), _) => jumpBlock(i != 0)
@@ -419,9 +415,9 @@ class Walker(isInterface: JType.Cls => Boolean,
         // We don't know how to handle these, so walk both cases
         val n = new JumpInsnNode(current.getOpcode, null)
         finalInsnList.add(n)
-        walkNextBlock(current.getNext, nextState(n))
+        walkNextBlock(current.getNext, nextFrame)
 
-        val (fresh, jumped) = walkBlock(current.label, nextState(n))
+        val (fresh, jumped) = walkBlock(current.label, nextFrame)
 
         n.label = jumped.getFirst.asInstanceOf[LabelNode]
     }
@@ -442,11 +438,11 @@ class Walker(isInterface: JType.Cls => Boolean,
     */
   def constantFold(currentInsn: AbstractInsnNode,
                    newInsn: AbstractInsnNode,
-                   nextState: Frame[LValue],
+                   nextFrame: Frame[LValue],
                    finalInsnList: InsnList) = {
     val stackEffect = Bytecode.stackEffect(currentInsn.getOpcode).asInstanceOf[Fixed]
     if (stackEffect.push == 1){
-      nextState.stack.last.tpe match{
+      nextFrame.stack.last.tpe match{
         case IType.I(v) =>
           popN(finalInsnList, stackEffect.pop)
           finalInsnList.add(
