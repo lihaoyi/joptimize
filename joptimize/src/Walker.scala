@@ -10,6 +10,25 @@ import org.objectweb.asm.tree._
 import scala.annotation.tailrec
 import scala.collection.mutable
 object Walker{
+
+  /**
+    *
+    * @param liveArgs Which of the method's original arguments end up being live:
+    *                 possibly contributing to the execution of the method. Other
+    *                 arguments are candidate for removal since they don't do
+    *                 anything
+    *
+    * @param inferredReturn The return type of the method, narrowed to potentially
+    *                       a more specific value given what we learned from
+    *                       analyzing the method body.
+    *
+    * @param methodBody The optimized instruction list of the optimized method
+    *
+    * @param pure Whether the method's only contribution to the computation is
+    *             its return value: without side effects, IO, or exceptions.
+    *             Such methods are candidates for re-ordering or outright
+    *             elimination if their return value does not end up being used.
+    */
   case class MethodResult(liveArgs: Seq[Boolean],
                           inferredReturn: IType,
                           methodBody: InsnList,
@@ -201,7 +220,7 @@ class Walker(isInterface: JType.Cls => Boolean,
             case current: JumpInsnNode =>
               walkJump(
                 walkBlock(_, _, seenBlocks), finalInsnList, walkNextBlock,
-                currentFrame, current
+                currentFrame, terminalInsns, current
               )
             case current: LabelNode =>
               val newLabel = new LabelNode()
@@ -222,6 +241,7 @@ class Walker(isInterface: JType.Cls => Boolean,
 
             case current: LookupSwitchInsnNode =>
               val n = new LookupSwitchInsnNode(null, Array(), Array())
+              terminalInsns.append(Terminal(n, Seq(currentFrame.stack.last), None))
               finalInsnList.add(n)
               val nextFrame = currentFrame.execute(n, dataflow)
               n.dflt = walkBlock(current.dflt, nextFrame, seenBlocks)._2.getFirst.asInstanceOf[LabelNode]
@@ -316,6 +336,7 @@ class Walker(isInterface: JType.Cls => Boolean,
               val n = new TableSwitchInsnNode(current.min, current.max, null)
               finalInsnList.add(n)
               val nextFrame = currentFrame.execute(n, dataflow)
+              terminalInsns.append(Terminal(n, Seq(currentFrame.stack.last), None))
               n.dflt = walkBlock(current.dflt, nextFrame, seenBlocks)._2.getFirst.asInstanceOf[LabelNode]
               n.labels = current.labels.asScala.map(walkBlock(_, nextFrame, seenBlocks)._2.getFirst.asInstanceOf[LabelNode]).asJava
 
@@ -336,7 +357,7 @@ class Walker(isInterface: JType.Cls => Boolean,
         visitedBlocks.get((blockStart, typeState)) match{
           case Some((insns, frame)) =>
 
-//            println("OLD BLOCK")
+//            println("OLD BLOCK " + sig)
             // When we jump back to a previously visited block with the same
             // typestate, aggregate the upstream LValues of the new jump with
             // those already saved earlier
@@ -344,6 +365,7 @@ class Walker(isInterface: JType.Cls => Boolean,
               insns,
               frame.zipWith(blockState){(x1, x2) => x1.mergeIntoThis(x2)}
             )
+
             (false, insns)
           case None =>
 //          println("NEW BLOCK " + (currentInsn, currentFrame))
@@ -358,13 +380,14 @@ class Walker(isInterface: JType.Cls => Boolean,
 
       val initialArgumentLValues = args
         .zipWithIndex
-        .map{case (a, i) => new LValue(a, Left(i), mutable.Buffer())}
+        .map{case (a, i) => new LValue(a, Left(i), Nil, mutable.Buffer())}
+
       walkBlock(
         insns.getFirst,
         Frame.initial(
           maxLocals, maxStack,
           initialArgumentLValues,
-          new LValue(JType.Null, Left(-1), mutable.Buffer())
+          new LValue(JType.Null, Left(-1), Nil, mutable.Buffer())
         ),
         Set()
       )
@@ -376,26 +399,19 @@ class Walker(isInterface: JType.Cls => Boolean,
         if (methodReturns.isEmpty) sig.desc.ret // abstract methods have no return insn
         else merge(methodReturns.map(_.tpe))
 
-      val outputInsns =
-        if(true){
+      val (outputInsns, liveArguments) =
+        if(false){
           val outputInsns = new InsnList
           visitedBlocks.valuesIterator.foreach(t => outputInsns.add(t._1))
-          outputInsns
+          (outputInsns, (_: Any) => true)
         }else{
-
-          Liveness(
-            maxLocals, maxStack,
-            sig,
-            visitedBlocks.values.map(_._1).toSeq,
-            terminalInsns,
-            initialArgumentLValues
-          )
+          val outputInsns = new InsnList
+          visitedBlocks.valuesIterator.foreach(t => outputInsns.add(t._1))
+          Liveness(outputInsns, terminalInsns)
         }
 
-
-
       Walker.MethodResult(
-        sig.desc.args.map(_ => true),
+        sig.desc.args.indices.map(liveArguments),
         resultType,
         outputInsns,
         pure
@@ -415,6 +431,7 @@ class Walker(isInterface: JType.Cls => Boolean,
                finalInsnList: InsnList,
                walkNextBlock: (AbstractInsnNode, Frame[LValue]) => InsnList,
                currentFrame: Frame[LValue],
+               terminalInsns: mutable.Buffer[Terminal],
                current: JumpInsnNode) = {
     def jumpBlock(pred: Boolean): Unit = {
       val popInsns = popN(Bytecode.stackEffect(current.getOpcode).asInstanceOf[Fixed].pop)
@@ -448,6 +465,7 @@ class Walker(isInterface: JType.Cls => Boolean,
         // We don't know how to handle these, so walk both cases
         val n = new JumpInsnNode(current.getOpcode, null)
         finalInsnList.add(n)
+        terminalInsns.append(Terminal(n, Seq(currentFrame.stack.last), None))
         val nextFrame = currentFrame.execute(n, dataflow)
         walkNextBlock(current.getNext, nextFrame)
 
