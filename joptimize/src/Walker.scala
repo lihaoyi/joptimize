@@ -9,31 +9,7 @@ import org.objectweb.asm.tree._
 
 import scala.annotation.tailrec
 import scala.collection.mutable
-object Walker{
 
-  /**
-    *
-    * @param liveArgs Which of the method's original arguments end up being live:
-    *                 possibly contributing to the execution of the method. Other
-    *                 arguments are candidate for removal since they don't do
-    *                 anything
-    *
-    * @param inferredReturn The return type of the method, narrowed to potentially
-    *                       a more specific value given what we learned from
-    *                       analyzing the method body.
-    *
-    * @param methodBody The optimized instruction list of the optimized method
-    *
-    * @param pure Whether the method's only contribution to the computation is
-    *             its return value: without side effects, IO, or exceptions.
-    *             Such methods are candidates for re-ordering or outright
-    *             elimination if their return value does not end up being used.
-    */
-  case class MethodResult(liveArgs: Seq[Boolean],
-                          inferredReturn: IType,
-                          methodBody: InsnList,
-                          pure: Boolean)
-}
 class Walker(isInterface: JType.Cls => Boolean,
              lookupMethod: MethodSig => Option[MethodNode],
              visitedMethods: mutable.Map[(MethodSig, Seq[IType]), Walker.MethodResult],
@@ -325,7 +301,7 @@ class Walker(isInterface: JType.Cls => Boolean,
                   }
 
                   if (methodPure && narrowRet.isConstant){
-                    val insns = popN(argOutCount) ++ Seq(constantToInstruction(narrowRet.asInstanceOf[IType.Constant]))
+                    val insns = popN(argOutCount) ++ Seq(Util.constantToInstruction(narrowRet.asInstanceOf[IType.Constant]))
                     insns.foreach(finalInsnList.add)
                     insns.foldLeft(currentFrame)(_.execute(_, dataflow))
                   }else{
@@ -452,7 +428,7 @@ class Walker(isInterface: JType.Cls => Boolean,
                terminalInsns: mutable.Buffer[Terminal],
                current: JumpInsnNode) = {
     def jumpBlock(pred: Boolean): Unit = {
-      val popInsns = popN(Bytecode.stackEffect(current.getOpcode).asInstanceOf[Fixed].pop)
+      val popInsns = popN(Bytecode.stackEffect(current.getOpcode).pop(current))
 
       popInsns.foreach(finalInsnList.add)
 
@@ -513,46 +489,11 @@ class Walker(isInterface: JType.Cls => Boolean,
     val newInsns =
       if (stackEffect.push(currentInsn) == 1){
         tentativeNextFrame.stack.last.tpe match{
-          case const: IType.Constant => popN(stackEffect.pop(currentInsn)) ++ Seq(constantToInstruction(const))
+          case const: IType.Constant => popN(stackEffect.pop(currentInsn)) ++ Seq(Util.constantToInstruction(const))
           case _ => Seq(Util.clone(currentInsn, mutable.Map.empty))
         }
       }else Seq(Util.clone(currentInsn, mutable.Map.empty))
     (newInsns, newInsns.foldLeft(currentFrame)(_.execute(_, dataflow)))
-  }
-
-  def constantToInstruction(tpe: IType.Constant) = {
-    tpe match{
-      case IType.I(v) =>
-        v match{
-          case -1 => new InsnNode(ICONST_M1)
-          case 0 => new InsnNode(ICONST_0)
-          case 1 => new InsnNode(ICONST_1)
-          case 2 => new InsnNode(ICONST_2)
-          case 3 => new InsnNode(ICONST_3)
-          case 4 => new InsnNode(ICONST_4)
-          case 5 => new InsnNode(ICONST_5)
-          case _ => new LdcInsnNode(java.lang.Integer.valueOf(v))
-        }
-      case IType.J(v) =>
-        v match{
-          case 0 => new InsnNode(LCONST_0)
-          case 1 => new InsnNode(LCONST_1)
-          case _ => new LdcInsnNode(java.lang.Long.valueOf(v))
-        }
-      case IType.F(v) =>
-        v match{
-          case 0 => new InsnNode(FCONST_0)
-          case 1 => new InsnNode(FCONST_1)
-          case 2 => new InsnNode(FCONST_2)
-          case _ => new LdcInsnNode(java.lang.Float.valueOf(v))
-        }
-      case IType.D(v) =>
-        v match{
-          case 0 => new InsnNode(DCONST_0)
-          case 1 => new InsnNode(DCONST_1)
-          case _ => new LdcInsnNode(java.lang.Double.valueOf(v))
-        }
-    }
   }
 
   def mangleMethodCallInsn(frame: Frame[LValue],
@@ -632,4 +573,30 @@ class Walker(isInterface: JType.Cls => Boolean,
       })
     }
   }
+}
+
+object Walker{
+
+  /**
+    *
+    * @param liveArgs Which of the method's original arguments end up being live:
+    *                 possibly contributing to the execution of the method. Other
+    *                 arguments are candidate for removal since they don't do
+    *                 anything
+    *
+    * @param inferredReturn The return type of the method, narrowed to potentially
+    *                       a more specific value given what we learned from
+    *                       analyzing the method body.
+    *
+    * @param methodBody The optimized instruction list of the optimized method
+    *
+    * @param pure Whether the method's only contribution to the computation is
+    *             its return value: without side effects, IO, or exceptions.
+    *             Such methods are candidates for re-ordering or outright
+    *             elimination if their return value does not end up being used.
+    */
+  case class MethodResult(liveArgs: Seq[Boolean],
+                          inferredReturn: IType,
+                          methodBody: InsnList,
+                          pure: Boolean)
 }

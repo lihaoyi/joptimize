@@ -3,6 +3,7 @@ package joptimize
 import java.io.PrintWriter
 import java.io.StringWriter
 
+import org.objectweb.asm.Opcodes._
 import org.objectweb.asm.tree._
 import org.objectweb.asm.util.{Textifier, TraceMethodVisitor}
 
@@ -134,4 +135,41 @@ object Util{
     }
     visitedInterfaces
   }
+
+
+  def constantToInstruction(tpe: IType.Constant) = {
+    tpe match{
+      case IType.I(v) =>
+        v match{
+          case -1 => new InsnNode(ICONST_M1)
+          case 0 => new InsnNode(ICONST_0)
+          case 1 => new InsnNode(ICONST_1)
+          case 2 => new InsnNode(ICONST_2)
+          case 3 => new InsnNode(ICONST_3)
+          case 4 => new InsnNode(ICONST_4)
+          case 5 => new InsnNode(ICONST_5)
+          case _ => new LdcInsnNode(java.lang.Integer.valueOf(v))
+        }
+      case IType.J(v) =>
+        v match{
+          case 0 => new InsnNode(LCONST_0)
+          case 1 => new InsnNode(LCONST_1)
+          case _ => new LdcInsnNode(java.lang.Long.valueOf(v))
+        }
+      case IType.F(v) =>
+        v match{
+          case 0 => new InsnNode(FCONST_0)
+          case 1 => new InsnNode(FCONST_1)
+          case 2 => new InsnNode(FCONST_2)
+          case _ => new LdcInsnNode(java.lang.Float.valueOf(v))
+        }
+      case IType.D(v) =>
+        v match{
+          case 0 => new InsnNode(DCONST_0)
+          case 1 => new InsnNode(DCONST_1)
+          case _ => new LdcInsnNode(java.lang.Double.valueOf(v))
+        }
+    }
+  }
+
 }
