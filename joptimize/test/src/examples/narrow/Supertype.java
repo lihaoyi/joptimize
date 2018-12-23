@@ -1,20 +1,28 @@
 package joptimize.examples.narrow;
 
-class Supertype{
-  static int main(int x, int y){
-    return call(new Bar(), x) + call(new Qux(), y);
-    // (x + 1) + (y + 2)
-  }
+class Supertype {
+    static int main(int x, int y) {
+        return call(new Bar(), x) + call(new Qux(), y);
+        // (x + 1) + (y + 2)
+    }
 
-  static int call(Foo f, int n){ return f.inc(n); }
+    static int call(Foo f, int n) {
+        return f.inc(n);
+    }
 
-    interface Foo{
+    interface Foo {
         int inc(int n);
     }
-    static class Bar implements Foo{
-        public int inc(int n){ return n + 1; }
+
+    static class Bar implements Foo {
+        public int inc(int n) {
+            return n + 1;
+        }
     }
-    static class Qux implements Foo{
-        public int inc(int n){ return n + 2; }
+
+    static class Qux implements Foo {
+        public int inc(int n) {
+            return n + 2;
+        }
     }
 }
