@@ -255,8 +255,8 @@ object MainTests extends TestSuite{
       'SimpleDce - {
         'main - opt[Int, Int, Int]
           .check((1, 2) -> 6)
-          .checkPresent("SimpleDce$.call1", "SimpleDce$.call2")
-          .checkRemoved("SimpleDce$.call3")
+          .checkPresent("SimpleDce.call1", "SimpleDce.call2")
+          .checkRemoved("SimpleDce.call3")
       }
       'BooleanJumpFlatten - {
         'simpleTrue - opt[Int, Int, Int]
@@ -387,18 +387,18 @@ object MainTests extends TestSuite{
       'Liveness - {
         'main - opt[Int, Int]
           .check(1 -> 2, 2 -> 3)
-          .checkPresent("Liveness$.main")
-          .checkRemoved("Liveness$.pureButNotConstant")
+          .checkPresent("Liveness.main")
+          .checkRemoved("Liveness.pureButNotConstant")
 
         'main2a - opt[Int, Int]
           .check(1 -> 0, 2 -> 1)
-          .checkPresent("Liveness$.main2a", "Liveness$.pureButNotConstant")
-          .checkRemoved("Liveness$.pureButNotConstant2")
+          .checkPresent("Liveness.main2a", "Liveness.pureButNotConstant")
+          .checkRemoved("Liveness.pureButNotConstant2")
 
         'main2b - opt[Int, Int]
           .check(1 -> 2, 2 -> 3)
-          .checkPresent("Liveness$.main2b", "Liveness$.pureButNotConstant2")
-          .checkRemoved("Liveness$.pureButNotConstant")
+          .checkPresent("Liveness.main2b", "Liveness.pureButNotConstant2")
+          .checkRemoved("Liveness.pureButNotConstant")
       }
     }
   }
@@ -454,7 +454,8 @@ object MainTests extends TestSuite{
     def check0(cases: (Any, Any)*) = {
       for ((args, expected) <- cases) checkWithClassloader{ cl =>
         val cls = cl.loadClass(s"joptimize.examples.${tp.value.dropRight(1).mkString(".")}")
-        val method = cls.getMethod(tp.value.last, argClasses: _*)
+        val method = cls.getDeclaredMethod(tp.value.last, argClasses: _*)
+        method.setAccessible(true)
         val argsList = args match {
           case () => Nil
           case p: Product => p.productIterator.toSeq
@@ -500,7 +501,7 @@ object MainTests extends TestSuite{
       for(sigString <- sigStrings) {
         val (cls2, methodName) = resolveMethod(sigString, cl)
         // That the previously-existing method has been removed
-        assert(cls2.getMethods.exists(_.getName == methodName))
+        assert(cls2.getDeclaredMethods.exists(_.getName == methodName))
       }
     }
 
@@ -509,7 +510,7 @@ object MainTests extends TestSuite{
         val (cls2, methodName) = resolveMethod(sigString, cl)
         // That the previously-existing method has been removed
         // And the n>=2 duplicate methods are in place (presumably being used)
-        assert(cls2.getMethods.count(_.getName.startsWith(methodName + "__")) >= 2)
+        assert(cls2.getDeclaredMethods.count(_.getName.startsWith(methodName + "__")) >= 2)
       }
     }
 
@@ -518,7 +519,7 @@ object MainTests extends TestSuite{
         val (cls2, methodName) = resolveMethod(sigString, cl)
         // That the previously-existing method has been removed
         // And the n>=2 duplicate methods are in place (presumably being used)
-        assert(cls2.getMethods.count(_.getName.startsWith(methodName + "__")) == 0)
+        assert(cls2.getDeclaredMethods.count(_.getName.startsWith(methodName + "__")) == 0)
       }
     }
 
@@ -526,7 +527,7 @@ object MainTests extends TestSuite{
       for(sigString <- sigStrings){
         val (cls2, methodName) = resolveMethod(sigString, cl)
         // That the previously-existing method has been removed
-        assert(!cls2.getMethods.exists(_.getName == methodName))
+        assert(!cls2.getDeclaredMethods.exists(_.getName == methodName))
       }
     }
   }

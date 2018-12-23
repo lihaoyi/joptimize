@@ -614,11 +614,12 @@ class Walker(isInterface: JType.Cls => Boolean,
         }
 
       // Owner type changed! We may need to narrow from an invokeinterface to an invokevirtual
-      val newOwner = JType.fromIType(
-        frame.stack(frame.stack.length - originalTypes.map(_.getSize).sum).tpe,
-        JType.Cls(called.owner)
-      ).name
-
+      val newOwner =
+        if (static) called.owner
+        else JType.fromIType(
+          frame.stack(frame.stack.length - originalTypes.map(_.getSize).sum).tpe,
+          JType.Cls(called.owner)
+        ).name
 
       (narrowReturnType, (isInterface(called.owner), isInterface(newOwner)) match{
         case (false, true) => ??? // cannot widen interface into class!
