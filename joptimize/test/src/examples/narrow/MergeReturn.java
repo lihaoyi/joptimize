@@ -9,4 +9,14 @@ class MergeReturn {
     if (x > y) return new Bar();
     else return new Qux();
   }
+
+    interface Foo{
+        int inc(int n);
+    }
+    static class Bar implements Foo{
+        public int inc(int n){ return n + 1; }
+    }
+    static class Qux implements Foo{
+        public int inc(int n){ return n + 2; }
+    }
 }

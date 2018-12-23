@@ -21,6 +21,5 @@ class IntersectionReturn {
     static class  Qux implements Foo1, Foo2{
         public int inc(int n) { return n + 2; }
     }
-
 }
 

@@ -8,4 +8,14 @@ class Parametric2 {
 
   static <T extends Foo> int call(T f, int n){ return call2(f, n); }
   static <T extends Foo> int call2(T f, int n){ return f.inc(n); }
+
+    interface Foo{
+        int inc(int n);
+    }
+    static class Bar implements Foo{
+        public int inc(int n){ return n + 1; }
+    }
+    static class Qux implements Foo{
+        public int inc(int n){ return n + 2; }
+    }
 }
