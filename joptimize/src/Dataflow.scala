@@ -54,11 +54,22 @@ class Dataflow(merge0: Seq[IType] => IType) extends Interpreter[LValue](ASM4){
     mutable.Buffer()
   )
 
-  // We do not record any of the copy operations in the LValue dataflow graph
-  // that we construct during abstract interpretation. Those do not meaningfully
-  // affect the shape of the graph, and we will generate our own copy operations
-  // as-necessary when serializing the graph back out to bytecode
-  def copyOperation(insn: AbstractInsnNode, value: LValue) = value
+
+  def copyOperation(insn: AbstractInsnNode, value: LValue) = insn.getOpcode match{
+    case ILOAD | LLOAD | FLOAD | DLOAD | ALOAD =>
+      new LValue(
+        value.tpe,
+        Right(insn),
+        Seq(value),
+        mutable.Buffer()
+      )
+    // We do not record any of these copy operations in the LValue dataflow graph
+    // that we construct during abstract interpretation. Those do not meaningfully
+    // affect the shape of the graph, and we will generate our own copy operations
+    // as-necessary when serializing the graph back out to bytecode
+    case ISTORE | LSTORE | FSTORE | DSTORE | ASTORE | DUP | DUP_X1 | DUP_X2 | DUP2 | DUP2_X1 | DUP2_X2 | SWAP =>
+      value
+  }
 
   def unaryOperation(insn: AbstractInsnNode, value: LValue) = new LValue(
     insn.getOpcode match {

@@ -401,19 +401,34 @@ object MainTests extends TestSuite{
       }
 
       'Liveness - {
-        'main - opt[Int, Int]
+        'simple - opt[Int, Int]
           .check(1 -> 2, 2 -> 3)
-          .checkPresent("Liveness.main")
+          .checkPresent("Liveness.simple")
           .checkRemoved("Liveness.pureButNotConstant")
 
-        'main2a - opt[Int, Int]
+        'simple2a - opt[Int, Int]
           .check(1 -> 0, 2 -> 1)
-          .checkPresent("Liveness.main2a", "Liveness.pureButNotConstant")
+          .checkPresent("Liveness.simple2a", "Liveness.pureButNotConstant")
           .checkRemoved("Liveness.pureButNotConstant2")
 
-        'main2b - opt[Int, Int]
+        'simple2b - opt[Int, Int]
           .check(1 -> 2, 2 -> 3)
-          .checkPresent("Liveness.main2b", "Liveness.pureButNotConstant2")
+          .checkPresent("Liveness.simple2b", "Liveness.pureButNotConstant2")
+          .checkRemoved("Liveness.pureButNotConstant")
+
+        'chained - opt[Int, Int]
+          .check(1 -> 2, 2 -> 3)
+          .checkPresent("Liveness.chained")
+          .checkRemoved("Liveness.pureButNotConstant")
+
+        'chained2a - opt[Int, Int]
+          .check(1 -> 0, 2 -> 1)
+          .checkPresent("Liveness.chained2a", "Liveness.pureButNotConstant")
+          .checkRemoved("Liveness.pureButNotConstant2")
+
+        'chained2b - opt[Int, Int]
+          .check(1 -> 2, 2 -> 3)
+          .checkPresent("Liveness.chained2b", "Liveness.pureButNotConstant2")
           .checkRemoved("Liveness.pureButNotConstant")
       }
     }

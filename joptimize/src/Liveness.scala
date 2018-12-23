@@ -14,6 +14,7 @@ import collection.JavaConverters._
   * downstream will also get similarly stubbed out
   */
 object Liveness {
+
   def apply(insns: InsnList,
             allTerminals: Seq[Terminal],
             subCallArgLiveness: Map[AbstractInsnNode, scala.Seq[Boolean]]): (InsnList, Set[Int]) = {
@@ -39,9 +40,9 @@ object Liveness {
 
       }
 
-    val allLiveMethodInsns = allVertices
+    val allLiveInsns = allVertices
       .collect{case Left(lv) => lv.insn}
-      .collect{case Right(mn: MethodInsnNode) => mn}
+      .collect{case Right(mn) => mn}
 
     val liveArgumentIndices = roots
       .collect{case Left(lv) => lv.insn}
@@ -49,7 +50,7 @@ object Liveness {
 
     for (insn <- insns.iterator().asScala){
       insn match{
-        case mn: MethodInsnNode if !allLiveMethodInsns.contains(mn) && mn.name != "<init>" =>
+        case mn: MethodInsnNode if !allLiveInsns.contains(mn) && mn.name != "<init>" =>
           val desc = Desc.read(mn.desc)
           val argOutCount = desc.args.length + (if (mn.getOpcode == Opcodes.INVOKESTATIC) 0 else 1)
           for(_ <- 0 until argOutCount) insns.insertBefore(mn, new InsnNode(Opcodes.POP))
@@ -63,6 +64,25 @@ object Liveness {
           }))
           insns.remove(mn)
 
+        case current: InsnNode
+          if !allLiveInsns.contains(current)
+          && Bytecode.stackEffect(current.getOpcode).push(current) == 1 =>
+          for(_ <- 0 until Bytecode.stackEffect(current.getOpcode).pop(current)) {
+            insns.insertBefore(current, new InsnNode(Opcodes.POP))
+          }
+          insns.insertBefore(current,
+            new InsnNode(
+              Bytecode.stackEffect(current.getOpcode).nullType(current).get match{
+                case JType.Prim.Z | JType.Prim.B | JType.Prim.C | JType.Prim.S | JType.Prim.I =>
+                  Opcodes.ICONST_0
+                case JType.Prim.F => Opcodes.FCONST_0
+                case JType.Prim.J => Opcodes.LCONST_0
+                case JType.Prim.D => Opcodes.DCONST_0
+                case _ => Opcodes.ACONST_NULL
+              }
+            )
+          )
+          insns.remove(current)
         case _ => //do nothing
       }
     }

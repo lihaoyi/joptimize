@@ -169,7 +169,14 @@ class Walker(isInterface: JType.Cls => Boolean,
                   val (newInsns, nextFrame) = constantFold(currentInsn, currentFrame)
 
                   newInsns.foreach(finalInsnList.add)
-                  terminalInsns.append(Terminal(newInsns.last, Seq(currentFrame.stack.last), None))
+                  terminalInsns.append(Terminal(
+                    newInsns.last,
+                    currentFrame.stack.takeRight(
+                      Bytecode.stackEffect(currentInsn.getOpcode).pop(currentInsn)
+                    ),
+                    None
+                  ))
+
                   if (!walkNextLabel(nextFrame)) walkInsn(current.getNext, nextFrame)
                 case ARETURN | DRETURN | FRETURN | IRETURN | LRETURN =>
                   val n = new InsnNode(current.getOpcode)
@@ -250,7 +257,13 @@ class Walker(isInterface: JType.Cls => Boolean,
                     special = copy.getOpcode == INVOKESPECIAL,
                     recurse = (staticSig, types) => {
 
-                      if (seen((staticSig, types))) staticSig.desc.ret
+                      if (seen((staticSig, types))) {
+                        // When we hit recursive methods, simply assume that
+                        // they are impure and that all their arguments are live.
+                        methodPure = false
+                        argLivenesses.append(Seq.fill(argOutCount)(true))
+                        staticSig.desc.ret
+                      }
                       else {
                         val clinitSig = MethodSig(staticSig.cls, "<clinit>", Desc.read("()V"), true)
                         if (!seen.contains((clinitSig, Nil))) {
@@ -275,10 +288,12 @@ class Walker(isInterface: JType.Cls => Boolean,
                           seen
                         )
 
-                        if (copy.getOpcode == INVOKESTATIC) argLivenesses.append(walked.liveArgs)
+                        if (copy.getOpcode == INVOKESTATIC) {
+                          argLivenesses.append(walked.liveArgs)
+                        }
                         else {
                           argLivenesses.append(
-                            if (walked.liveArgs.length > 0) walked.liveArgs.updated(0, true)
+                            if (walked.liveArgs.nonEmpty) walked.liveArgs.updated(0, true)
                             else Seq(true)
                           )
                         }
@@ -459,7 +474,11 @@ class Walker(isInterface: JType.Cls => Boolean,
         // We don't know how to handle these, so walk both cases
         val n = new JumpInsnNode(current.getOpcode, null)
         finalInsnList.add(n)
-        terminalInsns.append(Terminal(n, Seq(currentFrame.stack.last), None))
+        terminalInsns.append(Terminal(
+          n,
+          currentFrame.stack.takeRight(Bytecode.stackEffect(current.getOpcode).pop(current)),
+          None
+        ))
         val nextFrame = currentFrame.execute(n, dataflow)
         walkNextBlock(current.getNext, nextFrame)
 

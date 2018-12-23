@@ -9,56 +9,66 @@ object Bytecode {
   sealed trait StackChange{
     def push(node: AbstractInsnNode): Int
     def pop(node: AbstractInsnNode): Int
+    def nullType(node: AbstractInsnNode): Option[JType]
   }
-  case class Fixed(pop: Int, push: Int) extends StackChange{
+  case class Fixed(pop: Int, push: Int, pushType: JType = null) extends StackChange{
     def push(node: AbstractInsnNode): Int = push
     def pop(node: AbstractInsnNode): Int = pop
+    def nullType(node: AbstractInsnNode) = Option(pushType)
+  }
+  case class Ldc(pop: Int, push: Int, pushType: JType = null) extends StackChange{
+    def push(node: AbstractInsnNode): Int = push
+    def pop(node: AbstractInsnNode): Int = pop
+    def nullType(node: AbstractInsnNode) = Option(pushType)
   }
   case object MultiANewArray extends StackChange{
     def push(node: AbstractInsnNode): Int = 1
     def pop(node: AbstractInsnNode): Int = node.asInstanceOf[MultiANewArrayInsnNode].dims
+    def nullType(node: AbstractInsnNode) = Some(JType.read(node.asInstanceOf[MultiANewArrayInsnNode].desc))
   }
   case class Invoke(static: Boolean) extends StackChange{
     def push(node: AbstractInsnNode): Int = 1
     def pop(node: AbstractInsnNode): Int = Desc.read(node.asInstanceOf[MethodInsnNode].desc).args.size
+    def nullType(node: AbstractInsnNode) = Some(Desc.read(node.asInstanceOf[MethodInsnNode].desc).ret)
   }
   case class InvokeDynamic() extends StackChange{
     def push(node: AbstractInsnNode): Int = ???
     def pop(node: AbstractInsnNode): Int = ???
+    def nullType(node: AbstractInsnNode) = ???
   }
   val stackEffect = Map[Int, StackChange](
     (NOP, Fixed(0, 0)),// visitInsn
-    (ACONST_NULL, Fixed(0, 1)),// -
-    (ICONST_M1, Fixed(0, 1)),
-    (ICONST_0, Fixed(0, 1)),
-    (ICONST_1, Fixed(0, 1)),
-    (ICONST_2, Fixed(0, 1)),
-    (ICONST_3, Fixed(0, 1)),
-    (ICONST_4, Fixed(0, 1)),
-    (ICONST_5, Fixed(0, 1)),
-    (LCONST_0, Fixed(0, 1)),
-    (LCONST_1, Fixed(0, 1)),
-    (FCONST_0, Fixed(0, 1)),
-    (FCONST_1, Fixed(0, 1)),
-    (FCONST_2, Fixed(0, 1)),
-    (DCONST_0, Fixed(0, 1)),
-    (DCONST_1, Fixed(0, 1)),
-    (BIPUSH, Fixed(0, 1)),// visitIntInsn
-    (SIPUSH, Fixed(0, 1)),
+    (ACONST_NULL, Fixed(0, 1, JType.Null)),// -
+    (ICONST_M1, Fixed(0, 1, JType.Prim.I)),
+    (ICONST_0, Fixed(0, 1, JType.Prim.I)),
+    (ICONST_1, Fixed(0, 1, JType.Prim.I)),
+    (ICONST_2, Fixed(0, 1, JType.Prim.I)),
+    (ICONST_3, Fixed(0, 1, JType.Prim.I)),
+    (ICONST_4, Fixed(0, 1, JType.Prim.I)),
+    (ICONST_5, Fixed(0, 1, JType.Prim.I)),
+    (LCONST_0, Fixed(0, 1, JType.Prim.J)),
+    (LCONST_1, Fixed(0, 1, JType.Prim.J)),
+    (FCONST_0, Fixed(0, 1, JType.Prim.F)),
+    (FCONST_1, Fixed(0, 1, JType.Prim.F)),
+    (FCONST_2, Fixed(0, 1, JType.Prim.F)),
+    (DCONST_0, Fixed(0, 1, JType.Prim.D)),
+    (DCONST_1, Fixed(0, 1, JType.Prim.D)),
+    (BIPUSH, Fixed(0, 1, JType.Prim.I)),// visitIntInsn
+    (SIPUSH, Fixed(0, 1, JType.Prim.I)),
     (LDC, Fixed(0, 1)),// visitLdcInsn
-    (ILOAD, Fixed(0, 1)),// visitVarInsn
-    (LLOAD, Fixed(0, 1)),
-    (FLOAD, Fixed(0, 1)),
-    (DLOAD, Fixed(0, 1)),
-    (ALOAD, Fixed(0, 1)),
-    (IALOAD, Fixed(2, 1)),
-    (LALOAD, Fixed(2, 1)),
-    (FALOAD, Fixed(2, 1)),
-    (DALOAD, Fixed(2, 1)),
-    (AALOAD, Fixed(2, 1)),
-    (BALOAD, Fixed(2, 1)),
-    (CALOAD, Fixed(2, 1)),
-    (SALOAD, Fixed(2, 1)),
+    (ILOAD, Fixed(0, 1, JType.Prim.I)),// visitVarInsn
+    (LLOAD, Fixed(0, 1, JType.Prim.J)),
+    (FLOAD, Fixed(0, 1, JType.Prim.F)),
+    (DLOAD, Fixed(0, 1, JType.Prim.D)),
+    (ALOAD, Fixed(0, 1, JType.Null)),
+    (IALOAD, Fixed(2, 1, JType.Prim.I)),
+    (LALOAD, Fixed(2, 1, JType.Prim.J)),
+    (FALOAD, Fixed(2, 1, JType.Prim.F)),
+    (DALOAD, Fixed(2, 1, JType.Prim.D)),
+    (AALOAD, Fixed(2, 1, JType.Null)),
+    (BALOAD, Fixed(2, 1, JType.Prim.I)),
+    (CALOAD, Fixed(2, 1, JType.Prim.I)),
+    (SALOAD, Fixed(2, 1, JType.Prim.I)),
     (ISTORE, Fixed(1, 0)),
     (LSTORE, Fixed(1, 0)),
     (FSTORE, Fixed(1, 0)),
@@ -81,63 +91,63 @@ object Bytecode {
     (DUP2_X1, Fixed(3, 5)),
     (DUP2_X2, Fixed(4, 6)),
     (SWAP, Fixed(2, 2)),
-    (IADD, Fixed(2, 1)),
-    (LADD, Fixed(2, 1)),
-    (FADD, Fixed(2, 1)),
-    (DADD, Fixed(2, 1)),
-    (ISUB, Fixed(2, 1)),
-    (LSUB, Fixed(2, 1)),
-    (FSUB, Fixed(2, 1)),
-    (DSUB, Fixed(2, 1)),
-    (IMUL, Fixed(2, 1)),
-    (LMUL, Fixed(2, 1)),
-    (FMUL, Fixed(2, 1)),
-    (DMUL, Fixed(2, 1)),
-    (IDIV, Fixed(2, 1)),
-    (LDIV, Fixed(2, 1)),
-    (FDIV, Fixed(2, 1)),
-    (DDIV, Fixed(2, 1)),
-    (IREM, Fixed(2, 1)),
-    (LREM, Fixed(2, 1)),
-    (FREM, Fixed(2, 1)),
-    (DREM, Fixed(2, 1)),
-    (INEG, Fixed(1, 1)),
-    (LNEG, Fixed(1, 1)),
-    (FNEG, Fixed(1, 1)),
-    (DNEG, Fixed(1, 1)),
-    (ISHL, Fixed(2, 1)),
-    (LSHL, Fixed(2, 1)),
-    (ISHR, Fixed(2, 1)),
-    (LSHR, Fixed(2, 1)),
-    (IUSHR, Fixed(2, 1)),
-    (LUSHR, Fixed(2, 1)),
-    (IAND, Fixed(2, 1)),
-    (LAND, Fixed(2, 1)),
-    (IOR, Fixed(2, 1)),
-    (LOR, Fixed(2, 1)),
-    (IXOR, Fixed(2, 1)),
-    (LXOR, Fixed(2, 1)),
+    (IADD, Fixed(2, 1, JType.Prim.I)),
+    (LADD, Fixed(2, 1, JType.Prim.J)),
+    (FADD, Fixed(2, 1, JType.Prim.F)),
+    (DADD, Fixed(2, 1, JType.Prim.D)),
+    (ISUB, Fixed(2, 1, JType.Prim.I)),
+    (LSUB, Fixed(2, 1, JType.Prim.J)),
+    (FSUB, Fixed(2, 1, JType.Prim.F)),
+    (DSUB, Fixed(2, 1, JType.Prim.D)),
+    (IMUL, Fixed(2, 1, JType.Prim.I)),
+    (LMUL, Fixed(2, 1, JType.Prim.J)),
+    (FMUL, Fixed(2, 1, JType.Prim.F)),
+    (DMUL, Fixed(2, 1, JType.Prim.D)),
+    (IDIV, Fixed(2, 1, JType.Prim.I)),
+    (LDIV, Fixed(2, 1, JType.Prim.J)),
+    (FDIV, Fixed(2, 1, JType.Prim.F)),
+    (DDIV, Fixed(2, 1, JType.Prim.D)),
+    (IREM, Fixed(2, 1, JType.Prim.I)),
+    (LREM, Fixed(2, 1, JType.Prim.J)),
+    (FREM, Fixed(2, 1, JType.Prim.F)),
+    (DREM, Fixed(2, 1, JType.Prim.D)),
+    (INEG, Fixed(1, 1, JType.Prim.I)),
+    (LNEG, Fixed(1, 1, JType.Prim.J)),
+    (FNEG, Fixed(1, 1, JType.Prim.F)),
+    (DNEG, Fixed(1, 1, JType.Prim.D)),
+    (ISHL, Fixed(2, 1, JType.Prim.I)),
+    (LSHL, Fixed(2, 1, JType.Prim.J)),
+    (ISHR, Fixed(2, 1, JType.Prim.I)),
+    (LSHR, Fixed(2, 1, JType.Prim.J)),
+    (IUSHR, Fixed(2, 1, JType.Prim.I)),
+    (LUSHR, Fixed(2, 1, JType.Prim.J)),
+    (IAND, Fixed(2, 1, JType.Prim.I)),
+    (LAND, Fixed(2, 1, JType.Prim.J)),
+    (IOR, Fixed(2, 1, JType.Prim.I)),
+    (LOR, Fixed(2, 1, JType.Prim.J)),
+    (IXOR, Fixed(2, 1, JType.Prim.I)),
+    (LXOR, Fixed(2, 1, JType.Prim.J)),
     (IINC, Fixed(0, 0)),// visitIincInsn
-    (I2L, Fixed(1, 1)),
-    (I2F, Fixed(1, 1)),
-    (I2D, Fixed(1, 1)),
-    (L2I, Fixed(1, 1)),
-    (L2F, Fixed(1, 1)),
-    (L2D, Fixed(1, 1)),
-    (F2I, Fixed(1, 1)),
-    (F2L, Fixed(1, 1)),
-    (F2D, Fixed(1, 1)),
-    (D2I, Fixed(1, 1)),
-    (D2L, Fixed(1, 1)),
-    (D2F, Fixed(1, 1)),
-    (I2B, Fixed(1, 1)),
-    (I2C, Fixed(1, 1)),
-    (I2S, Fixed(1, 1)),
-    (LCMP, Fixed(2, 1)),
-    (FCMPL, Fixed(2, 1)),
-    (FCMPG, Fixed(2, 1)),
-    (DCMPL, Fixed(2, 1)),
-    (DCMPG, Fixed(2, 1)),
+    (I2L, Fixed(1, 1, JType.Prim.J)),
+    (I2F, Fixed(1, 1, JType.Prim.F)),
+    (I2D, Fixed(1, 1, JType.Prim.D)),
+    (L2I, Fixed(1, 1, JType.Prim.I)),
+    (L2F, Fixed(1, 1, JType.Prim.F)),
+    (L2D, Fixed(1, 1, JType.Prim.D)),
+    (F2I, Fixed(1, 1, JType.Prim.I)),
+    (F2L, Fixed(1, 1, JType.Prim.J)),
+    (F2D, Fixed(1, 1, JType.Prim.D)),
+    (D2I, Fixed(1, 1, JType.Prim.I)),
+    (D2L, Fixed(1, 1, JType.Prim.J)),
+    (D2F, Fixed(1, 1, JType.Prim.F)),
+    (I2B, Fixed(1, 1, JType.Prim.I)),
+    (I2C, Fixed(1, 1, JType.Prim.I)),
+    (I2S, Fixed(1, 1, JType.Prim.I)),
+    (LCMP, Fixed(2, 1, JType.Prim.I)),
+    (FCMPL, Fixed(2, 1, JType.Prim.I)),
+    (FCMPG, Fixed(2, 1, JType.Prim.I)),
+    (DCMPL, Fixed(2, 1, JType.Prim.I)),
+    (DCMPG, Fixed(2, 1, JType.Prim.I)),
     (IFEQ, Fixed(1, 0)),// visitJumpInsn
     (IFNE, Fixed(1, 0)),
     (IFLT, Fixed(1, 0)),
@@ -172,13 +182,13 @@ object Bytecode {
     (INVOKESTATIC, Invoke(static = true)),
     (INVOKEINTERFACE, Invoke(static = false)),
     (INVOKEDYNAMIC, InvokeDynamic()),// visitInvokeDynamicInsn
-    (NEW, Fixed(0, 1)),// visitTypeInsn
-    (NEWARRAY, Fixed(1, 1)),
-    (ANEWARRAY, Fixed(1, 1)),
-    (ARRAYLENGTH, Fixed(1, 1)),
-    (ATHROW, Fixed(1, 1)),
-    (CHECKCAST, Fixed(1, 1)),
-    (INSTANCEOF, Fixed(1, 1)),
+    (NEW, Fixed(0, 1, JType.Null)),// visitTypeInsn
+    (NEWARRAY, Fixed(1, 1, JType.Null)),
+    (ANEWARRAY, Fixed(1, 1, JType.Null)),
+    (ARRAYLENGTH, Fixed(1, 1, JType.Prim.I)),
+    (ATHROW, Fixed(1, 0)),
+    (CHECKCAST, Fixed(1, 1, JType.Null)),
+    (INSTANCEOF, Fixed(1, 1, JType.Prim.I)),
     (MONITORENTER, Fixed(1, 0)),
     (MONITOREXIT, Fixed(1, 0)),
     (MULTIANEWARRAY, MultiANewArray),// visitMultiANewArrayInsn
