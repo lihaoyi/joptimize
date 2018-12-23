@@ -145,22 +145,15 @@ class Walker(isInterface: JType.Cls => Boolean,
               if (!walkNextLabel(nextFrame)) walkInsn(current.getNext, nextFrame)
 
             case current: FrameNode =>
-              val n = new FrameNode(
-                current.`type`,
-                current.local.size,
-                current.local.toArray,
-                current.stack.size,
-                current.stack.toArray
-              )
-              finalInsnList.add(n)
-              val nextFrame = currentFrame.execute(n, dataflow)
-              if (!walkNextLabel(nextFrame)) walkInsn(current.getNext, nextFrame)
+              // We discard frame nodes; we're going to be doing a bunch of mangling
+              // so they'll all be wrong, so easier just let ASM recompute them
+              if (!walkNextLabel(currentFrame)) walkInsn(current.getNext, currentFrame)
 
-            case current: IincInsnNode =>
-              val n = new IincInsnNode(current.`var`, current.incr)
+            case _: IincInsnNode | _: IntInsnNode | _: LdcInsnNode | _: MultiANewArrayInsnNode =>
+              val n = Util.clone(currentInsn, mutable.Map.empty)
               finalInsnList.add(n)
               val nextFrame = currentFrame.execute(n, dataflow)
-              if (!walkNextLabel(nextFrame)) walkInsn(current.getNext, nextFrame)
+              if (!walkNextLabel(nextFrame)) walkInsn(currentInsn.getNext, nextFrame)
 
             case current: InsnNode =>
               current.getOpcode match{
@@ -193,12 +186,6 @@ class Walker(isInterface: JType.Cls => Boolean,
                   if (!walkNextLabel(nextFrame)) walkInsn(current.getNext, nextFrame)
               }
 
-            case current: IntInsnNode =>
-              val n = new IntInsnNode(current.getOpcode, current.operand)
-              finalInsnList.add(n)
-              val nextFrame = currentFrame.execute(n, dataflow)
-              if (!walkNextLabel(nextFrame)) walkInsn(current.getNext, nextFrame)
-
             case current: InvokeDynamicInsnNode => ???
 
             case current: JumpInsnNode =>
@@ -211,12 +198,6 @@ class Walker(isInterface: JType.Cls => Boolean,
               val nextFrame = currentFrame.execute(newLabel, dataflow)
               labelMapping(current) = newLabel :: labelMapping.getOrElse(current, Nil)
               finalInsnList.add(newLabel)
-              if (!walkNextLabel(nextFrame)) walkInsn(current.getNext, nextFrame)
-
-            case current: LdcInsnNode =>
-              val n = new LdcInsnNode(current.cst)
-              finalInsnList.add(n)
-              val nextFrame = currentFrame.execute(n, dataflow)
               if (!walkNextLabel(nextFrame)) walkInsn(current.getNext, nextFrame)
 
             case current: LineNumberNode =>
@@ -330,12 +311,6 @@ class Walker(isInterface: JType.Cls => Boolean,
 
 
               if (!walkNextLabel(nextFrame1)) walkInsn(current.getNext, nextFrame1)
-
-            case current: MultiANewArrayInsnNode =>
-              val n = new MultiANewArrayInsnNode(current.desc, current.dims)
-              finalInsnList.add(n)
-              val nextFrame = currentFrame.execute(n, dataflow)
-              if (!walkNextLabel(nextFrame)) walkInsn(current.getNext, nextFrame)
 
             case current: TableSwitchInsnNode =>
               val n = new TableSwitchInsnNode(current.min, current.max, null)

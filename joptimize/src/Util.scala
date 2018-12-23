@@ -106,7 +106,7 @@ object Util{
         case i: InvokeDynamicInsnNode => new InvokeDynamicInsnNode(i.name, i.desc, i.bsm, i.bsmArgs.clone())
         case i: JumpInsnNode => new JumpInsnNode(i.getOpcode, i.label)
         case i: LabelNode =>  new LabelNode()
-        case i: LdcInsnNode => new LdcInsnNode(i.getOpcode, i.cst)
+        case i: LdcInsnNode => new LdcInsnNode(i.cst)
         case i: LineNumberNode => new LineNumberNode(i.line, i.start)
         case i: LookupSwitchInsnNode => new LookupSwitchInsnNode(i.dflt, i.keys.asScala.toArray.map(_.intValue()), i.labels.asScala.toArray)
         case i: MethodInsnNode => new MethodInsnNode(i.getOpcode, i.owner, i.name, i.desc, i.itf)
