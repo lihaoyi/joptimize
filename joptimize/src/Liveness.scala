@@ -50,44 +50,39 @@ object Liveness {
 
     for (insn <- insns.iterator().asScala){
       insn match{
-        case mn: MethodInsnNode if !allLiveInsns.contains(mn) && mn.name != "<init>" =>
-          val desc = Desc.read(mn.desc)
-          val argOutCount = desc.args.length + (if (mn.getOpcode == Opcodes.INVOKESTATIC) 0 else 1)
-          for(_ <- 0 until argOutCount) insns.insertBefore(mn, new InsnNode(Opcodes.POP))
-          insns.insertBefore(mn, new InsnNode(desc.ret.widen match{
-            case JType.Prim.I | JType.Prim.S | JType.Prim.C | JType.Prim.B | JType.Prim.Z =>
-              Opcodes.ICONST_0
-            case JType.Prim.J => Opcodes.LCONST_0
-            case JType.Prim.F => Opcodes.FCONST_0
-            case JType.Prim.D => Opcodes.DCONST_0
-            case _ => Opcodes.ACONST_NULL
-          }))
-          insns.remove(mn)
+        case current: MethodInsnNode
+          if !allLiveInsns.contains(current) && current.name != "<init>" =>
+          stubOut(insns, current)
 
         case current: InsnNode
           if !allLiveInsns.contains(current)
           && Bytecode.stackEffect(current.getOpcode).push(current) == 1 =>
-          for(_ <- 0 until Bytecode.stackEffect(current.getOpcode).pop(current)) {
-            insns.insertBefore(current, new InsnNode(Opcodes.POP))
-          }
-          insns.insertBefore(current,
-            new InsnNode(
-              Bytecode.stackEffect(current.getOpcode).nullType(current).get match{
-                case JType.Prim.Z | JType.Prim.B | JType.Prim.C | JType.Prim.S | JType.Prim.I =>
-                  Opcodes.ICONST_0
-                case JType.Prim.F => Opcodes.FCONST_0
-                case JType.Prim.J => Opcodes.LCONST_0
-                case JType.Prim.D => Opcodes.DCONST_0
-                case _ => Opcodes.ACONST_NULL
-              }
-            )
-          )
-          insns.remove(current)
+          stubOut(insns, current)
+
         case _ => //do nothing
       }
     }
 
     (insns, liveArgumentIndices)
+  }
+
+  def stubOut(insns: InsnList, current: AbstractInsnNode) = {
+    for (_ <- 0 until Bytecode.stackEffect(current.getOpcode).pop(current)) {
+      insns.insertBefore(current, new InsnNode(Opcodes.POP))
+    }
+    insns.insertBefore(current,
+      new InsnNode(
+        Bytecode.stackEffect(current.getOpcode).nullType(current).get match {
+          case JType.Prim.Z | JType.Prim.B | JType.Prim.C | JType.Prim.S | JType.Prim.I =>
+            Opcodes.ICONST_0
+          case JType.Prim.F => Opcodes.FCONST_0
+          case JType.Prim.J => Opcodes.LCONST_0
+          case JType.Prim.D => Opcodes.DCONST_0
+          case _ => Opcodes.ACONST_NULL
+        }
+      )
+    )
+    insns.remove(current)
   }
 }
 
