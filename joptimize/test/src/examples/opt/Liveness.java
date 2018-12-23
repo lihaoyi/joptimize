@@ -1,6 +1,6 @@
 package joptimize.examples.opt;
 
-public class Liveness {
+class Liveness {
     static int main(int i) {
         pureButNotConstant(i);
         return i + 1;

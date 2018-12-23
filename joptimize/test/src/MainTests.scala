@@ -261,13 +261,13 @@ object MainTests extends TestSuite{
       'BooleanJumpFlatten - {
         'simpleTrue - opt[Int, Int, Int]
           .check((1, 2) -> 2)
-          .checkPresent("BooleanJumpFlatten$.leaf1")
-          .checkRemoved("BooleanJumpFlatten$.leaf2")
+          .checkPresent("BooleanJumpFlatten.leaf1")
+          .checkRemoved("BooleanJumpFlatten.leaf2")
 
         'simpleFalse - opt[Int, Int, Int]
           .check((1, 2) -> 4)
-          .checkPresent("BooleanJumpFlatten$.leaf2")
-          .checkRemoved("BooleanJumpFlatten$.leaf1")
+          .checkPresent("BooleanJumpFlatten.leaf2")
+          .checkRemoved("BooleanJumpFlatten.leaf1")
       }
       'InstanceofJumpFlatten - {
         'simpleBar - opt[Int, Int]
@@ -303,7 +303,7 @@ object MainTests extends TestSuite{
       'BooleanWidening - {
         'simple - opt[Boolean, Int]
           .check(true -> 2, false -> 1)
-          .checkPresent("BooleanWidening$.invert")
+          .checkPresent("BooleanWidening.invert")
       }
       'InstanceDce - {
         'simple1 - opt[Int, Int, Int]
@@ -366,22 +366,22 @@ object MainTests extends TestSuite{
           .check(1 -> 3, 2 -> 4)
       }
       'ConstantMethod - {
-        'int - opt[Boolean, Int]
+        'intMain - opt[Boolean, Int]
           .check(true -> 1, false -> 2)
-          .checkPresent("ConstantMethod$.int")
-          .checkRemoved("ConstantMethod$.callInt")
-          .checkNotMangled("ConstantMethod$.callInt")
+          .checkPresent("ConstantMethod.intMain")
+          .checkRemoved("ConstantMethod.callInt")
+          .checkNotMangled("ConstantMethod.callInt")
 
-        'bool - opt[Boolean, Boolean]
+        'boolMain - opt[Boolean, Boolean]
           .check(true -> false, false -> true)
-          .checkPresent("ConstantMethod$.bool")
-          .checkRemoved("ConstantMethod$.callBool")
-          .checkNotMangled("ConstantMethod$.callBool")
+          .checkPresent("ConstantMethod.boolMain")
+          .checkRemoved("ConstantMethod.callBool")
+          .checkNotMangled("ConstantMethod.callBool")
 
-        'impure - opt[Boolean, Boolean]
+        'impureMain - opt[Boolean, Boolean]
           .check(true -> false, false -> true)
-          .checkPresent("ConstantMethod$.impure")
-          .checkMangled("ConstantMethod$.callImpure")
+          .checkPresent("ConstantMethod.impureMain")
+          .checkMangled("ConstantMethod.callImpure")
       }
 
       'Liveness - {
