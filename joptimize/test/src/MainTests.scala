@@ -205,6 +205,19 @@ object MainTests extends TestSuite{
         'make3D - opt[Int, Int, Int, Array[Array[Array[Int]]]].check((1, 2, 3) -> Array.fill(1, 2, 3)(0))
         'getAndSet - opt[Int].check(() -> 900)
       }
+      'InvokeDynamic - {
+        'lambda - opt[Int, Int].check(1 -> 2, 2 -> 3)
+        'concat - opt[String, String, String].check(("hello", "world") -> "helloworld")
+      }
+//      'Inheritance - {
+//        'implement - opt[Int, String].check(7 -> "baaaaaaa")
+//        'abstractClass - opt[String].check(() -> "vroooooooooom")
+//        'shadowedInheritedGet - opt[String].check(() -> "v5rooooor5")
+//        'shadowedInheritedSet - opt[String].check(() -> "v5rooooooor5")
+//        'superMethod - opt[String].check(() -> "")
+//        'staticInheritance - opt[String].check(() -> "")
+//        'staticInheritanceMethod - opt[String].check(() -> "")
+//      }
     }
     'narrow - {
       'Supertype - {
