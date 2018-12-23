@@ -212,24 +212,23 @@ object MainTests extends TestSuite{
           .check((1, 2) -> 6)
           .checkRemoved("Supertype.call")
           .checkMangled("Supertype.call")
+
+        'mainDeep - opt[Int, Int, Int]
+          .check((1, 2) -> 6)
+          .checkRemoved("Supertype.call")
+          .checkMangled("Supertype.call", "Supertype.callDeep")
       }
       'Parametric - {
         'main - opt[Int, Int, Int]
           .check((1, 2) -> 6)
           .checkRemoved("Parametric.call")
           .checkMangled("Parametric.call")
-      }
-      'Supertype2 - {
-        'main - opt[Int, Int, Int]
+
+
+        'mainDeep - opt[Int, Int, Int]
           .check((1, 2) -> 6)
-          .checkRemoved("Supertype2.call")
-          .checkMangled("Supertype2.call")
-      }
-      'Parametric2 - {
-        'main - opt[Int, Int, Int]
-          .check((1, 2) -> 6)
-          .checkRemoved("Parametric2.call")
-          .checkMangled("Parametric2.call")
+          .checkRemoved("Parametric.call")
+          .checkMangled("Parametric.call", "Parametric.callDeep")
       }
       'NarrowReturn - {
         'main - opt[Int, Int, Int]

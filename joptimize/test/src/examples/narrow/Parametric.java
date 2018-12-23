@@ -10,6 +10,15 @@ class Parametric {
         return f.inc(n);
     }
 
+    static int mainDeep(int x, int y) {
+        return callDeep(new Bar(), x) + callDeep(new Qux(), y);
+        // (x + 1) + (y + 2)
+    }
+
+    static <T extends Foo> int callDeep(T f, int n) {
+        return call(f, n);
+    }
+
     interface Foo {
         int inc(int n);
     }
