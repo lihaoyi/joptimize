@@ -210,32 +210,32 @@ object MainTests extends TestSuite{
       'Supertype - {
         'main - opt[Int, Int, Int]
           .check((1, 2) -> 6)
-          .checkRemoved("Supertype$.call")
-          .checkMangled("Supertype$.call")
+          .checkRemoved("Supertype.call")
+          .checkMangled("Supertype.call")
       }
       'Parametric - {
         'main - opt[Int, Int, Int]
           .check((1, 2) -> 6)
-          .checkRemoved("Parametric$.call")
-          .checkMangled("Parametric$.call")
+          .checkRemoved("Parametric.call")
+          .checkMangled("Parametric.call")
       }
       'Supertype2 - {
         'main - opt[Int, Int, Int]
           .check((1, 2) -> 6)
-          .checkRemoved("Supertype2$.call")
-          .checkMangled("Supertype2$.call")
+          .checkRemoved("Supertype2.call")
+          .checkMangled("Supertype2.call")
       }
       'Parametric2 - {
         'main - opt[Int, Int, Int]
           .check((1, 2) -> 6)
-          .checkRemoved("Parametric2$.call")
-          .checkMangled("Parametric2$.call")
+          .checkRemoved("Parametric2.call")
+          .checkMangled("Parametric2.call")
       }
       'NarrowReturn - {
         'main - opt[Int, Int, Int]
           .check((1, 2) -> 6)
-          .checkRemoved("NarrowReturn$.call")
-          .checkMangled("NarrowReturn$.call")
+          .checkRemoved("NarrowReturn.call")
+          .checkMangled("NarrowReturn.call")
       }
       'MergeReturn - {
         'main - opt[Int, Int, Int]
@@ -248,7 +248,7 @@ object MainTests extends TestSuite{
       'ForceWide - {
         'main - opt[Int, Int, Int]
           .check((1, 2) -> 6)
-          .checkPresent("ForceWide$.call")
+          .checkPresent("ForceWide.call")
       }
     }
     'opt - {
