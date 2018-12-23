@@ -50,16 +50,15 @@ object Liveness {
 
     for (insn <- insns.iterator().asScala){
       insn match{
-        case current: MethodInsnNode
-          if !allLiveInsns.contains(current) && current.name != "<init>" =>
-          stubOut(insns, current)
+        case current: MethodInsnNode =>
+          if (!allLiveInsns.contains(current) && current.name != "<init>")stubOut(insns, current)
 
-        case current: InsnNode
-          if !allLiveInsns.contains(current)
-          && Bytecode.stackEffect(current.getOpcode).push(current) == 1 =>
-          stubOut(insns, current)
-
-        case _ => //do nothing
+        case current: AbstractInsnNode =>
+          if (current.getOpcode != -1
+          && !allLiveInsns.contains(current)
+          && Bytecode.stackEffect(current.getOpcode).push(current) == 1){
+            stubOut(insns, current)
+          }
       }
     }
 
