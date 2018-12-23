@@ -272,33 +272,33 @@ object MainTests extends TestSuite{
       'InstanceofJumpFlatten - {
         'simpleBar - opt[Int, Int]
           .check(1 -> 2)
-          .checkPresent("InstanceofJumpFlatten$.leaf1")
-          .checkRemoved("InstanceofJumpFlatten$.leaf2", "InstanceofJumpFlatten$.leaf3")
+          .checkPresent("InstanceofJumpFlatten.leaf1")
+          .checkRemoved("InstanceofJumpFlatten.leaf2", "InstanceofJumpFlatten.leaf3")
 
         'simpleBaz - opt[Int, Int]
           .check(1 -> 3)
-          .checkPresent("InstanceofJumpFlatten$.leaf2")
-          .checkRemoved("InstanceofJumpFlatten$.leaf1", "InstanceofJumpFlatten$.leaf3")
+          .checkPresent("InstanceofJumpFlatten.leaf2")
+          .checkRemoved("InstanceofJumpFlatten.leaf1", "InstanceofJumpFlatten.leaf3")
 
         'simpleQux - opt[Int, Int]
           .check(1 -> 4)
-          .checkPresent("InstanceofJumpFlatten$.leaf3")
-          .checkRemoved("InstanceofJumpFlatten$.leaf1", "InstanceofJumpFlatten$.leaf2")
+          .checkPresent("InstanceofJumpFlatten.leaf3")
+          .checkRemoved("InstanceofJumpFlatten.leaf1", "InstanceofJumpFlatten.leaf2")
 
         'simpleBarMatch - opt[Int, Int]
           .check(1 -> 2)
-          .checkPresent("InstanceofJumpFlatten$.leaf1")
-          .checkRemoved("InstanceofJumpFlatten$.leaf2", "InstanceofJumpFlatten$.leaf3")
+          .checkPresent("InstanceofJumpFlatten.leaf1")
+          .checkRemoved("InstanceofJumpFlatten.leaf2", "InstanceofJumpFlatten.leaf3")
 
         'simpleBazMatch - opt[Int, Int]
           .check(1 -> 3)
-          .checkPresent("InstanceofJumpFlatten$.leaf2")
-          .checkRemoved("InstanceofJumpFlatten$.leaf1", "InstanceofJumpFlatten$.leaf3")
+          .checkPresent("InstanceofJumpFlatten.leaf2")
+          .checkRemoved("InstanceofJumpFlatten.leaf1", "InstanceofJumpFlatten.leaf3")
 
         'simpleQuxMatch - opt[Int, Int]
           .check(1 -> 4)
-          .checkPresent("InstanceofJumpFlatten$.leaf3")
-          .checkRemoved("InstanceofJumpFlatten$.leaf1", "InstanceofJumpFlatten$.leaf2")
+          .checkPresent("InstanceofJumpFlatten.leaf3")
+          .checkRemoved("InstanceofJumpFlatten.leaf1", "InstanceofJumpFlatten.leaf2")
       }
       'BooleanWidening - {
         'simple - opt[Boolean, Int]
@@ -314,32 +314,36 @@ object MainTests extends TestSuite{
         'simple2 - opt[Int, Int, Int]
           .check((1, 2) -> 6)
           .checkPresent("BarTwo.incA", "BarTwo.incB")
-          .checkRemoved("QuxTwo.incA", "QuxTwo.incB")
+          .checkClassRemoved("QuxTwo")
 
         'simple3 - opt[Int, Int, Int]
           .check((1, 2) -> 10)
           .checkPresent("QuxTwo.incA", "QuxTwo.incB")
-          .checkRemoved("BarTwo.incA", "BarTwo.incB")
+          .checkClassRemoved("BarTwo")
 
         'single1 - opt[Int, Int, Int]
           .check((1, 2) -> 5)
           .checkPresent("BarTwo.incA")
-          .checkRemoved("BarTwo.incB", "QuxTwo.incA", "QuxTwo.incB")
+          .checkRemoved("BarTwo.incB")
+          .checkClassRemoved("QuxTwo")
 
         'single2 - opt[Int, Int, Int]
           .check((1, 2) -> 7)
           .checkPresent("BarTwo.incB")
-          .checkRemoved("BarTwo.incA", "QuxTwo.incA", "QuxTwo.incB")
+          .checkRemoved("BarTwo.incA")
+          .checkClassRemoved("QuxTwo")
 
         'single3 - opt[Int, Int, Int]
           .check((1, 2) -> 9)
           .checkPresent("QuxTwo.incA")
-          .checkRemoved("QuxTwo.incB", "BarTwo.incA", "BarTwo.incB")
+          .checkRemoved("QuxTwo.incB")
+          .checkClassRemoved("BarTwo")
 
         'single4 - opt[Int, Int, Int]
           .check((1, 2) -> 11)
           .checkPresent("QuxTwo.incB")
-          .checkRemoved("QuxTwo.incA", "BarTwo.incA", "BarTwo.incB")
+          .checkRemoved("QuxTwo.incA")
+          .checkClassRemoved("BarTwo")
 
         'unknown1 - opt[Int, Int, Int]
           .check((1, 2) -> 7)
@@ -528,6 +532,16 @@ object MainTests extends TestSuite{
         val (cls2, methodName) = resolveMethod(sigString, cl)
         // That the previously-existing method has been removed
         assert(!cls2.getDeclaredMethods.exists(_.getName == methodName))
+      }
+    }
+
+    def checkClassRemoved(sigStrings: String*) = checkWithClassloader{ cl =>
+      for(sigString <- sigStrings){
+        intercept[ClassNotFoundException]{
+          cl.loadClass(
+            s"joptimize.examples.${tp.value.dropRight(2).mkString(".")}.$sigString"
+          )
+        }
       }
     }
   }
