@@ -127,7 +127,7 @@ class Walker(isInterface: JType.Cls => Boolean,
         else merge(methodReturns.map(_.tpe))
 
       val outputInsns = new InsnList
-      allVisitedBlocks .foreach(t => outputInsns.add(t.blockInsns))
+      allVisitedBlocks.foreach(t => outputInsns.add(t.insns))
 
       val liveArguments =
         if(false) (_: Any) => true
@@ -173,7 +173,7 @@ class Walker(isInterface: JType.Cls => Boolean,
         res
 
       case Some(res: Walker.BlockResult) =>
-        merges.append((res.frame, blockState))
+        merges.append((res.startFrame, blockState))
         res
 
       case None =>
@@ -196,15 +196,7 @@ class Walker(isInterface: JType.Cls => Boolean,
           val blockRes = walkBlock1(destBlockStart, destBlockState)
 
           if (blockRes.blockIndex != blockIndex + 1){
-            val l = blockRes.blockInsns.getFirst match{
-              case l: LabelNode => l
-              case _ =>
-                val l = new LabelNode()
-                blockRes.blockInsns.insert(l)
-                l
-            }
-
-            insnList.add(new JumpInsnNode(GOTO, l))
+            insnList.add(new JumpInsnNode(GOTO, blockRes.leadingLabel))
           }
           blockRes
         }
@@ -231,7 +223,11 @@ class Walker(isInterface: JType.Cls => Boolean,
           walkMethod = recurse
         )
 
-        visitedBlocks((blockStart, typeState)) = Walker.BlockStub(blockIndex, insnList, blockState)
+        visitedBlocks((blockStart, typeState)) = Walker.BlockStub(
+          blockIndex,
+          () => insnList.getFirst.asInstanceOf[LabelNode],
+          blockState
+        )
 
         walkInsn(blockStart, blockState, ctx)
 
@@ -369,12 +365,12 @@ class Walker(isInterface: JType.Cls => Boolean,
         ctx.terminalInsns.append(Terminal(n, Seq(currentFrame.stack.last), None))
         ctx.finalInsnList.add(n)
         val nextFrame = currentFrame.execute(n, dataflow)
-        n.dflt = ctx.walkBlock(current.dflt, nextFrame).blockInsns.getFirst.asInstanceOf[LabelNode]
+        n.dflt = ctx.walkBlock(current.dflt, nextFrame).leadingLabel
         n.keys = current.keys
-        n.labels = current.labels.asScala.map(ctx.walkBlock(_, nextFrame).blockInsns.getFirst.asInstanceOf[LabelNode]).asJava
+        n.labels = current.labels.asScala.map(ctx.walkBlock(_, nextFrame).leadingLabel).asJava
 
       case current: MethodInsnNode =>
-        val nextFrame1 = walkMethodInsn(currentFrame, ctx, walkNextLabel _, current)
+        val nextFrame1 = walkMethodInsn(currentFrame, ctx, walkNextLabel, current)
         if (!walkNextLabel(nextFrame1)) walkInsn(current.getNext, nextFrame1, ctx)
 
       case current: TableSwitchInsnNode =>
@@ -383,16 +379,12 @@ class Walker(isInterface: JType.Cls => Boolean,
         val nextFrame = currentFrame.execute(n, dataflow)
         ctx.terminalInsns.append(Terminal(n, Seq(currentFrame.stack.last), None))
         n.dflt = ctx.walkBlock(current.dflt, nextFrame)
-          .blockInsns
-          .getFirst
-          .asInstanceOf[LabelNode]
+          .leadingLabel
         n.labels = current.labels
           .asScala
           .map(
             ctx.walkBlock(_, nextFrame)
-              .blockInsns
-              .getFirst
-              .asInstanceOf[LabelNode]
+              .leadingLabel
           )
           .asJava
 
@@ -585,7 +577,7 @@ class Walker(isInterface: JType.Cls => Boolean,
 
         val res = walkBlock(current.label, nextFrame)
 
-        n.label = res.blockInsns.getFirst.asInstanceOf[LabelNode]
+        n.label = res.leadingLabel
     }
   }
   def popN(n: Int) = {
@@ -646,23 +638,27 @@ object Walker{
 
   trait BlockInfo{
     def blockIndex: Int
-    def blockInsns: InsnList
-    def frame: Frame[LValue]
+    def leadingLabel: LabelNode
+    def startFrame: Frame[LValue]
   }
 
   case class BlockStub(blockIndex: Int,
-                       blockInsns: InsnList,
-                       frame: Frame[LValue]) extends BlockInfo
+                       leadingLabel0: () => LabelNode,
+                       startFrame: Frame[LValue]) extends BlockInfo{
+    def leadingLabel = leadingLabel0()
+  }
 
   case class BlockResult(blockIndex: Int,
-                         blockInsns: InsnList,
-                         frame: Frame[LValue],
+                         insns: InsnList,
+                         startFrame: Frame[LValue],
                          methodReturns: Seq[LValue],
                          terminalInsns: Seq[Terminal],
                          pure: Boolean,
                          subCallArgLiveness: Map[AbstractInsnNode, Seq[Boolean]],
                          lineNumberNodes: Set[LineNumberNode],
-                         methodInsnMapping: Map[AbstractInsnNode, List[AbstractInsnNode]]) extends BlockInfo
+                         methodInsnMapping: Map[AbstractInsnNode, List[AbstractInsnNode]]) extends BlockInfo{
+    def leadingLabel = insns.getFirst.asInstanceOf[LabelNode]
+  }
 
   case class InsnCtx(sig: MethodSig,
                      finalInsnList: InsnList,
