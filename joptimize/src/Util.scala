@@ -103,7 +103,7 @@ object Util{
         case i: IincInsnNode => new IincInsnNode(i.`var`, i.incr)
         case i: InsnNode => new InsnNode(i.getOpcode)
         case i: IntInsnNode => new IntInsnNode(i.getOpcode, i.operand)
-        case i: InvokeDynamicInsnNode => new InvokeDynamicInsnNode(i.name, i.desc, i.bsm, i.bsmArgs.clone())
+        case i: InvokeDynamicInsnNode => new InvokeDynamicInsnNode(i.name, i.desc, i.bsm, i.bsmArgs.clone():_*)
         case i: JumpInsnNode => new JumpInsnNode(i.getOpcode, i.label)
         case i: LabelNode =>  new LabelNode()
         case i: LdcInsnNode => new LdcInsnNode(i.cst)

@@ -207,7 +207,10 @@ object MainTests extends TestSuite{
       }
       'InvokeDynamic - {
         'lambda - opt[Int, Int].check(1 -> 2, 2 -> 3)
-        'concat - opt[String, String, String].check(("hello", "world") -> "helloworld")
+        'concat - opt[String, String, String].check(
+          ("hello", "123") -> "hello sep 123",
+          ("", "0") -> " sep 0"
+        )
       }
 //      'Inheritance - {
 //        'implement - opt[Int, String].check(7 -> "baaaaaaa")

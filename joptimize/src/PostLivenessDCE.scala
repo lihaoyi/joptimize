@@ -1,6 +1,7 @@
 package joptimize
 
-import org.objectweb.asm.Opcodes
+import org.objectweb.asm.tree.InvokeDynamicInsnNode
+import org.objectweb.asm.{Handle, Opcodes}
 import org.objectweb.asm.tree.{ClassNode, FieldInsnNode, MethodInsnNode, TypeInsnNode}
 
 import collection.JavaConverters._
@@ -30,6 +31,23 @@ object PostLivenessDCE {
           .get
 
         mn.instructions.iterator().asScala.foreach{
+          case current: InvokeDynamicInsnNode =>
+            val metafactory = new Handle(
+              Opcodes.H_INVOKESTATIC,
+              "java/lang/invoke/LambdaMetafactory",
+              "metafactory",
+              "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;"
+            )
+            if (current.bsm == metafactory){
+              val target = current.bsmArgs(1).asInstanceOf[Handle]
+              val targetSig = MethodSig(
+                JType.Cls(target.getOwner),
+                target.getName,
+                Desc.read(target.getDesc),
+                target.getTag == Opcodes.H_INVOKESTATIC
+              )
+              queue.enqueue(targetSig)
+            }
           case current: MethodInsnNode if !current.owner.startsWith("java/")=>
             val sig = MethodSig(
               current.owner, current.name,
