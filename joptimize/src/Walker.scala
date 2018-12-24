@@ -237,7 +237,7 @@ class Walker(isInterface: JType.Cls => Boolean,
           walkBlock = walkBlock(_, _, seenBlocks, visitedBlocks, sig, seenMethods, recurse),
           walkNextBlock = walkNextBlock(insnList, _, _),
           seenMethods = seenMethods,
-          recurse = recurse
+          walkMethod = recurse
         )
 
         visitedBlocks((blockStart, typeState)) = Left((ctx.finalInsnList, blockState))
@@ -362,9 +362,14 @@ class Walker(isInterface: JType.Cls => Boolean,
         )
 
       case current: LineNumberNode =>
+        // We do not bother copying line number nodes in-place. Instead, we
+        // just batch them all up and then append them to the end of the insn
+        // list once we're done processing a method, since the position of the
+        // line number node in the insn list doesn't matter (only the label
+        // pointer does)
         ctx.lineNumberNodes.add(current)
         if (!walkNextLabel(currentFrame)) walkInsn(current.getNext, currentFrame, ctx)
-      // TODO: handle line numbers properly
+
 
       case current: LookupSwitchInsnNode =>
         val n = new LookupSwitchInsnNode(null, Array(), Array())
@@ -432,7 +437,7 @@ class Walker(isInterface: JType.Cls => Boolean,
       val (argLivenesses, methodPure, narrowRet, mangled) = {
         val static = originalInsn.getOpcode == INVOKESTATIC
         val special = originalInsn.getOpcode == INVOKESPECIAL
-        val recurse = ctx.recurse
+        val recurse = ctx.walkMethod
 
         val calledDesc = Desc.read(originalInsn.desc)
         val calledSelf = if (static) Nil else Seq(JType.Cls(originalInsn.owner))
@@ -664,5 +669,5 @@ object Walker{
                      walkBlock: (AbstractInsnNode, Frame[LValue]) => InsnList,
                      walkNextBlock: (AbstractInsnNode, Frame[LValue]) => InsnList,
                      seenMethods: Set[(MethodSig, Seq[IType])],
-                     recurse: (MethodSig, Seq[IType]) => Walker.MethodResult)
+                     walkMethod: (MethodSig, Seq[IType]) => Walker.MethodResult)
 }
