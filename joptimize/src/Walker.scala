@@ -20,7 +20,7 @@ class Walker(isInterface: JType.Cls => Boolean,
              dataflow: Dataflow) {
 
   def walkMethod(sig: MethodSig,
-                 insns: InsnList,
+                 originalInsns: InsnList,
                  args: Seq[IType],
                  maxLocals: Int,
                  maxStack: Int,
@@ -75,7 +75,7 @@ class Walker(isInterface: JType.Cls => Boolean,
         .map{case (a, i) => new LValue(a, Left(i), Nil, mutable.Buffer())}
 
       walkBlock(
-        insns.getFirst,
+        originalInsns.getFirst,
         Frame.initial(
           maxLocals, maxStack,
           initialArgumentLValues,
@@ -88,7 +88,12 @@ class Walker(isInterface: JType.Cls => Boolean,
             // When we hit recursive methods, simply assume that
             // they are impure and that all their arguments are live.
 
-            Walker.MethodResult(Seq.fill(argOutCount)(true), staticSig.desc.ret, ???, false)
+            Walker.MethodResult(
+              Seq.fill(argOutCount)(true),
+              staticSig.desc.ret,
+              new InsnList,
+              false
+            )
           }
           else {
             val clinitSig = MethodSig(staticSig.cls, "<clinit>", Desc.read("()V"), true)
@@ -133,16 +138,11 @@ class Walker(isInterface: JType.Cls => Boolean,
         if (methodReturns.isEmpty) sig.desc.ret // abstract methods have no return insn
         else merge(methodReturns.map(_.tpe))
 
-      val (outputInsns, liveArguments) =
-        if(false){
-          val outputInsns = new InsnList
-          allVisitedBlocks .foreach(t => outputInsns.add(t.blockInsns))
-          (outputInsns, (_: Any) => true)
-        }else{
-          val outputInsns = new InsnList
-          allVisitedBlocks .foreach(t => outputInsns.add(t.blockInsns))
-          Liveness(outputInsns, terminalInsns, subCallArgLiveness.toMap)
-        }
+      val outputInsns = new InsnList
+      allVisitedBlocks .foreach(t => outputInsns.add(t.blockInsns))
+      val liveArguments =
+        if(false) (_: Any) => true
+        else Liveness(outputInsns, terminalInsns, subCallArgLiveness.toMap)
 
       val liveArgs =
         if (sig.static) sig.desc.args.indices.map(liveArguments)
@@ -412,42 +412,38 @@ class Walker(isInterface: JType.Cls => Boolean,
   def walkMethodInsn(currentFrame: Frame[LValue],
                      ctx: Walker.InsnCtx,
                      walkNextLabel: Frame[LValue] => Boolean,
-                     current: MethodInsnNode) = {
-    val copy = new MethodInsnNode(
-      current.getOpcode, current.owner, current.name, current.desc, current.itf
-    )
+                     originalInsn: MethodInsnNode) = {
 
-    val argOutCount = Desc.read(current.desc).args.length + (if (current.getOpcode == INVOKESTATIC) 0 else 1)
-    if (current.owner.startsWith("java/")) {
+    val argOutCount = Desc.read(originalInsn.desc).args.length + (if (originalInsn.getOpcode == INVOKESTATIC) 0 else 1)
+    if (originalInsn.owner.startsWith("java/")) {
       ctx.pure = false
+      val copy = new MethodInsnNode(
+        originalInsn.getOpcode, originalInsn.owner, originalInsn.name, originalInsn.desc, originalInsn.itf
+      )
       ctx.terminalInsns.append(Terminal(
         copy,
         currentFrame.stack.takeRight(argOutCount),
-        Some(Desc.read(current.desc).ret)
+        Some(Desc.read(originalInsn.desc).ret)
       ))
       ctx.finalInsnList.add(copy)
       currentFrame.execute(copy, dataflow)
     } else {
 
       val (argLivenesses, methodPure, narrowRet, mangled) = {
-        val static = copy.getOpcode == INVOKESTATIC
-        val special = copy.getOpcode == INVOKESPECIAL
+        val static = originalInsn.getOpcode == INVOKESTATIC
+        val special = originalInsn.getOpcode == INVOKESPECIAL
         val recurse = ctx.recurse
-        val insn = current
-        val frame = currentFrame
-        val called = insn.asInstanceOf[MethodInsnNode]
 
-
-        val calledDesc = Desc.read(called.desc)
-        val calledSelf = if (static) Nil else Seq(JType.Cls(called.owner))
+        val calledDesc = Desc.read(originalInsn.desc)
+        val calledSelf = if (static) Nil else Seq(JType.Cls(originalInsn.owner))
         val originalTypes = calledSelf ++ calledDesc.args.toSeq
 
         val inferredTypes =
-          (frame.stack.length - originalTypes.map(_.getSize).sum)
-            .until(frame.stack.length)
-            .map(frame.stack(_).tpe)
+          (currentFrame.stack.length - originalTypes.map(_.getSize).sum)
+            .until(currentFrame.stack.length)
+            .map(currentFrame.stack(_).tpe)
 
-        val sig = MethodSig(called.owner, called.name, Desc.read(called.desc), static)
+        val sig = MethodSig(originalInsn.owner, originalInsn.name, Desc.read(originalInsn.desc), static)
 
         val (concreteSigs, abstractSigs) =
           if (special) (Seq(sig), Nil)
@@ -471,17 +467,17 @@ class Walker(isInterface: JType.Cls => Boolean,
         val argLivenesses = recursedResults.map(_.liveArgs)
         val narrowReturnType = merge(recursedResults.map(_.inferredReturn))
 
-        if (Util.isCompatible(inferredTypes, originalTypes)) (argLivenesses, methodPure, narrowReturnType, insn) // No narrowing
+        if (Util.isCompatible(inferredTypes, originalTypes)) (argLivenesses, methodPure, narrowReturnType, originalInsn) // No narrowing
         else {
           val descChanged =
             (static && inferredTypes != originalTypes) ||
               (!static && inferredTypes.drop(1) != originalTypes.drop(1)) // ignore self type
 
           val (mangledName, mangledDesc) =
-            if (!descChanged) (called.name, Desc.read(called.desc))
+            if (!descChanged) (originalInsn.name, Desc.read(originalInsn.desc))
             else {
               Util.mangle(
-                called.name,
+                originalInsn.name,
                 if (static) inferredTypes else inferredTypes.drop(1),
                 if (static) originalTypes else originalTypes.drop(1),
                 narrowReturnType,
@@ -491,24 +487,23 @@ class Walker(isInterface: JType.Cls => Boolean,
 
           // Owner type changed! We may need to narrow from an invokeinterface to an invokevirtual
           val newOwner =
-            if (static) called.owner
+            if (static) originalInsn.owner
             else JType.fromIType(
-              frame.stack(frame.stack.length - originalTypes.map(_.getSize).sum).tpe,
-              JType.Cls(called.owner)
+              currentFrame.stack(currentFrame.stack.length - originalTypes.map(_.getSize).sum).tpe,
+              JType.Cls(originalInsn.owner)
             ).name
 
-          (argLivenesses, methodPure, narrowReturnType, (isInterface(called.owner), isInterface(newOwner)) match {
-            case (false, true) => ??? // cannot widen interface into class!
-            case (true, false) => new MethodInsnNode(INVOKEVIRTUAL, newOwner, mangledName, mangledDesc.unparse)
-            case _ =>
-              called.owner = newOwner
-              called.name = mangledName
-              called.desc = mangledDesc.unparse
-              called
-          })
+          val returnNode = new MethodInsnNode(
+            (isInterface(originalInsn.owner), isInterface(newOwner)) match {
+              case (false, true) => ??? // cannot widen interface into class!
+              case (true, false) => INVOKEVIRTUAL
+              case _ => originalInsn.getOpcode
+            },
+            newOwner, mangledName, mangledDesc.unparse
+          )
+          (argLivenesses, methodPure, narrowReturnType, returnNode)
         }
       }
-
 
       if (!methodPure) {
         ctx.terminalInsns.append(Terminal(

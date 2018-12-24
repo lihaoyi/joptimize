@@ -17,7 +17,7 @@ object Liveness {
 
   def apply(insns: InsnList,
             allTerminals: Seq[Terminal],
-            subCallArgLiveness: Map[AbstractInsnNode, scala.Seq[Boolean]]): (InsnList, Set[Int]) = {
+            subCallArgLiveness: Map[AbstractInsnNode, scala.Seq[Boolean]]): Set[Int] = {
 
     val (allVertices, roots, downstreamEdges) =
       Util.breadthFirstAggregation[Either[LValue, Terminal]](allTerminals.map(Right(_)).toSet){
@@ -62,7 +62,7 @@ object Liveness {
       }
     }
 
-    (insns, liveArgumentIndices)
+    liveArgumentIndices
   }
 
   def stubOut(insns: InsnList, current: AbstractInsnNode) = {
