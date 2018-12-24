@@ -24,10 +24,10 @@ class Walker(isInterface: JType.Cls => Boolean,
                  args: Seq[IType],
                  maxLocals: Int,
                  maxStack: Int,
-                 seenMethods: Set[(MethodSig, Seq[IType])]): Walker.MethodResult = {
+                 seenMethods0: Set[(MethodSig, Seq[IType])]): Walker.MethodResult = {
 
     visitedMethods.getOrElseUpdate((sig, args.drop(if (sig.static) 0 else 1)), {
-      val seen = seenMethods ++ Seq((sig, args))
+      val seenMethods = seenMethods0 ++ Seq((sig, args))
       // - One-pass walk through the instruction list of a method, starting from
       //   narrowed argument types
       //
@@ -81,7 +81,7 @@ class Walker(isInterface: JType.Cls => Boolean,
           initialArgumentLValues,
           new LValue(JType.Null, Left(-1), Nil, mutable.Buffer())
         ),
-        Set(), visitedBlocks, sig, seen,
+        Set(), visitedBlocks, sig, seenMethods,
         recurse = (staticSig, types) => {
           val argOutCount = staticSig.desc.args.length + (if (staticSig.static) 0 else 1)
           if (seenMethods((staticSig, types))) {
@@ -140,6 +140,7 @@ class Walker(isInterface: JType.Cls => Boolean,
 
       val outputInsns = new InsnList
       allVisitedBlocks .foreach(t => outputInsns.add(t.blockInsns))
+
       val liveArguments =
         if(false) (_: Any) => true
         else Liveness(outputInsns, terminalInsns, subCallArgLiveness.toMap)
