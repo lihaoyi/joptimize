@@ -50,18 +50,7 @@ class Walker(isInterface: JType.Cls => Boolean,
       //     incoming state is by definition wider than all possible narrowed
       //     states
 
-      val visitedBlocks = new mutable.LinkedHashMap[
-        (AbstractInsnNode, Frame[IType]),
-        Either[(InsnList, Frame[LValue]), Walker.BlockResult]
-      ]{
-        // overrides for perf, https://github.com/scala/scala/pull/7566
-        override def last =
-          if (nonEmpty) (lastEntry.key, lastEntry.value)
-          else throw new NoSuchElementException("Cannot call .last on empty LinkedHashMap")
-        override def lastOption =
-          if (nonEmpty) Some((lastEntry.key, lastEntry.value))
-          else None
-      }
+      val visitedBlocks = new mutable.LinkedHashMap[(AbstractInsnNode, Frame[IType]), Walker.BlockInfo]
 
       // Equivalent to visitedBlocks.lastOption, but faster because
       // LinkedHashMap#lastOption isn't optimized and so is O(n) instead of O(1)
@@ -124,7 +113,7 @@ class Walker(isInterface: JType.Cls => Boolean,
 //      pprint.log(sig -> "END")
 
 //      pprint.log((sig, pure, methodReturns))
-      val allVisitedBlocks = visitedBlocks.values.map(_.right.get)
+      val allVisitedBlocks = visitedBlocks.values.map(_.asInstanceOf[Walker.BlockResult])
       val methodReturns = allVisitedBlocks.flatMap(_.methodReturns).toSeq
       val terminalInsns = allVisitedBlocks.flatMap(_.terminalInsns).toSeq
       val lineNumberNodes = allVisitedBlocks.flatMap(_.lineNumberNodes)
@@ -164,13 +153,10 @@ class Walker(isInterface: JType.Cls => Boolean,
   def walkBlock(blockStart: AbstractInsnNode,
                 blockState0: Frame[LValue],
                 seenBlocks0: Set[AbstractInsnNode],
-                visitedBlocks: mutable.LinkedHashMap[
-                  (AbstractInsnNode, Frame[IType]),
-                  Either[(InsnList, Frame[LValue]), Walker.BlockResult]
-                ],
+                visitedBlocks: mutable.LinkedHashMap[(AbstractInsnNode, Frame[IType]), Walker.BlockInfo],
                 sig: MethodSig,
                 seenMethods: Set[(MethodSig, scala.Seq[IType])],
-                recurse: (MethodSig, Seq[IType]) => Walker.MethodResult): InsnList = {
+                recurse: (MethodSig, Seq[IType]) => Walker.MethodResult): Walker.BlockInfo = {
 
     val blockState =
       if (!seenBlocks0.contains(blockStart)) blockState0
@@ -186,15 +172,17 @@ class Walker(isInterface: JType.Cls => Boolean,
         // typestate, aggregate the upstream LValues of the new jump with
         // those already saved earlier
         visitedBlocks((blockStart, typeState)) match{
-          case Left((insns, frame)) =>
+          case Walker.BlockStub(blockIndex, insns, frame) =>
             frame.zipWith(blockState){(x1, x2) => x1.mergeIntoThis(x2)}
-            insns
-          case Right(res) =>
+
+          case res: Walker.BlockResult =>
             res.frame.zipWith(blockState){(x1, x2) => x1.mergeIntoThis(x2)}
-            res.blockInsns
+
         }
+        res
 
       case None =>
+        val blockIndex = visitedBlocks.size
         //          println("NEW BLOCK " + (currentInsn, currentFrame))
 
         val insnList = new InsnList
@@ -210,18 +198,14 @@ class Walker(isInterface: JType.Cls => Boolean,
         def walkNextBlock(destBlockStart: AbstractInsnNode,
                           destBlockState: Frame[LValue]) = {
 
-          val preWalkLastBlock = visitedBlocks.lastOption.map(_._1)
-
-          val destIsFresh = visitedBlocks.contains((destBlockStart, destBlockState.map(_.tpe)))
-          val currentIsLast = preWalkLastBlock.get != (destBlockStart, typeState)
           val blockRes = walkBlock1(destBlockStart, destBlockState)
 
-          if (currentIsLast || destIsFresh){
-            val l = blockRes.getFirst match{
+          if (blockRes.blockIndex != blockIndex + 1){
+            val l = blockRes.blockInsns.getFirst match{
               case l: LabelNode => l
               case _ =>
                 val l = new LabelNode()
-                blockRes.insert(l)
+                blockRes.blockInsns.insert(l)
                 l
             }
 
@@ -244,7 +228,7 @@ class Walker(isInterface: JType.Cls => Boolean,
           walkMethod = recurse
         )
 
-        visitedBlocks((blockStart, typeState)) = Left((ctx.finalInsnList, blockState))
+        visitedBlocks((blockStart, typeState)) = Walker.BlockStub(blockIndex, ctx.finalInsnList, blockState)
         walkInsn(blockStart, blockState, ctx)
 
         val methodInsnMapping = mutable.Map.empty[AbstractInsnNode, List[AbstractInsnNode]]
@@ -252,6 +236,7 @@ class Walker(isInterface: JType.Cls => Boolean,
           methodInsnMapping(k) = v :: methodInsnMapping.getOrElse(k, Nil)
         }
         val res = Walker.BlockResult(
+          blockIndex,
           ctx.finalInsnList,
           blockState,
           ctx.methodReturns,
@@ -261,9 +246,9 @@ class Walker(isInterface: JType.Cls => Boolean,
           ctx.lineNumberNodes.toSet,
           methodInsnMapping.toMap
         )
-        visitedBlocks((blockStart, typeState)) = Right(res)
+        visitedBlocks((blockStart, typeState)) = res
         //          println("END BLOCK")
-        res.blockInsns
+        res
     }
   }
   /**
@@ -380,9 +365,9 @@ class Walker(isInterface: JType.Cls => Boolean,
         ctx.terminalInsns.append(Terminal(n, Seq(currentFrame.stack.last), None))
         ctx.finalInsnList.add(n)
         val nextFrame = currentFrame.execute(n, dataflow)
-        n.dflt = ctx.walkBlock(current.dflt, nextFrame).getFirst.asInstanceOf[LabelNode]
+        n.dflt = ctx.walkBlock(current.dflt, nextFrame).blockInsns.getFirst.asInstanceOf[LabelNode]
         n.keys = current.keys
-        n.labels = current.labels.asScala.map(ctx.walkBlock(_, nextFrame).getFirst.asInstanceOf[LabelNode]).asJava
+        n.labels = current.labels.asScala.map(ctx.walkBlock(_, nextFrame).blockInsns.getFirst.asInstanceOf[LabelNode]).asJava
 
       case current: MethodInsnNode =>
         val nextFrame1 = walkMethodInsn(currentFrame, ctx, walkNextLabel _, current)
@@ -394,12 +379,14 @@ class Walker(isInterface: JType.Cls => Boolean,
         val nextFrame = currentFrame.execute(n, dataflow)
         ctx.terminalInsns.append(Terminal(n, Seq(currentFrame.stack.last), None))
         n.dflt = ctx.walkBlock(current.dflt, nextFrame)
+          .blockInsns
           .getFirst
           .asInstanceOf[LabelNode]
         n.labels = current.labels
           .asScala
           .map(
             ctx.walkBlock(_, nextFrame)
+              .blockInsns
               .getFirst
               .asInstanceOf[LabelNode]
           )
@@ -546,9 +533,9 @@ class Walker(isInterface: JType.Cls => Boolean,
     * bytecode, and walk the two jump targets to make sure we have somewhere
     * to jump to
     */
-  def walkJump(walkBlock: (AbstractInsnNode, Frame[LValue]) => InsnList,
+  def walkJump(walkBlock: (AbstractInsnNode, Frame[LValue]) => Walker.BlockInfo,
                finalInsnList: InsnList,
-               walkNextBlock: (AbstractInsnNode, Frame[LValue]) => InsnList,
+               walkNextBlock: (AbstractInsnNode, Frame[LValue]) => Walker.BlockInfo,
                currentFrame: Frame[LValue],
                terminalInsns: mutable.Buffer[Terminal],
                current: JumpInsnNode) = {
@@ -594,7 +581,7 @@ class Walker(isInterface: JType.Cls => Boolean,
 
         val res = walkBlock(current.label, nextFrame)
 
-        n.label = res.getFirst.asInstanceOf[LabelNode]
+        n.label = res.blockInsns.getFirst.asInstanceOf[LabelNode]
     }
   }
   def popN(n: Int) = {
@@ -653,14 +640,23 @@ object Walker{
                           methodBody: InsnList,
                           pure: Boolean)
 
-  case class BlockResult(blockInsns: InsnList,
+  trait BlockInfo{
+    def blockIndex: Int
+    def blockInsns: InsnList
+    def frame: Frame[LValue]
+  }
+  case class BlockStub(blockIndex: Int,
+                       blockInsns: InsnList,
+                       frame: Frame[LValue]) extends BlockInfo
+  case class BlockResult(blockIndex: Int,
+                         blockInsns: InsnList,
                          frame: Frame[LValue],
                          methodReturns: Seq[LValue],
                          terminalInsns: Seq[Terminal],
                          pure: Boolean,
                          subCallArgLiveness: Map[AbstractInsnNode, Seq[Boolean]],
                          lineNumberNodes: Set[LineNumberNode],
-                         methodInsnMapping: Map[AbstractInsnNode, List[AbstractInsnNode]])
+                         methodInsnMapping: Map[AbstractInsnNode, List[AbstractInsnNode]]) extends BlockInfo
 
   case class InsnCtx(sig: MethodSig,
                      finalInsnList: InsnList,
@@ -670,8 +666,8 @@ object Walker{
                      var pure: Boolean,
                      subCallArgLiveness: mutable.Map[AbstractInsnNode, Seq[Boolean]],
                      lineNumberNodes: mutable.Set[LineNumberNode],
-                     walkBlock: (AbstractInsnNode, Frame[LValue]) => InsnList,
-                     walkNextBlock: (AbstractInsnNode, Frame[LValue]) => InsnList,
+                     walkBlock: (AbstractInsnNode, Frame[LValue]) => BlockInfo,
+                     walkNextBlock: (AbstractInsnNode, Frame[LValue]) => BlockInfo,
                      seenMethods: Set[(MethodSig, Seq[IType])],
                      walkMethod: (MethodSig, Seq[IType]) => Walker.MethodResult)
 }
