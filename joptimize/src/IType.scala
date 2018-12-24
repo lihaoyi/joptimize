@@ -21,24 +21,12 @@ trait Frameable[T <: Frameable[T]] extends Value{
   */
 class LValue(val tpe: IType,
              val insn: Either[Int, AbstractInsnNode],
-             val upstream: Seq[LValue],
-             val merges: mutable.Buffer[LValue]) extends Frameable[LValue]{
+             val upstream: Seq[LValue]) extends Frameable[LValue]{
   def getSize = tpe.size
-  def widen = new LValue(tpe.widen, insn, upstream, merges)
+  def widen = new LValue(tpe.widen, insn, Seq(this))
   def isEmpty = tpe.isEmpty
   def internalName = tpe.internalName
 
-  /**
-    * Merge another LValue as an upstream dependency of this one.
-    *
-    * Note that merging is asymmetric, and the `other` is is kept in `this`'s
-    * `merges` list, but not the other way around.
-    */
-  def mergeIntoThis(other: LValue) = {
-    assert(tpe == other.tpe)
-    merges += other
-    this
-  }
 
   override def toString = s"LValue@${Integer.toHexString(System.identityHashCode(this))}($tpe, $insn)"
 }

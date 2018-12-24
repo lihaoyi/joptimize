@@ -10,8 +10,8 @@ import scala.collection.mutable
 
 class Dataflow(merge0: Seq[IType] => IType) extends Interpreter[LValue](ASM4){
   def newValue(tpe: org.objectweb.asm.Type) = {
-    if (tpe == null) new LValue(JType.Null, Left(-1), Seq(), mutable.Buffer())
-    else new LValue(JType.read(tpe.getInternalName), Left(-1), Seq(), mutable.Buffer())
+    if (tpe == null) new LValue(JType.Null, Left(-1), Seq())
+    else new LValue(JType.read(tpe.getInternalName), Left(-1), Seq())
   }
 
   def newOperation(insn: AbstractInsnNode) = new LValue(
@@ -50,8 +50,7 @@ class Dataflow(merge0: Seq[IType] => IType) extends Interpreter[LValue](ASM4){
       case NEW => JType.read(insn.asInstanceOf[TypeInsnNode].desc)
     },
     Right(insn),
-    Nil,
-    mutable.Buffer()
+    Nil
   )
 
 
@@ -60,8 +59,7 @@ class Dataflow(merge0: Seq[IType] => IType) extends Interpreter[LValue](ASM4){
       new LValue(
         value.tpe,
         Right(insn),
-        Seq(value),
-        mutable.Buffer()
+        Seq(value)
       )
     // We do not record any of these copy operations in the LValue dataflow graph
     // that we construct during abstract interpretation. Those do not meaningfully
@@ -129,8 +127,7 @@ class Dataflow(merge0: Seq[IType] => IType) extends Interpreter[LValue](ASM4){
       case MONITORENTER | MONITOREXIT | IFNULL | IFNONNULL => JType.Null
     },
     Right(insn),
-    Seq(value),
-    mutable.Buffer()
+    Seq(value)
   )
   def binaryOperation(insn: AbstractInsnNode, v1: LValue, v2: LValue) = new LValue(
     insn.getOpcode match {
@@ -180,12 +177,11 @@ class Dataflow(merge0: Seq[IType] => IType) extends Interpreter[LValue](ASM4){
         JType.Null
     },
     Right(insn),
-    Seq(v1, v2),
-    mutable.Buffer()
+    Seq(v1, v2)
   )
 
   def ternaryOperation(insn: AbstractInsnNode, v1: LValue, v2: LValue, v3: LValue) = {
-    new LValue(JType.Null, Right(insn), Seq(v1, v2, v3), mutable.Buffer())
+    new LValue(JType.Null, Right(insn), Seq(v1, v2, v3))
   }
   def naryOperation(insn: AbstractInsnNode, vs: java.util.List[_ <: LValue]) = {
     new LValue(
@@ -195,8 +191,7 @@ class Dataflow(merge0: Seq[IType] => IType) extends Interpreter[LValue](ASM4){
         case _ => Desc.read(insn.asInstanceOf[MethodInsnNode].desc).ret
       },
       Right(insn),
-      vs.asScala,
-      mutable.Buffer()
+      vs.asScala
     )
   }
   def returnOperation(insn: AbstractInsnNode, value: LValue, expected: LValue) = {}

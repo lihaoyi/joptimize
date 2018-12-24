@@ -59,14 +59,15 @@ class Walker(isInterface: JType.Cls => Boolean,
 
       val initialArgumentLValues = args
         .zipWithIndex
-        .map{case (a, i) => new LValue(a, Left(i), Nil, mutable.Buffer())}
+        .map{case (a, i) => new LValue(a, Left(i), Nil)}
 
+      val merges = mutable.Buffer.empty[(Frame[LValue], Frame[LValue])]
       walkBlock(
         originalInsns.getFirst,
         Frame.initial(
           maxLocals, maxStack,
           initialArgumentLValues,
-          new LValue(JType.Null, Left(-1), Nil, mutable.Buffer())
+          new LValue(JType.Null, Left(-1), Nil)
         ),
         Set(), visitedBlocks, sig, seenMethods,
         recurse = (staticSig, types) => {
@@ -106,8 +107,8 @@ class Walker(isInterface: JType.Cls => Boolean,
               seenMethods ++ Seq(staticSig -> types)
             )
           }
-        }
-
+        },
+        merges
       )
 
 //      pprint.log(sig -> "END")
@@ -130,7 +131,7 @@ class Walker(isInterface: JType.Cls => Boolean,
 
       val liveArguments =
         if(false) (_: Any) => true
-        else Liveness(outputInsns, terminalInsns, subCallArgLiveness.toMap)
+        else Liveness(outputInsns, terminalInsns, subCallArgLiveness.toMap, merges)
 
       val liveArgs =
         if (sig.static) sig.desc.args.indices.map(liveArguments)
@@ -156,7 +157,8 @@ class Walker(isInterface: JType.Cls => Boolean,
                 visitedBlocks: mutable.LinkedHashMap[(AbstractInsnNode, Frame[IType]), Walker.BlockInfo],
                 sig: MethodSig,
                 seenMethods: Set[(MethodSig, scala.Seq[IType])],
-                recurse: (MethodSig, Seq[IType]) => Walker.MethodResult): Walker.BlockInfo = {
+                recurse: (MethodSig, Seq[IType]) => Walker.MethodResult,
+                merges: mutable.Buffer[(Frame[LValue], Frame[LValue])]): Walker.BlockInfo = {
 
     val blockState =
       if (!seenBlocks0.contains(blockStart)) blockState0
@@ -166,19 +168,12 @@ class Walker(isInterface: JType.Cls => Boolean,
     val typeState = blockState.map(_.tpe)
     //        pprint.log("VISITING BLOCK" + Util.prettyprint(blockStart))
     visitedBlocks.get((blockStart, typeState)) match{
-      case Some(res) =>
-        //            println("OLD BLOCK " + sig)
-        // When we jump back to a previously visited block with the same
-        // typestate, aggregate the upstream LValues of the new jump with
-        // those already saved earlier
-        visitedBlocks((blockStart, typeState)) match{
-          case Walker.BlockStub(blockIndex, insns, frame) =>
-            frame.zipWith(blockState){(x1, x2) => x1.mergeIntoThis(x2)}
+      case Some(res @ Walker.BlockStub(blockIndex, insns, frame)) =>
+        merges.append((frame, blockState))
+        res
 
-          case res: Walker.BlockResult =>
-            res.frame.zipWith(blockState){(x1, x2) => x1.mergeIntoThis(x2)}
-
-        }
+      case Some(res: Walker.BlockResult) =>
+        merges.append((res.frame, blockState))
         res
 
       case None =>
@@ -186,7 +181,7 @@ class Walker(isInterface: JType.Cls => Boolean,
         //          println("NEW BLOCK " + (currentInsn, currentFrame))
 
         val insnList = new InsnList
-        def walkBlock1 = walkBlock(_, _, seenBlocks, visitedBlocks, sig, seenMethods, recurse)
+        def walkBlock1 = walkBlock(_, _, seenBlocks, visitedBlocks, sig, seenMethods, recurse, merges)
         /**
           * Walk another block. Automatically inserts a GOTO if the next block isn't
           * going to be immediately after the current block, and elides the GOTO otherwise
@@ -213,22 +208,31 @@ class Walker(isInterface: JType.Cls => Boolean,
           }
           blockRes
         }
+
+        val blockInsnMapping = mutable.Map.empty[AbstractInsnNode, AbstractInsnNode]
+        val methodReturns = mutable.Buffer.empty[LValue]
+        val terminalInsns = mutable.Buffer.empty[Terminal]
+        val pure = sig.name != "<init>" && sig.name != "<clinit>"
+        val subCallArgLiveness = mutable.Map.empty[AbstractInsnNode, Seq[Boolean]]
+        val lineNumberNodes = mutable.Set.empty[LineNumberNode]
+
         val ctx = Walker.InsnCtx(
           sig,
           finalInsnList = insnList,
-          blockInsnMapping = mutable.Map.empty,
-          methodReturns = mutable.Buffer.empty,
-          terminalInsns = mutable.Buffer.empty,
-          pure = sig.name != "<init>" && sig.name != "<clinit>",
-          subCallArgLiveness = mutable.Map.empty,
-          lineNumberNodes = mutable.Set.empty,
+          blockInsnMapping = blockInsnMapping,
+          methodReturns = methodReturns,
+          terminalInsns = terminalInsns,
+          pure = pure,
+          subCallArgLiveness = subCallArgLiveness,
+          lineNumberNodes = lineNumberNodes,
           walkBlock = walkBlock1,
           walkNextBlock = walkNextBlock,
           seenMethods = seenMethods,
           walkMethod = recurse
         )
 
-        visitedBlocks((blockStart, typeState)) = Walker.BlockStub(blockIndex, ctx.finalInsnList, blockState)
+        visitedBlocks((blockStart, typeState)) = Walker.BlockStub(blockIndex, insnList, blockState)
+
         walkInsn(blockStart, blockState, ctx)
 
         val methodInsnMapping = mutable.Map.empty[AbstractInsnNode, List[AbstractInsnNode]]
@@ -237,13 +241,13 @@ class Walker(isInterface: JType.Cls => Boolean,
         }
         val res = Walker.BlockResult(
           blockIndex,
-          ctx.finalInsnList,
+          insnList,
           blockState,
-          ctx.methodReturns,
-          ctx.terminalInsns,
+          methodReturns,
+          terminalInsns,
           ctx.pure,
-          ctx.subCallArgLiveness.toMap,
-          ctx.lineNumberNodes.toSet,
+          subCallArgLiveness.toMap,
+          lineNumberNodes.toSet,
           methodInsnMapping.toMap
         )
         visitedBlocks((blockStart, typeState)) = res
@@ -645,9 +649,11 @@ object Walker{
     def blockInsns: InsnList
     def frame: Frame[LValue]
   }
+
   case class BlockStub(blockIndex: Int,
                        blockInsns: InsnList,
                        frame: Frame[LValue]) extends BlockInfo
+
   case class BlockResult(blockIndex: Int,
                          blockInsns: InsnList,
                          frame: Frame[LValue],

@@ -2,7 +2,9 @@ package joptimize
 
 import org.objectweb.asm.Opcodes
 import org.objectweb.asm.tree._
+
 import collection.JavaConverters._
+import scala.collection.mutable
 
 /**
   * Rudimentary Method-level liveness analysis: we report on which arguments a
@@ -17,18 +19,30 @@ object Liveness {
 
   def apply(insns: InsnList,
             allTerminals: Seq[Terminal],
-            subCallArgLiveness: Map[AbstractInsnNode, scala.Seq[Boolean]]): Set[Int] = {
+            subCallArgLiveness: Map[AbstractInsnNode, scala.Seq[Boolean]],
+            merges: Seq[(Frame[LValue], Frame[LValue])]): Set[Int] = {
+
+
+    val mergeLookup = mutable.Map.empty[LValue, mutable.Buffer[LValue]]
+
+    for((lhs, rhs) <- merges){
+      lhs.zipForeach(rhs){(l, r) =>
+        mergeLookup.getOrElseUpdate(l, mutable.Buffer()) += r
+      }
+    }
+
+    def getMerges(l: LValue) = mergeLookup.getOrElse(l, Nil)
 
     val (allVertices, roots, downstreamEdges) =
       Util.breadthFirstAggregation[Either[LValue, Terminal]](allTerminals.map(Right(_)).toSet){
         case Left(x) =>
           x.insn match{
-            case Left(i) => (x.upstream ++ x.merges).map(Left[LValue, Terminal])
+            case Left(i) => (x.upstream ++ getMerges(x)).map(Left[LValue, Terminal])
             case Right(insn) =>
               subCallArgLiveness.get(insn) match{
-                case None => (x.upstream ++ x.merges).map(Left[LValue, Terminal])
+                case None => (x.upstream ++ getMerges(x)).map(Left[LValue, Terminal])
                 case Some(liveness) =>
-                  (x.upstream.zip(liveness).collect{case (k, true) => k} ++ x.merges).map(Left[LValue, Terminal])
+                  (x.upstream.zip(liveness).collect{case (k, true) => k} ++ getMerges(x)).map(Left[LValue, Terminal])
               }
           }
         case Right(y) =>

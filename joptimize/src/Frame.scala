@@ -37,16 +37,15 @@ class Frame[T <: Frameable[T]](protected val value: org.objectweb.asm.tree.analy
     new Frame(f0)
   }
 
-  def zipWith[V <: Frameable[V], Z <: Frameable[Z]](other: Frame[V])(func: (T, V) => Z) = {
+  def zipForeach[V <: Frameable[V]](other: Frame[V])(func: (T, V) => Unit): Unit = {
     assert(stack.length == other.stack.length)
     assert(locals.length == other.locals.length)
-    val f0 = new org.objectweb.asm.tree.analysis.Frame[Z](value.getLocals, value.getMaxStackSize)
-    for(i <- 0 until stack.length) f0.push(func(stack(i), other.stack(i)))
+    for(i <- 0 until stack.length) func(stack(i), other.stack(i))
     for(i <- 0 until locals.length) (locals(i), other.locals(i)) match{
-      case (null, null) =>
-      case (l, r) => f0.setLocal(i, func(l, r))
+      case (null, null) => // Skip null entries
+      case (_, null) | (null, _) => ??? // We do not expect any asymmetric nullness
+      case (l, r) => func(l, r)
     }
-    new Frame(f0)
   }
 
 
