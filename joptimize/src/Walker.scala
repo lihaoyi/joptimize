@@ -1,8 +1,6 @@
 package joptimize
 
 
-import joptimize.Bytecode.Fixed
-
 import collection.JavaConverters._
 import org.objectweb.asm.Opcodes._
 import org.objectweb.asm.tree._
@@ -173,37 +171,11 @@ class Walker(isInterface: JType.Cls => Boolean,
                 sig: MethodSig,
                 seenMethods: Set[(MethodSig, scala.Seq[IType])],
                 recurse: (MethodSig, Seq[IType]) => Walker.MethodResult): InsnList = {
+
     val blockState =
       if (!seenBlocks0.contains(blockStart)) blockState0
       else blockState0.widen
     val seenBlocks = seenBlocks0 + blockStart
-
-    /**
-      * Walk another block. Automatically inserts a GOTO if the next block isn't
-      * going to be immediately after the current block, and elides the GOTO otherwise
-      *
-      * Shouldn't be used if there isn't any possibility of the next block
-      * seamlessly following the current, e.g. in the case of switches where
-      * every branch needs a jump.
-      */
-    def walkNextBlock(finalInsnList: InsnList, destBlockStart: AbstractInsnNode, destBlockState: Frame[LValue]) = {
-
-      val preWalkLastBlock = visitedBlocks.lastOption
-      val blockRes = walkBlock(destBlockStart, destBlockState, seenBlocks, visitedBlocks, sig, seenMethods, recurse)
-
-      if (visitedBlocks.contains((destBlockStart, destBlockState.map(_.tpe))) || !preWalkLastBlock.exists(_ != (destBlockStart, blockState))){
-        val l = blockRes.getFirst match{
-          case l: LabelNode => l
-          case _ =>
-            val l = new LabelNode()
-            blockRes.insert(l)
-            l
-        }
-
-        finalInsnList.add(new JumpInsnNode(GOTO, l))
-      }
-      blockRes
-    }
 
     val typeState = blockState.map(_.tpe)
     //        pprint.log("VISITING BLOCK" + Util.prettyprint(blockStart))
@@ -226,6 +198,37 @@ class Walker(isInterface: JType.Cls => Boolean,
         //          println("NEW BLOCK " + (currentInsn, currentFrame))
 
         val insnList = new InsnList
+        def walkBlock1 = walkBlock(_, _, seenBlocks, visitedBlocks, sig, seenMethods, recurse)
+        /**
+          * Walk another block. Automatically inserts a GOTO if the next block isn't
+          * going to be immediately after the current block, and elides the GOTO otherwise
+          *
+          * Shouldn't be used if there isn't any possibility of the next block
+          * seamlessly following the current, e.g. in the case of switches where
+          * every branch needs a jump.
+          */
+        def walkNextBlock(destBlockStart: AbstractInsnNode,
+                          destBlockState: Frame[LValue]) = {
+
+          val preWalkLastBlock = visitedBlocks.lastOption.map(_._1)
+
+          val destIsFresh = visitedBlocks.contains((destBlockStart, destBlockState.map(_.tpe)))
+          val currentIsLast = preWalkLastBlock.get != (destBlockStart, typeState)
+          val blockRes = walkBlock1(destBlockStart, destBlockState)
+
+          if (currentIsLast || destIsFresh){
+            val l = blockRes.getFirst match{
+              case l: LabelNode => l
+              case _ =>
+                val l = new LabelNode()
+                blockRes.insert(l)
+                l
+            }
+
+            insnList.add(new JumpInsnNode(GOTO, l))
+          }
+          blockRes
+        }
         val ctx = Walker.InsnCtx(
           sig,
           finalInsnList = insnList,
@@ -235,8 +238,8 @@ class Walker(isInterface: JType.Cls => Boolean,
           pure = sig.name != "<init>" && sig.name != "<clinit>",
           subCallArgLiveness = mutable.Map.empty,
           lineNumberNodes = mutable.Set.empty,
-          walkBlock = walkBlock(_, _, seenBlocks, visitedBlocks, sig, seenMethods, recurse),
-          walkNextBlock = walkNextBlock(insnList, _, _),
+          walkBlock = walkBlock1,
+          walkNextBlock = walkNextBlock,
           seenMethods = seenMethods,
           walkMethod = recurse
         )
