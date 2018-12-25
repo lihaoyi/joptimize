@@ -1,21 +1,25 @@
 package joptimize.examples.simple;
 
 public class Inheritance {
+    @joptimize.Test(inputs = {1, 2, 4, 8})
     public static String implement(int n) {
         Baas b = new Sheep();
         return b.baa(n);
     }
 
+    @joptimize.Test()
     public static String abstractClass() {
         Car toyota = new Toyota();
         return toyota.vroom();
     }
 
+    @joptimize.Test()
     public static String shadowedInheritedGet() {
         Car honda = new Honda();
         return honda.vroom();
     }
 
+    @joptimize.Test()
     public static String shadowedInheritedSet() {
         Car honda = new Honda();
         honda.rev();
@@ -24,16 +28,19 @@ public class Inheritance {
         return honda.vroom();
     }
 
+    @joptimize.Test()
     public static String superMethod() {
         return new Toyota().superVStart();
     }
 
+    @joptimize.Test()
     public static int staticInheritance() {
         int a = Parent.x;
         Child1.x = 100;
         return a + Child1.x + Child2.x;
     }
 
+    @joptimize.Test()
     public static int staticInheritanceMethod() {
         return Child1.inherited() + // Calls the method inherited from parent
                 Parent.overriden() + // Calls the method directly on parent

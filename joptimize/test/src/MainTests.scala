@@ -59,15 +59,15 @@ object MainTests extends TestSuite{
         'lambdaBoxed - annotatedTest
         'concat - annotatedTest
       }
-//      'Inheritance - {
-//        'implement - annotatedTest[Int, String].check(7 -> "baaaaaaa")
-//        'abstractClass - annotatedTest[String].check(() -> "vroooooooooom")
-//        'shadowedInheritedGet - annotatedTest[String].check(() -> "v5rooooor5")
-//        'shadowedInheritedSet - annotatedTest[String].check(() -> "v5rooooooor5")
-//        'superMethod - annotatedTest[String].check(() -> "")
-//        'staticInheritance - annotatedTest[String].check(() -> "")
-//        'staticInheritanceMethod - annotatedTest[String].check(() -> "")
-//      }
+      'Inheritance - {
+        'implement - annotatedTest
+        'abstractClass - annotatedTest
+        'shadowedInheritedGet - annotatedTest
+        'shadowedInheritedSet - annotatedTest
+        'superMethod - annotatedTest
+        'staticInheritance - annotatedTest
+        'staticInheritanceMethod - annotatedTest
+      }
     }
     'narrow - {
       'Supertype - {
@@ -184,7 +184,10 @@ object MainTests extends TestSuite{
     }
 
     val testAnnot = rawMethod.getAnnotation(classOf[joptimize.Test])
-    val cases = testAnnot.inputs().grouped(rawMethod.getParameterCount)
+    val cases = testAnnot.inputs() match{
+      case Array() => Iterator(Array())
+      case multiple => multiple.grouped(rawMethod.getParameterCount)
+    }
 
     val output = mutable.Buffer.empty[ujson.Value]
     for (args <- cases) checkWithClassloader{ cl =>

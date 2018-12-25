@@ -76,6 +76,7 @@ object JOptimize{
       visitedMethods = visitedMethods,
       visitedClasses = visitedClasses,
       findSubtypes = subtypeMap.getOrElse(_, Nil),
+      exists = sig => originalMethods.contains(sig),
       isConcrete = sig => originalMethods(sig).instructions.size != 0,
       merge = merge,
       dataflow = new Dataflow(merge),
@@ -132,7 +133,6 @@ object JOptimize{
       newMethods.groupBy(_._1).mapValues(_.map(_._2))
 
     for((cn, mns) <- grouped) yield {
-
       if (cn.attrs != null) Util.removeFromJavaList(cn.attrs)(_.`type` == "ScalaSig")
       if (cn.attrs != null) Util.removeFromJavaList(cn.attrs)(_.`type` == "ScalaInlineInfo")
       if (cn.visibleAnnotations != null) {
@@ -146,7 +146,6 @@ object JOptimize{
       entrypoints,
       grouped.keys.toSeq,
       findSubtypes = subtypeMap.getOrElse(_, Nil),
-      classNodeMap,
       ignore = ignore
     )
 

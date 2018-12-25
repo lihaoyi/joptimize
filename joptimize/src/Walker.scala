@@ -16,6 +16,7 @@ class Walker(isInterface: JType.Cls => Boolean,
              visitedClasses: mutable.Set[JType.Cls],
              findSubtypes: JType.Cls => List[JType.Cls],
              isConcrete: MethodSig => Boolean,
+             exists: MethodSig => Boolean,
              merge: Seq[IType] => IType,
              dataflow: Dataflow,
              ignore: String => Boolean) {
@@ -294,11 +295,14 @@ class Walker(isInterface: JType.Cls => Boolean,
             )
           }
         }
-        current.getOpcode match{
-          case PUTFIELD | PUTSTATIC => ctx.terminalInsns.append(Terminal(n, Seq(currentFrame.stack.last), None))
-          case GETFIELD | GETSTATIC => ctx.terminalInsns.append(Terminal(n, Nil, None))
-        }
-        //
+        ctx.terminalInsns.append(Terminal(
+          n,
+          currentFrame.stack.takeRight(
+            Bytecode.stackEffect(currentInsn.getOpcode).pop(currentInsn)
+          ),
+          None
+        ))
+
         ctx.finalInsnList.add(n)
         val nextFrame = currentFrame.execute(n, dataflow)
         if (!walkNextLabel(nextFrame)) walkInsn(current.getNext, nextFrame, ctx)
@@ -476,7 +480,7 @@ class Walker(isInterface: JType.Cls => Boolean,
           else {
             val subtypes = findSubtypes(sig.cls)
             val possibleSigs = subtypes.map(st => sig.copy(cls = st)) ++ Seq(sig)
-            possibleSigs.partition(isConcrete)
+            possibleSigs.filter(exists).partition(isConcrete)
           }
 
         for (interfaceSig <- abstractSigs) {
@@ -511,21 +515,13 @@ class Walker(isInterface: JType.Cls => Boolean,
               )
             }
 
-          // Owner type changed! We may need to narrow from an invokeinterface to an invokevirtual
-          val newOwner =
-            if (static) originalInsn.owner
-            else JType.fromIType(
-              currentFrame.stack(currentFrame.stack.length - originalTypes.map(_.getSize).sum).tpe,
-              JType.Cls(originalInsn.owner)
-            ).name
-
+          // We do not bother narrowing the owner of the bytecode or
+          // swapping from INVOKEDYNAMIC to INVOKEINTERFACE for now
           val returnNode = new MethodInsnNode(
-            (isInterface(originalInsn.owner), isInterface(newOwner)) match {
-              case (false, true) => ??? // cannot widen interface into class!
-              case (true, false) => INVOKEVIRTUAL
-              case _ => originalInsn.getOpcode
-            },
-            newOwner, mangledName, mangledDesc.unparse
+            originalInsn.getOpcode,
+            originalInsn.owner,
+            mangledName,
+            mangledDesc.unparse
           )
           (argLivenesses, methodPure, narrowReturnType, returnNode)
         }

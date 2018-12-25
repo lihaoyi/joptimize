@@ -17,20 +17,25 @@ object PostLivenessDCE {
   def apply(entrypoints: scala.Seq[MethodSig],
             classNodes: Seq[ClassNode],
             findSubtypes: JType.Cls => List[JType.Cls],
-            classNodeMap: Map[JType.Cls, ClassNode],
             ignore: String => Boolean): Seq[ClassNode] = {
+
+    val classNodeMap = classNodes.map{cn => (JType.Cls(cn.name), cn)}.toMap
+    val allMethodSigs = for{
+      cn <- classNodes
+      mn <- cn.methods.iterator().asScala
+    } yield (MethodSig(cn.name, mn.name, Desc.read(mn.desc), (mn.access & Opcodes.ACC_STATIC) != 0), mn)
+    val methodSigMap = allMethodSigs.toMap
+
     val queue = entrypoints.to[mutable.Queue]
     val seenMethods = mutable.Set.empty[MethodSig]
     val seenClasses = mutable.Set.empty[JType.Cls]
+
     while(queue.nonEmpty){
       val current = queue.dequeue()
       if (!ignore(current.cls.name) && !seenMethods(current)){
         seenMethods.add(current)
-        val cn = classNodes.find(_.name == current.cls.name).getOrElse(throw new Exception(current.cls.name))
-        val mn = cn.methods.iterator().asScala
-          .find(mn => mn.name == current.name && mn.desc == current.desc.unparse)
-          .get
-
+        seenClasses.add(current.cls)
+        val mn = methodSigMap(current)
         mn.instructions.iterator().asScala.foreach{
           case current: InvokeDynamicInsnNode =>
             if (current.bsm == Util.metafactory || current.bsm == Util.altMetafactory){
@@ -44,6 +49,7 @@ object PostLivenessDCE {
               queue.enqueue(targetSig)
             }
           case current: MethodInsnNode if !ignore(current.owner) =>
+
             val sig = MethodSig(
               current.owner, current.name,
               Desc.read(current.desc), current.getOpcode == Opcodes.INVOKESTATIC
@@ -52,10 +58,11 @@ object PostLivenessDCE {
             val subtypes = findSubtypes(sig.cls)
             val possibleSigs = subtypes.map(st => sig.copy(cls = st)) ++ Seq(sig)
 
-            queue.enqueue(possibleSigs:_*)
+            queue.enqueue(possibleSigs.filter(methodSigMap.contains):_*)
 
           case current: FieldInsnNode =>
-            queue.enqueue(MethodSig(current.owner, "<clinit>", Desc.read("()V"), true))
+            val clinitMethod = MethodSig(current.owner, "<clinit>", Desc.read("()V"), true)
+            if (methodSigMap.contains(clinitMethod)) queue.enqueue(clinitMethod)
 
           case current: TypeInsnNode => seenClasses.add(JType.Cls(current.desc))
 
