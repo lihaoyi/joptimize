@@ -295,15 +295,18 @@ class Walker(isInterface: JType.Cls => Boolean,
             )
           }
         }
-        ctx.terminalInsns.append(Terminal(
-          n,
-          currentFrame.stack.takeRight(
-            Bytecode.stackEffect(currentInsn.getOpcode).pop(currentInsn)
-          ),
-          None
-        ))
+        if (!ignore(current.owner)) {
+          visitedClasses.add(JType.Cls(current.owner))
+        }
 
         if (current.getOpcode == PUTFIELD || current.getOpcode == PUTSTATIC){
+          ctx.terminalInsns.append(Terminal(
+            n,
+            currentFrame.stack.takeRight(
+              Bytecode.stackEffect(currentInsn.getOpcode).pop(currentInsn)
+            ),
+            None
+          ))
           ctx.pure = false
         }
 

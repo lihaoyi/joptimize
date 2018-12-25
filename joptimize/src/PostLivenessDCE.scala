@@ -63,6 +63,7 @@ object PostLivenessDCE {
           case current: FieldInsnNode =>
             val clinitMethod = MethodSig(current.owner, "<clinit>", Desc.read("()V"), true)
             if (methodSigMap.contains(clinitMethod)) queue.enqueue(clinitMethod)
+            seenClasses.add(current.owner)
 
           case current: TypeInsnNode => seenClasses.add(JType.Cls(current.desc))
 
