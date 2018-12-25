@@ -17,6 +17,7 @@ object PostLivenessDCE {
   def apply(entrypoints: scala.Seq[MethodSig],
             classNodes: Seq[ClassNode],
             findSubtypes: JType.Cls => List[JType.Cls],
+            findSupertypes: JType.Cls => Seq[JType.Cls],
             ignore: String => Boolean): Seq[ClassNode] = {
 
     val classNodeMap = classNodes.map{cn => (JType.Cls(cn.name), cn)}.toMap
@@ -35,7 +36,19 @@ object PostLivenessDCE {
       if (!ignore(current.cls.name) && !seenMethods(current)){
         seenMethods.add(current)
         seenClasses.add(current.cls)
-        val mn = methodSigMap(current)
+        val mn = methodSigMap(
+          if (!current.static) current
+          else {
+            findSupertypes(current.cls)
+              .iterator
+              .map(MethodSig(_, current.name, current.desc, current.static))
+              .filter(methodSigMap.contains)
+              .take(1)
+              .toSeq
+              .head
+          }
+        )
+
         mn.instructions.iterator().asScala.foreach{
           case current: InvokeDynamicInsnNode =>
             if (current.bsm == Util.metafactory || current.bsm == Util.altMetafactory){

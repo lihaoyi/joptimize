@@ -69,6 +69,13 @@ object JOptimize{
 
     def ignore(s: String) = s.startsWith("java/") || s.startsWith("scala/")
 
+    def findSupertypes(cls: JType.Cls) = {
+      val output = mutable.Buffer(cls)
+      while(classNodeMap(output.last).superName != null && !ignore(classNodeMap(output.last).superName)){
+        output.append(JType.Cls(classNodeMap(output.last).superName))
+      }
+      output
+    }
     val visitedClasses = mutable.Set.empty[JType.Cls]
     val interp = new Walker(
       isInterface = s => (classNodeMap(s).access & Opcodes.ACC_INTERFACE) != 0,
@@ -76,6 +83,7 @@ object JOptimize{
       visitedMethods = visitedMethods,
       visitedClasses = visitedClasses,
       findSubtypes = subtypeMap.getOrElse(_, Nil),
+      findSupertypes = findSupertypes,
       exists = sig => originalMethods.contains(sig),
       isConcrete = sig => originalMethods(sig).instructions.size != 0,
       merge = merge,
@@ -94,10 +102,8 @@ object JOptimize{
         Set()
       )
     }
-
     val newMethods = visitedMethods.toList.collect{
-      case ((sig, inferredTypes), Walker.MethodResult(liveArgs, returnType, insns, pure))
-        if !(pure && returnType.isConstant)=>
+      case ((sig, inferredTypes), Walker.MethodResult(liveArgs, returnType, insns, pure)) =>
 
         val originalNode = originalMethods(sig)
 
@@ -146,6 +152,7 @@ object JOptimize{
       entrypoints,
       grouped.keys.toSeq,
       findSubtypes = subtypeMap.getOrElse(_, Nil),
+      findSupertypes = findSupertypes,
       ignore = ignore
     )
 

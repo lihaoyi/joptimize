@@ -15,6 +15,7 @@ class Walker(isInterface: JType.Cls => Boolean,
              visitedMethods: mutable.Map[(MethodSig, Seq[IType]), Walker.MethodResult],
              visitedClasses: mutable.Set[JType.Cls],
              findSubtypes: JType.Cls => List[JType.Cls],
+             findSupertypes: JType.Cls => Seq[JType.Cls],
              isConcrete: MethodSig => Boolean,
              exists: MethodSig => Boolean,
              merge: Seq[IType] => IType,
@@ -59,7 +60,7 @@ class Walker(isInterface: JType.Cls => Boolean,
       // Equivalent to visitedBlocks.lastOption, but faster because
       // LinkedHashMap#lastOption isn't optimized and so is O(n) instead of O(1)
 
-//      pprint.log(sig -> insns.size)
+//      pprint.log(sig)
 
       val initialArgumentLValues = args
         .zipWithIndex
@@ -484,6 +485,15 @@ class Walker(isInterface: JType.Cls => Boolean,
 
         val (concreteSigs, abstractSigs) =
           if (special) (Seq(sig), Nil)
+          else if (static) (
+            findSupertypes(sig.cls)
+              .iterator
+              .map(MethodSig(_, originalInsn.name, calledDesc, true))
+              .filter(exists)
+              .take(1)
+              .toSeq,
+            Nil
+          )
           else {
             val subtypes = findSubtypes(sig.cls)
             val possibleSigs = subtypes.map(st => sig.copy(cls = st)) ++ Seq(sig)
@@ -502,6 +512,7 @@ class Walker(isInterface: JType.Cls => Boolean,
         val recursedResults = concreteSigs.map(ctx.walkMethod(_, inferredTypes))
         val methodPure = recursedResults.forall(_.pure)
         val argLivenesses = recursedResults.map(_.liveArgs)
+
         val narrowReturnType = merge(recursedResults.map(_.inferredReturn))
 
         if (Util.isCompatible(inferredTypes, originalTypes)) (argLivenesses, methodPure, narrowReturnType, originalInsn) // No narrowing

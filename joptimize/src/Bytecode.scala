@@ -1,6 +1,6 @@
 package joptimize
 import org.objectweb.asm.Opcodes._
-import org.objectweb.asm.tree.{AbstractInsnNode, MethodInsnNode, MultiANewArrayInsnNode}
+import org.objectweb.asm.tree.{AbstractInsnNode, LdcInsnNode, MethodInsnNode, MultiANewArrayInsnNode}
 /**
   * Table of stack effects of each bytecode instruction. Note that ASM treats
   * doubles and longs as one slot in the stack, rather than two.
@@ -16,10 +16,19 @@ object Bytecode {
     def pop(node: AbstractInsnNode): Int = pop
     def nullType(node: AbstractInsnNode) = Option(pushType)
   }
-  case class Ldc(pop: Int, push: Int, pushType: JType = null) extends StackChange{
-    def push(node: AbstractInsnNode): Int = push
-    def pop(node: AbstractInsnNode): Int = pop
-    def nullType(node: AbstractInsnNode) = Option(pushType)
+  case class Ldc() extends StackChange{
+    def push(node: AbstractInsnNode): Int = 1
+    def pop(node: AbstractInsnNode): Int = 0
+    def nullType(node: AbstractInsnNode) = Some(
+      node.asInstanceOf[LdcInsnNode].cst match{
+        case _: java.lang.Integer => JType.Prim.I
+        case _: java.lang.Float => JType.Prim.F
+        case _: java.lang.Long => JType.Prim.J
+        case _: java.lang.Double => JType.Prim.D
+        case _: java.lang.String => JType.Null
+        case _: org.objectweb.asm.Type => JType.Null
+      }
+    )
   }
   case object MultiANewArray extends StackChange{
     def push(node: AbstractInsnNode): Int = 1
@@ -55,7 +64,7 @@ object Bytecode {
     DCONST_1        -> Fixed(0, 1, JType.Prim.D),
     BIPUSH          -> Fixed(0, 1, JType.Prim.I),// visitIntInsn
     SIPUSH          -> Fixed(0, 1, JType.Prim.I),
-    LDC             -> Fixed(0, 1),// visitLdcInsn
+    LDC             -> Ldc(),// visitLdcInsn
     ILOAD           -> Fixed(0, 1, JType.Prim.I),// visitVarInsn
     LLOAD           -> Fixed(0, 1, JType.Prim.J),
     FLOAD           -> Fixed(0, 1, JType.Prim.F),
