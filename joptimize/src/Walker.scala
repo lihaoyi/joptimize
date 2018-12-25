@@ -335,6 +335,16 @@ class Walker(isInterface: JType.Cls => Boolean,
           blockState
         )
 
+        if (blockStart.isInstanceOf[LabelNode]) {
+          for (handler <- ctx.tryCatchBlocks.filter(_.start == blockStart)) {
+            walkBlock1(
+              handler.handler,
+              blockState.handleException(
+                new LValue(JType.Cls(handler.`type`), Right(blockStart), Nil)
+              )
+            )
+          }
+        }
         walkInsn(blockStart, blockState, ctx)
 
         val methodInsnMapping = mutable.Map.empty[AbstractInsnNode, List[AbstractInsnNode]]
@@ -423,16 +433,6 @@ class Walker(isInterface: JType.Cls => Boolean,
         if (!walkNextLabel(currentFrame)) walkInsn(current.getNext, currentFrame, ctx)
 
       case _: LabelNode | _: IincInsnNode | _: IntInsnNode | _: LdcInsnNode | _: MultiANewArrayInsnNode =>
-        if (currentInsn.isInstanceOf[LabelNode]) {
-          for (handler <- ctx.tryCatchBlocks.filter(_.start == currentInsn)) {
-            ctx.walkBlock(
-              handler.handler,
-              currentFrame.handleException(
-                new LValue(JType.Cls(handler.`type`), Right(currentInsn), Nil)
-              )
-            )
-          }
-        }
         val n = Util.clone(currentInsn, ctx.blockInsnMapping)
         ctx.finalInsnList.add(n)
         val nextFrame = currentFrame.execute(n, dataflow)
