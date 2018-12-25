@@ -74,6 +74,7 @@ object MainTests extends TestSuite{
         'throwCatch1 - annotatedTest
         'throwCatch2 - annotatedTest
         'throwCatch3 - annotatedTest
+        'throwCatch4 - annotatedTest
         'multiCatch - annotatedTest
         'nullPointer - annotatedTest
         'arrayIndexOutOfBounds - annotatedTest

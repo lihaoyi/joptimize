@@ -4,7 +4,7 @@ package joptimize.examples.simple;
 import java.io.IOException;
 
 public class Exceptions {
-    @joptimize.Test(inputs = {1})
+    @joptimize.Test(inputs = {0, 1, 2})
     public static int throwCatch0(int a) {
         try {
             throw new Exception();
@@ -13,7 +13,7 @@ public class Exceptions {
         }
     }
 
-    @joptimize.Test(inputs = {1})
+    @joptimize.Test(inputs = {0, 1, 2})
     public static int throwCatch1(int a) {
         try {
             if (a > 0) throw new Exception();
@@ -23,8 +23,21 @@ public class Exceptions {
         return 2;
     }
 
-    @joptimize.Test(inputs = {1})
+
+    @joptimize.Test(inputs = {0, 1, 2})
     public static int throwCatch2(int a) {
+        int b = a >= 1 ? 2 : 3;
+
+        try {
+            if (a > 0) b += 1;
+        } catch (Exception e) {
+        }
+        return b;
+    }
+
+
+    @joptimize.Test(inputs = {0, 1, 2})
+    public static int throwCatch3(int a) {
         int b = a >= 1 ? 2 : 3;
 
         try {
@@ -35,7 +48,7 @@ public class Exceptions {
     }
 
     @joptimize.Test(inputs = {0, 1, 2, 3, 4, 5})
-    public static int throwCatch3(int a) {
+    public static int throwCatch4(int a) {
 
         int b = 1;
         if (a >= 1) b += 1;

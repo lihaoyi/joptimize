@@ -186,7 +186,6 @@ class Walker(isInterface: JType.Cls => Boolean,
           }
         }
 
-//        pprint.log(tcbRanges)
         for((start, end) <- tcbRanges){
           val tcb = new TryCatchBlockNode(
             (
@@ -222,7 +221,7 @@ class Walker(isInterface: JType.Cls => Boolean,
             methodInsnMapping(tryCatchBlocks(tcbIndex).handler).head.asInstanceOf[LabelNode],
             tryCatchBlocks(tcbIndex).`type`
           )
-          outputTcbs.append(tcb)
+          if (tcb.start != tcb.end) outputTcbs.append(tcb)
         }
       }
 
