@@ -3,6 +3,7 @@ package joptimize
 import java.io.PrintWriter
 import java.io.StringWriter
 
+import org.objectweb.asm.{Handle, Opcodes}
 import org.objectweb.asm.Opcodes._
 import org.objectweb.asm.tree._
 import org.objectweb.asm.util.{Textifier, TraceMethodVisitor}
@@ -171,5 +172,24 @@ object Util{
         }
     }
   }
+
+  val metafactory = new Handle(
+    Opcodes.H_INVOKESTATIC,
+    "java/lang/invoke/LambdaMetafactory",
+    "metafactory",
+    "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;"
+  )
+  val altMetafactory = new Handle(
+    Opcodes.H_INVOKESTATIC,
+    "java/lang/invoke/LambdaMetafactory",
+    "altMetafactory",
+    "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;[Ljava/lang/Object;)Ljava/lang/invoke/CallSite;"
+  )
+  val makeConcatWithConstants = new Handle(
+    Opcodes.H_INVOKESTATIC,
+    "java/lang/invoke/StringConcatFactory",
+    "makeConcatWithConstants",
+    "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/invoke/CallSite;"
+  )
 
 }

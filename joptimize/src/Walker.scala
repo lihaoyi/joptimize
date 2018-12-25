@@ -17,7 +17,8 @@ class Walker(isInterface: JType.Cls => Boolean,
              findSubtypes: JType.Cls => List[JType.Cls],
              isConcrete: MethodSig => Boolean,
              merge: Seq[IType] => IType,
-             dataflow: Dataflow) {
+             dataflow: Dataflow,
+             ignore: String => Boolean) {
 
   def walkMethod(sig: MethodSig,
                  originalInsns: InsnList,
@@ -345,19 +346,8 @@ class Walker(isInterface: JType.Cls => Boolean,
         }
 
       case current: InvokeDynamicInsnNode =>
-        val metafactory = new Handle(
-          Opcodes.H_INVOKESTATIC,
-          "java/lang/invoke/LambdaMetafactory",
-          "metafactory",
-          "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;"
-        )
-        val makeConcatWithConstants = new Handle(
-          Opcodes.H_INVOKESTATIC,
-          "java/lang/invoke/StringConcatFactory",
-          "makeConcatWithConstants",
-          "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/invoke/CallSite;"
-        )
-        if (current.bsm == metafactory){
+
+        if (current.bsm == Util.metafactory || current.bsm == Util.altMetafactory){
 
           val target = current.bsmArgs(1).asInstanceOf[Handle]
           val targetSig = MethodSig(
@@ -373,12 +363,17 @@ class Walker(isInterface: JType.Cls => Boolean,
           ctx.finalInsnList.add(n)
           val nextFrame = currentFrame.execute(n, dataflow)
           if (!walkNextLabel(nextFrame)) walkInsn(current.getNext, nextFrame, ctx)
-        }else if(current.bsm == makeConcatWithConstants){
+        }else if(current.bsm == Util.makeConcatWithConstants){
           val n = Util.clone(currentInsn, ctx.blockInsnMapping)
           ctx.finalInsnList.add(n)
           val nextFrame = currentFrame.execute(n, dataflow)
           if (!walkNextLabel(nextFrame)) walkInsn(current.getNext, nextFrame, ctx)
         } else{
+          pprint.log(current.bsm)
+          pprint.log(current.bsmArgs)
+          pprint.log(current.bsmArgs.map(_.getClass))
+          pprint.log(current.desc)
+          pprint.log(current.name)
           ???
         }
 
@@ -427,7 +422,9 @@ class Walker(isInterface: JType.Cls => Boolean,
           .asJava
 
       case current: TypeInsnNode =>
-        if (!current.desc.startsWith("java/")) visitedClasses.add(JType.Cls(current.desc))
+        if (!ignore(current.desc)) {
+          visitedClasses.add(JType.Cls(current.desc))
+        }
         val (newInsns, nextFrame) = constantFold(currentInsn, currentFrame, ctx.blockInsnMapping)
         newInsns.foreach(ctx.finalInsnList.add)
         if (!walkNextLabel(nextFrame)) walkInsn(current.getNext, nextFrame, ctx)
@@ -445,7 +442,7 @@ class Walker(isInterface: JType.Cls => Boolean,
                      originalInsn: MethodInsnNode) = {
 
     val argOutCount = Desc.read(originalInsn.desc).args.length + (if (originalInsn.getOpcode == INVOKESTATIC) 0 else 1)
-    if (originalInsn.owner.startsWith("java/")) {
+    if (ignore(originalInsn.owner)) {
       ctx.pure = false
       val copy = new MethodInsnNode(
         originalInsn.getOpcode, originalInsn.owner, originalInsn.name, originalInsn.desc, originalInsn.itf

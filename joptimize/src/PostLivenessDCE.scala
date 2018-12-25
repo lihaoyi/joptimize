@@ -17,13 +17,14 @@ object PostLivenessDCE {
   def apply(entrypoints: scala.Seq[MethodSig],
             classNodes: Seq[ClassNode],
             findSubtypes: JType.Cls => List[JType.Cls],
-            classNodeMap: Map[JType.Cls, ClassNode]): Seq[ClassNode] = {
+            classNodeMap: Map[JType.Cls, ClassNode],
+            ignore: String => Boolean): Seq[ClassNode] = {
     val queue = entrypoints.to[mutable.Queue]
     val seenMethods = mutable.Set.empty[MethodSig]
     val seenClasses = mutable.Set.empty[JType.Cls]
     while(queue.nonEmpty){
       val current = queue.dequeue()
-      if (!seenMethods(current)){
+      if (!ignore(current.cls.name) && !seenMethods(current)){
         seenMethods.add(current)
         val cn = classNodes.find(_.name == current.cls.name).getOrElse(throw new Exception(current.cls.name))
         val mn = cn.methods.iterator().asScala
@@ -32,13 +33,7 @@ object PostLivenessDCE {
 
         mn.instructions.iterator().asScala.foreach{
           case current: InvokeDynamicInsnNode =>
-            val metafactory = new Handle(
-              Opcodes.H_INVOKESTATIC,
-              "java/lang/invoke/LambdaMetafactory",
-              "metafactory",
-              "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;"
-            )
-            if (current.bsm == metafactory){
+            if (current.bsm == Util.metafactory || current.bsm == Util.altMetafactory){
               val target = current.bsmArgs(1).asInstanceOf[Handle]
               val targetSig = MethodSig(
                 JType.Cls(target.getOwner),
@@ -48,7 +43,7 @@ object PostLivenessDCE {
               )
               queue.enqueue(targetSig)
             }
-          case current: MethodInsnNode if !current.owner.startsWith("java/")=>
+          case current: MethodInsnNode if !ignore(current.owner) =>
             val sig = MethodSig(
               current.owner, current.name,
               Desc.read(current.desc), current.getOpcode == Opcodes.INVOKESTATIC

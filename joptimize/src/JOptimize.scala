@@ -67,6 +67,8 @@ object JOptimize{
       else throw new Exception(flattened.toString)
     }
 
+    def ignore(s: String) = s.startsWith("java/") || s.startsWith("scala/")
+
     val visitedClasses = mutable.Set.empty[JType.Cls]
     val interp = new Walker(
       isInterface = s => (classNodeMap(s).access & Opcodes.ACC_INTERFACE) != 0,
@@ -76,7 +78,8 @@ object JOptimize{
       findSubtypes = subtypeMap.getOrElse(_, Nil),
       isConcrete = sig => originalMethods(sig).instructions.size != 0,
       merge = merge,
-      dataflow = new Dataflow(merge)
+      dataflow = new Dataflow(merge),
+      ignore = ignore
     )
 
     for(entrypoint <- entrypoints){
@@ -143,7 +146,8 @@ object JOptimize{
       entrypoints,
       grouped.keys.toSeq,
       findSubtypes = subtypeMap.getOrElse(_, Nil),
-      classNodeMap
+      classNodeMap,
+      ignore = ignore
     )
 
     outClasses
