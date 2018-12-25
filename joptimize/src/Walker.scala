@@ -303,6 +303,10 @@ class Walker(isInterface: JType.Cls => Boolean,
           None
         ))
 
+        if (current.getOpcode == PUTFIELD || current.getOpcode == PUTSTATIC){
+          ctx.pure = false
+        }
+
         ctx.finalInsnList.add(n)
         val nextFrame = currentFrame.execute(n, dataflow)
         if (!walkNextLabel(nextFrame)) walkInsn(current.getNext, nextFrame, ctx)

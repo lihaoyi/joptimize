@@ -22,7 +22,6 @@ object Liveness {
             subCallArgLiveness: Map[AbstractInsnNode, scala.Seq[Boolean]],
             merges: Seq[(Frame[LValue], Frame[LValue])]): Set[Int] = {
 
-
     val mergeLookup = mutable.Map.empty[LValue, mutable.Buffer[LValue]]
 
     for((lhs, rhs) <- merges){
@@ -54,9 +53,9 @@ object Liveness {
 
       }
 
-    val allLiveInsns = allVertices
-      .collect{case Left(lv) => lv.insn}
-      .collect{case Right(mn) => mn}
+    val allLiveInsns =
+      allVertices.collect{case Left(lv) => lv.insn}.collect{case Right(mn) => mn} ++
+      allTerminals.map(_.insn)
 
     val liveArgumentIndices = roots
       .collect{case Left(lv) => lv.insn}
