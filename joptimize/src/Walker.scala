@@ -366,7 +366,9 @@ class Walker(isInterface: JType.Cls => Boolean,
             Desc.read(target.getDesc),
             target.getTag == Opcodes.H_INVOKESTATIC
           )
-          val destWalked = ctx.walkMethod(targetSig, targetSig.desc.args)
+
+          ctx.walkMethod(targetSig, targetSig.desc.args)
+
           val n = Util.clone(currentInsn, ctx.blockInsnMapping)
           ctx.finalInsnList.add(n)
           val nextFrame = currentFrame.execute(n, dataflow)
@@ -425,7 +427,7 @@ class Walker(isInterface: JType.Cls => Boolean,
           .asJava
 
       case current: TypeInsnNode =>
-        visitedClasses.add(JType.Cls(current.desc))
+        if (!current.desc.startsWith("java/")) visitedClasses.add(JType.Cls(current.desc))
         val (newInsns, nextFrame) = constantFold(currentInsn, currentFrame, ctx.blockInsnMapping)
         newInsns.foreach(ctx.finalInsnList.add)
         if (!walkNextLabel(nextFrame)) walkInsn(current.getNext, nextFrame, ctx)
@@ -460,7 +462,6 @@ class Walker(isInterface: JType.Cls => Boolean,
       val (argLivenesses, methodPure, narrowRet, mangled) = {
         val static = originalInsn.getOpcode == INVOKESTATIC
         val special = originalInsn.getOpcode == INVOKESPECIAL
-        val recurse = ctx.walkMethod
 
         val calledDesc = Desc.read(originalInsn.desc)
         val calledSelf = if (static) Nil else Seq(JType.Cls(originalInsn.owner))
@@ -490,7 +491,7 @@ class Walker(isInterface: JType.Cls => Boolean,
           )
         }
 
-        val recursedResults = concreteSigs.map(recurse(_, inferredTypes))
+        val recursedResults = concreteSigs.map(ctx.walkMethod(_, inferredTypes))
         val methodPure = recursedResults.forall(_.pure)
         val argLivenesses = recursedResults.map(_.liveArgs)
         val narrowReturnType = merge(recursedResults.map(_.inferredReturn))

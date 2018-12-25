@@ -49,7 +49,7 @@ object MainTests extends TestSuite{
       }
       'InvokeDynamic - {
         'lambda - annotatedTest
-//        'lambdaBoxed - annotatedTest
+        'lambdaBoxed - annotatedTest
         'concat - annotatedTest
       }
 //      'Inheritance - {
