@@ -24,6 +24,7 @@ class Walker(isInterface: JType.Cls => Boolean,
 
   def walkMethod(sig: MethodSig,
                  originalInsns: InsnList,
+                 tryCatchBlocks: Seq[TryCatchBlockNode],
                  args: Seq[IType],
                  maxLocals: Int,
                  maxStack: Int,
@@ -67,6 +68,34 @@ class Walker(isInterface: JType.Cls => Boolean,
         .map{case (a, i) => new LValue(a, Left(i), Nil)}
 
       val merges = mutable.Buffer.empty[(Frame[LValue], Frame[LValue])]
+
+      val insnTryCatchBlocks = {
+        val tryCatchBlockIndices = tryCatchBlocks.zipWithIndex.toMap
+        val tryCatchBlockStarts = tryCatchBlocks.groupBy(_.start)
+        val tryCatchBlockEnds = tryCatchBlocks.groupBy(_.end)
+        val mapping = mutable.LinkedHashMap.empty[AbstractInsnNode, Map[Int, (JType.Cls, LabelNode)]]
+
+        var currentTryCatchBlocks = Map.empty[Int, (JType.Cls, LabelNode)]
+
+        originalInsns.iterator().asScala.foreach{
+          case insn: LabelNode =>
+            for(tcb <- tryCatchBlockStarts.getOrElse(insn, Nil)){
+              currentTryCatchBlocks += ((
+                tryCatchBlockIndices(tcb),
+                (JType.Cls(tcb.`type`), tcb.handler)
+              ))
+            }
+            mapping(insn) = currentTryCatchBlocks
+            for(tcb <- tryCatchBlockEnds.getOrElse(insn, Nil)){
+              currentTryCatchBlocks -= tryCatchBlockIndices(tcb)
+            }
+          case insn =>
+            mapping(insn) = currentTryCatchBlocks
+        }
+
+        mapping
+      }
+//      pprint.log(insnTryCatchBlocks.map{case (k,v) => (k, Util.prettyprint(k), v.nonEmpty)}, height=9999)
       walkBlock(
         originalInsns.getFirst,
         Frame.initial(
@@ -74,7 +103,7 @@ class Walker(isInterface: JType.Cls => Boolean,
           initialArgumentLValues,
           new LValue(JType.Null, Left(-1), Nil)
         ),
-        Set(), visitedBlocks, sig, seenMethods,
+        Set(), visitedBlocks, sig, tryCatchBlocks, seenMethods,
         recurse = (staticSig, types) => {
           val argOutCount = staticSig.desc.args.length + (if (staticSig.static) 0 else 1)
           if (seenMethods((staticSig, types))) {
@@ -85,7 +114,8 @@ class Walker(isInterface: JType.Cls => Boolean,
               Seq.fill(argOutCount)(true),
               staticSig.desc.ret,
               new InsnList,
-              false
+              false,
+              Nil
             )
           }
           else {
@@ -95,6 +125,7 @@ class Walker(isInterface: JType.Cls => Boolean,
                 walkMethod(
                   clinitSig,
                   clinit.instructions,
+                  clinit.tryCatchBlocks.asScala,
                   Nil,
                   clinit.maxLocals,
                   clinit.maxStack,
@@ -106,6 +137,7 @@ class Walker(isInterface: JType.Cls => Boolean,
             walkMethod(
               staticSig,
               lookupMethod(staticSig).get.instructions,
+              lookupMethod(staticSig).get.tryCatchBlocks.asScala,
               types.toList,
               lookupMethod(staticSig).get.maxLocals,
               lookupMethod(staticSig).get.maxStack,
@@ -113,13 +145,14 @@ class Walker(isInterface: JType.Cls => Boolean,
             )
           }
         },
-        merges
+        merges,
+        insnTryCatchBlocks.toMap
       )
 
 //      pprint.log(sig -> "END")
 
 //      pprint.log((sig, pure, methodReturns))
-      val allVisitedBlocks = visitedBlocks.values.map(_.asInstanceOf[Walker.BlockResult])
+      val allVisitedBlocks = visitedBlocks.values.map(_.asInstanceOf[Walker.BlockResult]).toSeq
       val methodReturns = allVisitedBlocks.flatMap(_.methodReturns).toSeq
       val terminalInsns = allVisitedBlocks.flatMap(_.terminalInsns).toSeq
       val lineNumberNodes = allVisitedBlocks.flatMap(_.lineNumberNodes)
@@ -132,6 +165,67 @@ class Walker(isInterface: JType.Cls => Boolean,
         else merge(methodReturns.map(_.tpe))
 
       val outputInsns = new InsnList
+
+      val outputTcbs = mutable.Buffer.empty[TryCatchBlockNode]
+      for(tcbIndex <- tryCatchBlocks.indices){
+//        pprint.log(tcbIndex)
+        val tcbBlockIndices = allVisitedBlocks.zipWithIndex.collect{
+          case (b, i) if b.tryCatchBlocks.contains(tcbIndex) => i
+        }
+//        pprint.log(tcbBlockIndices)
+        val tcbRanges = mutable.Buffer.empty[(Int, Int)]
+        for(tcbBlockIndex <- tcbBlockIndices){
+          if (tcbRanges.isEmpty) tcbRanges.append((tcbBlockIndex, tcbBlockIndex))
+          else{
+            val last = tcbRanges.last
+            if (last._2 + 1 == tcbBlockIndex){
+              tcbRanges(tcbRanges.length - 1) = (last._1, tcbBlockIndex)
+            }else{
+              tcbRanges.append((tcbBlockIndex, tcbBlockIndex))
+            }
+          }
+        }
+
+//        pprint.log(tcbRanges)
+        for((start, end) <- tcbRanges){
+          val tcb = new TryCatchBlockNode(
+            (
+              allVisitedBlocks(start).insns.getFirst match{
+                case l: LabelNode => Some(l)
+                case _ => None
+              }
+            ).orElse(
+              allVisitedBlocks.lift(start-1).flatMap(b => b.insns.getLast match{
+                case l: LabelNode => Some(l)
+                case _ => None
+              }
+            )).getOrElse{
+              val l = new LabelNode()
+              allVisitedBlocks(start).insns.insert(l)
+              l
+            },
+            (
+              allVisitedBlocks(end).insns.getLast match{
+                case l: LabelNode => Some(l)
+                case _ => None
+              }
+            ).orElse(
+              allVisitedBlocks.lift(end + 1).flatMap(b => b.insns.getFirst match{
+                case l: LabelNode => Some(l)
+                case _ => None
+              }
+            )).getOrElse{
+              val l = new LabelNode()
+              allVisitedBlocks(end).insns.add(l)
+              l
+            },
+            methodInsnMapping(tryCatchBlocks(tcbIndex).handler).head.asInstanceOf[LabelNode],
+            tryCatchBlocks(tcbIndex).`type`
+          )
+          outputTcbs.append(tcb)
+        }
+      }
+
       allVisitedBlocks.foreach(t => outputInsns.add(t.insns))
 
       val liveArguments =
@@ -143,15 +237,17 @@ class Walker(isInterface: JType.Cls => Boolean,
         else Seq(true) ++ sig.desc.args.indices.map(_+1).map(liveArguments)
 
       for{
-        lineNumNode <- lineNumberNodes
+        lineNumNode <- lineNumberNodes.distinct
         label <- methodInsnMapping(lineNumNode.start)
       } outputInsns.add(new LineNumberNode(lineNumNode.line, label.asInstanceOf[LabelNode]))
+
 
       Walker.MethodResult(
         liveArgs,
         resultType,
         outputInsns,
-        pure
+        pure,
+        outputTcbs
       )
     })
   }
@@ -161,9 +257,11 @@ class Walker(isInterface: JType.Cls => Boolean,
                 seenBlocks0: Set[AbstractInsnNode],
                 visitedBlocks: mutable.LinkedHashMap[(AbstractInsnNode, Frame[IType]), Walker.BlockInfo],
                 sig: MethodSig,
+                tryCatchBlocks: Seq[TryCatchBlockNode],
                 seenMethods: Set[(MethodSig, scala.Seq[IType])],
                 recurse: (MethodSig, Seq[IType]) => Walker.MethodResult,
-                merges: mutable.Buffer[(Frame[LValue], Frame[LValue])]): Walker.BlockInfo = {
+                merges: mutable.Buffer[(Frame[LValue], Frame[LValue])],
+                insnTryCatchBlocks: Map[AbstractInsnNode, Map[Int, (JType.Cls, LabelNode)]]): Walker.BlockInfo = {
 
     val blockState =
       if (!seenBlocks0.contains(blockStart)) blockState0
@@ -186,7 +284,10 @@ class Walker(isInterface: JType.Cls => Boolean,
         //          println("NEW BLOCK " + (currentInsn, currentFrame))
 
         val insnList = new InsnList
-        def walkBlock1 = walkBlock(_, _, seenBlocks, visitedBlocks, sig, seenMethods, recurse, merges)
+        def walkBlock1 = walkBlock(
+          _, _,
+          seenBlocks, visitedBlocks, sig, tryCatchBlocks, seenMethods, recurse, merges, insnTryCatchBlocks
+        )
         /**
           * Walk another block. Automatically inserts a GOTO if the next block isn't
           * going to be immediately after the current block, and elides the GOTO otherwise
@@ -225,7 +326,8 @@ class Walker(isInterface: JType.Cls => Boolean,
           walkBlock = walkBlock1,
           walkNextBlock = walkNextBlock,
           seenMethods = seenMethods,
-          walkMethod = recurse
+          walkMethod = recurse,
+          tryCatchBlocks = tryCatchBlocks
         )
 
         visitedBlocks((blockStart, typeState)) = Walker.BlockStub(
@@ -240,6 +342,7 @@ class Walker(isInterface: JType.Cls => Boolean,
         for((k, v) <- ctx.blockInsnMapping){
           methodInsnMapping(k) = v :: methodInsnMapping.getOrElse(k, Nil)
         }
+
         val res = Walker.BlockResult(
           blockIndex,
           insnList,
@@ -249,9 +352,11 @@ class Walker(isInterface: JType.Cls => Boolean,
           ctx.pure,
           subCallArgLiveness.toMap,
           lineNumberNodes.toSet,
-          methodInsnMapping.toMap
+          methodInsnMapping.toMap,
+          insnTryCatchBlocks(blockStart)
         )
         visitedBlocks((blockStart, typeState)) = res
+
         //          println("END BLOCK")
         res
     }
@@ -264,8 +369,6 @@ class Walker(isInterface: JType.Cls => Boolean,
   @tailrec final def walkInsn(currentInsn: AbstractInsnNode,
                               currentFrame: Frame[LValue],
                               ctx: Walker.InsnCtx): Unit = {
-    //          println("    " + currentFrame)
-    //          val nextFrame = currentFrame.execute(currentInsn, dataflow)
 
     /**
       * Walk the next instruction as a new block, if it is a label. If not
@@ -289,6 +392,7 @@ class Walker(isInterface: JType.Cls => Boolean,
             walkMethod(
               clinitSig,
               clinit.instructions,
+              clinit.tryCatchBlocks.asScala,
               Nil,
               clinit.maxLocals,
               clinit.maxStack,
@@ -321,6 +425,16 @@ class Walker(isInterface: JType.Cls => Boolean,
         if (!walkNextLabel(currentFrame)) walkInsn(current.getNext, currentFrame, ctx)
 
       case _: LabelNode | _: IincInsnNode | _: IntInsnNode | _: LdcInsnNode | _: MultiANewArrayInsnNode =>
+        if (currentInsn.isInstanceOf[LabelNode]) {
+          for (handler <- ctx.tryCatchBlocks.filter(_.start == currentInsn)) {
+            ctx.walkBlock(
+              handler.handler,
+              currentFrame.handleException(
+                new LValue(JType.Cls(handler.`type`), Right(currentInsn), Nil)
+              )
+            )
+          }
+        }
         val n = Util.clone(currentInsn, ctx.blockInsnMapping)
         ctx.finalInsnList.add(n)
         val nextFrame = currentFrame.execute(n, dataflow)
@@ -348,6 +462,10 @@ class Walker(isInterface: JType.Cls => Boolean,
             ctx.methodReturns.append(currentFrame.stack.last)
             ctx.terminalInsns.append(Terminal(n, Seq(currentFrame.stack.last), None))
           case RETURN =>
+            val n = new InsnNode(current.getOpcode)
+            ctx.finalInsnList.add(n)
+            ctx.terminalInsns.append(Terminal(n, Seq(), None))
+          case ATHROW =>
             val n = new InsnNode(current.getOpcode)
             ctx.finalInsnList.add(n)
             ctx.terminalInsns.append(Terminal(n, Seq(), None))
@@ -505,7 +623,8 @@ class Walker(isInterface: JType.Cls => Boolean,
             Array.fill(originalTypes.length - 1)(true),
             interfaceSig.desc.ret,
             new InsnList,
-            false
+            false,
+            Nil
           )
         }
 
@@ -682,7 +801,8 @@ object Walker{
   case class MethodResult(liveArgs: Seq[Boolean],
                           inferredReturn: IType,
                           methodBody: InsnList,
-                          pure: Boolean)
+                          pure: Boolean,
+                          seenTryCatchBlocks: Seq[TryCatchBlockNode])
 
   trait BlockInfo{
     def blockIndex: Int
@@ -704,8 +824,15 @@ object Walker{
                          pure: Boolean,
                          subCallArgLiveness: Map[AbstractInsnNode, Seq[Boolean]],
                          lineNumberNodes: Set[LineNumberNode],
-                         methodInsnMapping: Map[AbstractInsnNode, List[AbstractInsnNode]]) extends BlockInfo{
-    def leadingLabel = insns.getFirst.asInstanceOf[LabelNode]
+                         methodInsnMapping: Map[AbstractInsnNode, List[AbstractInsnNode]],
+                         tryCatchBlocks: Map[Int, (JType.Cls, LabelNode)]) extends BlockInfo{
+    def leadingLabel = insns.getFirst match{
+      case l: LabelNode => l
+      case _ =>
+        val l = new LabelNode()
+        insns.insert(l)
+        l
+    }
   }
 
   case class InsnCtx(sig: MethodSig,
@@ -719,5 +846,6 @@ object Walker{
                      walkBlock: (AbstractInsnNode, Frame[LValue]) => BlockInfo,
                      walkNextBlock: (AbstractInsnNode, Frame[LValue]) => BlockInfo,
                      seenMethods: Set[(MethodSig, Seq[IType])],
-                     walkMethod: (MethodSig, Seq[IType]) => Walker.MethodResult)
+                     walkMethod: (MethodSig, Seq[IType]) => Walker.MethodResult,
+                     tryCatchBlocks: Seq[TryCatchBlockNode])
 }

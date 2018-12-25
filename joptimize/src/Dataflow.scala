@@ -72,7 +72,7 @@ class Dataflow(merge0: Seq[IType] => IType) extends Interpreter[LValue](ASM4){
   def unaryOperation(insn: AbstractInsnNode, value: LValue) = new LValue(
     insn.getOpcode match {
       case INEG => value.tpe match{ case IType.I(i) => IType.I(-i) case _ => JType.Prim.I}
-      case IINC => value.tpe match{ case IType.I(i) => IType.I(i + 1) case _ => JType.Prim.I}
+      case IINC => value.tpe match{ case IType.I(i) => IType.I(i + insn.asInstanceOf[IincInsnNode].incr) case _ => JType.Prim.I}
       case L2I => value.tpe match{ case IType.J(i) => IType.I(i.toInt) case _ => JType.Prim.I}
       case F2I => value.tpe match{ case IType.F(i) => IType.I(i.toInt) case _ => JType.Prim.I}
       case D2I => value.tpe match{ case IType.D(i) => IType.I(i.toInt) case _ => JType.Prim.I}

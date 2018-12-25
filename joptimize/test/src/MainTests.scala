@@ -12,6 +12,7 @@ object MainTests extends TestSuite{
     'simple - {
       'IfElse - {
         'basicIf - annotatedTest
+        'ifAssign - annotatedTest
         'ifNonIntZero - annotatedTest
         'ifNonIntBinary - annotatedTest
         'ifElseIf - annotatedTest
@@ -69,7 +70,10 @@ object MainTests extends TestSuite{
         'staticInheritanceMethod - annotatedTest
       }
       'Exceptions - {
-        'throwCatch - annotatedTest
+        'throwCatch0 - annotatedTest
+        'throwCatch1 - annotatedTest
+        'throwCatch2 - annotatedTest
+        'throwCatch3 - annotatedTest
         'multiCatch - annotatedTest
         'nullPointer - annotatedTest
         'arrayIndexOutOfBounds - annotatedTest

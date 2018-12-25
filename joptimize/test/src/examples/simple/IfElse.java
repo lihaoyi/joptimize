@@ -8,6 +8,15 @@ public class IfElse {
         else return -a;
     }
 
+    @joptimize.Test(inputs = {0, 1, 2, 3, 4, 5})
+    public static int ifAssign(int a) {
+        int b = 1;
+        if (a >= 1) b += 1;
+        else b += 2;
+
+        return b;
+    }
+
     @joptimize.Test(inputs = {10, 11, -9, 9})
     public static int ifNonIntZero(int a) {
         if (((byte) a) > 0) return a;

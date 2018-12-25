@@ -96,14 +96,16 @@ object JOptimize{
       interp.walkMethod(
         entrypoint,
         mn.instructions,
+        mn.tryCatchBlocks.asScala,
         Desc.read(mn.desc).args,
         mn.maxLocals,
         mn.maxStack,
         Set()
       )
     }
+
     val newMethods = visitedMethods.toList.collect{
-      case ((sig, inferredTypes), Walker.MethodResult(liveArgs, returnType, insns, pure)) =>
+      case ((sig, inferredTypes), Walker.MethodResult(liveArgs, returnType, insns, pure, seenTryCatchBlocks)) =>
 
         val originalNode = originalMethods(sig)
 
@@ -123,6 +125,7 @@ object JOptimize{
         originalNode.accept(newNode)
         newNode.instructions = insns
         newNode.desc = mangledDesc.unparse
+        newNode.tryCatchBlocks = seenTryCatchBlocks.asJava
 
         classNodeMap(sig.cls) -> newNode
     }

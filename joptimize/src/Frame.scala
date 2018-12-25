@@ -71,6 +71,12 @@ class Frame[T <: Frameable[T]](protected val value: org.objectweb.asm.tree.analy
       new Frame(newFrame)
     }
   }
+  def handleException(ex: T) = {
+    val newFrame = new org.objectweb.asm.tree.analysis.Frame[T](value)
+    newFrame.clearStack()
+    newFrame.push(ex)
+    new Frame(newFrame)
+  }
   def widen = {
     val newValue = new org.objectweb.asm.tree.analysis.Frame[T](
       value.getLocals,
