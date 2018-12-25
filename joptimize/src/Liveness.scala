@@ -112,5 +112,5 @@ object Liveness {
   * Note that we cannot model terminals as their returned LValue, because some
   * terminals such as RETURN or void method INVOKEs return nothing.
   */
-case class Terminal(insn: AbstractInsnNode, inputs: Seq[LValue], ret: Option[IType])
+case class Terminal(insn: AbstractInsnNode, inputs: Seq[LValue])
 

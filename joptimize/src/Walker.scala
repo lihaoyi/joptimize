@@ -409,7 +409,6 @@ class Walker(isInterface: JType.Cls => Boolean,
             currentFrame.stack.takeRight(
               Bytecode.stackEffect(currentInsn.getOpcode).pop(currentInsn)
             ),
-            None
           ))
           ctx.pure = false
         }
@@ -451,7 +450,6 @@ class Walker(isInterface: JType.Cls => Boolean,
               currentFrame.stack.takeRight(
                 Bytecode.stackEffect(currentInsn.getOpcode).pop(currentInsn)
               ),
-              None
             ))
 
             if (!walkNextLabel(nextFrame)) walkInsn(current.getNext, nextFrame, ctx)
@@ -459,15 +457,15 @@ class Walker(isInterface: JType.Cls => Boolean,
             val n = new InsnNode(current.getOpcode)
             ctx.finalInsnList.add(n)
             ctx.methodReturns.append(currentFrame.stack.last)
-            ctx.terminalInsns.append(Terminal(n, Seq(currentFrame.stack.last), None))
+            ctx.terminalInsns.append(Terminal(n, Seq(currentFrame.stack.last)))
           case RETURN =>
             val n = new InsnNode(current.getOpcode)
             ctx.finalInsnList.add(n)
-            ctx.terminalInsns.append(Terminal(n, Seq(), None))
+            ctx.terminalInsns.append(Terminal(n, Seq()))
           case ATHROW =>
             val n = new InsnNode(current.getOpcode)
             ctx.finalInsnList.add(n)
-            ctx.terminalInsns.append(Terminal(n, Seq(), None))
+            ctx.terminalInsns.append(Terminal(n, Seq()))
           case _ =>
             val (nextInsns, nextFrame) = constantFold(currentInsn, currentFrame, ctx.blockInsnMapping)
             nextInsns.foreach(ctx.finalInsnList.add)
@@ -524,7 +522,7 @@ class Walker(isInterface: JType.Cls => Boolean,
 
       case current: LookupSwitchInsnNode =>
         val n = new LookupSwitchInsnNode(null, Array(), Array())
-        ctx.terminalInsns.append(Terminal(n, Seq(currentFrame.stack.last), None))
+        ctx.terminalInsns.append(Terminal(n, Seq(currentFrame.stack.last)))
         ctx.finalInsnList.add(n)
         val nextFrame = currentFrame.execute(n, dataflow)
         n.dflt = ctx.walkBlock(current.dflt, nextFrame).leadingLabel
@@ -539,7 +537,7 @@ class Walker(isInterface: JType.Cls => Boolean,
         val n = new TableSwitchInsnNode(current.min, current.max, null)
         ctx.finalInsnList.add(n)
         val nextFrame = currentFrame.execute(n, dataflow)
-        ctx.terminalInsns.append(Terminal(n, Seq(currentFrame.stack.last), None))
+        ctx.terminalInsns.append(Terminal(n, Seq(currentFrame.stack.last)))
         n.dflt = ctx.walkBlock(current.dflt, nextFrame)
           .leadingLabel
         n.labels = current.labels
@@ -579,7 +577,6 @@ class Walker(isInterface: JType.Cls => Boolean,
       ctx.terminalInsns.append(Terminal(
         copy,
         currentFrame.stack.takeRight(argOutCount),
-        Some(Desc.read(originalInsn.desc).ret)
       ))
       ctx.finalInsnList.add(copy)
       currentFrame.execute(copy, dataflow)
@@ -667,7 +664,6 @@ class Walker(isInterface: JType.Cls => Boolean,
         ctx.terminalInsns.append(Terminal(
           mangled,
           currentFrame.stack.takeRight(argOutCount),
-          Some(narrowRet)
         ))
       }
 
@@ -736,7 +732,6 @@ class Walker(isInterface: JType.Cls => Boolean,
         terminalInsns.append(Terminal(
           n,
           currentFrame.stack.takeRight(Bytecode.stackEffect(current.getOpcode).pop(current)),
-          None
         ))
         val nextFrame = currentFrame.execute(n, dataflow)
         walkNextBlock(current.getNext, nextFrame)
