@@ -1,5 +1,9 @@
 # Easy
 
+- Exception handling
+
+    - Preserve catch/finally code blocks, and classfile annotations
+
 - NULLness inference for reference types
     - Needed if we want to mark instance methods as elidable, because we need to
       be sure they do not throw NPEs.

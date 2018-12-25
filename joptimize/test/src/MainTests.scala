@@ -68,6 +68,12 @@ object MainTests extends TestSuite{
         'staticInheritance - annotatedTest
         'staticInheritanceMethod - annotatedTest
       }
+      'Exceptions - {
+        'throwCatch - annotatedTest
+        'multiCatch - annotatedTest
+        'nullPointer - annotatedTest
+        'arrayIndexOutOfBounds - annotatedTest
+      }
     }
     'narrow - {
       'Supertype - {

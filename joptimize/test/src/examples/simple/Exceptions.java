@@ -4,7 +4,7 @@ package joptimize.examples.simple;
 import java.io.IOException;
 
 public class Exceptions {
-
+    @joptimize.Test(inputs = {0, 1, 2, 3, 4, 5})
     public static int throwCatch(int a) {
 
         int b = 1;
@@ -21,6 +21,7 @@ public class Exceptions {
         return b;
     }
 
+    @joptimize.Test(inputs = {0, 1, 2, 3, 4, 5})
     public static int multiCatch(int in) {
         try {
             try {
@@ -56,7 +57,9 @@ public class Exceptions {
         }
     }
 
-    public static String nullPointer(Object o) {
+    @joptimize.Test(inputs = {0, 1, 2, 3, 4, 5})
+    public static String nullPointer(int n) {
+        Object o = n == 0 ? null : "";
         try {
             return o.toString();
         } catch (NullPointerException npe) {
@@ -64,6 +67,7 @@ public class Exceptions {
         }
     }
 
+    @joptimize.Test(inputs = {0, 1, 2, 3, 4, 5})
     public static String arrayIndexOutOfBounds(int i) {
         try {
             int[] a = {1, 2, 4, 8};

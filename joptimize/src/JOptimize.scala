@@ -123,6 +123,7 @@ object JOptimize{
         originalNode.accept(newNode)
         newNode.instructions = insns
         newNode.desc = mangledDesc.unparse
+
         classNodeMap(sig.cls) -> newNode
     }
 
