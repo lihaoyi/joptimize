@@ -325,8 +325,7 @@ class Walker(isInterface: JType.Cls => Boolean,
           walkBlock = walkBlock1,
           walkNextBlock = walkNextBlock,
           seenMethods = seenMethods,
-          walkMethod = recurse,
-          tryCatchBlocks = tryCatchBlocks
+          walkMethod = recurse
         )
 
         visitedBlocks((blockStart, typeState)) = Walker.BlockStub(
@@ -336,7 +335,7 @@ class Walker(isInterface: JType.Cls => Boolean,
         )
 
         if (blockStart.isInstanceOf[LabelNode]) {
-          for (handler <- ctx.tryCatchBlocks.filter(_.start == blockStart)) {
+          for (handler <- tryCatchBlocks.filter(_.start == blockStart)) {
             walkBlock1(
               handler.handler,
               blockState.handleException(
@@ -840,6 +839,5 @@ object Walker{
                      walkBlock: (AbstractInsnNode, Frame[LValue]) => BlockInfo,
                      walkNextBlock: (AbstractInsnNode, Frame[LValue]) => BlockInfo,
                      seenMethods: Set[(MethodSig, Seq[IType])],
-                     walkMethod: (MethodSig, Seq[IType]) => Walker.MethodResult,
-                     tryCatchBlocks: Seq[TryCatchBlockNode])
+                     walkMethod: (MethodSig, Seq[IType]) => Walker.MethodResult)
 }
