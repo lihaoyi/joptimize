@@ -1,6 +1,11 @@
 package joptimize.examples.narrow;
 
 class Supertype {
+    @joptimize.Test(
+        inputs = {2, 1, 1, 2},
+        checkRemoved = {"Supertype.call"},
+        checkMangled = {"Supertype.call"}
+    )
     static int main(int x, int y) {
         return call(new Bar(), x) + call(new Qux(), y);
         // (x + 1) + (y + 2)
@@ -10,6 +15,11 @@ class Supertype {
         return f.inc(n);
     }
 
+    @joptimize.Test(
+        inputs = {2, 1, 1, 2},
+        checkRemoved = {"Supertype.call"},
+        checkMangled = {"Supertype.call", "Supertype.callDeep"}
+    )
     static int mainDeep(int x, int y) {
         return callDeep(new Bar(), x) + callDeep(new Qux(), y);
         // (x + 1) + (y + 2)

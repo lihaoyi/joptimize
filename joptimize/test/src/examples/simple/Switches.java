@@ -2,6 +2,7 @@ package joptimize.examples.simple;
 
 
 public class Switches {
+    @joptimize.Test(inputs = {0, 1, 2, 3, 4, 5, 6, 7, 9})
     public static int smallSwitch(int a) {
         switch (a) {
             case 0:
@@ -13,6 +14,12 @@ public class Switches {
         }
     }
 
+    @joptimize.Test(
+        inputs = {
+            0, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15, 16,
+            17, 18, 19, 20, 21, 22, 23, 24,25, 26, 27, 28, 29, 30, 31, 32
+        }
+    )
     public static double bigDenseSwitch(int a) {
         switch (a) {
             case 0:
@@ -79,7 +86,14 @@ public class Switches {
                 return 123123.123123;
         }
     }
+    @joptimize.Test(
+        inputs = {
+            1, 2, 4, 8, 16, 32, 62, 128, 256, 512, 1024,
+            2048, 4096, 8192, 16384, 32768, 65536,
+            131072, 262144, 524288, 1048576, 2097152, -1
 
+        }
+    )
     public static double bigSparseSwitch(int a) {
         switch (a) {
             case 1:
@@ -131,6 +145,7 @@ public class Switches {
         }
     }
 
+    @joptimize.Test(inputs = {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l'})
     public static int charSwitch(char c) {
         switch (c) {
             case 'a':
@@ -158,6 +173,7 @@ public class Switches {
         }
     }
 
+    @joptimize.Test(inputs = {1, 2, 4, 16, 32, 64, 127, -128, 3})
     public static int byteSwitch(byte b) {
         switch (b) {
             case 1:

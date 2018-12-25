@@ -12,7 +12,10 @@ object joptimize extends ScalaModule{
     ivy"com.lihaoyi::pprint:0.5.3"
   )
   object test extends Tests{
-    def ivyDeps = Agg(ivy"com.lihaoyi::utest::0.6.6")
+    def ivyDeps = Agg(
+      ivy"com.lihaoyi::utest::0.6.6",
+      ivy"com.lihaoyi::ujson:0.7.1"
+    )
     def testFrameworks = Seq("joptimize.UTestFramework")
   }
 }

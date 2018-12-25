@@ -1,10 +1,20 @@
 package joptimize.examples.opt;
 
 class BooleanJumpFlatten {
+    @joptimize.Test(
+        inputs = {1, 2},
+        checkPresent = {"BooleanJumpFlatten.leaf1"},
+        checkRemoved = {"BooleanJumpFlatten.leaf2"}
+    )
     static int simpleTrue(int x, int y) {
         return call(true, x, y);
     }
 
+    @joptimize.Test(
+            inputs = {1, 2},
+            checkPresent = {"BooleanJumpFlatten.leaf2"},
+            checkRemoved = {"BooleanJumpFlatten.leaf1"}
+    )
     static int simpleFalse(int x, int y) {
         return call(false, x, y);
     }

@@ -1,10 +1,16 @@
 package joptimize.examples.opt;
 
 class InterfacePreservation {
+    @joptimize.Test(
+        inputs = {1, 2}
+    )
     static int shallow(int i) {
         return new Bar().run(i);
     }
 
+    @joptimize.Test(
+        inputs = {1, 2}
+    )
     static int deep(int i) {
         return new Qux().run(i);
     }
