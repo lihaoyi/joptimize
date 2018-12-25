@@ -465,7 +465,7 @@ class Walker(isInterface: JType.Cls => Boolean,
           case ATHROW =>
             val n = new InsnNode(current.getOpcode)
             ctx.finalInsnList.add(n)
-            ctx.terminalInsns.append(Terminal(n, Seq()))
+            ctx.terminalInsns.append(Terminal(n, Seq(currentFrame.stack.last)))
           case _ =>
             val (nextInsns, nextFrame) = constantFold(currentInsn, currentFrame, ctx.blockInsnMapping)
             nextInsns.foreach(ctx.finalInsnList.add)
