@@ -31,7 +31,7 @@ class Walker(isInterface: JType.Cls => Boolean,
                  seenMethods0: Set[(MethodSig, Seq[IType])]): Walker.MethodResult = {
 
     visitedMethods.getOrElseUpdate((sig, args.drop(if (sig.static) 0 else 1)), {
-      val seenMethods = seenMethods0 ++ Seq((sig, args))
+      val seenMethods = seenMethods0 ++ Seq((sig, args.map(_.widen)))
       // - One-pass walk through the instruction list of a method, starting from
       //   narrowed argument types
       //
@@ -102,8 +102,9 @@ class Walker(isInterface: JType.Cls => Boolean,
           new LValue(JType.Null, Left(-1), Nil)
         ),
         Set(), visitedBlocks, sig, seenMethods,
-        recurse = (staticSig, types) => {
+        recurse = (staticSig, types0) => {
           val argOutCount = staticSig.desc.args.length + (if (staticSig.static) 0 else 1)
+          val types = if (seenMethods((staticSig, types0.map(_.widen)))) types0.map(_.widen) else types0
           if (seenMethods((staticSig, types))) {
             // When we hit recursive methods, simply assume that
             // they are impure and that all their arguments are live.
@@ -295,7 +296,7 @@ class Walker(isInterface: JType.Cls => Boolean,
 
         val ctx = Walker.InsnCtx(
           sig,
-          finalInsnList = insnList,
+          outputInsns = insnList,
           blockInsnMapping = blockInsnMapping,
           methodReturns = methodReturns,
           terminalInsns = terminalInsns,
@@ -398,7 +399,7 @@ class Walker(isInterface: JType.Cls => Boolean,
           ctx.pure = false
         }
 
-        ctx.finalInsnList.add(n)
+        ctx.outputInsns.add(n)
         val nextFrame = currentFrame.execute(n, dataflow)
         if (!walkNextLabel(nextFrame)) walkInsn(current.getNext, nextFrame, ctx)
 
@@ -409,7 +410,7 @@ class Walker(isInterface: JType.Cls => Boolean,
 
       case _: LabelNode | _: IincInsnNode | _: IntInsnNode | _: LdcInsnNode | _: MultiANewArrayInsnNode =>
         val n = Util.clone(currentInsn, ctx.blockInsnMapping)
-        ctx.finalInsnList.add(n)
+        ctx.outputInsns.add(n)
         val nextFrame = currentFrame.execute(n, dataflow)
         if (!walkNextLabel(nextFrame)) walkInsn(currentInsn.getNext, nextFrame, ctx)
 
@@ -419,7 +420,7 @@ class Walker(isInterface: JType.Cls => Boolean,
                IALOAD | LALOAD | FALOAD | DALOAD | AALOAD | BALOAD | CALOAD | SALOAD =>
             val (newInsns, nextFrame) = constantFold(currentInsn, currentFrame, ctx.blockInsnMapping)
 
-            newInsns.foreach(ctx.finalInsnList.add)
+            newInsns.foreach(ctx.outputInsns.add)
             ctx.terminalInsns.append(Terminal(
               newInsns.last,
               currentFrame.stack.takeRight(
@@ -430,20 +431,20 @@ class Walker(isInterface: JType.Cls => Boolean,
             if (!walkNextLabel(nextFrame)) walkInsn(current.getNext, nextFrame, ctx)
           case ARETURN | DRETURN | FRETURN | IRETURN | LRETURN =>
             val n = new InsnNode(current.getOpcode)
-            ctx.finalInsnList.add(n)
+            ctx.outputInsns.add(n)
             ctx.methodReturns.append(currentFrame.stack.last)
             ctx.terminalInsns.append(Terminal(n, Seq(currentFrame.stack.last)))
           case RETURN =>
             val n = new InsnNode(current.getOpcode)
-            ctx.finalInsnList.add(n)
+            ctx.outputInsns.add(n)
             ctx.terminalInsns.append(Terminal(n, Seq()))
           case ATHROW =>
             val n = new InsnNode(current.getOpcode)
-            ctx.finalInsnList.add(n)
+            ctx.outputInsns.add(n)
             ctx.terminalInsns.append(Terminal(n, Seq(currentFrame.stack.last)))
           case _ =>
             val (nextInsns, nextFrame) = constantFold(currentInsn, currentFrame, ctx.blockInsnMapping)
-            nextInsns.foreach(ctx.finalInsnList.add)
+            nextInsns.foreach(ctx.outputInsns.add)
             if (!walkNextLabel(nextFrame)) walkInsn(current.getNext, nextFrame, ctx)
         }
 
@@ -462,12 +463,12 @@ class Walker(isInterface: JType.Cls => Boolean,
           ctx.walkMethod(targetSig, targetSig.desc.args)
 
           val n = Util.clone(currentInsn, ctx.blockInsnMapping)
-          ctx.finalInsnList.add(n)
+          ctx.outputInsns.add(n)
           val nextFrame = currentFrame.execute(n, dataflow)
           if (!walkNextLabel(nextFrame)) walkInsn(current.getNext, nextFrame, ctx)
         }else if(current.bsm == Util.makeConcatWithConstants){
           val n = Util.clone(currentInsn, ctx.blockInsnMapping)
-          ctx.finalInsnList.add(n)
+          ctx.outputInsns.add(n)
           val nextFrame = currentFrame.execute(n, dataflow)
           if (!walkNextLabel(nextFrame)) walkInsn(current.getNext, nextFrame, ctx)
         } else{
@@ -480,9 +481,10 @@ class Walker(isInterface: JType.Cls => Boolean,
         }
 
       case current: JumpInsnNode =>
+        assert(current.label != null, current + " " + ctx.outputInsns.getLast)
         walkJump(
-          ctx.walkBlock, ctx.finalInsnList, ctx.walkNextBlock,
-          currentFrame, ctx.terminalInsns, current
+          ctx.walkBlock, ctx.outputInsns, ctx.walkNextBlock,
+          currentFrame, ctx.terminalInsns, current, ctx.blockInsnMapping
         )
 
       case current: LineNumberNode =>
@@ -498,7 +500,7 @@ class Walker(isInterface: JType.Cls => Boolean,
       case current: LookupSwitchInsnNode =>
         val n = new LookupSwitchInsnNode(null, Array(), Array())
         ctx.terminalInsns.append(Terminal(n, Seq(currentFrame.stack.last)))
-        ctx.finalInsnList.add(n)
+        ctx.outputInsns.add(n)
         val nextFrame = currentFrame.execute(n, dataflow)
         n.dflt = ctx.walkBlock(current.dflt, nextFrame).leadingLabel
         n.keys = current.keys
@@ -510,7 +512,7 @@ class Walker(isInterface: JType.Cls => Boolean,
 
       case current: TableSwitchInsnNode =>
         val n = new TableSwitchInsnNode(current.min, current.max, null)
-        ctx.finalInsnList.add(n)
+        ctx.outputInsns.add(n)
         val nextFrame = currentFrame.execute(n, dataflow)
         ctx.terminalInsns.append(Terminal(n, Seq(currentFrame.stack.last)))
         n.dflt = ctx.walkBlock(current.dflt, nextFrame)
@@ -528,12 +530,12 @@ class Walker(isInterface: JType.Cls => Boolean,
           visitedClasses.add(JType.Cls(current.desc))
         }
         val (newInsns, nextFrame) = constantFold(currentInsn, currentFrame, ctx.blockInsnMapping)
-        newInsns.foreach(ctx.finalInsnList.add)
+        newInsns.foreach(ctx.outputInsns.add)
         if (!walkNextLabel(nextFrame)) walkInsn(current.getNext, nextFrame, ctx)
 
       case current: VarInsnNode =>
         val (newInsns, nextFrame) = constantFold(currentInsn, currentFrame, ctx.blockInsnMapping)
-        newInsns.foreach(ctx.finalInsnList.add)
+        newInsns.foreach(ctx.outputInsns.add)
         if (!walkNextLabel(nextFrame)) walkInsn(current.getNext, nextFrame, ctx)
     }
   }
@@ -553,7 +555,7 @@ class Walker(isInterface: JType.Cls => Boolean,
         copy,
         currentFrame.stack.takeRight(argOutCount),
       ))
-      ctx.finalInsnList.add(copy)
+      ctx.outputInsns.add(copy)
       currentFrame.execute(copy, dataflow)
     } else {
 
@@ -644,12 +646,12 @@ class Walker(isInterface: JType.Cls => Boolean,
 
       if (methodPure && narrowRet.isConstant) {
         val insns = popN(argOutCount) ++ Seq(Util.constantToInstruction(narrowRet.asInstanceOf[IType.Constant]))
-        insns.foreach(ctx.finalInsnList.add)
+        insns.foreach(ctx.outputInsns.add)
         insns.foldLeft(currentFrame)(_.execute(_, dataflow))
       } else {
         val finalArgLiveness = argLivenesses.transpose.map(_.reduce(_ || _))
         ctx.subCallArgLiveness(mangled.asInstanceOf[MethodInsnNode]) = finalArgLiveness
-        ctx.finalInsnList.add(mangled)
+        ctx.outputInsns.add(mangled)
 
         currentFrame.execute(mangled, dataflow)
       }
@@ -667,15 +669,16 @@ class Walker(isInterface: JType.Cls => Boolean,
     * to jump to
     */
   def walkJump(walkBlock: (AbstractInsnNode, Frame[LValue]) => Walker.BlockInfo,
-               finalInsnList: InsnList,
+               outputInsns: InsnList,
                walkNextBlock: (AbstractInsnNode, Frame[LValue]) => Walker.BlockInfo,
                currentFrame: Frame[LValue],
                terminalInsns: mutable.Buffer[Terminal],
-               current: JumpInsnNode) = {
+               current: JumpInsnNode,
+               blockInsnMapping: mutable.Map[AbstractInsnNode, AbstractInsnNode]) = {
     def jumpBlock(pred: Boolean): Unit = {
       val popInsns = popN(Bytecode.stackEffect(current.getOpcode).pop(current))
 
-      popInsns.foreach(finalInsnList.add)
+      popInsns.foreach(outputInsns.add)
 
       val nextFrame = popInsns.foldLeft(currentFrame)(_.execute(_, dataflow))
       walkNextBlock(if (pred) current.label else current.getNext, nextFrame)
@@ -703,7 +706,8 @@ class Walker(isInterface: JType.Cls => Boolean,
       case _ => // JSR, IFNULL, IFNONNULL, IF_ACMPEQ, IF_ACMPNE, anything else
         // We don't know how to handle these, so walk both cases
         val n = new JumpInsnNode(current.getOpcode, null)
-        finalInsnList.add(n)
+        outputInsns.add(n)
+        blockInsnMapping(current) = n
         terminalInsns.append(Terminal(
           n,
           currentFrame.stack.takeRight(Bytecode.stackEffect(current.getOpcode).pop(current)),
@@ -805,7 +809,7 @@ object Walker{
   }
 
   case class InsnCtx(sig: MethodSig,
-                     finalInsnList: InsnList,
+                     outputInsns: InsnList,
                      blockInsnMapping: mutable.Map[AbstractInsnNode, AbstractInsnNode],
                      methodReturns: mutable.Buffer[LValue],
                      terminalInsns: mutable.Buffer[Terminal],

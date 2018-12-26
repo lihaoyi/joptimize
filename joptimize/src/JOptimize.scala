@@ -56,10 +56,10 @@ object JOptimize{
           case many => IType.Intersect(many)
         }
       }
-      else if(flattened.forall(_.widen == JType.Prim.Z)) JType.Prim.Z
-      else if(flattened.forall(_.widen == JType.Prim.B)) JType.Prim.B
-      else if(flattened.forall(_.widen == JType.Prim.C)) JType.Prim.C
-      else if(flattened.forall(_.widen == JType.Prim.S)) JType.Prim.S
+      else if(flattened.forall(x => x.widen == JType.Prim.Z || x.getClass == classOf[IType.I])) JType.Prim.Z
+      else if(flattened.forall(x => x.widen == JType.Prim.B || x.getClass == classOf[IType.I])) JType.Prim.B
+      else if(flattened.forall(x => x.widen == JType.Prim.C || x.getClass == classOf[IType.I])) JType.Prim.C
+      else if(flattened.forall(x => x.widen == JType.Prim.S || x.getClass == classOf[IType.I])) JType.Prim.S
       else if(flattened.forall(_.widen == JType.Prim.I)) JType.Prim.I
       else if(flattened.forall(_.widen == JType.Prim.F)) JType.Prim.F
       else if(flattened.forall(_.widen == JType.Prim.J)) JType.Prim.J

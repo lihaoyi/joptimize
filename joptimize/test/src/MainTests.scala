@@ -79,6 +79,9 @@ object MainTests extends TestSuite{
         'nullPointer - annotatedTest
         'arrayIndexOutOfBounds - annotatedTest
       }
+      'Sudoku - {
+        'run - annotatedTest
+      }
     }
     'narrow - {
       'Supertype - {

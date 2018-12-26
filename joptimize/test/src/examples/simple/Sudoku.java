@@ -1,6 +1,7 @@
 package joptimize.examples.simple;
 
 public class Sudoku {
+    @joptimize.Test()
     public static String run() {
         int[][] grid = {
                 {5, 3, 0, 0, 7, 0, 0, 0, 0},
