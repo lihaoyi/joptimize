@@ -15,7 +15,7 @@ object Liveness {
 
   def apply(allVisitedBlocks: Seq[Walker.BlockResult],
             merges: Seq[(Frame[SSA], Frame[SSA])]): (InsnList, Set[Int]) = {
-    val allTerminals = allVisitedBlocks.flatMap(_.terminalInsns).toSeq
+    val allTerminals = allVisitedBlocks.flatMap(_.terminalInsns)
     val subCallArgLiveness = allVisitedBlocks.flatMap(_.subCallArgLiveness).toMap
     val mergeLookup = mutable.Map.empty[SSA, mutable.Buffer[SSA]]
 
@@ -25,75 +25,23 @@ object Liveness {
       }
     }
 
-    def getMerges(l: SSA) = mergeLookup.getOrElse(l, Nil)
-
-    val (allVertices, roots, downstreamEdges) =
-      Util.breadthFirstAggregation[Either[SSA, Terminal]](allTerminals.map(Right(_)).toSet){
-        case Left(x) =>
-          x.insn match{
-            case Left(i) => (x.upstream ++ getMerges(x)).map(Left[SSA, Terminal])
-            case Right(insn) =>
-              subCallArgLiveness.get(insn) match{
-                case None => (x.upstream ++ getMerges(x)).map(Left[SSA, Terminal])
-                case Some(liveness) =>
-                  (x.upstream.zip(liveness).collect{case (k, true) => k} ++ getMerges(x)).map(Left[SSA, Terminal])
-              }
-          }
-        case Right(y) =>
-          subCallArgLiveness.get(y.insn) match{
-            case None => y.inputs.map(Left[SSA, Terminal])
-            case Some(liveness) =>
-              y.inputs.zip(liveness).collect{case (k, true) => k}.map(Left[SSA, Terminal])
-          }
-
-      }
-
-    val allLiveInsns =
-      allVertices.collect{case Left(lv) => lv.insn}.collect{case Right(mn) => mn} ++
-      allTerminals.map(_.insn)
-
-    val liveArgumentIndices = roots
-      .collect{case Left(lv) => lv.insn}
-      .collect{case Left(n) => n}
-
-    val labelsToBlocks = allVisitedBlocks.flatMap(b => b.leadingLabel -> b).toMap
-
-    liveArgumentIndices
-  }
-
-  def stubOut(insns: InsnList, current: AbstractInsnNode) = {
-    for (_ <- 0 until Bytecode.stackEffect(current.getOpcode).pop(current)) {
-      insns.insertBefore(current, new InsnNode(Opcodes.POP))
-    }
-    insns.insertBefore(current,
-      new InsnNode(
-        Bytecode.stackEffect(current.getOpcode).nullType(current).get match {
-          case JType.Prim.Z | JType.Prim.B | JType.Prim.C | JType.Prim.S | JType.Prim.I =>
-            Opcodes.ICONST_0
-          case JType.Prim.F => Opcodes.FCONST_0
-          case JType.Prim.J => Opcodes.LCONST_0
-          case JType.Prim.D => Opcodes.DCONST_0
-          case _ => Opcodes.ACONST_NULL
-        }
-      )
-    )
-    insns.remove(current)
+    pprint.log(allTerminals)
+    pprint.log(allVisitedBlocks.map(_.blockInsns.value))
+//    def getMerges(l: SSA) = mergeLookup.getOrElse(l, Nil)
+//
+//    val allLiveInsns =
+//      allVertices.collect{case Left(lv) => lv.insn}.collect{case Right(mn) => mn} ++
+//      allTerminals.map(_.insn)
+//
+//    val liveArgumentIndices = roots
+//      .collect{case Left(lv) => lv.insn}
+//      .collect{case Left(n) => n}
+//
+//    val labelsToBlocks = allVisitedBlocks.flatMap(b => b.leadingLabel -> b).toMap
+//
+//    liveArgumentIndices
+    ???
   }
 }
 
-
-/**
-  * Terminal instructions have an instruction, its inputs, and an optional
-  * return type.
-  *
-  * The terminal instruction's return value is not kept track of specially; we
-  * only need to ensure that the terminal instruction is called with the input
-  * in the right order, not that anything in particular happens to the return
-  * value. Anyone who needs the return value will depend on it like any other
-  * SSA in the dataflow graph
-  *
-  * Note that we cannot model terminals as their returned SSA, because some
-  * terminals such as RETURN or void method INVOKEs return nothing.
-  */
-case class Terminal(insn: AbstractInsnNode, inputs: Seq[SSA])
 

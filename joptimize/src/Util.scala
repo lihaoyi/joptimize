@@ -138,7 +138,7 @@ object Util{
   }
 
 
-  def constantToInstruction(tpe: IType.Constant) = {
+  def constantToInstruction(tpe: IType.Constant[_]) = {
     tpe match{
       case IType.I(v) =>
         v match{
