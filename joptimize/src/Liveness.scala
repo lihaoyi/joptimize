@@ -1,6 +1,8 @@
 package joptimize
 
-import org.objectweb.asm.Opcodes
+import java.util
+
+import org.objectweb.asm.Opcodes._
 import org.objectweb.asm.tree._
 
 import collection.JavaConverters._
@@ -15,7 +17,8 @@ object Liveness {
 
   def apply(allVisitedBlocks: Seq[Walker.BlockResult],
             merges: Seq[(Frame[SSA], Frame[SSA])],
-            initialArgs: Seq[SSA.Arg]): (InsnList, Set[Int]) = {
+            initialArgs: Seq[SSA.Arg],
+            inferredTypes: util.IdentityHashMap[SSA, IType]): (InsnList, Set[Int]) = {
     val allTerminals = allVisitedBlocks.flatMap(_.terminalInsns)
     val subCallArgLiveness = allVisitedBlocks.flatMap(_.subCallArgLiveness).toMap
     val mergeLookup = mutable.Map.empty[SSA, mutable.Buffer[SSA]]
@@ -26,33 +29,118 @@ object Liveness {
       }
     }
 
-    def getMerges(l: SSA) = mergeLookup.getOrElse(l, Nil)
-
     val (allVertices, roots, downstreamEdges) =
       Util.breadthFirstAggregation[SSA](allTerminals.toSet){ ssa =>
-        ssa.upstream ++ getMerges(ssa)
+        ssa.upstream ++ mergeLookup.getOrElse(ssa, Nil)
       }
+    
+    val saveable = downstreamEdges.groupBy(_._1).mapValues(_.distinct.size > 1)
 
     val liveArgumentIndices = for{
       (a, i) <- initialArgs.zipWithIndex
       if roots(a)
     } yield i
 
-    pprint.log(roots)
-    pprint.log(allTerminals)
-    pprint.log(allVisitedBlocks.map(x => x.blockInsns.value -> x.blockInsns.fallThrough))
-//    def getMerges(l: SSA) = mergeLookup.getOrElse(l, Nil)
-//
-//    val allLiveInsns =
-//      allVertices.collect{case Left(lv) => lv.insn}.collect{case Right(mn) => mn} ++
-//      allTerminals.map(_.insn)
-//
-//    val liveArgumentIndices = roots
-//      .collect{case Left(lv) => lv.insn}
-//      .collect{case Left(n) => n}
-//
-//    val labelsToBlocks = allVisitedBlocks.flatMap(b => b.leadingLabel -> b).toMap
-//
+    val outputInsns = new InsnList()
+    val savedLocals = new util.IdentityHashMap[SSA, Int]()
+    for((a, i) <- initialArgs.zipWithIndex){
+      savedLocals.put(a, i)
+    }
+    for(block <- allVisitedBlocks) {
+      val start = new LabelNode()
+      outputInsns.add(start)
+      pprint.log(block.blockInsns.value)
+      for(ssa <- block.blockInsns.value) {
+        if (savedLocals.containsKey(ssa)){
+          outputInsns.add(new VarInsnNode(ALOAD, savedLocals.get(ssa)))
+        }else{
+          ssa match{
+            case SSA.Arg(index, typeSize) => ??? // shouldn't happen
+            case SSA.BinOp(a, b, opcode, typeSize) => outputInsns.add(new InsnNode(opcode))
+            case SSA.UnaryOp(a, opcode, typeSize) =>
+            case SSA.Inc(a, increment) =>
+            case SSA.UnaryBranch(a, target, opcode) =>
+            case SSA.BinBranch(a, b, target, opcode) =>
+            case SSA.ReturnVal(a) =>
+              outputInsns.add(new InsnNode(
+                inferredTypes.get(a).widen match{
+                  case JType.Prim.I | JType.Prim.B | JType.Prim.S | JType.Prim.C => IRETURN
+                  case JType.Prim.J => LRETURN
+                  case JType.Prim.F => FRETURN
+                  case JType.Prim.D => DRETURN
+                  case _ => ARETURN
+                }
+              ))
+
+            case SSA.Return() => outputInsns.add(new InsnNode(RETURN))
+            case SSA.AThrow(src) => outputInsns.add(new InsnNode(ATHROW))
+            case SSA.TableSwitch(src, min, max, default, targets: Seq[Block]) =>
+            case SSA.LookupSwitch(src, default, keys: Seq[Int], tartargets: Seq[Block]) =>
+            case SSA.Goto(target) =>
+            case SSA.CheckCast(src, desc) =>
+            case SSA.ArrayLength(src) =>
+            case SSA.InstanceOf(src, desc) =>
+            case SSA.PushI(value) => value match{
+              case -1 => outputInsns.add(new InsnNode(ICONST_M1))
+              case 0 => outputInsns.add(new InsnNode(ICONST_0))
+              case 1 => outputInsns.add(new InsnNode(ICONST_1))
+              case 2 => outputInsns.add(new InsnNode(ICONST_2))
+              case 3 => outputInsns.add(new InsnNode(ICONST_3))
+              case 4 => outputInsns.add(new InsnNode(ICONST_4))
+              case 5 => outputInsns.add(new InsnNode(ICONST_5))
+              case _ => outputInsns.add(new LdcInsnNode(value))
+            }
+            case SSA.PushJ(value) => value match{
+              case 0 => outputInsns.add(new InsnNode(LCONST_0))
+              case 1 => outputInsns.add(new InsnNode(LCONST_1))
+              case _ => outputInsns.add(new LdcInsnNode(value))
+            }
+            case SSA.PushF(value) => value match{
+              case 0 => outputInsns.add(new InsnNode(FCONST_0))
+              case 1 => outputInsns.add(new InsnNode(FCONST_1))
+              case 2 => outputInsns.add(new InsnNode(FCONST_2))
+              case _ => outputInsns.add(new LdcInsnNode(value))
+            }
+            case SSA.PushD(value) => value match{
+              case 0 => outputInsns.add(new InsnNode(DCONST_0))
+              case 1 => outputInsns.add(new InsnNode(DCONST_1))
+              case _ => outputInsns.add(new LdcInsnNode(value))
+            }
+            case SSA.PushS(value) => outputInsns.add(new LdcInsnNode(value))
+            case SSA.PushNull() => outputInsns.add(new InsnNode(ACONST_NULL))
+            case SSA.PushCls(value: JType.Cls) =>
+              outputInsns.add(new LdcInsnNode(org.objectweb.asm.Type.getType(value.name)))
+            case SSA.InvokeStatic(srcs: Seq[SSA], cls: JType.Cls, name, desc) =>
+            case SSA.InvokeSpecial(srcs: Seq[SSA], cls: JType.Cls, name, desc) =>
+            case SSA.InvokeVirtual(srcs: Seq[SSA], cls: JType.Cls, name, desc:Desc) =>
+            case SSA.InvokeDynamic(name, desc, bsTag, bsOwner, bsName, bsDesc, bsArgs: Seq[AnyRef]) =>
+            case SSA.New(cls: JType.Cls) =>
+            case SSA.NewArray(src, typeRef) =>
+            case SSA.MultiANewArray(desc, dims: Seq[SSA]) =>
+            case SSA.PutStatic(src, cls: JType.Cls, name, desc) =>
+            case SSA.GetStatic(cls: JType.Cls, name, desc) =>
+            case SSA.PutField(src, obj, owner: JType.Cls, name, desc) =>
+            case SSA.GetField(obj, owner: JType.Cls, name, desc) =>
+            case SSA.PutArray(src, indexSrc, array) =>
+            case SSA.GetArray(indexSrc, array, typeSize) =>
+            case SSA.MonitorEnter(indexSrc) =>
+            case SSA.MonitorExit(indexSrc) =>
+          }
+          if (saveable.getOrElse(ssa, false)){
+            val n = savedLocals.size()
+            outputInsns.add(new InsnNode(DUP))
+            outputInsns.add(new VarInsnNode(ASTORE, n))
+            savedLocals.put(ssa, n)
+          }
+        }
+      }
+
+
+      start
+    }
+
+    pprint.log(outputInsns.iterator().asScala.map(Util.prettyprint).toSeq)
+
     (???, liveArgumentIndices.toSet)
   }
 }

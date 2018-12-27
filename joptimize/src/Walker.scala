@@ -194,7 +194,12 @@ class Walker(isInterface: JType.Cls => Boolean,
 //      }
 
 
-      val (outputInsns, liveArguments) = Liveness(allVisitedBlocks, merges, initialArgumentLValues)
+      val (outputInsns, liveArguments) = Liveness(
+        allVisitedBlocks,
+        merges,
+        initialArgumentLValues,
+        ssaInterpreter.inferredTypes
+      )
 
       val liveArgs =
         if (sig.static) sig.desc.args.indices.map(liveArguments)

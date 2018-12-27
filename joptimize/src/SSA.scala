@@ -8,13 +8,9 @@ class Block(val value: mutable.Buffer[SSA], var fallThrough: Option[Block])
 sealed abstract class SSA(size: Int, upstream0: SSA*) extends Value{
   def upstream = upstream0
   def getSize = size
-  override def equals(obj: Any) = this eq obj.asInstanceOf[AnyRef]
-
 }
 
 object SSA{
-  case class Phi(typeSize: Int, inputs: mutable.Buffer[SSA]) extends SSA(typeSize)
-
   case class Arg(index: Int, typeSize: Int) extends SSA(typeSize)
   case class BinOp(a: SSA, b: SSA, opcode: Int, typeSize: Int) extends SSA(typeSize, a, b)
   case class UnaryOp(a: SSA, opcode: Int, typeSize: Int) extends SSA(typeSize, a)
