@@ -37,16 +37,10 @@ class Walker(isInterface: JType.Cls => Boolean,
 
       val seenMethods = seenMethods0 ++ Seq((sig, args.map(_.widen)))
 
-      val jumpTargets =
-        tryCatchBlocks.map(_.handler) ++
-        originalInsns.iterator().asScala.flatMap{
-          case j: JumpInsnNode => Seq(j.label)
-          case x: TableSwitchInsnNode => Seq(x.dflt) ++ x.labels.iterator().asScala
-          case x: LookupSwitchInsnNode => Seq(x.dflt) ++ x.labels.iterator().asScala
-          case _ => Nil
-        }
-
-      val jumpedBasicBlocks = jumpTargets.map(_ -> new Block(mutable.Buffer.empty)).toMap
+      val jumpedBasicBlocks = originalInsns
+        .iterator().asScala
+        .map(_ -> new Block(mutable.Buffer.empty, None))
+        .toMap
 
       val visitedBlocks = new mutable.LinkedHashMap[(AbstractInsnNode, Frame[IType]), Walker.BlockInfo]
 
@@ -224,7 +218,7 @@ class Walker(isInterface: JType.Cls => Boolean,
                 merges: mutable.Buffer[(Frame[SSA], Frame[SSA])],
                 insnTryCatchBlocks: Map[AbstractInsnNode, Map[Int, (JType.Cls, LabelNode)]],
                 ssaInterpreter: SSAInterpreter,
-                jumpedBasicBlocks: Map[LabelNode, Block]): Walker.BlockInfo = {
+                jumpedBasicBlocks: Map[AbstractInsnNode, Block]): Walker.BlockInfo = {
 
     val seenBlocks = seenBlocks0 + blockStart
 
@@ -240,7 +234,6 @@ class Walker(isInterface: JType.Cls => Boolean,
         res
 
       case None =>
-        val blockIndex = visitedBlocks.size
         //          println("NEW BLOCK " + (currentInsn, currentFrame))
 
         def walkBlock1 = walkBlock(
@@ -248,10 +241,7 @@ class Walker(isInterface: JType.Cls => Boolean,
           seenBlocks, visitedBlocks, sig, seenMethods, recurse,
           merges, insnTryCatchBlocks, ssaInterpreter, jumpedBasicBlocks
         )
-        val blockInsns = blockStart match{
-          case l: LabelNode => jumpedBasicBlocks.getOrElse(l, new Block(mutable.Buffer.empty[SSA]))
-          case _=> new Block(mutable.Buffer.empty[SSA])
-        }
+        val blockInsns = jumpedBasicBlocks(blockStart)
 
         val methodReturns = mutable.Buffer.empty[SSA]
         val terminalInsns = mutable.Buffer.empty[SSA]
@@ -269,7 +259,8 @@ class Walker(isInterface: JType.Cls => Boolean,
           walkBlock = walkBlock1,
           seenMethods = seenMethods,
           walkMethod = recurse,
-          ssaInterpreter = ssaInterpreter(blockInsns)
+          ssaInterpreter = ssaInterpreter(blockInsns),
+          jumpedBasicBlocks = jumpedBasicBlocks
         )
 
         visitedBlocks((blockStart, typeState)) = Walker.BlockStub(blockState)
@@ -317,6 +308,7 @@ class Walker(isInterface: JType.Cls => Boolean,
       */
     def walkNextLabel(nextFrame1: Frame[SSA]) = {
       if (currentInsn.getNext.isInstanceOf[LabelNode]) {
+        ctx.ssaInterpreter.basicBlock.fallThrough = Some(ctx.jumpedBasicBlocks(currentInsn.getNext))
         ctx.walkBlock(currentInsn.getNext, nextFrame1)
         true
       } else false
@@ -663,5 +655,6 @@ object Walker{
                      walkBlock: (AbstractInsnNode, Frame[SSA]) => BlockInfo,
                      seenMethods: Set[(MethodSig, Seq[IType])],
                      walkMethod: (MethodSig, Seq[IType]) => Walker.MethodResult,
-                     ssaInterpreter: SSAInterpreter#Sub)
+                     ssaInterpreter: SSAInterpreter#Sub,
+                     jumpedBasicBlocks: Map[AbstractInsnNode, Block])
 }

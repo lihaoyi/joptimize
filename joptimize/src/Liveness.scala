@@ -26,7 +26,7 @@ object Liveness {
     }
 
     pprint.log(allTerminals)
-    pprint.log(allVisitedBlocks.map(_.blockInsns.value))
+    pprint.log(allVisitedBlocks.map(_.blockInsns))
 //    def getMerges(l: SSA) = mergeLookup.getOrElse(l, Nil)
 //
 //    val allLiveInsns =

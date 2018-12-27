@@ -8,7 +8,7 @@ import org.objectweb.asm.tree._
 import collection.JavaConverters._
 import scala.collection.mutable
 
-class SSAInterpreter(typer: ITypeInterpreter, jumpedBasicBlocks: Map[LabelNode, Block]) {
+class SSAInterpreter(typer: ITypeInterpreter, jumpedBasicBlocks: Map[AbstractInsnNode, Block]) {
   val inferredTypes = new java.util.IdentityHashMap[SSA, IType]()
 
   def apply(basicBlock: Block) = new Sub(basicBlock)

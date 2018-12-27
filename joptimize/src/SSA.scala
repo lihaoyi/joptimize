@@ -3,12 +3,10 @@ import org.objectweb.asm.tree.analysis.Value
 
 import scala.collection.mutable
 
-class Block(val value: mutable.Buffer[SSA])
+class Block(val value: mutable.Buffer[SSA], var fallThrough: Option[Block])
 
 sealed abstract class SSA(size: Int) extends Value{
   def getSize = size
-
-  var misc: Any = null
   override def equals(obj: Any) = this eq obj.asInstanceOf[AnyRef]
 }
 
