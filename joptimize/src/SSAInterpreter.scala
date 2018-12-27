@@ -8,13 +8,32 @@ import org.objectweb.asm.tree._
 import collection.JavaConverters._
 import scala.collection.mutable
 
-object SSAInterpreter extends Interpreter[SSA](ASM4){
+class SSAInterpreter(typer: ITypeInterpreter) extends Interpreter[SSA](ASM4){
   def newValue(tpe: org.objectweb.asm.Type) = {
     if (tpe == null) SSA.Arg(-1, 1)
     else SSA.Arg(-1, JType.read(tpe.getInternalName).size)
   }
 
-  def newOperation(insn: AbstractInsnNode) = {
+  val inferredTypes = new java.util.IdentityHashMap[SSA, IType]()
+
+  def constantFold(ssa: SSA) = {
+    val inferred = typer.visitSSA(ssa, inferredTypes)
+    if (inferred.isConstant){
+      val folded = inferred match{
+        case IType.I(v) => SSA.PushI(v)
+        case IType.F(v) => SSA.PushF(v)
+        case IType.J(v) => SSA.PushJ(v)
+        case IType.D(v) => SSA.PushD(v)
+      }
+      inferredTypes(folded) = inferred
+      folded
+    } else {
+      inferredTypes(ssa) = inferred
+      ssa
+    }
+  }
+
+  def newOperation(insn: AbstractInsnNode) = constantFold{
     insn.getOpcode match {
       case ACONST_NULL => SSA.PushNull()
       case ICONST_M1 => SSA.PushI(-1)
@@ -59,7 +78,7 @@ object SSAInterpreter extends Interpreter[SSA](ASM4){
   // as-necessary when serializing the graph back out to bytecode
   def copyOperation(insn: AbstractInsnNode, value: SSA) = value
 
-  def unaryOperation(insn: AbstractInsnNode, value: SSA) = {
+  def unaryOperation(insn: AbstractInsnNode, value: SSA) = constantFold{
     insn.getOpcode match {
       case IINC => SSA.Inc(value, insn.asInstanceOf[IincInsnNode].incr)
       case INEG | L2I | F2I | D2I | I2B | I2C | I2S | FNEG | I2F | L2F | D2F  =>
@@ -126,7 +145,7 @@ object SSAInterpreter extends Interpreter[SSA](ASM4){
     }
   }
 
-  def binaryOperation(insn: AbstractInsnNode, v1: SSA, v2: SSA) = {
+  def binaryOperation(insn: AbstractInsnNode, v1: SSA, v2: SSA) = constantFold{
     insn.getOpcode match {
       case IALOAD | BALOAD | CALOAD | SALOAD | FALOAD | AALOAD => SSA.GetArray(v1, v2, 1)
 
@@ -150,11 +169,11 @@ object SSAInterpreter extends Interpreter[SSA](ASM4){
     }
   }
 
-  def ternaryOperation(insn: AbstractInsnNode, v1: SSA, v2: SSA, v3: SSA) = {
+  def ternaryOperation(insn: AbstractInsnNode, v1: SSA, v2: SSA, v3: SSA) = constantFold{
     SSA.PutArray(v1, v2, v3)
   }
 
-  def naryOperation(insn: AbstractInsnNode, vs: java.util.List[_ <: SSA]) = {
+  def naryOperation(insn: AbstractInsnNode, vs: java.util.List[_ <: SSA]) = constantFold{
     insn.getOpcode match{
       case MULTIANEWARRAY =>
         val insn2 = insn.asInstanceOf[MultiANewArrayInsnNode]
@@ -181,7 +200,7 @@ object SSAInterpreter extends Interpreter[SSA](ASM4){
         SSA.InvokeSpecial(vs.asScala, insn2.owner, insn2.name, Desc.read(insn2.desc))
     }
   }
-  def returnOperation(insn: AbstractInsnNode, value: SSA, expected: SSA) = {
+  def returnOperation(insn: AbstractInsnNode, value: SSA, expected: SSA) = constantFold{
     SSA.ReturnVal(value)
   }
 

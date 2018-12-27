@@ -87,7 +87,7 @@ object JOptimize{
       exists = sig => originalMethods.contains(sig),
       isConcrete = sig => originalMethods(sig).instructions.size != 0,
       merge = merge,
-      dataflow = new ITypeInterpreter(merge),
+      typer = new ITypeInterpreter(merge),
       ignore = ignore
     )
 

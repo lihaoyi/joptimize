@@ -3,8 +3,9 @@ import java.util
 
 import org.objectweb.asm.Opcodes._
 
-object ITypeInterpreter{
-  def visitSSA(ssa: SSA,inferred: util.IdentityHashMap[SSA, IType]) = ssa match{
+class ITypeInterpreter(merge0: Seq[IType] => IType){
+  def visitSSA(ssa: SSA,
+               inferred: util.IdentityHashMap[SSA, IType]): IType = ssa match{
     case SSA.Arg(index, typeSize) => inferred.get(ssa)
     case SSA.BinOp(a, b, opcode, typeSize) =>
       val v1 = inferred.get(a)
@@ -82,7 +83,13 @@ object ITypeInterpreter{
     case SSA.Goto(target) => JType.Null
     case SSA.CheckCast(src, desc) => desc
     case SSA.ArrayLength(src) => JType.Prim.I
-    case SSA.InstanceOf(src, desc) => JType.Prim.B
+    case SSA.InstanceOf(src, desc) =>
+      val cls = inferred.get(src)
+      val merged = merge0(Seq(desc, cls))
+      if (merged == desc) IType.I(1)
+      else if (merged == cls) JType.Prim.Z
+      else IType.I(0)
+
     case SSA.PushI(value) => IType.I(value)
     case SSA.PushJ(value) => IType.J(value)
     case SSA.PushF(value) => IType.F(value)

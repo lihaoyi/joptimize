@@ -6,6 +6,8 @@ case class Block(terminals: Seq[SSA])
 
 sealed abstract class SSA(size: Int) extends Value{
   def getSize = size
+
+  override def equals(obj: Any) = this eq obj.asInstanceOf[AnyRef]
 }
 
 object SSA{
