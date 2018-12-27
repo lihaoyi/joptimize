@@ -5,44 +5,18 @@ import org.objectweb.asm.tree.analysis.Value
 
 import scala.collection.mutable
 
-trait Frameable[T <: Frameable[T]] extends Value{
-  def widen: T
-  def isEmpty: Boolean
-  def internalName: String
-
-}
-
-/**
-  * Models an abstract or concrete value. Unlike a simple [[IType]], a [[LValue]]
-  * also tracks the provenance of this value: what instruction computed it, which
-  * other values it was computed from, any dataflow merges. This allows you to
-  * analyze the dataflow of LValues to figure out exactly how this value was
-  * computed
-  */
-class LValue(val tpe: IType,
-             val insn: Either[Int, AbstractInsnNode],
-             val upstream: Seq[LValue]) extends Frameable[LValue]{
-  def getSize = tpe.size
-  def widen = new LValue(tpe.widen, insn, Seq(this))
-  def isEmpty = tpe.isEmpty
-  def internalName = tpe.internalName
-
-
-  override def toString = s"LValue@${Integer.toHexString(System.identityHashCode(this))}($tpe, $insn)"
-}
 /**
   * Represents an inferred type in the joptimize type system.
   *
   * Can be a concrete JType, an intersection type, or a concrete value
   */
-trait IType extends Frameable[IType]{
+trait IType extends Value{
   def size: Int
   def isRef: Boolean
   def internalName: String
   def getSize: Int = size
   def name: String
 
-  def isEmpty = this == JType.Null
   /**
     * Forget any information about concrete values encoded in this type, and
     * widen it into a type as represented purely by JVM classes
@@ -60,31 +34,69 @@ object IType{
     def widen = this
     def isConstant = false
   }
-  trait Constant extends IType{
+  trait Constant[T] extends IType{
     def isConstant = true
+    def value: T
   }
-  case class I(value: Int) extends Constant{
+  trait ConstantCompanion[T] {
+    def apply(value: T): Constant[T]
+    def unapply(value: IType): Option[T]
+    def wide: JType
+  }
+  object I extends ConstantCompanion[Int]{
+    def apply(value: Int) = new I(value)
+    def unapply(value: IType) = value match{
+      case x: I => Some(x.value)
+      case _ => None
+    }
+    def wide = JType.Prim.I
+  }
+  case class I(value: Int) extends Constant[Int]{
     def size = 1
     def isRef = false
     def internalName = s"TI$value;"
     def name = s"TI$value"
     def widen = JType.Prim.I
   }
-  case class J(value: Long) extends Constant{
+  object J extends ConstantCompanion[Long]{
+    def apply(value: Long) = new J(value)
+    def unapply(value: IType) = value match{
+      case x: J => Some(x.value)
+      case _ => None
+    }
+    def wide = JType.Prim.J
+  }
+  case class J(value: Long) extends Constant[Long]{
     def size = 2
     def isRef = false
     def internalName = s"TJ$value;"
     def name = s"TJ$value"
     def widen = JType.Prim.J
   }
-  case class F(value: Float) extends Constant{
+  object F extends ConstantCompanion[Float]{
+    def apply(value: Float) = new F(value)
+    def unapply(value: IType) = value match{
+      case x: F => Some(x.value)
+      case _ => None
+    }
+    def wide = JType.Prim.F
+  }
+  case class F(value: Float) extends Constant[Float]{
     def size = 1
     def isRef = false
     def internalName = s"TF$value;"
     def name = s"TF$value"
     def widen = JType.Prim.F
   }
-  case class D(value: Double) extends Constant{
+  object D extends ConstantCompanion[Double]{
+    def apply(value: Double) = new D(value)
+    def unapply(value: IType) = value match{
+      case x: D => Some(x.value)
+      case _ => None
+    }
+    def wide = JType.Prim.D
+  }
+  case class D(value: Double) extends Constant[Double]{
     def size = 2
     def isRef = false
     def internalName = s"TD$value;"

@@ -1,6 +1,8 @@
 package joptimize
 
 
+import java.util.IdentityHashMap
+
 import org.objectweb.asm.{Handle, Opcodes}
 
 import collection.JavaConverters._
@@ -19,7 +21,7 @@ class Walker(isInterface: JType.Cls => Boolean,
              isConcrete: MethodSig => Boolean,
              exists: MethodSig => Boolean,
              merge: Seq[IType] => IType,
-             dataflow: Dataflow,
+             dataflow: ITypeInterpreter,
              ignore: String => Boolean) {
 
   def walkMethod(sig: MethodSig,
@@ -31,6 +33,7 @@ class Walker(isInterface: JType.Cls => Boolean,
                  seenMethods0: Set[(MethodSig, Seq[IType])]): Walker.MethodResult = {
 
     visitedMethods.getOrElseUpdate((sig, args.drop(if (sig.static) 0 else 1)), {
+      val inferredTypes = new IdentityHashMap[SSA, IType]()
       val seenMethods = seenMethods0 ++ Seq((sig, args.map(_.widen)))
       // - One-pass walk through the instruction list of a method, starting from
       //   narrowed argument types
@@ -60,11 +63,13 @@ class Walker(isInterface: JType.Cls => Boolean,
 
 //      pprint.log(sig)
 
-      val initialArgumentLValues = args
-        .zipWithIndex
-        .map{case (a, i) => new LValue(a, Left(i), Nil)}
+      val initialArgumentLValues = for((a, i) <- args.zipWithIndex) yield {
+        val ssa = SSA.Arg(i, a.getSize)
+        inferredTypes.put(ssa, a)
+        ssa
+      }
 
-      val merges = mutable.Buffer.empty[(Frame[LValue], Frame[LValue])]
+      val merges = mutable.Buffer.empty[(Frame[SSA], Frame[SSA])]
 
       val insnTryCatchBlocks = {
         val tryCatchBlockIndices = tryCatchBlocks.zipWithIndex.toMap
@@ -99,7 +104,7 @@ class Walker(isInterface: JType.Cls => Boolean,
         Frame.initial(
           maxLocals, maxStack,
           initialArgumentLValues,
-          new LValue(JType.Null, Left(-1), Nil)
+          null
         ),
         Set(), visitedBlocks, sig, seenMethods,
         recurse = (staticSig, types0) => {
@@ -145,7 +150,8 @@ class Walker(isInterface: JType.Cls => Boolean,
           }
         },
         merges,
-        insnTryCatchBlocks.toMap
+        insnTryCatchBlocks.toMap,
+        inferredTypes
       )
 
 //      pprint.log(sig -> "END")
@@ -159,7 +165,7 @@ class Walker(isInterface: JType.Cls => Boolean,
       val pure = allVisitedBlocks.forall(_.pure)
       val resultType =
         if (methodReturns.isEmpty) sig.desc.ret // abstract methods have no return insn
-        else merge(methodReturns.map(_.tpe))
+        else merge(methodReturns.map(inferredTypes.get))
 
 
       val outputTcbs = mutable.Buffer.empty[TryCatchBlockNode]
@@ -221,22 +227,19 @@ class Walker(isInterface: JType.Cls => Boolean,
   }
 
   def walkBlock(blockStart: AbstractInsnNode,
-                blockState0: Frame[LValue],
+                blockState: Frame[SSA],
                 seenBlocks0: Set[AbstractInsnNode],
                 visitedBlocks: mutable.LinkedHashMap[(AbstractInsnNode, Frame[IType]), Walker.BlockInfo],
                 sig: MethodSig,
                 seenMethods: Set[(MethodSig, scala.Seq[IType])],
                 recurse: (MethodSig, Seq[IType]) => Walker.MethodResult,
-                merges: mutable.Buffer[(Frame[LValue], Frame[LValue])],
-                insnTryCatchBlocks: Map[AbstractInsnNode, Map[Int, (JType.Cls, LabelNode)]]): Walker.BlockInfo = {
-
-    val blockState =
-      if (!seenBlocks0.contains(blockStart)) blockState0
-      else blockState0.widen
+                merges: mutable.Buffer[(Frame[SSA], Frame[SSA])],
+                insnTryCatchBlocks: Map[AbstractInsnNode, Map[Int, (JType.Cls, LabelNode)]],
+                inferredTypes: IdentityHashMap[SSA, IType]): Walker.BlockInfo = {
 
     val seenBlocks = seenBlocks0 + blockStart
 
-    val typeState = blockState.map(_.tpe)
+    val typeState = blockState.map(inferredTypes.get)
     //        pprint.log("VISITING BLOCK" + Util.prettyprint(blockStart))
     visitedBlocks.get((blockStart, typeState)) match{
       case Some(res @ Walker.BlockStub(blockIndex, frame)) =>
@@ -253,11 +256,11 @@ class Walker(isInterface: JType.Cls => Boolean,
 
         def walkBlock1 = walkBlock(
           _, _,
-          seenBlocks, visitedBlocks, sig, seenMethods, recurse, merges, insnTryCatchBlocks
+          seenBlocks, visitedBlocks, sig, seenMethods, recurse, merges, insnTryCatchBlocks, inferredTypes
         )
 
         val blockInsnMapping = mutable.Map.empty[AbstractInsnNode, AbstractInsnNode]
-        val methodReturns = mutable.Buffer.empty[LValue]
+        val methodReturns = mutable.Buffer.empty[SSA]
         val terminalInsns = mutable.Buffer.empty[Terminal]
         val pure = sig.name != "<init>" && sig.name != "<clinit>"
         val subCallArgLiveness = mutable.Map.empty[AbstractInsnNode, Seq[Boolean]]
@@ -273,7 +276,8 @@ class Walker(isInterface: JType.Cls => Boolean,
           lineNumberNodes = lineNumberNodes,
           walkBlock = walkBlock1,
           seenMethods = seenMethods,
-          walkMethod = recurse
+          walkMethod = recurse,
+          inferredTypes = inferredTypes
         )
 
         visitedBlocks((blockStart, typeState)) = Walker.BlockStub(
@@ -286,7 +290,9 @@ class Walker(isInterface: JType.Cls => Boolean,
         val blockEnd = walkInsn(blockStart, blockState, ctx)
 
         for ((_, (tpe, handler))<- insnTryCatchBlocks(blockStart)) {
-          val handlerFrame = blockState.handleException(new LValue(tpe, Right(blockStart), Nil))
+          val ssa = SSA.Arg(-1, 1)
+          inferredTypes.put(ssa, tpe)
+          val handlerFrame = blockState.handleException(ssa)
           val dest = walkBlock1(handler, handlerFrame)
           allHandlers.append((handler, tpe))
         }
@@ -320,14 +326,14 @@ class Walker(isInterface: JType.Cls => Boolean,
     * - Instruction list of that basic block
     */
   @tailrec final def walkInsn(currentInsn: AbstractInsnNode,
-                              currentFrame: Frame[LValue],
+                              currentFrame: Frame[SSA],
                               ctx: Walker.InsnCtx): (Option[Int], Option[AbstractInsnNode]) = {
     /**
       * Walk the next instruction as a new block, if it is a label. If not
       * then return `false` so we can tail-recursively walk it as a simple
       * instruction
       */
-    def walkNextLabel(nextFrame1: Frame[LValue]) = {
+    def walkNextLabel(nextFrame1: Frame[SSA]) = {
       if (currentInsn.getNext.isInstanceOf[LabelNode]) {
         val res = ctx.walkBlock(currentInsn.getNext, nextFrame1)
         Some((Some(res.blockIndex), None))
@@ -366,7 +372,7 @@ class Walker(isInterface: JType.Cls => Boolean,
           ctx.pure = false
         }
 
-        val nextFrame = currentFrame.execute(n, dataflow)
+        val nextFrame = currentFrame.execute(n, SSAInterpreter)
         walkNextLabel(nextFrame) match {
           case Some(t) => t
           case None => walkInsn(current.getNext, nextFrame, ctx)
@@ -382,7 +388,7 @@ class Walker(isInterface: JType.Cls => Boolean,
 
       case _: LabelNode | _: IincInsnNode | _: IntInsnNode | _: LdcInsnNode | _: MultiANewArrayInsnNode =>
         val n = Util.clone(currentInsn, ctx.blockInsnMapping)
-        val nextFrame = currentFrame.execute(n, dataflow)
+        val nextFrame = currentFrame.execute(n, SSAInterpreter)
         walkNextLabel(nextFrame) match {
           case Some(t) => t
           case None => walkInsn(currentInsn.getNext, nextFrame, ctx)
@@ -392,7 +398,9 @@ class Walker(isInterface: JType.Cls => Boolean,
         current.getOpcode match{
           case IASTORE | LASTORE | FASTORE | DASTORE | AASTORE | BASTORE | CASTORE | SASTORE |
                IALOAD | LALOAD | FALOAD | DALOAD | AALOAD | BALOAD | CALOAD | SALOAD =>
-            val (newInsns, nextFrame) = constantFold(currentInsn, currentFrame, ctx.blockInsnMapping)
+            val (newInsns, nextFrame) = constantFold(
+              currentInsn, currentFrame, ctx.blockInsnMapping, ctx.inferredTypes
+            )
 
             ctx.terminalInsns.append(Terminal(
               newInsns.last,
@@ -419,7 +427,9 @@ class Walker(isInterface: JType.Cls => Boolean,
             ctx.terminalInsns.append(Terminal(n, Seq(currentFrame.stack.last)))
             (None, None)
           case _ =>
-            val (nextInsns, nextFrame) = constantFold(currentInsn, currentFrame, ctx.blockInsnMapping)
+            val (nextInsns, nextFrame) = constantFold(
+              currentInsn, currentFrame, ctx.blockInsnMapping, ctx.inferredTypes
+            )
             walkNextLabel(nextFrame) match {
               case Some(t) => t
               case None => walkInsn(current.getNext, nextFrame, ctx)
@@ -441,14 +451,14 @@ class Walker(isInterface: JType.Cls => Boolean,
           ctx.walkMethod(targetSig, targetSig.desc.args)
 
           val n = Util.clone(currentInsn, ctx.blockInsnMapping)
-          val nextFrame = currentFrame.execute(n, dataflow)
+          val nextFrame = currentFrame.execute(n, SSAInterpreter)
           walkNextLabel(nextFrame) match {
             case Some(t) => t
             case None => walkInsn(current.getNext, nextFrame, ctx)
           }
         }else if(current.bsm == Util.makeConcatWithConstants){
           val n = Util.clone(currentInsn, ctx.blockInsnMapping)
-          val nextFrame = currentFrame.execute(n, dataflow)
+          val nextFrame = currentFrame.execute(n, SSAInterpreter)
           walkNextLabel(nextFrame) match {
             case Some(t) => t
             case None => walkInsn(current.getNext, nextFrame, ctx)
@@ -463,7 +473,7 @@ class Walker(isInterface: JType.Cls => Boolean,
         }
 
       case current: JumpInsnNode =>
-        walkJump(ctx.walkBlock, currentFrame, ctx.terminalInsns, current, ctx.blockInsnMapping)
+        walkJump(ctx.walkBlock, currentFrame, ctx.terminalInsns, current, ctx.blockInsnMapping, ctx.inferredTypes)
 
       case current: LineNumberNode =>
         // We do not bother copying line number nodes in-place. Instead, we
@@ -481,7 +491,7 @@ class Walker(isInterface: JType.Cls => Boolean,
       case current: LookupSwitchInsnNode =>
         val n = new LookupSwitchInsnNode(null, Array(), Array())
         ctx.terminalInsns.append(Terminal(n, Seq(currentFrame.stack.last)))
-        val nextFrame = currentFrame.execute(n, dataflow)
+        val nextFrame = currentFrame.execute(n, SSAInterpreter)
         ctx.walkBlock(current.dflt, nextFrame)
         n.dflt = current.dflt
         n.keys = current.keys
@@ -497,7 +507,7 @@ class Walker(isInterface: JType.Cls => Boolean,
 
       case current: TableSwitchInsnNode =>
         val n = new TableSwitchInsnNode(current.min, current.max, null)
-        val nextFrame = currentFrame.execute(n, dataflow)
+        val nextFrame = currentFrame.execute(n, SSAInterpreter)
         ctx.terminalInsns.append(Terminal(n, Seq(currentFrame.stack.last)))
         ctx.walkBlock(current.dflt, nextFrame)
         n.dflt = current.dflt
@@ -508,14 +518,18 @@ class Walker(isInterface: JType.Cls => Boolean,
         if (!ignore(current.desc)) {
           visitedClasses.add(JType.Cls(current.desc))
         }
-        val (newInsns, nextFrame) = constantFold(currentInsn, currentFrame, ctx.blockInsnMapping)
+        val (newInsns, nextFrame) = constantFold(
+          currentInsn, currentFrame, ctx.blockInsnMapping, ctx.inferredTypes
+        )
         walkNextLabel(nextFrame) match {
           case Some(t) => t
           case None => walkInsn(current.getNext, nextFrame, ctx)
         }
 
       case current: VarInsnNode =>
-        val (newInsns, nextFrame) = constantFold(currentInsn, currentFrame, ctx.blockInsnMapping)
+        val (newInsns, nextFrame) = constantFold(
+          currentInsn, currentFrame, ctx.blockInsnMapping, ctx.inferredTypes
+        )
         walkNextLabel(nextFrame) match {
           case Some(t) => t
           case None => walkInsn(current.getNext, nextFrame, ctx)
@@ -523,7 +537,7 @@ class Walker(isInterface: JType.Cls => Boolean,
     }
   }
 
-  def walkMethodInsn(currentFrame: Frame[LValue],
+  def walkMethodInsn(currentFrame: Frame[SSA],
                      ctx: Walker.InsnCtx,
                      originalInsn: MethodInsnNode) = {
 
@@ -537,7 +551,7 @@ class Walker(isInterface: JType.Cls => Boolean,
         copy,
         currentFrame.stack.takeRight(argOutCount),
       ))
-      currentFrame.execute(copy, dataflow)
+      currentFrame.execute(copy, SSAInterpreter)
     } else {
 
       val (argLivenesses, methodPure, narrowRet, mangled) = {
@@ -548,10 +562,10 @@ class Walker(isInterface: JType.Cls => Boolean,
         val calledSelf = if (static) Nil else Seq(JType.Cls(originalInsn.owner))
         val originalTypes = calledSelf ++ calledDesc.args.toSeq
 
-        val inferredTypes =
+        val inferredArgumentTypes =
           (currentFrame.stack.length - originalTypes.map(_.getSize).sum)
             .until(currentFrame.stack.length)
-            .map(currentFrame.stack(_).tpe)
+            .map(x => ctx.inferredTypes.get(currentFrame.stack(_)))
 
         val sig = MethodSig(originalInsn.owner, originalInsn.name, Desc.read(originalInsn.desc), static)
 
@@ -582,24 +596,24 @@ class Walker(isInterface: JType.Cls => Boolean,
           )
         }
 
-        val recursedResults = concreteSigs.map(ctx.walkMethod(_, inferredTypes))
+        val recursedResults = concreteSigs.map(ctx.walkMethod(_, inferredArgumentTypes))
         val methodPure = recursedResults.forall(_.pure)
         val argLivenesses = recursedResults.map(_.liveArgs)
 
         val narrowReturnType = merge(recursedResults.map(_.inferredReturn))
 
-        if (Util.isCompatible(inferredTypes, originalTypes)) (argLivenesses, methodPure, narrowReturnType, originalInsn) // No narrowing
+        if (Util.isCompatible(inferredArgumentTypes, originalTypes)) (argLivenesses, methodPure, narrowReturnType, originalInsn) // No narrowing
         else {
           val descChanged =
-            (static && inferredTypes != originalTypes) ||
-              (!static && inferredTypes.drop(1) != originalTypes.drop(1)) // ignore self type
+            (static && inferredArgumentTypes != originalTypes) ||
+              (!static && inferredArgumentTypes.drop(1) != originalTypes.drop(1)) // ignore self type
 
           val (mangledName, mangledDesc) =
             if (!descChanged) (originalInsn.name, Desc.read(originalInsn.desc))
             else {
               Util.mangle(
                 originalInsn.name,
-                if (static) inferredTypes else inferredTypes.drop(1),
+                if (static) inferredArgumentTypes else inferredArgumentTypes.drop(1),
                 if (static) originalTypes else originalTypes.drop(1),
                 narrowReturnType,
                 calledDesc.ret
@@ -627,12 +641,12 @@ class Walker(isInterface: JType.Cls => Boolean,
 
       if (methodPure && narrowRet.isConstant) {
         val insns = popN(argOutCount) ++ Seq(Util.constantToInstruction(narrowRet.asInstanceOf[IType.Constant]))
-        insns.foldLeft(currentFrame)(_.execute(_, dataflow))
+        insns.foldLeft(currentFrame)(_.execute(_, SSAInterpreter))
       } else {
         val finalArgLiveness = argLivenesses.transpose.map(_.reduce(_ || _))
         ctx.subCallArgLiveness(mangled.asInstanceOf[MethodInsnNode]) = finalArgLiveness
 
-        currentFrame.execute(mangled, dataflow)
+        currentFrame.execute(mangled, SSAInterpreter)
       }
     }
 
@@ -647,22 +661,23 @@ class Walker(isInterface: JType.Cls => Boolean,
     * bytecode, and walk the two jump targets to make sure we have somewhere
     * to jump to
     */
-  def walkJump(walkBlock: (AbstractInsnNode, Frame[LValue]) => Walker.BlockInfo,
-               currentFrame: Frame[LValue],
+  def walkJump(walkBlock: (AbstractInsnNode, Frame[SSA]) => Walker.BlockInfo,
+               currentFrame: Frame[SSA],
                terminalInsns: mutable.Buffer[Terminal],
                current: JumpInsnNode,
-               blockInsnMapping: mutable.Map[AbstractInsnNode, AbstractInsnNode]): (Option[Int], Option[AbstractInsnNode]) = {
+               blockInsnMapping: mutable.Map[AbstractInsnNode, AbstractInsnNode],
+               inferredTypes: IdentityHashMap[SSA, IType]): (Option[Int], Option[AbstractInsnNode]) = {
     def jumpBlock(pred: Boolean): (Option[Int], Option[AbstractInsnNode]) = {
       val popInsns = popN(Bytecode.stackEffect(current.getOpcode).pop(current))
-      val nextFrame = popInsns.foldLeft(currentFrame)(_.execute(_, dataflow))
+      val nextFrame = popInsns.foldLeft(currentFrame)(_.execute(_, SSAInterpreter))
       val res = walkBlock(if (pred) current.label else current.getNext, nextFrame)
       (Some(res.blockIndex), None)
     }
 
     (
       current.getOpcode,
-      currentFrame.stack.lift(currentFrame.stack.length - 1).map(_.tpe),
-      currentFrame.stack.lift(currentFrame.stack.length - 2).map(_.tpe)
+      currentFrame.stack.lift(currentFrame.stack.length - 1).map(inferredTypes.get),
+      currentFrame.stack.lift(currentFrame.stack.length - 2).map(inferredTypes.get)
     ) match {
       case (IFEQ, Some(IType.I(i)), _) => jumpBlock(i == 0)
       case (IFNE, Some(IType.I(i)), _) => jumpBlock(i != 0)
@@ -687,7 +702,7 @@ class Walker(isInterface: JType.Cls => Boolean,
           currentFrame.stack.takeRight(Bytecode.stackEffect(current.getOpcode).pop(current)),
         ))
 
-        val nextFrame = currentFrame.execute(n, dataflow)
+        val nextFrame = currentFrame.execute(n, SSAInterpreter)
         val fallThrough = walkBlock(current.getNext, nextFrame)
         val jumpTarget = walkBlock(current.label, nextFrame)
 
@@ -710,18 +725,19 @@ class Walker(isInterface: JType.Cls => Boolean,
     * collapse all the unused instructions later (TBD)
     */
   def constantFold(currentInsn: AbstractInsnNode,
-                   currentFrame: Frame[LValue],
-                   blockInsnMapping: mutable.Map[AbstractInsnNode, AbstractInsnNode]): (Seq[AbstractInsnNode], Frame[LValue]) = {
+                   currentFrame: Frame[SSA],
+                   blockInsnMapping: mutable.Map[AbstractInsnNode, AbstractInsnNode],
+                   inferredTypes: IdentityHashMap[SSA, IType]): (Seq[AbstractInsnNode], Frame[SSA]) = {
     val stackEffect = Bytecode.stackEffect(currentInsn.getOpcode)
-    val tentativeNextFrame = currentFrame.execute(currentInsn, dataflow)
+    val tentativeNextFrame = currentFrame.execute(currentInsn, SSAInterpreter)
     val newInsns =
       if (stackEffect.push(currentInsn) == 1){
-        tentativeNextFrame.stack.last.tpe match{
+        inferredTypes.get(tentativeNextFrame.stack.last) match{
           case const: IType.Constant => popN(stackEffect.pop(currentInsn)) ++ Seq(Util.constantToInstruction(const))
           case _ => Seq(Util.clone(currentInsn, blockInsnMapping))
         }
       }else Seq(Util.clone(currentInsn, blockInsnMapping))
-    (newInsns, newInsns.foldLeft(currentFrame)(_.execute(_, dataflow)))
+    (newInsns, newInsns.foldLeft(currentFrame)(_.execute(_, SSAInterpreter)))
   }
 
 }
@@ -754,15 +770,15 @@ object Walker{
 
   trait BlockInfo{
     def blockIndex: Int
-    def startFrame: Frame[LValue]
+    def startFrame: Frame[SSA]
   }
 
   case class BlockStub(blockIndex: Int,
-                       startFrame: Frame[LValue]) extends BlockInfo
+                       startFrame: Frame[SSA]) extends BlockInfo
 
   case class BlockResult(blockIndex: Int,
-                         startFrame: Frame[LValue],
-                         methodReturns: Seq[LValue],
+                         startFrame: Frame[SSA],
+                         methodReturns: Seq[SSA],
                          terminalInsns: Seq[Terminal],
                          pure: Boolean,
                          subCallArgLiveness: Map[AbstractInsnNode, Seq[Boolean]],
@@ -773,12 +789,13 @@ object Walker{
 
   case class InsnCtx(sig: MethodSig,
                      blockInsnMapping: mutable.Map[AbstractInsnNode, AbstractInsnNode],
-                     methodReturns: mutable.Buffer[LValue],
+                     methodReturns: mutable.Buffer[SSA],
                      terminalInsns: mutable.Buffer[Terminal],
                      var pure: Boolean,
                      subCallArgLiveness: mutable.Map[AbstractInsnNode, Seq[Boolean]],
                      lineNumberNodes: mutable.Set[LineNumberNode],
-                     walkBlock: (AbstractInsnNode, Frame[LValue]) => BlockInfo,
+                     walkBlock: (AbstractInsnNode, Frame[SSA]) => BlockInfo,
                      seenMethods: Set[(MethodSig, Seq[IType])],
-                     walkMethod: (MethodSig, Seq[IType]) => Walker.MethodResult)
+                     walkMethod: (MethodSig, Seq[IType]) => Walker.MethodResult,
+                     inferredTypes: IdentityHashMap[SSA, IType])
 }

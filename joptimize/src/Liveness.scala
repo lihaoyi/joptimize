@@ -14,10 +14,10 @@ import scala.collection.mutable
 object Liveness {
 
   def apply(allVisitedBlocks: Seq[Walker.BlockResult],
-            merges: Seq[(Frame[LValue], Frame[LValue])]): (InsnList, Set[Int]) = {
+            merges: Seq[(Frame[SSA], Frame[SSA])]): (InsnList, Set[Int]) = {
     val allTerminals = allVisitedBlocks.flatMap(_.terminalInsns).toSeq
     val subCallArgLiveness = allVisitedBlocks.flatMap(_.subCallArgLiveness).toMap
-    val mergeLookup = mutable.Map.empty[LValue, mutable.Buffer[LValue]]
+    val mergeLookup = mutable.Map.empty[SSA, mutable.Buffer[SSA]]
 
     for((lhs, rhs) <- merges){
       lhs.zipForeach(rhs){(l, r) =>
@@ -25,25 +25,25 @@ object Liveness {
       }
     }
 
-    def getMerges(l: LValue) = mergeLookup.getOrElse(l, Nil)
+    def getMerges(l: SSA) = mergeLookup.getOrElse(l, Nil)
 
     val (allVertices, roots, downstreamEdges) =
-      Util.breadthFirstAggregation[Either[LValue, Terminal]](allTerminals.map(Right(_)).toSet){
+      Util.breadthFirstAggregation[Either[SSA, Terminal]](allTerminals.map(Right(_)).toSet){
         case Left(x) =>
           x.insn match{
-            case Left(i) => (x.upstream ++ getMerges(x)).map(Left[LValue, Terminal])
+            case Left(i) => (x.upstream ++ getMerges(x)).map(Left[SSA, Terminal])
             case Right(insn) =>
               subCallArgLiveness.get(insn) match{
-                case None => (x.upstream ++ getMerges(x)).map(Left[LValue, Terminal])
+                case None => (x.upstream ++ getMerges(x)).map(Left[SSA, Terminal])
                 case Some(liveness) =>
-                  (x.upstream.zip(liveness).collect{case (k, true) => k} ++ getMerges(x)).map(Left[LValue, Terminal])
+                  (x.upstream.zip(liveness).collect{case (k, true) => k} ++ getMerges(x)).map(Left[SSA, Terminal])
               }
           }
         case Right(y) =>
           subCallArgLiveness.get(y.insn) match{
-            case None => y.inputs.map(Left[LValue, Terminal])
+            case None => y.inputs.map(Left[SSA, Terminal])
             case Some(liveness) =>
-              y.inputs.zip(liveness).collect{case (k, true) => k}.map(Left[LValue, Terminal])
+              y.inputs.zip(liveness).collect{case (k, true) => k}.map(Left[SSA, Terminal])
           }
 
       }
@@ -90,10 +90,10 @@ object Liveness {
   * only need to ensure that the terminal instruction is called with the input
   * in the right order, not that anything in particular happens to the return
   * value. Anyone who needs the return value will depend on it like any other
-  * LValue in the dataflow graph
+  * SSA in the dataflow graph
   *
-  * Note that we cannot model terminals as their returned LValue, because some
+  * Note that we cannot model terminals as their returned SSA, because some
   * terminals such as RETURN or void method INVOKEs return nothing.
   */
-case class Terminal(insn: AbstractInsnNode, inputs: Seq[LValue])
+case class Terminal(insn: AbstractInsnNode, inputs: Seq[SSA])
 

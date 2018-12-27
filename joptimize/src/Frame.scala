@@ -8,7 +8,7 @@ import org.objectweb.asm.tree.analysis.{Interpreter, Value}
 /**
   * An immutable wrapper around [[org.objectweb.asm.tree.analysis.Frame]],
   */
-class Frame[T <: Frameable[T]](protected val value: org.objectweb.asm.tree.analysis.Frame[T]){
+class Frame[T <: Value](protected val value: org.objectweb.asm.tree.analysis.Frame[T]){
   val locals = new IndexedSeq[T] {
     def length = value.getLocals
     def apply(idx: Int) = value.getLocal(idx)
@@ -27,7 +27,7 @@ class Frame[T <: Frameable[T]](protected val value: org.objectweb.asm.tree.analy
 //  assert(!locals.contains(null), locals.indexOf(null))
 //  assert(!stack.contains(null), stack.indexOf(null))
 
-  def map[V <: Frameable[V]](func: T => V) = {
+  def map[V <: Value](func: T => V) = {
     val f0 = new org.objectweb.asm.tree.analysis.Frame[V](value.getLocals, value.getMaxStackSize)
     for(i <- 0 until stack.length) f0.push(func(stack(i)))
     for(i <- 0 until locals.length) value.getLocal(i) match{
@@ -37,7 +37,7 @@ class Frame[T <: Frameable[T]](protected val value: org.objectweb.asm.tree.analy
     new Frame(f0)
   }
 
-  def zipForeach[V <: Frameable[V]](other: Frame[V])(func: (T, V) => Unit): Unit = {
+  def zipForeach[V <: Value](other: Frame[V])(func: (T, V) => Unit): Unit = {
     assert(stack.length == other.stack.length)
     assert(locals.length == other.locals.length)
     for(i <- 0 until stack.length) func(stack(i), other.stack(i))
@@ -77,30 +77,9 @@ class Frame[T <: Frameable[T]](protected val value: org.objectweb.asm.tree.analy
     newFrame.push(ex)
     new Frame(newFrame)
   }
-  def widen = {
-    val newValue = new org.objectweb.asm.tree.analysis.Frame[T](
-      value.getLocals,
-      value.getMaxStackSize
-    )
-
-    for(i <- 0 until newValue.getLocals) {
-      val local = locals(i)
-      if (local != null) newValue.setLocal(i, local.widen)
-    }
-    for(i <- 0 until newValue.getStackSize) newValue.push(newValue.getLocal(i).widen)
-    new Frame(newValue)
-  }
-  override def toString = {
-    def stringify(values: IndexedSeq[T]) = {
-      values
-        .map{case null => " " case x => if (x.isEmpty) "_" else x.internalName}
-        .mkString
-    }
-    s"Frame(${stringify(locals)}, ${stringify(stack)})"
-  }
 }
 object Frame{
-  def initial[T <: Frameable[T]](maxLocals: Int, maxStack: Int, args: Seq[T], nilValue: T) = {
+  def initial[T <: Value](maxLocals: Int, maxStack: Int, args: Seq[T], nilValue: T) = {
     val initialFrame0 = new org.objectweb.asm.tree.analysis.Frame[T](maxLocals, maxStack)
     var i = 0
     for(arg <- args){
