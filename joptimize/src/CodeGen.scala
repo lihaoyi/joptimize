@@ -13,7 +13,7 @@ import scala.collection.mutable
   * back into executable bytecode, without all the unreachable, unused or
   * constant-folded instructions
   */
-object Liveness {
+object CodeGen {
 
   def apply(allVisitedBlocks: Seq[Walker.BlockResult],
             merges: Seq[(Frame[SSA], Frame[SSA])],
@@ -49,10 +49,21 @@ object Liveness {
     for(block <- allVisitedBlocks) {
       val start = new LabelNode()
       outputInsns.add(start)
-      pprint.log(block.blockInsns.value)
-      for(ssa <- block.blockInsns.value) {
+      def rec(ssa: SSA): Unit = {
+        ssa.upstream.foreach(rec)
         if (savedLocals.containsKey(ssa)){
-          outputInsns.add(new VarInsnNode(ALOAD, savedLocals.get(ssa)))
+          outputInsns.add(
+            new VarInsnNode(
+              inferredTypes.get(ssa).widen match{
+                case JType.Prim.I => ILOAD
+                case JType.Prim.J => LLOAD
+                case JType.Prim.F => FLOAD
+                case JType.Prim.D => DLOAD
+                case _ => ALOAD
+              },
+              savedLocals.get(ssa)
+            )
+          )
         }else{
           ssa match{
             case SSA.Arg(index, typeSize) => ??? // shouldn't happen
@@ -74,8 +85,8 @@ object Liveness {
 
             case SSA.Return() => outputInsns.add(new InsnNode(RETURN))
             case SSA.AThrow(src) => outputInsns.add(new InsnNode(ATHROW))
-            case SSA.TableSwitch(src, min, max, default, targets: Seq[Block]) =>
-            case SSA.LookupSwitch(src, default, keys: Seq[Int], tartargets: Seq[Block]) =>
+            case SSA.TableSwitch(src, min, max, default, targets) =>
+            case SSA.LookupSwitch(src, default, keys, targets) =>
             case SSA.Goto(target) =>
             case SSA.CheckCast(src, desc) =>
             case SSA.ArrayLength(src) =>
@@ -108,40 +119,50 @@ object Liveness {
             }
             case SSA.PushS(value) => outputInsns.add(new LdcInsnNode(value))
             case SSA.PushNull() => outputInsns.add(new InsnNode(ACONST_NULL))
-            case SSA.PushCls(value: JType.Cls) =>
+            case SSA.PushCls(value) =>
               outputInsns.add(new LdcInsnNode(org.objectweb.asm.Type.getType(value.name)))
-            case SSA.InvokeStatic(srcs: Seq[SSA], cls: JType.Cls, name, desc) =>
-            case SSA.InvokeSpecial(srcs: Seq[SSA], cls: JType.Cls, name, desc) =>
-            case SSA.InvokeVirtual(srcs: Seq[SSA], cls: JType.Cls, name, desc:Desc) =>
-            case SSA.InvokeDynamic(name, desc, bsTag, bsOwner, bsName, bsDesc, bsArgs: Seq[AnyRef]) =>
-            case SSA.New(cls: JType.Cls) =>
+            case SSA.InvokeStatic(state, srcs, cls, name, desc) =>
+            case SSA.InvokeSpecial(state, srcs, cls, name, desc) =>
+            case SSA.InvokeVirtual(state, srcs, cls, name, desc:Desc) =>
+            case SSA.InvokeDynamic(name, desc, bsTag, bsOwner, bsName, bsDesc, bsArgs) =>
+            case SSA.New(cls) =>
             case SSA.NewArray(src, typeRef) =>
-            case SSA.MultiANewArray(desc, dims: Seq[SSA]) =>
-            case SSA.PutStatic(src, cls: JType.Cls, name, desc) =>
-            case SSA.GetStatic(cls: JType.Cls, name, desc) =>
-            case SSA.PutField(src, obj, owner: JType.Cls, name, desc) =>
-            case SSA.GetField(obj, owner: JType.Cls, name, desc) =>
-            case SSA.PutArray(src, indexSrc, array) =>
-            case SSA.GetArray(indexSrc, array, typeSize) =>
+            case SSA.MultiANewArray(desc, dims) =>
+            case SSA.PutStatic(state, src, cls, name, desc) =>
+            case SSA.GetStatic(state, cls, name, desc) =>
+            case SSA.PutField(state, src, obj, owner, name, desc) =>
+            case SSA.GetField(state, obj, owner, name, desc) =>
+            case SSA.PutArray(state, src, indexSrc, array) =>
+            case SSA.GetArray(state, indexSrc, array, typeSize) =>
             case SSA.MonitorEnter(indexSrc) =>
             case SSA.MonitorExit(indexSrc) =>
           }
           if (saveable.getOrElse(ssa, false)){
             val n = savedLocals.size()
             outputInsns.add(new InsnNode(DUP))
-            outputInsns.add(new VarInsnNode(ASTORE, n))
+            outputInsns.add(
+              new VarInsnNode(
+                inferredTypes.get(ssa).widen match{
+                  case JType.Prim.I => ISTORE
+                  case JType.Prim.J => LSTORE
+                  case JType.Prim.F => FSTORE
+                  case JType.Prim.D => DSTORE
+                  case _ => ASTORE
+                },
+                n
+              )
+            )
             savedLocals.put(ssa, n)
           }
         }
       }
-
-
+      block.terminalInsns.reverseIterator.foreach(rec)
       start
     }
 
     pprint.log(outputInsns.iterator().asScala.map(Util.prettyprint).toSeq)
 
-    (???, liveArgumentIndices.toSet)
+    (outputInsns, liveArgumentIndices.toSet)
   }
 }
 

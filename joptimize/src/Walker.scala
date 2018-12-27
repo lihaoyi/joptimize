@@ -22,7 +22,7 @@ class Walker(isInterface: JType.Cls => Boolean,
              isConcrete: MethodSig => Boolean,
              exists: MethodSig => Boolean,
              merge: Seq[IType] => IType,
-             typer: ITypeInterpreter,
+             typer: Typer,
              ignore: String => Boolean) {
 
   def walkMethod(sig: MethodSig,
@@ -44,7 +44,7 @@ class Walker(isInterface: JType.Cls => Boolean,
 
       val visitedBlocks = new mutable.LinkedHashMap[(AbstractInsnNode, Frame[IType]), Walker.BlockInfo]
 
-      val ssaInterpreter = new SSAInterpreter(typer, jumpedBasicBlocks)
+      val ssaInterpreter = new StepEvaluator(typer, jumpedBasicBlocks)
       val initialArgumentLValues = for((a, i) <- args.zipWithIndex) yield {
         val ssa = SSA.Arg(i, a.getSize)
         ssaInterpreter.inferredTypes.put(ssa, a)
@@ -194,7 +194,7 @@ class Walker(isInterface: JType.Cls => Boolean,
 //      }
 
 
-      val (outputInsns, liveArguments) = Liveness(
+      val (outputInsns, liveArguments) = CodeGen(
         allVisitedBlocks,
         merges,
         initialArgumentLValues,
@@ -224,7 +224,7 @@ class Walker(isInterface: JType.Cls => Boolean,
                 recurse: (MethodSig, Seq[IType]) => Walker.MethodResult,
                 merges: mutable.Buffer[(Frame[SSA], Frame[SSA])],
                 insnTryCatchBlocks: Map[AbstractInsnNode, Map[Int, (JType.Cls, LabelNode)]],
-                ssaInterpreter: SSAInterpreter,
+                ssaInterpreter: StepEvaluator,
                 jumpedBasicBlocks: Map[AbstractInsnNode, Block]): Walker.BlockInfo = {
 
     val seenBlocks = seenBlocks0 + blockStart
@@ -569,7 +569,7 @@ class Walker(isInterface: JType.Cls => Boolean,
                currentFrame: Frame[SSA],
                terminalInsns: mutable.Buffer[SSA],
                current: JumpInsnNode,
-               ssaInterpreter: SSAInterpreter#Sub): Unit = {
+               ssaInterpreter: StepEvaluator#Sub): Unit = {
     def jumpBlock(pred: Boolean) = {
       val popInsns = popN(Bytecode.stackEffect(current.getOpcode).pop(current))
       val nextFrame = popInsns.foldLeft(currentFrame)(_.execute(_, ssaInterpreter))
@@ -656,6 +656,6 @@ object Walker{
                      walkBlock: (AbstractInsnNode, Frame[SSA]) => BlockInfo,
                      seenMethods: Set[(MethodSig, Seq[IType])],
                      walkMethod: (MethodSig, Seq[IType]) => Walker.MethodResult,
-                     ssaInterpreter: SSAInterpreter#Sub,
+                     ssaInterpreter: StepEvaluator#Sub,
                      jumpedBasicBlocks: Map[AbstractInsnNode, Block])
 }

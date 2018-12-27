@@ -8,12 +8,13 @@ import org.objectweb.asm.tree._
 import collection.JavaConverters._
 import scala.collection.mutable
 
-class SSAInterpreter(typer: ITypeInterpreter, jumpedBasicBlocks: Map[AbstractInsnNode, Block]) {
+class StepEvaluator(typer: Typer, jumpedBasicBlocks: Map[AbstractInsnNode, Block]) {
   val inferredTypes = new java.util.IdentityHashMap[SSA, IType]()
 
   def apply(basicBlock: Block) = new Sub(basicBlock)
   class Sub(val basicBlock:Block) extends Interpreter[SSA](ASM4){
-    val inferredTypes = SSAInterpreter.this.inferredTypes
+    var blockState = SSA.State(None)
+    val inferredTypes = StepEvaluator.this.inferredTypes
     def newValue(tpe: org.objectweb.asm.Type) = {
       if (tpe == null) SSA.Arg(-1, 1)
       else {
@@ -79,7 +80,7 @@ class SSAInterpreter(typer: ITypeInterpreter, jumpedBasicBlocks: Map[AbstractIns
         case JSR => ???
         case GETSTATIC =>
           val insn2 = insn.asInstanceOf[FieldInsnNode]
-          SSA.GetStatic(JType.Cls(insn2.owner), insn2.name, insn2.desc)
+          SSA.GetStatic(blockState, JType.Cls(insn2.owner), insn2.name, insn2.desc)
         case NEW => SSA.New(insn.asInstanceOf[TypeInsnNode].desc)
       }
     }
@@ -121,11 +122,13 @@ class SSAInterpreter(typer: ITypeInterpreter, jumpedBasicBlocks: Map[AbstractIns
 
         case PUTSTATIC =>
           val insn2 = insn.asInstanceOf[FieldInsnNode]
-          SSA.PutStatic(value, insn2.owner, insn2.name, insn2.desc)
+          val res = SSA.PutStatic(blockState, value, insn2.owner, insn2.name, insn2.desc)
+          blockState = SSA.State(Some(res))
+          res
 
         case GETFIELD =>
           val insn2 = insn.asInstanceOf[FieldInsnNode]
-          SSA.GetField(value, insn2.owner, insn2.name, insn2.desc)
+          SSA.GetField(blockState, value, insn2.owner, insn2.name, insn2.desc)
 
         case NEWARRAY =>
           SSA.NewArray(
@@ -166,9 +169,10 @@ class SSAInterpreter(typer: ITypeInterpreter, jumpedBasicBlocks: Map[AbstractIns
 
     def binaryOperation(insn: AbstractInsnNode, v1: SSA, v2: SSA) = constantFold{
       insn.getOpcode match {
-        case IALOAD | BALOAD | CALOAD | SALOAD | FALOAD | AALOAD => SSA.GetArray(v1, v2, 1)
+        case IALOAD | BALOAD | CALOAD | SALOAD | FALOAD | AALOAD =>
+          SSA.GetArray(blockState, v1, v2, 1)
 
-        case LALOAD | DALOAD => SSA.GetArray(v1, v2, 2)
+        case LALOAD | DALOAD => SSA.GetArray(blockState, v1, v2, 2)
 
         case IADD | ISUB | IMUL | IDIV | IREM | ISHL | ISHR | IUSHR | IAND | IOR | IXOR |
              FADD | FSUB | FMUL | FDIV | FREM | LCMP | FCMPL | FCMPG | DCMPL | DCMPG =>
@@ -180,16 +184,18 @@ class SSAInterpreter(typer: ITypeInterpreter, jumpedBasicBlocks: Map[AbstractIns
 
         case IF_ICMPEQ | IF_ICMPNE | IF_ICMPLT | IF_ICMPGE | IF_ICMPGT |
              IF_ICMPLE | IF_ACMPEQ | IF_ACMPNE =>
-          SSA.BinBranch(v1, v2, ???, insn.getOpcode)
+          SSA.BinBranch(v1, v2, jumpedBasicBlocks(insn.asInstanceOf[JumpInsnNode].label), insn.getOpcode)
 
         case PUTFIELD =>
           val insn2 = insn.asInstanceOf[FieldInsnNode]
-          SSA.PutField(v1, v2, insn2.owner, insn2.name, insn2.desc)
+          val res = SSA.PutField(blockState, v1, v2, insn2.owner, insn2.name, insn2.desc)
+          blockState = SSA.State(Some(res))
+          res
       }
     }
 
     def ternaryOperation(insn: AbstractInsnNode, v1: SSA, v2: SSA, v3: SSA) = constantFold{
-      SSA.PutArray(v1, v2, v3)
+      SSA.PutArray(blockState, v1, v2, v3)
     }
 
     def naryOperation(insn: AbstractInsnNode, vs: java.util.List[_ <: SSA]) = constantFold{
@@ -208,15 +214,21 @@ class SSAInterpreter(typer: ITypeInterpreter, jumpedBasicBlocks: Map[AbstractIns
 
         case INVOKESTATIC =>
           val insn2 = insn.asInstanceOf[MethodInsnNode]
-          SSA.InvokeStatic(vs.asScala, insn2.owner, insn2.name, Desc.read(insn2.desc))
+          val res = SSA.InvokeStatic(blockState, vs.asScala, insn2.owner, insn2.name, Desc.read(insn2.desc))
+          blockState = SSA.State(Some(res))
+          res
 
         case INVOKEVIRTUAL =>
           val insn2 = insn.asInstanceOf[MethodInsnNode]
-          SSA.InvokeVirtual(vs.asScala, insn2.owner, insn2.name, Desc.read(insn2.desc))
+          val res = SSA.InvokeVirtual(blockState, vs.asScala, insn2.owner, insn2.name, Desc.read(insn2.desc))
+          blockState = SSA.State(Some(res))
+          res
 
         case INVOKESPECIAL =>
           val insn2 = insn.asInstanceOf[MethodInsnNode]
-          SSA.InvokeSpecial(vs.asScala, insn2.owner, insn2.name, Desc.read(insn2.desc))
+          val res = SSA.InvokeSpecial(blockState, vs.asScala, insn2.owner, insn2.name, Desc.read(insn2.desc))
+          blockState = SSA.State(Some(res))
+          res
       }
     }
     def returnOperation(insn: AbstractInsnNode, value: SSA, expected: SSA) = constantFold{

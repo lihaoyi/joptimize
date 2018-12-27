@@ -3,7 +3,7 @@ import java.util
 
 import org.objectweb.asm.Opcodes._
 
-class ITypeInterpreter(merge0: Seq[IType] => IType){
+class Typer(merge0: Seq[IType] => IType){
   def visitSSA(ssa: SSA,
                inferred: util.IdentityHashMap[SSA, IType]): IType = ssa match{
     case SSA.Arg(index, typeSize) => inferred.get(ssa)
@@ -101,12 +101,12 @@ class ITypeInterpreter(merge0: Seq[IType] => IType){
     case SSA.NewArray(src, typeRef) => typeRef
 
     case SSA.MultiANewArray(desc, dims) => desc
-    case SSA.PutStatic(src, cls, name, desc) => JType.Null
-    case SSA.GetStatic(cls, name, desc) => desc
-    case SSA.PutField(src, obj, owner, name, desc) => JType.Null
-    case SSA.GetField(obj, owner, name, desc) => desc
-    case SSA.PutArray(src, indexSrc, array) => JType.Null
-    case SSA.GetArray(indexSrc, array, typeSize) => inferred.get(array).asInstanceOf[JType.Arr].innerType
+    case SSA.PutStatic(state, src, cls, name, desc) => JType.Null
+    case SSA.GetStatic(state, cls, name, desc) => desc
+    case SSA.PutField(state, src, obj, owner, name, desc) => JType.Null
+    case SSA.GetField(state, obj, owner, name, desc) => desc
+    case SSA.PutArray(state, src, indexSrc, array) => JType.Null
+    case SSA.GetArray(state, indexSrc, array, typeSize) => inferred.get(array).asInstanceOf[JType.Arr].innerType
     case SSA.MonitorEnter(indexSrc) => JType.Null
     case SSA.MonitorExit(indexSrc) => JType.Null
   }
