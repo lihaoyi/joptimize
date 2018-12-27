@@ -91,7 +91,11 @@ class Walker(isInterface: JType.Cls => Boolean,
         Set(), visitedBlocks, sig, seenMethods,
         recurse = (staticSig, types0) => {
           val argOutCount = staticSig.desc.args.length + (if (staticSig.static) 0 else 1)
-          val types = if (seenMethods((staticSig, types0.map(_.widen)))) types0.map(_.widen) else types0
+          pprint.log(types0)
+          val widened = types0.map(_.widen)
+          val types =
+            if (seenMethods((staticSig, widened))) widened
+            else types0
           if (seenMethods((staticSig, types))) {
             // When we hit recursive methods, simply assume that
             // they are impure and that all their arguments are live.
@@ -352,7 +356,8 @@ class Walker(isInterface: JType.Cls => Boolean,
         // so they'll all be wrong, so easier just let ASM recompute them
         if (!walkNextLabel(currentFrame)) walkInsn(current.getNext, currentFrame, ctx)
 
-      case _: LabelNode | _: IincInsnNode | _: IntInsnNode | _: LdcInsnNode | _: MultiANewArrayInsnNode =>
+      case _: LabelNode | _: IincInsnNode | _: IntInsnNode | _: LdcInsnNode |
+           _: MultiANewArrayInsnNode | _: VarInsnNode =>
         val nextFrame = currentFrame.execute(currentInsn, ctx.ssaInterpreter)
         if (!walkNextLabel(nextFrame)) walkInsn(currentInsn.getNext, nextFrame, ctx)
 
@@ -437,13 +442,8 @@ class Walker(isInterface: JType.Cls => Boolean,
         ctx.walkBlock(current.dflt, nextFrame)
         current.labels.asScala.foreach(ctx.walkBlock(_, nextFrame))
 
-
       case current: TypeInsnNode =>
         if (!ignore(current.desc)) visitedClasses.add(JType.Cls(current.desc))
-        val nextFrame = currentFrame.execute(current, ctx.ssaInterpreter)
-        if (!walkNextLabel(nextFrame)) walkInsn(current.getNext, nextFrame, ctx)
-
-      case current: VarInsnNode =>
         val nextFrame = currentFrame.execute(current, ctx.ssaInterpreter)
         if (!walkNextLabel(nextFrame)) walkInsn(current.getNext, nextFrame, ctx)
     }
@@ -472,7 +472,7 @@ class Walker(isInterface: JType.Cls => Boolean,
         val inferredArgumentTypes =
           (currentFrame.stack.length - originalTypes.map(_.getSize).sum)
             .until(currentFrame.stack.length)
-            .map(x => ctx.ssaInterpreter.inferredTypes.get(currentFrame.stack(_)))
+            .map(x => ctx.ssaInterpreter.inferredTypes.get(currentFrame.stack(x)))
 
         val sig = MethodSig(originalInsn.owner, originalInsn.name, Desc.read(originalInsn.desc), static)
 
@@ -503,6 +503,7 @@ class Walker(isInterface: JType.Cls => Boolean,
           )
         }
 
+        pprint.log(inferredArgumentTypes)
         val recursedResults = concreteSigs.map(ctx.walkMethod(_, inferredArgumentTypes))
         val methodPure = recursedResults.forall(_.pure)
         val argLivenesses = recursedResults.map(_.liveArgs)

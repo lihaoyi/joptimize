@@ -34,7 +34,11 @@ object CodeGen {
         ssa.upstream ++ mergeLookup.getOrElse(ssa, Nil)
       }
     
-    val saveable = downstreamEdges.groupBy(_._1).mapValues(_.distinct.size > 1)
+    val saveable = downstreamEdges
+      .groupBy(_._1)
+      .mapValues(_.distinct.size)
+      .map{case (k, x) => (k, x > 1 || x == 1 && allTerminals.contains(k)) }
+      .toMap
 
     val liveArgumentIndices = for{
       (a, i) <- initialArgs.zipWithIndex
@@ -91,32 +95,32 @@ object CodeGen {
             case SSA.CheckCast(src, desc) =>
             case SSA.ArrayLength(src) =>
             case SSA.InstanceOf(src, desc) =>
-            case SSA.PushI(value) => value match{
-              case -1 => outputInsns.add(new InsnNode(ICONST_M1))
-              case 0 => outputInsns.add(new InsnNode(ICONST_0))
-              case 1 => outputInsns.add(new InsnNode(ICONST_1))
-              case 2 => outputInsns.add(new InsnNode(ICONST_2))
-              case 3 => outputInsns.add(new InsnNode(ICONST_3))
-              case 4 => outputInsns.add(new InsnNode(ICONST_4))
-              case 5 => outputInsns.add(new InsnNode(ICONST_5))
-              case _ => outputInsns.add(new LdcInsnNode(value))
-            }
-            case SSA.PushJ(value) => value match{
-              case 0 => outputInsns.add(new InsnNode(LCONST_0))
-              case 1 => outputInsns.add(new InsnNode(LCONST_1))
-              case _ => outputInsns.add(new LdcInsnNode(value))
-            }
-            case SSA.PushF(value) => value match{
-              case 0 => outputInsns.add(new InsnNode(FCONST_0))
-              case 1 => outputInsns.add(new InsnNode(FCONST_1))
-              case 2 => outputInsns.add(new InsnNode(FCONST_2))
-              case _ => outputInsns.add(new LdcInsnNode(value))
-            }
-            case SSA.PushD(value) => value match{
-              case 0 => outputInsns.add(new InsnNode(DCONST_0))
-              case 1 => outputInsns.add(new InsnNode(DCONST_1))
-              case _ => outputInsns.add(new LdcInsnNode(value))
-            }
+            case SSA.PushI(value) => outputInsns.add(value match{
+              case -1 => new InsnNode(ICONST_M1)
+              case 0 => new InsnNode(ICONST_0)
+              case 1 => new InsnNode(ICONST_1)
+              case 2 => new InsnNode(ICONST_2)
+              case 3 => new InsnNode(ICONST_3)
+              case 4 => new InsnNode(ICONST_4)
+              case 5 => new InsnNode(ICONST_5)
+              case _ => new LdcInsnNode(value)
+            })
+            case SSA.PushJ(value) => outputInsns.add(value match{
+              case 0 => new InsnNode(LCONST_0)
+              case 1 => new InsnNode(LCONST_1)
+              case _ => new LdcInsnNode(value)
+            })
+            case SSA.PushF(value) => outputInsns.add(value match{
+              case 0 => new InsnNode(FCONST_0)
+              case 1 => new InsnNode(FCONST_1)
+              case 2 => new InsnNode(FCONST_2)
+              case _ => new LdcInsnNode(value)
+            })
+            case SSA.PushD(value) => outputInsns.add(value match{
+              case 0 => new InsnNode(DCONST_0)
+              case 1 => new InsnNode(DCONST_1)
+              case _ => new LdcInsnNode(value)
+            })
             case SSA.PushS(value) => outputInsns.add(new LdcInsnNode(value))
             case SSA.PushNull() => outputInsns.add(new InsnNode(ACONST_NULL))
             case SSA.PushCls(value) =>
