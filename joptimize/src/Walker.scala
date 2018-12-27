@@ -139,9 +139,11 @@ class Walker(isInterface: JType.Cls => Boolean,
 
 //      pprint.log(sig -> "END")
 
-//      pprint.log((sig, pure, methodReturns))
       val allVisitedBlocks = visitedBlocks.values.map(_.asInstanceOf[Walker.BlockResult]).toSeq
-      val methodReturns = allVisitedBlocks.flatMap(_.methodReturns).toSeq
+      val methodReturns = allVisitedBlocks
+        .flatMap(_.blockInsns.value.lastOption)
+        .collect{case SSA.ReturnVal(v) => v}
+
       val lineNumberNodes = allVisitedBlocks.flatMap(_.lineNumberNodes)
 
       val pure = allVisitedBlocks.forall(_.pure)
@@ -192,7 +194,7 @@ class Walker(isInterface: JType.Cls => Boolean,
 //      }
 
 
-      val (outputInsns, liveArguments) = Liveness(allVisitedBlocks, merges)
+      val (outputInsns, liveArguments) = Liveness(allVisitedBlocks, merges, initialArgumentLValues)
 
       val liveArgs =
         if (sig.static) sig.desc.args.indices.map(liveArguments)
@@ -243,7 +245,6 @@ class Walker(isInterface: JType.Cls => Boolean,
         )
         val blockInsns = jumpedBasicBlocks(blockStart)
 
-        val methodReturns = mutable.Buffer.empty[SSA]
         val terminalInsns = mutable.Buffer.empty[SSA]
         val pure = sig.name != "<init>" && sig.name != "<clinit>"
         val subCallArgLiveness = mutable.Map.empty[AbstractInsnNode, Seq[Boolean]]
@@ -251,7 +252,6 @@ class Walker(isInterface: JType.Cls => Boolean,
 
         val ctx = Walker.InsnCtx(
           sig,
-          methodReturns = methodReturns,
           terminalInsns = terminalInsns,
           pure = pure,
           subCallArgLiveness = subCallArgLiveness,
@@ -279,7 +279,6 @@ class Walker(isInterface: JType.Cls => Boolean,
 
         val res = Walker.BlockResult(
           blockState,
-          methodReturns,
           terminalInsns,
           ctx.pure,
           subCallArgLiveness.toMap,
@@ -355,7 +354,6 @@ class Walker(isInterface: JType.Cls => Boolean,
       case current: InsnNode =>
         current.getOpcode match{
           case ARETURN | DRETURN | FRETURN | IRETURN | LRETURN =>
-            ctx.methodReturns.append(currentFrame.stack.last)
             ctx.ssaInterpreter.basicBlock.value.append(SSA.ReturnVal(currentFrame.stack.last))
             ctx.terminalInsns.append(ctx.ssaInterpreter.basicBlock.value.last)
 
@@ -369,7 +367,7 @@ class Walker(isInterface: JType.Cls => Boolean,
 
           case _ =>
             val nextFrame = currentFrame.execute(current, ctx.ssaInterpreter)
-            if (!walkNextLabel(currentFrame)) walkInsn(current.getNext, currentFrame, ctx)
+            if (!walkNextLabel(nextFrame)) walkInsn(current.getNext, nextFrame, ctx)
         }
 
       case current: InvokeDynamicInsnNode =>
@@ -638,7 +636,6 @@ object Walker{
   case class BlockStub(startFrame: Frame[SSA]) extends BlockInfo
 
   case class BlockResult(startFrame: Frame[SSA],
-                         methodReturns: Seq[SSA],
                          terminalInsns: Seq[SSA],
                          pure: Boolean,
                          subCallArgLiveness: Map[AbstractInsnNode, Seq[Boolean]],
@@ -647,7 +644,6 @@ object Walker{
                          blockInsns: Block) extends BlockInfo
 
   case class InsnCtx(sig: MethodSig,
-                     methodReturns: mutable.Buffer[SSA],
                      terminalInsns: mutable.Buffer[SSA],
                      var pure: Boolean,
                      subCallArgLiveness: mutable.Map[AbstractInsnNode, Seq[Boolean]],

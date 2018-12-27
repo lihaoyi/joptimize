@@ -14,7 +14,8 @@ import scala.collection.mutable
 object Liveness {
 
   def apply(allVisitedBlocks: Seq[Walker.BlockResult],
-            merges: Seq[(Frame[SSA], Frame[SSA])]): (InsnList, Set[Int]) = {
+            merges: Seq[(Frame[SSA], Frame[SSA])],
+            initialArgs: Seq[SSA.Arg]): (InsnList, Set[Int]) = {
     val allTerminals = allVisitedBlocks.flatMap(_.terminalInsns)
     val subCallArgLiveness = allVisitedBlocks.flatMap(_.subCallArgLiveness).toMap
     val mergeLookup = mutable.Map.empty[SSA, mutable.Buffer[SSA]]
@@ -25,8 +26,21 @@ object Liveness {
       }
     }
 
+    def getMerges(l: SSA) = mergeLookup.getOrElse(l, Nil)
+
+    val (allVertices, roots, downstreamEdges) =
+      Util.breadthFirstAggregation[SSA](allTerminals.toSet){ ssa =>
+        ssa.upstream ++ getMerges(ssa)
+      }
+
+    val liveArgumentIndices = for{
+      (a, i) <- initialArgs.zipWithIndex
+      if roots(a)
+    } yield i
+
+    pprint.log(roots)
     pprint.log(allTerminals)
-    pprint.log(allVisitedBlocks.map(_.blockInsns))
+    pprint.log(allVisitedBlocks.map(x => x.blockInsns.value -> x.blockInsns.fallThrough))
 //    def getMerges(l: SSA) = mergeLookup.getOrElse(l, Nil)
 //
 //    val allLiveInsns =
@@ -39,8 +53,7 @@ object Liveness {
 //
 //    val labelsToBlocks = allVisitedBlocks.flatMap(b => b.leadingLabel -> b).toMap
 //
-//    liveArgumentIndices
-    ???
+    (???, liveArgumentIndices.toSet)
   }
 }
 
