@@ -24,10 +24,10 @@ class StepEvaluator(typer: Typer, jumpedBasicBlocks: Map[AbstractInsnNode, Block
     var blockState = SSA.State(None)
     val inferredTypes = StepEvaluator.this.inferredTypes
     def newValue(tpe: org.objectweb.asm.Type) = {
-      if (tpe == null) SSA.Arg(-1, 1)
+      if (tpe == null) SSA.Arg(-1, JType.Prim.V)
       else {
         val jtype = JType.read(tpe.getInternalName)
-        val res = SSA.Arg(-1, jtype.size)
+        val res = SSA.Arg(-1, jtype)
         inferredTypes.put(res, jtype)
         res
       }
@@ -102,11 +102,9 @@ class StepEvaluator(typer: Typer, jumpedBasicBlocks: Map[AbstractInsnNode, Block
     def unaryOperation(insn: AbstractInsnNode, value: SSA) = constantFold{
       insn.getOpcode match {
         case IINC => SSA.Inc(value, insn.asInstanceOf[IincInsnNode].incr)
-        case INEG | L2I | F2I | D2I | I2B | I2C | I2S | FNEG | I2F | L2F | D2F  =>
-          SSA.UnaryOp(value, SSA.UnaryOp.lookup(insn.getOpcode), 1)
-
-        case LNEG | I2L | F2L | D2L | DNEG | I2D | L2D | F2D =>
-          SSA.UnaryOp(value, SSA.UnaryOp.lookup(insn.getOpcode), 2)
+        case INEG | L2I | F2I | D2I | I2B | I2C | I2S | FNEG | I2F | L2F |
+             D2F | LNEG | I2L | F2L | D2L | DNEG | I2D | L2D | F2D =>
+          SSA.UnaryOp(value, SSA.UnaryOp.lookup(insn.getOpcode))
 
         case IFEQ | IFNE | IFLT | IFGE | IFGT | IFLE | IFNULL | IFNONNULL =>
           SSA.UnaryBranch(
@@ -186,12 +184,14 @@ class StepEvaluator(typer: Typer, jumpedBasicBlocks: Map[AbstractInsnNode, Block
         case LALOAD | DALOAD => SSA.GetArray(blockState, v1, v2, 2)
 
         case IADD | ISUB | IMUL | IDIV | IREM | ISHL | ISHR | IUSHR | IAND | IOR | IXOR |
-             FADD | FSUB | FMUL | FDIV | FREM | LCMP | FCMPL | FCMPG | DCMPL | DCMPG =>
-          SSA.BinOp(v1, v2, SSA.BinOp.lookup(insn.getOpcode), 1)
-
-        case LADD | LSUB | LMUL | LDIV | LREM | LSHL |
+             FADD | FSUB | FMUL | FDIV | FREM | LCMP | FCMPL | FCMPG | DCMPL | DCMPG |
+             LADD | LSUB | LMUL | LDIV | LREM | LSHL |
              LSHR | LUSHR | LAND | LOR | LXOR | DADD | DSUB | DMUL | DDIV | DREM =>
-          SSA.BinOp(v1, v2, SSA.BinOp.lookup(insn.getOpcode), 2)
+          pprint.log(SSA.BinOp.lookup(insn.getOpcode))
+          pprint.log(v1)
+          pprint.log(v2)
+          SSA.BinOp(v1, v2, SSA.BinOp.lookup(insn.getOpcode))
+
 
         case IF_ICMPEQ | IF_ICMPNE | IF_ICMPLT | IF_ICMPGE | IF_ICMPGT |
              IF_ICMPLE | IF_ACMPEQ | IF_ACMPNE =>

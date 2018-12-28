@@ -34,7 +34,7 @@ class Walker(isInterface: JType.Cls => Boolean,
                  seenMethods0: Set[(MethodSig, Seq[IType])]): Walker.MethodResult = {
 
     visitedMethods.getOrElseUpdate((sig, args.drop(if (sig.static) 0 else 1)), {
-
+      pprint.log(originalInsns.iterator().asScala.map(Util.prettyprint).toSeq)
       val seenMethods = seenMethods0 ++ Seq((sig, args.map(_.widen)))
 
       val jumpedBasicBlocks = originalInsns
@@ -46,7 +46,7 @@ class Walker(isInterface: JType.Cls => Boolean,
 
       val ssaInterpreter = new StepEvaluator(typer, jumpedBasicBlocks)
       val initialArgumentLValues = for((a, i) <- args.zipWithIndex) yield {
-        val ssa = SSA.Arg(i, a.getSize)
+        val ssa = SSA.Arg(i, a)
         ssaInterpreter.inferredTypes.put(ssa, a)
         ssa
       }
@@ -279,7 +279,7 @@ class Walker(isInterface: JType.Cls => Boolean,
         walkInsn(blockStart, blockStartFrame, ctx)
 
         for ((_, (tpe, handler))<- insnTryCatchBlocks(blockStart)) {
-          val ssa = SSA.Arg(-1, 1)
+          val ssa = SSA.Arg(-1, tpe)
           ssaInterpreter.inferredTypes.put(ssa, tpe)
           val handlerFrame = blockStartFrame.handleException(ssa)
           val dest = walkBlock1(handler, handlerFrame)
@@ -544,9 +544,11 @@ class Walker(isInterface: JType.Cls => Boolean,
         val insns = popN(argOutCount) ++ Seq(Util.constantToInstruction(narrowRet.asInstanceOf[IType.Constant[_]]))
         insns.foldLeft(currentFrame)(_.execute(_, ctx.ssaInterpreter))
       } else {
+        pprint.log("WALK")
         ctx.subCallArgLiveness(mangled) = argLivenesses.transpose.map(_.reduce(_ || _))
 
         val srcs = currentFrame.stack.takeRight(argOutCount)
+        pprint.log(srcs)
 
         val readDesc = Desc.read(mangled.desc)
         val ssa = originalInsn.getOpcode match{

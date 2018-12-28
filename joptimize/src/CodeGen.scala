@@ -52,6 +52,7 @@ object CodeGen {
     }
     val startLabels = allVisitedBlocks.map(_.blockInsns -> new LabelNode()).toMap
     for(block <- allVisitedBlocks) {
+      pprint.log(block.terminalInsns)
       outputInsns.add(startLabels(block.blockInsns))
       def rec(ssa: SSA): Unit = {
         ssa.upstream.foreach(rec)
@@ -71,8 +72,8 @@ object CodeGen {
         }else{
           ssa match{
             case SSA.Arg(index, typeSize) => ??? // shouldn't happen
-            case SSA.BinOp(a, b, opcode, typeSize) => outputInsns.add(new InsnNode(opcode.i))
-            case SSA.UnaryOp(a, opcode, typeSize) =>
+            case SSA.BinOp(a, b, opcode) => outputInsns.add(new InsnNode(opcode.i))
+            case SSA.UnaryOp(a, opcode) =>
             case SSA.Inc(a, increment) =>
             case SSA.UnaryBranch(a, target, opcode) =>
             case SSA.BinBranch(a, b, target, opcode) =>
@@ -171,7 +172,7 @@ object CodeGen {
       }
       block.terminalInsns.reverseIterator.foreach(rec)
     }
-    pprint.log(allTerminals)
+
     pprint.log(outputInsns.iterator().asScala.map(Util.prettyprint).toSeq)
 
     (outputInsns, liveArgumentIndices.toSet)

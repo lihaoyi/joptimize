@@ -8,7 +8,7 @@ import java.util
 class Typer(merge0: Seq[IType] => IType){
   def visitSSA(ssa: SSA, inferred: util.IdentityHashMap[SSA, IType]): IType = ssa match{
     case SSA.Arg(index, typeSize) => inferred.get(ssa)
-    case SSA.BinOp(a, b, opcode, typeSize) =>
+    case SSA.BinOp(a, b, opcode) =>
       val v1 = inferred.get(a)
       val v2 = inferred.get(b)
       opcode match{
@@ -48,7 +48,7 @@ class Typer(merge0: Seq[IType] => IType){
         case SSA.BinOp.DDIV => fold(v1, v2, IType.D)(_ / _)
         case SSA.BinOp.DREM => fold(v1, v2, IType.D)(_ % _)
       }
-    case SSA.UnaryOp(a, opcode, typeSize) =>
+    case SSA.UnaryOp(a, opcode) =>
       val value = inferred.get(a)
       opcode match{
         case SSA.UnaryOp.INEG => fold1(value, IType.I, IType.I)(-_)
