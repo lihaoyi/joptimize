@@ -8,11 +8,19 @@ import org.objectweb.asm.tree._
 import collection.JavaConverters._
 import scala.collection.mutable
 
+/**
+  * Takes in java bytecode instructions one at a time and converts them to
+  * [[SSA]] nodes.
+  *
+  * Takes in a [[Typer]] that it uses to perform type inference on each of the
+  * generated SSA nodes; we do this to allow immediate constant folding if the
+  * node's type is specific enough to be a concrete value.
+  */
 class StepEvaluator(typer: Typer, jumpedBasicBlocks: Map[AbstractInsnNode, Block]) {
   val inferredTypes = new java.util.IdentityHashMap[SSA, IType]()
 
   def apply(basicBlock: Block) = new Sub(basicBlock)
-  class Sub(val basicBlock:Block) extends Interpreter[SSA](ASM4){
+  class Sub(val basicBlock: Block) extends Interpreter[SSA](ASM4){
     var blockState = SSA.State(None)
     val inferredTypes = StepEvaluator.this.inferredTypes
     def newValue(tpe: org.objectweb.asm.Type) = {
@@ -123,7 +131,7 @@ class StepEvaluator(typer: Typer, jumpedBasicBlocks: Map[AbstractInsnNode, Block
         case PUTSTATIC =>
           val insn2 = insn.asInstanceOf[FieldInsnNode]
           val res = SSA.PutStatic(blockState, value, insn2.owner, insn2.name, insn2.desc)
-          blockState = SSA.State(Some(res))
+          blockState = SSA.State(Some(blockState -> res))
           res
 
         case GETFIELD =>
@@ -189,7 +197,7 @@ class StepEvaluator(typer: Typer, jumpedBasicBlocks: Map[AbstractInsnNode, Block
         case PUTFIELD =>
           val insn2 = insn.asInstanceOf[FieldInsnNode]
           val res = SSA.PutField(blockState, v1, v2, insn2.owner, insn2.name, insn2.desc)
-          blockState = SSA.State(Some(res))
+          blockState = SSA.State(Some(blockState -> res))
           res
       }
     }
@@ -215,19 +223,19 @@ class StepEvaluator(typer: Typer, jumpedBasicBlocks: Map[AbstractInsnNode, Block
         case INVOKESTATIC =>
           val insn2 = insn.asInstanceOf[MethodInsnNode]
           val res = SSA.InvokeStatic(blockState, vs.asScala, insn2.owner, insn2.name, Desc.read(insn2.desc))
-          blockState = SSA.State(Some(res))
+          blockState = SSA.State(Some(blockState -> res))
           res
 
         case INVOKEVIRTUAL =>
           val insn2 = insn.asInstanceOf[MethodInsnNode]
           val res = SSA.InvokeVirtual(blockState, vs.asScala, insn2.owner, insn2.name, Desc.read(insn2.desc))
-          blockState = SSA.State(Some(res))
+          blockState = SSA.State(Some(blockState -> res))
           res
 
         case INVOKESPECIAL =>
           val insn2 = insn.asInstanceOf[MethodInsnNode]
           val res = SSA.InvokeSpecial(blockState, vs.asScala, insn2.owner, insn2.name, Desc.read(insn2.desc))
-          blockState = SSA.State(Some(res))
+          blockState = SSA.State(Some(blockState -> res))
           res
       }
     }

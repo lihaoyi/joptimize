@@ -3,9 +3,12 @@ import java.util
 
 import org.objectweb.asm.Opcodes._
 
+/**
+  * Performs type inference on a single SSA node, given the types of its upstream
+  * dependencies.
+  */
 class Typer(merge0: Seq[IType] => IType){
-  def visitSSA(ssa: SSA,
-               inferred: util.IdentityHashMap[SSA, IType]): IType = ssa match{
+  def visitSSA(ssa: SSA, inferred: util.IdentityHashMap[SSA, IType]): IType = ssa match{
     case SSA.Arg(index, typeSize) => inferred.get(ssa)
     case SSA.BinOp(a, b, opcode, typeSize) =>
       val v1 = inferred.get(a)

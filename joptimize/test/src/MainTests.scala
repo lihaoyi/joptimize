@@ -189,9 +189,6 @@ object MainTests extends TestSuite{
       eliminateOldMethods = true
     )
 
-    val Seq(inputBytes, outputBytes) =
-      Seq(inputFileMap, outputFileMap).map(_.values.map(_.length).sum)
-
     os.remove.all(outRoot / tp.value)
     for((k, bytes) <- outputFileMap){
       os.write(outRoot / tp.value / os.RelPath(k), bytes, createFolders = true)
@@ -231,11 +228,13 @@ object MainTests extends TestSuite{
       )
       // Make sure the correct value is computed
       (res, expected) match {
-        case (a: Array[AnyRef], b: Array[AnyRef]) =>
-          assert(java.util.Arrays.deepEquals(a, b))
-        case _ => assert {
-          res == expected
-        }
+        case (a: Array[AnyRef], b: Array[AnyRef]) => assert(java.util.Arrays.deepEquals(a, b))
+        case _ =>
+          val argList = args.toList
+          assert {
+            argList
+            res == expected
+          }
       }
     }
     checkWithClassloader { cl =>

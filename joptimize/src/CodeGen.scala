@@ -50,9 +50,9 @@ object CodeGen {
     for((a, i) <- initialArgs.zipWithIndex){
       savedLocals.put(a, i)
     }
+    val startLabels = allVisitedBlocks.map(_.blockInsns -> new LabelNode()).toMap
     for(block <- allVisitedBlocks) {
-      val start = new LabelNode()
-      outputInsns.add(start)
+      outputInsns.add(startLabels(block.blockInsns))
       def rec(ssa: SSA): Unit = {
         ssa.upstream.foreach(rec)
         if (savedLocals.containsKey(ssa)){
@@ -76,6 +76,9 @@ object CodeGen {
             case SSA.Inc(a, increment) =>
             case SSA.UnaryBranch(a, target, opcode) =>
             case SSA.BinBranch(a, b, target, opcode) =>
+              rec(a)
+              rec(b)
+              outputInsns.add(new JumpInsnNode(opcode, startLabels(target)))
             case SSA.ReturnVal(a) =>
               outputInsns.add(new InsnNode(
                 inferredTypes.get(a).widen match{
@@ -126,8 +129,14 @@ object CodeGen {
             case SSA.PushCls(value) =>
               outputInsns.add(new LdcInsnNode(org.objectweb.asm.Type.getType(value.name)))
             case SSA.InvokeStatic(state, srcs, cls, name, desc) =>
+              srcs.foreach(rec)
+              outputInsns.add(new MethodInsnNode(INVOKESTATIC, cls.name, name, desc.unparse))
             case SSA.InvokeSpecial(state, srcs, cls, name, desc) =>
-            case SSA.InvokeVirtual(state, srcs, cls, name, desc:Desc) =>
+              srcs.foreach(rec)
+              outputInsns.add(new MethodInsnNode(INVOKESTATIC, cls.name, name, desc.unparse))
+            case SSA.InvokeVirtual(state, srcs, cls, name, desc) =>
+              srcs.foreach(rec)
+              outputInsns.add(new MethodInsnNode(INVOKESTATIC, cls.name, name, desc.unparse))
             case SSA.InvokeDynamic(name, desc, bsTag, bsOwner, bsName, bsDesc, bsArgs) =>
             case SSA.New(cls) =>
             case SSA.NewArray(src, typeRef) =>
@@ -161,9 +170,8 @@ object CodeGen {
         }
       }
       block.terminalInsns.reverseIterator.foreach(rec)
-      start
     }
-
+    pprint.log(allTerminals)
     pprint.log(outputInsns.iterator().asScala.map(Util.prettyprint).toSeq)
 
     (outputInsns, liveArgumentIndices.toSet)

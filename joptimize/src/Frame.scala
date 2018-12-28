@@ -27,6 +27,17 @@ class Frame[T <: Value](protected val value: org.objectweb.asm.tree.analysis.Fra
 //  assert(!locals.contains(null), locals.indexOf(null))
 //  assert(!stack.contains(null), stack.indexOf(null))
 
+  def popPush(popped: Int, pushed: Seq[T]) = {
+    val f0 = new org.objectweb.asm.tree.analysis.Frame[T](value.getLocals, value.getMaxStackSize)
+    for(i <- 0 until (stack.length - popped)) f0.push(stack(i))
+    for(p <- pushed) f0.push(p)
+    for(i <- 0 until locals.length) value.getLocal(i) match{
+      case null =>
+      case x => f0.setLocal(i, x)
+    }
+    new Frame(f0)
+  }
+
   def map[V <: Value](func: T => V) = {
     val f0 = new org.objectweb.asm.tree.analysis.Frame[V](value.getLocals, value.getMaxStackSize)
     for(i <- 0 until stack.length) f0.push(func(stack(i)))

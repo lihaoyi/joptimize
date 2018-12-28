@@ -11,7 +11,7 @@ sealed abstract class SSA(size: Int, upstream0: SSA*) extends Value{
 }
 
 object SSA{
-  case class State(root: Option[SSA]) extends SSA(0)
+  case class State(base: Option[(State, SSA)]) extends SSA(0)
   case class Arg(index: Int, typeSize: Int) extends SSA(typeSize)
   case class BinOp(a: SSA, b: SSA, opcode: Int, typeSize: Int) extends SSA(typeSize, a, b)
   case class UnaryOp(a: SSA, opcode: Int, typeSize: Int) extends SSA(typeSize, a)
