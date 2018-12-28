@@ -90,7 +90,7 @@ class Walker(isInterface: JType.Cls => Boolean,
         Set(), visitedBlocks, sig, seenMethods,
         recurse = (staticSig, types0) => {
           val argOutCount = staticSig.desc.args.length + (if (staticSig.static) 0 else 1)
-          pprint.log(types0)
+
           val widened = types0.map(_.widen)
           val types =
             if (seenMethods((staticSig, widened))) widened
