@@ -187,9 +187,6 @@ class StepEvaluator(typer: Typer, jumpedBasicBlocks: Map[AbstractInsnNode, Block
              FADD | FSUB | FMUL | FDIV | FREM | LCMP | FCMPL | FCMPG | DCMPL | DCMPG |
              LADD | LSUB | LMUL | LDIV | LREM | LSHL |
              LSHR | LUSHR | LAND | LOR | LXOR | DADD | DSUB | DMUL | DDIV | DREM =>
-          pprint.log(SSA.BinOp.lookup(insn.getOpcode))
-          pprint.log(v1)
-          pprint.log(v2)
           SSA.BinOp(v1, v2, SSA.BinOp.lookup(insn.getOpcode))
 
 

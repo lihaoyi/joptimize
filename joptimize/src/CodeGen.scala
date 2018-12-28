@@ -29,6 +29,7 @@ object CodeGen {
       }
     }
 
+    println(Renderer.render(allVisitedBlocks, merges))
     val (allVertices, roots, downstreamEdges) =
       Util.breadthFirstAggregation[SSA](allTerminals.toSet){ ssa =>
         ssa.upstream ++ mergeLookup.getOrElse(ssa, Nil)
@@ -52,7 +53,6 @@ object CodeGen {
     }
     val startLabels = allVisitedBlocks.map(_.blockInsns -> new LabelNode()).toMap
     for(block <- allVisitedBlocks) {
-      pprint.log(block.terminalInsns)
       outputInsns.add(startLabels(block.blockInsns))
       def rec(ssa: SSA): Unit = {
         ssa.upstream.foreach(rec)

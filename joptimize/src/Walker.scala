@@ -503,7 +503,6 @@ class Walker(isInterface: JType.Cls => Boolean,
           )
         }
 
-        pprint.log(inferredArgumentTypes)
         val recursedResults = concreteSigs.map(ctx.walkMethod(_, inferredArgumentTypes))
         val methodPure = recursedResults.forall(_.pure)
         val argLivenesses = recursedResults.map(_.liveArgs)
@@ -544,11 +543,9 @@ class Walker(isInterface: JType.Cls => Boolean,
         val insns = popN(argOutCount) ++ Seq(Util.constantToInstruction(narrowRet.asInstanceOf[IType.Constant[_]]))
         insns.foldLeft(currentFrame)(_.execute(_, ctx.ssaInterpreter))
       } else {
-        pprint.log("WALK")
         ctx.subCallArgLiveness(mangled) = argLivenesses.transpose.map(_.reduce(_ || _))
 
         val srcs = currentFrame.stack.takeRight(argOutCount)
-        pprint.log(srcs)
 
         val readDesc = Desc.read(mangled.desc)
         val ssa = originalInsn.getOpcode match{
