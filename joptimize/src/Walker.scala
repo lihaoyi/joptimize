@@ -35,7 +35,7 @@ class Walker(isInterface: JType.Cls => Boolean,
 
     visitedMethods.getOrElseUpdate((sig, args.drop(if (sig.static) 0 else 1)), {
       val seenMethods = seenMethods0 ++ Seq((sig, args.map(_.widen)))
-
+      pprint.log(originalInsns.iterator().asScala.map(Util.prettyprint).toSeq)
       val jumpedBasicBlocks = originalInsns
         .iterator().asScala
         .map(_ -> new Block(mutable.Buffer.empty, None))
@@ -308,6 +308,7 @@ class Walker(isInterface: JType.Cls => Boolean,
   @tailrec final def walkInsn(currentInsn: AbstractInsnNode,
                               currentFrame: Frame[SSA],
                               ctx: Walker.InsnCtx): Unit = {
+    pprint.log(Util.prettyprint(currentInsn))
     /**
       * Walk the next instruction as a new block, if it is a label. If not
       * then return `false` so we can tail-recursively walk it as a simple
@@ -364,6 +365,7 @@ class Walker(isInterface: JType.Cls => Boolean,
         current.getOpcode match{
           case ARETURN | DRETURN | FRETURN | IRETURN | LRETURN =>
             ctx.ssaInterpreter.basicBlock.value.append(SSA.ReturnVal(currentFrame.stack.last))
+            pprint.log(ctx.ssaInterpreter.basicBlock.value.last)
             ctx.terminalInsns.append(ctx.ssaInterpreter.basicBlock.value.last)
 
           case RETURN =>

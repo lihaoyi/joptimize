@@ -243,9 +243,7 @@ class StepEvaluator(typer: Typer, jumpedBasicBlocks: Map[AbstractInsnNode, Block
           res
       }
     }
-    def returnOperation(insn: AbstractInsnNode, value: SSA, expected: SSA) = constantFold{
-      SSA.ReturnVal(value)
-    }
+    def returnOperation(insn: AbstractInsnNode, value: SSA, expected: SSA) = ()
 
     // We do not use this, since we do the walking
     // and merging manually in AbstractInterpreter

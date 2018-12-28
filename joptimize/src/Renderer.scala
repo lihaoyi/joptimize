@@ -5,6 +5,7 @@ import collection.mutable
 object Renderer {
   def render(allVisitedBlocks: Seq[Walker.BlockResult],
              merges: Seq[(Frame[SSA], Frame[SSA])]): String = {
+    pprint.log(allVisitedBlocks.length)
     val mergeLookup = mutable.Map.empty[SSA, mutable.Buffer[SSA]]
     val allTerminals = allVisitedBlocks.flatMap(_.terminalInsns)
 
@@ -15,6 +16,7 @@ object Renderer {
         ssa.upstream ++ mergeLookup.getOrElse(ssa, Nil)
       }
 
+    pprint.log(downstreamEdges)
     val saveable = downstreamEdges
       .groupBy(_._1)
       .map{
@@ -32,7 +34,9 @@ object Renderer {
 
     val out = mutable.Buffer.empty[fansi.Str]
     for((block, blockIndex) <- allVisitedBlocks.zipWithIndex){
-      val renderRoots = block.blockInsns.value.filter(i => block.terminalInsns.contains(i) || saveable(i))
+      pprint.log(block.terminalInsns)
+      pprint.log(block.blockInsns.value)
+      val renderRoots = block.blockInsns.value.filter(i => block.terminalInsns.contains(i) || saveable.getOrElse(i, false))
       val savedLocals = new util.IdentityHashMap[SSA, Int]()
       for((r, i) <- renderRoots.zipWithIndex) savedLocals.put(r, i)
 

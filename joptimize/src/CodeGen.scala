@@ -81,8 +81,8 @@ object CodeGen {
           val current: Seq[AbstractInsnNode] = ssa match{
             case SSA.Arg(index, typeSize) => ??? // shouldn't happen
             case SSA.BinOp(a, b, opcode) => Seq(new InsnNode(opcode.i))
-            case SSA.UnaryOp(a, opcode) => ???
-            case SSA.Inc(a, increment) => ???
+            case SSA.UnaryOp(a, opcode) => Seq(new InsnNode(opcode.i))
+            case SSA.Inc(a, increment) => Seq(new LdcInsnNode(increment), new InsnNode(IADD))
             case SSA.UnaryBranch(a, target, opcode) => ???
             case SSA.BinBranch(a, b, target, opcode) =>
               rec(a) ++ rec(b) ++ Seq(new JumpInsnNode(opcode.i, startLabels(target)))
@@ -182,7 +182,7 @@ object CodeGen {
         }
       }
 
-      val renderRoots = block.blockInsns.value.filter(i => block.terminalInsns.contains(i) || saveable(i))
+      val renderRoots = block.blockInsns.value.filter(i => block.terminalInsns.contains(i) || saveable.getOrElse(i, false))
       Seq(startLabels(block.blockInsns)) ++ renderRoots.flatMap(rec)
     }
     val outputInsns = new InsnList()
