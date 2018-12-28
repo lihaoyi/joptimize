@@ -8,7 +8,7 @@ object Renderer {
     val mergeLookup = mutable.Map.empty[SSA, mutable.Buffer[SSA]]
     val allTerminals = allVisitedBlocks.flatMap(_.terminalInsns)
 
-    val savedLocals = new util.IdentityHashMap[SSA, Int]()
+
 
     val (allVertices, roots, downstreamEdges) =
       Util.breadthFirstAggregation[SSA](allTerminals.toSet){ ssa =>
@@ -17,78 +17,101 @@ object Renderer {
 
     val saveable = downstreamEdges
       .groupBy(_._1)
-      .mapValues(_.distinct.size)
-      .map{case (k, x) => (k, x > 1 || x == 1 && allTerminals.contains(k)) }
-      .toMap
+      .map{
+        case (k: SSA.PushI, _) => (k, false)
+        case (k: SSA.PushJ, _) => (k, false)
+        case (k: SSA.PushF, _) => (k, false)
+        case (k: SSA.PushD, _) => (k, false)
+        case (k: SSA.PushS, _) => (k, false)
+        case (k: SSA.PushNull, _) => (k, false)
+        case (k: SSA.PushCls, _) => (k, false)
+        case (k, x) =>
+          val n = x.distinct.size
+          (k, n > 1 || n == 1 && allTerminals.contains(k))
+      }
 
-    def apply(lhs: String, operands: pprint.Tree*) = pprint.Tree.Apply(lhs, operands.toIterator)
-    def atom(lhs: String) = pprint.Tree.Lazy(ctx => Iterator(lhs))
-    def literal(lhs: String) = pprint.Tree.Literal(lhs)
-    def infix(lhs: pprint.Tree, op: String, rhs: pprint.Tree) = pprint.Tree.Infix(lhs, op, rhs)
-    def blockify(lhs: Block) = atom("block" + allVisitedBlocks.indexWhere(_.blockInsns == lhs).toString)
-
-    def treeify(ssa: SSA): pprint.Tree = ssa match{
-      case SSA.Arg(index, typeSize) => atom("arg" + index)
-      case SSA.BinOp(a, b, opcode) => infix(treeify(a), binOpString(opcode), treeify(b))
-      case SSA.UnaryOp(a, opcode) => apply(unaryOpString(opcode), treeify(a))
-      case SSA.Inc(a, increment) => apply("inc", treeify(a), atom(increment.toString))
-      case SSA.UnaryBranch(a, target, opcode) => apply("if", treeify(a), atom(unaryBranchString(opcode)), blockify(target))
-      case SSA.BinBranch(a, b, target, opcode) => apply("if", infix(treeify(a), binBranchString(opcode), treeify(b)), blockify(target))
-      case SSA.ReturnVal(a) => apply("return", treeify(a))
-      case SSA.Return() => apply("return")
-      case SSA.AThrow(src) => apply("throw", treeify(src))
-      case SSA.TableSwitch(src, min, max, default, targets) =>
-        val args =
-          Seq(treeify(src), atom(min.toString), atom(max.toString), blockify(default)) ++
-          targets.map(blockify)
-        apply("tableswitch", args:_*)
-
-      case SSA.LookupSwitch(src, default, keys, targets) =>
-        val args =
-          Seq(treeify(src)) ++ keys.map(i => atom(i.toString)) ++
-          Seq(blockify(default)) ++ targets.map(blockify)
-        apply("lookupswitch", args:_*)
-
-      case SSA.Goto(target) => apply("goto", blockify(target))
-      case SSA.CheckCast(src, desc) => apply("cast", treeify(src), atom(desc.name))
-      case SSA.ArrayLength(src) => apply("arraylength", treeify(src))
-      case SSA.InstanceOf(src, desc) => apply("instanceof", treeify(src), atom(desc.name))
-      case SSA.PushI(value) => literal(value + "")
-      case SSA.PushJ(value) => literal(value + "L")
-      case SSA.PushF(value) => literal(value + "F")
-      case SSA.PushD(value) => literal(value + "D")
-      case SSA.PushS(value) => literal(pprint.Util.literalize(value))
-      case SSA.PushNull() => literal("null")
-      case SSA.PushCls(value) => literal(value.name)
-      case SSA.InvokeStatic(state, srcs, cls, name, desc) => apply(cls.javaName + "." + name + desc.unparse, srcs.map(treeify):_*)
-      case SSA.InvokeSpecial(state, srcs, cls, name, desc) => apply(cls.javaName + "##" + name + desc.unparse, srcs.map(treeify):_*)
-      case SSA.InvokeVirtual(state, srcs, cls, name, desc) => apply(cls.javaName + "#" + name + desc.unparse, srcs.map(treeify):_*)
-      case SSA.InvokeDynamic(name, desc, bsTag, bsOwner, bsName, bsDesc, bsArgs) => ???
-      case SSA.New(cls) => apply("new", atom(cls.name))
-      case SSA.NewArray(src, typeRef) => apply("newarray", treeify(src), atom(typeRef.name))
-      case SSA.MultiANewArray(desc, dims) => apply("multianewarray", atom(desc.name))
-      case SSA.PutStatic(state, src, cls, name, desc) => apply("putstatic", treeify(src), atom(cls.name), atom(name), atom(desc.name))
-      case SSA.GetStatic(state, cls, name, desc) => apply("getstatic", atom(cls.name), atom(name), atom(desc.name))
-      case SSA.PutField(state, src, obj, owner, name, desc) => apply("putfield", treeify(src), treeify(obj), atom(owner.name), atom(name), atom(desc.name))
-      case SSA.GetField(state, obj, owner, name, desc) => apply("getfield", treeify(obj), atom(owner.name), atom(name), atom(desc.name))
-      case SSA.PutArray(state, src, indexSrc, array) => apply("putarray", treeify(src), treeify(indexSrc), treeify(array))
-      case SSA.GetArray(state, indexSrc, array, typeSize) => apply("putarray", treeify(indexSrc), treeify(array))
-      case SSA.MonitorEnter(indexSrc) => ???
-      case SSA.MonitorExit(indexSrc) => ???
-    }
     val out = mutable.Buffer.empty[fansi.Str]
     for((block, blockIndex) <- allVisitedBlocks.zipWithIndex){
       val renderRoots = block.blockInsns.value.filter(i => block.terminalInsns.contains(i) || saveable(i))
-      val body = block.terminalInsns
-      val tree = pprint.Tree.Apply(
-        "block" + blockIndex,
-        renderRoots.iterator.map(treeify)
-      )
+      val savedLocals = new util.IdentityHashMap[SSA, Int]()
+      for((r, i) <- renderRoots.zipWithIndex) savedLocals.put(r, i)
 
-      out.appendAll(
-        new pprint.Renderer(80, fansi.Color.Yellow, fansi.Color.Green, 4)
-          .rec(tree, 0, 0).iter
-      )
+      def apply(lhs: String, operands: pprint.Tree*) = pprint.Tree.Apply(lhs, operands.toIterator)
+      def atom(lhs: String) = pprint.Tree.Lazy(ctx => Iterator(lhs))
+      def literal(lhs: String) = pprint.Tree.Literal(lhs)
+      def infix(lhs: pprint.Tree, op: String, rhs: pprint.Tree) = pprint.Tree.Infix(lhs, op, rhs)
+      def blockify(lhs: Block) = atom(fansi.Color.Magenta("block" + allVisitedBlocks.indexWhere(_.blockInsns == lhs).toString).toString)
+
+      def treeify0(ssa: SSA): pprint.Tree = ssa match{
+        case SSA.Arg(index, typeSize) => atom(fansi.Color.Cyan("arg" + index).toString)
+        case SSA.BinOp(a, b, opcode) => infix(treeify(a), binOpString(opcode), treeify(b))
+        case SSA.UnaryOp(a, opcode) => apply(unaryOpString(opcode), treeify(a))
+        case SSA.Inc(a, increment) => apply("inc", treeify(a), atom(increment.toString))
+        case SSA.UnaryBranch(a, target, opcode) => apply("if", treeify(a), atom(unaryBranchString(opcode)), blockify(target))
+        case SSA.BinBranch(a, b, target, opcode) => apply("if", infix(treeify(a), binBranchString(opcode), treeify(b)), blockify(target))
+        case SSA.ReturnVal(a) => apply("return", treeify(a))
+        case SSA.Return() => apply("return")
+        case SSA.AThrow(src) => apply("throw", treeify(src))
+        case SSA.TableSwitch(src, min, max, default, targets) =>
+          val args =
+            Seq(treeify(src), atom(min.toString), atom(max.toString), blockify(default)) ++
+            targets.map(blockify)
+          apply("tableswitch", args:_*)
+
+        case SSA.LookupSwitch(src, default, keys, targets) =>
+          val args =
+            Seq(treeify(src)) ++ keys.map(i => atom(i.toString)) ++
+            Seq(blockify(default)) ++ targets.map(blockify)
+          apply("lookupswitch", args:_*)
+
+        case SSA.Goto(target) => apply("goto", blockify(target))
+        case SSA.CheckCast(src, desc) => apply("cast", treeify(src), atom(desc.name))
+        case SSA.ArrayLength(src) => apply("arraylength", treeify(src))
+        case SSA.InstanceOf(src, desc) => apply("instanceof", treeify(src), atom(desc.name))
+        case SSA.PushI(value) => literal(value + "")
+        case SSA.PushJ(value) => literal(value + "L")
+        case SSA.PushF(value) => literal(value + "F")
+        case SSA.PushD(value) => literal(value + "D")
+        case SSA.PushS(value) => literal(pprint.Util.literalize(value))
+        case SSA.PushNull() => literal("null")
+        case SSA.PushCls(value) => literal(value.name)
+        case SSA.InvokeStatic(state, srcs, cls, name, desc) => apply(cls.javaName + "." + name + desc.unparse, srcs.map(treeify):_*)
+        case SSA.InvokeSpecial(state, srcs, cls, name, desc) => apply(cls.javaName + "##" + name + desc.unparse, srcs.map(treeify):_*)
+        case SSA.InvokeVirtual(state, srcs, cls, name, desc) => apply(cls.javaName + "#" + name + desc.unparse, srcs.map(treeify):_*)
+        case SSA.InvokeDynamic(name, desc, bsTag, bsOwner, bsName, bsDesc, bsArgs) => ???
+        case SSA.New(cls) => apply("new", atom(cls.name))
+        case SSA.NewArray(src, typeRef) => apply("newarray", treeify(src), atom(typeRef.name))
+        case SSA.MultiANewArray(desc, dims) => apply("multianewarray", atom(desc.name))
+        case SSA.PutStatic(state, src, cls, name, desc) => apply("putstatic", treeify(src), atom(cls.name), atom(name), atom(desc.name))
+        case SSA.GetStatic(state, cls, name, desc) => apply("getstatic", atom(cls.name), atom(name), atom(desc.name))
+        case SSA.PutField(state, src, obj, owner, name, desc) => apply("putfield", treeify(src), treeify(obj), atom(owner.name), atom(name), atom(desc.name))
+        case SSA.GetField(state, obj, owner, name, desc) => apply("getfield", treeify(obj), atom(owner.name), atom(name), atom(desc.name))
+        case SSA.PutArray(state, src, indexSrc, array) => apply("putarray", treeify(src), treeify(indexSrc), treeify(array))
+        case SSA.GetArray(state, indexSrc, array, typeSize) => apply("putarray", treeify(indexSrc), treeify(array))
+        case SSA.MonitorEnter(indexSrc) => ???
+        case SSA.MonitorExit(indexSrc) => ???
+      }
+      def treeify(ssa: SSA): pprint.Tree = {
+        if (savedLocals.containsKey(ssa)) atom(fansi.Color.Cyan("local" + savedLocals.get(ssa)).toString())
+        else treeify0(ssa)
+      }
+      val body = block.terminalInsns
+
+      out.append(fansi.Color.Magenta("block" + blockIndex))
+      out.append("\n")
+      for(r <- renderRoots){
+        val (lhs, sep) =
+          if (r.getSize == 0) ("  ", "")
+          else ("  local" + savedLocals.get(r), " = ")
+
+        out.append(fansi.Color.Cyan(lhs))
+        out.append(sep)
+        out.appendAll(
+          new pprint.Renderer(80, fansi.Color.Yellow, fansi.Color.Green, 2)
+            .rec(treeify0(r), lhs.length + sep.length, 1).iter
+        )
+        out.append("\n")
+      }
       out.append("\n")
     }
 

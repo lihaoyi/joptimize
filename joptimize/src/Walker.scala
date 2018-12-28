@@ -34,7 +34,6 @@ class Walker(isInterface: JType.Cls => Boolean,
                  seenMethods0: Set[(MethodSig, Seq[IType])]): Walker.MethodResult = {
 
     visitedMethods.getOrElseUpdate((sig, args.drop(if (sig.static) 0 else 1)), {
-      pprint.log(originalInsns.iterator().asScala.map(Util.prettyprint).toSeq)
       val seenMethods = seenMethods0 ++ Seq((sig, args.map(_.widen)))
 
       val jumpedBasicBlocks = originalInsns
