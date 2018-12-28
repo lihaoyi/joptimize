@@ -71,14 +71,14 @@ object CodeGen {
         }else{
           ssa match{
             case SSA.Arg(index, typeSize) => ??? // shouldn't happen
-            case SSA.BinOp(a, b, opcode, typeSize) => outputInsns.add(new InsnNode(opcode))
+            case SSA.BinOp(a, b, opcode, typeSize) => outputInsns.add(new InsnNode(opcode.i))
             case SSA.UnaryOp(a, opcode, typeSize) =>
             case SSA.Inc(a, increment) =>
             case SSA.UnaryBranch(a, target, opcode) =>
             case SSA.BinBranch(a, b, target, opcode) =>
               rec(a)
               rec(b)
-              outputInsns.add(new JumpInsnNode(opcode, startLabels(target)))
+              outputInsns.add(new JumpInsnNode(opcode.i, startLabels(target)))
             case SSA.ReturnVal(a) =>
               outputInsns.add(new InsnNode(
                 inferredTypes.get(a).widen match{

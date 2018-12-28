@@ -103,13 +103,18 @@ class StepEvaluator(typer: Typer, jumpedBasicBlocks: Map[AbstractInsnNode, Block
       insn.getOpcode match {
         case IINC => SSA.Inc(value, insn.asInstanceOf[IincInsnNode].incr)
         case INEG | L2I | F2I | D2I | I2B | I2C | I2S | FNEG | I2F | L2F | D2F  =>
-          SSA.UnaryOp(value, insn.getOpcode, 1)
+          SSA.UnaryOp(value, SSA.UnaryOp.lookup(insn.getOpcode), 1)
 
         case LNEG | I2L | F2L | D2L | DNEG | I2D | L2D | F2D =>
-          SSA.UnaryOp(value, insn.getOpcode, 2)
+          SSA.UnaryOp(value, SSA.UnaryOp.lookup(insn.getOpcode), 2)
 
-        case IFEQ | IFNE | IFLT | IFGE | IFGT | IFLE =>
-          SSA.UnaryBranch(value, jumpedBasicBlocks(insn.asInstanceOf[JumpInsnNode].label), insn.getOpcode)
+        case IFEQ | IFNE | IFLT | IFGE | IFGT | IFLE | IFNULL | IFNONNULL =>
+          SSA.UnaryBranch(
+            value,
+            jumpedBasicBlocks(insn.asInstanceOf[JumpInsnNode].label),
+            SSA.UnaryBranch.lookup(insn.getOpcode)
+          )
+
 
         case TABLESWITCH =>
           val insn2 = insn.asInstanceOf[TableSwitchInsnNode]
@@ -170,8 +175,6 @@ class StepEvaluator(typer: Typer, jumpedBasicBlocks: Map[AbstractInsnNode, Block
         case MONITORENTER => SSA.MonitorEnter(value)
 
         case MONITOREXIT => SSA.MonitorExit(value)
-
-        case IFNULL | IFNONNULL => SSA.UnaryBranch(value, ???, insn.getOpcode)
       }
     }
 
@@ -184,15 +187,19 @@ class StepEvaluator(typer: Typer, jumpedBasicBlocks: Map[AbstractInsnNode, Block
 
         case IADD | ISUB | IMUL | IDIV | IREM | ISHL | ISHR | IUSHR | IAND | IOR | IXOR |
              FADD | FSUB | FMUL | FDIV | FREM | LCMP | FCMPL | FCMPG | DCMPL | DCMPG =>
-          SSA.BinOp(v1, v2, insn.getOpcode, 1)
+          SSA.BinOp(v1, v2, SSA.BinOp.lookup(insn.getOpcode), 1)
 
         case LADD | LSUB | LMUL | LDIV | LREM | LSHL |
              LSHR | LUSHR | LAND | LOR | LXOR | DADD | DSUB | DMUL | DDIV | DREM =>
-          SSA.BinOp(v1, v2, insn.getOpcode, 2)
+          SSA.BinOp(v1, v2, SSA.BinOp.lookup(insn.getOpcode), 2)
 
         case IF_ICMPEQ | IF_ICMPNE | IF_ICMPLT | IF_ICMPGE | IF_ICMPGT |
              IF_ICMPLE | IF_ACMPEQ | IF_ACMPNE =>
-          SSA.BinBranch(v1, v2, jumpedBasicBlocks(insn.asInstanceOf[JumpInsnNode].label), insn.getOpcode)
+          SSA.BinBranch(
+            v1, v2,
+            jumpedBasicBlocks(insn.asInstanceOf[JumpInsnNode].label),
+            SSA.BinBranch.lookup(insn.getOpcode)
+          )
 
         case PUTFIELD =>
           val insn2 = insn.asInstanceOf[FieldInsnNode]
