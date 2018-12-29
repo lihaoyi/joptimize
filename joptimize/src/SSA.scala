@@ -84,7 +84,6 @@ object SSA{
     val L2D = new Code(Opcodes.L2D, 2)
     val F2D = new Code(Opcodes.F2D, 2)
   }
-  case class Inc(a: SSA, increment: Int) extends SSA(1, a)
 
   case class UnaryBranch(a: SSA, target: Block, opcode: UnaryBranch.Code) extends SSA(0, a)
   object UnaryBranch  extends Codes{

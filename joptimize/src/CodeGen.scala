@@ -61,7 +61,9 @@ object CodeGen {
       savedLocals.put(a, i)
     }
     val startLabels = allVisitedBlocks.map(_.blockInsns -> new LabelNode()).toMap
-    val blockInsns: Seq[Seq[AbstractInsnNode]] = for(block <- allVisitedBlocks) yield {
+    pprint.log(startLabels)
+    val blockInsns: Seq[Seq[AbstractInsnNode]] = for((block, blockIndex) <- allVisitedBlocks.zipWithIndex) yield {
+      pprint.log(blockIndex)
       def rec(ssa: SSA): Seq[AbstractInsnNode] = {
         if (savedLocals.containsKey(ssa)){
           Seq(
@@ -82,10 +84,10 @@ object CodeGen {
             case SSA.Arg(index, typeSize) => ??? // shouldn't happen
             case SSA.BinOp(a, b, opcode) => Seq(new InsnNode(opcode.i))
             case SSA.UnaryOp(a, opcode) => Seq(new InsnNode(opcode.i))
-            case SSA.Inc(a, increment) => Seq(new LdcInsnNode(increment), new InsnNode(IADD))
-            case SSA.UnaryBranch(a, target, opcode) => ???
+            case SSA.UnaryBranch(a, target, opcode) =>
+              Seq(new JumpInsnNode(opcode.i, startLabels(target)))
             case SSA.BinBranch(a, b, target, opcode) =>
-              rec(a) ++ rec(b) ++ Seq(new JumpInsnNode(opcode.i, startLabels(target)))
+              Seq(new JumpInsnNode(opcode.i, startLabels(target)))
             case SSA.ReturnVal(a) =>
               Seq(new InsnNode(
                 inferredTypes.get(a).widen match{
@@ -183,7 +185,11 @@ object CodeGen {
       }
 
       val renderRoots = block.blockInsns.value.filter(i => block.terminalInsns.contains(i) || saveable.getOrElse(i, false))
-      Seq(startLabels(block.blockInsns)) ++ renderRoots.flatMap(rec)
+      val snippet = Seq(startLabels(block.blockInsns)) ++ renderRoots.flatMap(rec)
+      pprint.log(block.blockInsns)
+      pprint.log(snippet.map(Util.prettyprint).toSeq)
+      pprint.log(snippet.toSeq)
+      snippet
     }
     val outputInsns = new InsnList()
     blockInsns.flatten.foreach(outputInsns.add)

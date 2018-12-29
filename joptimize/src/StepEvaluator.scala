@@ -16,13 +16,14 @@ import scala.collection.mutable
   * generated SSA nodes; we do this to allow immediate constant folding if the
   * node's type is specific enough to be a concrete value.
   */
-class StepEvaluator(typer: Typer, jumpedBasicBlocks: Map[AbstractInsnNode, Block]) {
+class StepEvaluator(typer: Typer, jumpedBasicBlocks: (AbstractInsnNode, Frame[IType]) => Block) {
   val inferredTypes = new java.util.IdentityHashMap[SSA, IType]()
 
-  def apply(basicBlock: Block) = new Sub(basicBlock)
-  class Sub(val basicBlock: Block) extends Interpreter[SSA](ASM4){
-    var blockState = SSA.State(None)
-    val inferredTypes = StepEvaluator.this.inferredTypes
+  val blockStates0 = mutable.Map.empty[Block, SSA.State]
+  def blockStates(b: Block) = blockStates0.getOrElse(b, SSA.State(None))
+  def apply(currentBasicBlock: Block, currentFrame0: Frame[SSA]) = new Sub(currentBasicBlock, currentFrame0)
+  class Sub(currentBasicBlock: Block, currentFrame0: Frame[SSA]) extends Interpreter[SSA](ASM4){
+    val currentFrame = currentFrame0.map(inferredTypes.get)
     def newValue(tpe: org.objectweb.asm.Type) = {
       if (tpe == null) SSA.Arg(-1, JType.Prim.V)
       else {
@@ -50,7 +51,7 @@ class StepEvaluator(typer: Typer, jumpedBasicBlocks: Map[AbstractInsnNode, Block
           ssa
         }
       }
-      basicBlock.value.append(res)
+      currentBasicBlock.value.append(res)
       res
     }
 
@@ -88,7 +89,7 @@ class StepEvaluator(typer: Typer, jumpedBasicBlocks: Map[AbstractInsnNode, Block
         case JSR => ???
         case GETSTATIC =>
           val insn2 = insn.asInstanceOf[FieldInsnNode]
-          SSA.GetStatic(blockState, JType.Cls(insn2.owner), insn2.name, insn2.desc)
+          SSA.GetStatic(blockStates(currentBasicBlock), JType.Cls(insn2.owner), insn2.name, insn2.desc)
         case NEW => SSA.New(insn.asInstanceOf[TypeInsnNode].desc)
       }
     }
@@ -101,7 +102,13 @@ class StepEvaluator(typer: Typer, jumpedBasicBlocks: Map[AbstractInsnNode, Block
 
     def unaryOperation(insn: AbstractInsnNode, value: SSA) = constantFold{
       insn.getOpcode match {
-        case IINC => SSA.Inc(value, insn.asInstanceOf[IincInsnNode].incr)
+        case IINC =>
+          val n = insn.asInstanceOf[IincInsnNode].incr
+          val const = SSA.PushI(n)
+          inferredTypes.put(const, IType.I(n))
+          currentBasicBlock.value.append(const)
+          SSA.BinOp(const, value, SSA.BinOp.IADD)
+
         case INEG | L2I | F2I | D2I | I2B | I2C | I2S | FNEG | I2F | L2F |
              D2F | LNEG | I2L | F2L | D2L | DNEG | I2D | L2D | F2D =>
           SSA.UnaryOp(value, SSA.UnaryOp.lookup(insn.getOpcode))
@@ -109,7 +116,7 @@ class StepEvaluator(typer: Typer, jumpedBasicBlocks: Map[AbstractInsnNode, Block
         case IFEQ | IFNE | IFLT | IFGE | IFGT | IFLE | IFNULL | IFNONNULL =>
           SSA.UnaryBranch(
             value,
-            jumpedBasicBlocks(insn.asInstanceOf[JumpInsnNode].label),
+            jumpedBasicBlocks(insn.asInstanceOf[JumpInsnNode].label, currentFrame.popPush(1, Nil)),
             SSA.UnaryBranch.lookup(insn.getOpcode)
           )
 
@@ -118,28 +125,29 @@ class StepEvaluator(typer: Typer, jumpedBasicBlocks: Map[AbstractInsnNode, Block
           val insn2 = insn.asInstanceOf[TableSwitchInsnNode]
           SSA.TableSwitch(
             value, insn2.min, insn2.max,
-            jumpedBasicBlocks(insn2.dflt),
-            insn2.labels.asScala.map(jumpedBasicBlocks)
+            jumpedBasicBlocks(insn2.dflt, currentFrame.popPush(1, Nil)),
+            insn2.labels.asScala.map(jumpedBasicBlocks(_, currentFrame.popPush(1, Nil)))
           )
 
         case LOOKUPSWITCH =>
           val insn2 = insn.asInstanceOf[LookupSwitchInsnNode]
           SSA.LookupSwitch(
-            value, jumpedBasicBlocks(insn2.dflt),
-            insn2.keys.asScala.map(_.intValue()), insn2.labels.asScala.map(jumpedBasicBlocks)
+            value, jumpedBasicBlocks(insn2.dflt, currentFrame.popPush(1, Nil)),
+            insn2.keys.asScala.map(_.intValue()),
+            insn2.labels.asScala.map(jumpedBasicBlocks(_, currentFrame.popPush(1, Nil)))
           )
 
         case IRETURN | LRETURN | FRETURN | DRETURN | ARETURN => SSA.ReturnVal(value)
 
         case PUTSTATIC =>
           val insn2 = insn.asInstanceOf[FieldInsnNode]
-          val res = SSA.PutStatic(blockState, value, insn2.owner, insn2.name, insn2.desc)
-          blockState = SSA.State(Some(blockState -> res))
+          val res = SSA.PutStatic(blockStates(currentBasicBlock), value, insn2.owner, insn2.name, insn2.desc)
+          blockStates0(currentBasicBlock) = SSA.State(Some(blockStates(currentBasicBlock) -> res))
           res
 
         case GETFIELD =>
           val insn2 = insn.asInstanceOf[FieldInsnNode]
-          SSA.GetField(blockState, value, insn2.owner, insn2.name, insn2.desc)
+          SSA.GetField(blockStates(currentBasicBlock), value, insn2.owner, insn2.name, insn2.desc)
 
         case NEWARRAY =>
           SSA.NewArray(
@@ -179,9 +187,9 @@ class StepEvaluator(typer: Typer, jumpedBasicBlocks: Map[AbstractInsnNode, Block
     def binaryOperation(insn: AbstractInsnNode, v1: SSA, v2: SSA) = constantFold{
       insn.getOpcode match {
         case IALOAD | BALOAD | CALOAD | SALOAD | FALOAD | AALOAD =>
-          SSA.GetArray(blockState, v1, v2, 1)
+          SSA.GetArray(blockStates(currentBasicBlock), v1, v2, 1)
 
-        case LALOAD | DALOAD => SSA.GetArray(blockState, v1, v2, 2)
+        case LALOAD | DALOAD => SSA.GetArray(blockStates(currentBasicBlock), v1, v2, 2)
 
         case IADD | ISUB | IMUL | IDIV | IREM | ISHL | ISHR | IUSHR | IAND | IOR | IXOR |
              FADD | FSUB | FMUL | FDIV | FREM | LCMP | FCMPL | FCMPG | DCMPL | DCMPG |
@@ -194,20 +202,20 @@ class StepEvaluator(typer: Typer, jumpedBasicBlocks: Map[AbstractInsnNode, Block
              IF_ICMPLE | IF_ACMPEQ | IF_ACMPNE =>
           SSA.BinBranch(
             v1, v2,
-            jumpedBasicBlocks(insn.asInstanceOf[JumpInsnNode].label),
+            jumpedBasicBlocks(insn.asInstanceOf[JumpInsnNode].label, currentFrame.popPush(2, Nil)),
             SSA.BinBranch.lookup(insn.getOpcode)
           )
 
         case PUTFIELD =>
           val insn2 = insn.asInstanceOf[FieldInsnNode]
-          val res = SSA.PutField(blockState, v1, v2, insn2.owner, insn2.name, insn2.desc)
-          blockState = SSA.State(Some(blockState -> res))
+          val res = SSA.PutField(blockStates(currentBasicBlock), v1, v2, insn2.owner, insn2.name, insn2.desc)
+          blockStates0(currentBasicBlock) = SSA.State(Some(blockStates(currentBasicBlock) -> res))
           res
       }
     }
 
     def ternaryOperation(insn: AbstractInsnNode, v1: SSA, v2: SSA, v3: SSA) = constantFold{
-      SSA.PutArray(blockState, v1, v2, v3)
+      SSA.PutArray(blockStates(currentBasicBlock), v1, v2, v3)
     }
 
     def naryOperation(insn: AbstractInsnNode, vs: java.util.List[_ <: SSA]) = constantFold{
@@ -226,20 +234,20 @@ class StepEvaluator(typer: Typer, jumpedBasicBlocks: Map[AbstractInsnNode, Block
 
         case INVOKESTATIC =>
           val insn2 = insn.asInstanceOf[MethodInsnNode]
-          val res = SSA.InvokeStatic(blockState, vs.asScala, insn2.owner, insn2.name, Desc.read(insn2.desc))
-          blockState = SSA.State(Some(blockState -> res))
+          val res = SSA.InvokeStatic(blockStates(currentBasicBlock), vs.asScala, insn2.owner, insn2.name, Desc.read(insn2.desc))
+          blockStates0(currentBasicBlock) = SSA.State(Some(blockStates(currentBasicBlock) -> res))
           res
 
         case INVOKEVIRTUAL =>
           val insn2 = insn.asInstanceOf[MethodInsnNode]
-          val res = SSA.InvokeVirtual(blockState, vs.asScala, insn2.owner, insn2.name, Desc.read(insn2.desc))
-          blockState = SSA.State(Some(blockState -> res))
+          val res = SSA.InvokeVirtual(blockStates(currentBasicBlock), vs.asScala, insn2.owner, insn2.name, Desc.read(insn2.desc))
+          blockStates0(currentBasicBlock) = SSA.State(Some(blockStates(currentBasicBlock) -> res))
           res
 
         case INVOKESPECIAL =>
           val insn2 = insn.asInstanceOf[MethodInsnNode]
-          val res = SSA.InvokeSpecial(blockState, vs.asScala, insn2.owner, insn2.name, Desc.read(insn2.desc))
-          blockState = SSA.State(Some(blockState -> res))
+          val res = SSA.InvokeSpecial(blockStates(currentBasicBlock), vs.asScala, insn2.owner, insn2.name, Desc.read(insn2.desc))
+          blockStates0(currentBasicBlock) = SSA.State(Some(blockStates(currentBasicBlock) -> res))
           res
       }
     }

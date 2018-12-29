@@ -34,6 +34,7 @@ object Renderer {
 
     val out = mutable.Buffer.empty[fansi.Str]
     for((block, blockIndex) <- allVisitedBlocks.zipWithIndex){
+      pprint.log(blockIndex)
       pprint.log(block.terminalInsns)
       pprint.log(block.blockInsns.value)
       val renderRoots = block.blockInsns.value.filter(i => block.terminalInsns.contains(i) || saveable.getOrElse(i, false))
@@ -50,7 +51,6 @@ object Renderer {
         case SSA.Arg(index, typeSize) => atom(fansi.Color.Cyan("arg" + index).toString)
         case SSA.BinOp(a, b, opcode) => infix(treeify(a), binOpString(opcode), treeify(b))
         case SSA.UnaryOp(a, opcode) => apply(unaryOpString(opcode), treeify(a))
-        case SSA.Inc(a, increment) => apply("inc", treeify(a), atom(increment.toString))
         case SSA.UnaryBranch(a, target, opcode) => apply("if", treeify(a), atom(unaryBranchString(opcode)), blockify(target))
         case SSA.BinBranch(a, b, target, opcode) => apply("if", infix(treeify(a), binBranchString(opcode), treeify(b)), blockify(target))
         case SSA.ReturnVal(a) => apply("return", treeify(a))
