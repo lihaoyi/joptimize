@@ -8,7 +8,7 @@ import org.objectweb.asm.tree.analysis.{Interpreter, Value}
 /**
   * An immutable wrapper around [[org.objectweb.asm.tree.analysis.Frame]],
   */
-class Frame[T <: Value](protected val value: org.objectweb.asm.tree.analysis.Frame[T]){
+class Frame[T <: Frame.Value](protected val value: org.objectweb.asm.tree.analysis.Frame[T]){
   val locals = new IndexedSeq[T] {
     def length = value.getLocals
     def apply(idx: Int) = value.getLocal(idx)
@@ -38,7 +38,7 @@ class Frame[T <: Value](protected val value: org.objectweb.asm.tree.analysis.Fra
     new Frame(f0)
   }
 
-  def map[V <: Value](func: T => V) = {
+  def map[V <: Frame.Value](func: T => V) = {
     val f0 = new org.objectweb.asm.tree.analysis.Frame[V](value.getLocals, value.getMaxStackSize)
     for(i <- 0 until stack.length) f0.push(func(stack(i)))
     for(i <- 0 until locals.length) value.getLocal(i) match{
@@ -48,7 +48,7 @@ class Frame[T <: Value](protected val value: org.objectweb.asm.tree.analysis.Fra
     new Frame(f0)
   }
 
-  def zipForeach[V <: Value](other: Frame[V])(func: (T, V) => Unit): Unit = {
+  def zipForeach[V <: Frame.Value](other: Frame[V])(func: (T, V) => Unit): Unit = {
     assert(stack.length == other.stack.length)
     assert(locals.length == other.locals.length)
     for(i <- 0 until stack.length) func(stack(i), other.stack(i))
@@ -88,8 +88,20 @@ class Frame[T <: Value](protected val value: org.objectweb.asm.tree.analysis.Fra
     newFrame.push(ex)
     new Frame(newFrame)
   }
+  def render = {
+    def stringify(values: IndexedSeq[T]) = {
+      values
+        .map{case null => " " case x => x.internalName}
+        .mkString
+    }
+
+    s"${stringify(locals)} ${stringify(stack)}"
+  }
 }
 object Frame{
+  trait Value extends org.objectweb.asm.tree.analysis.Value{
+    def internalName: String
+  }
   def initial[T <: Value](maxLocals: Int, maxStack: Int, args: Seq[T], nilValue: T) = {
     val initialFrame0 = new org.objectweb.asm.tree.analysis.Frame[T](maxLocals, maxStack)
     var i = 0

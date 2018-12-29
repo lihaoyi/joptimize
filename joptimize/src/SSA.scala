@@ -6,9 +6,11 @@ import scala.collection.mutable
 
 class Block(val value: mutable.Buffer[SSA], var fallThrough: Option[Block])
 
-sealed abstract class SSA(size: Int, upstream0: SSA*) extends Value{
+sealed abstract class SSA(size: Int, upstream0: SSA*) extends Frame.Value{
   def upstream = upstream0
   def getSize = size
+
+  def internalName = toString
 }
 
 object SSA{

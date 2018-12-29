@@ -1,22 +1,55 @@
 package joptimize
 import java.util
 
+import org.objectweb.asm.tree.{AbstractInsnNode, InsnList}
+
 import collection.mutable
 object Renderer {
-  def render(allVisitedBlocks: Seq[Walker.BlockResult],
-             merges: Seq[(Frame[SSA], Frame[SSA])]): String = {
-    pprint.log(allVisitedBlocks.length)
+  def render(insns: InsnList): fansi.Str = {
+    import collection.JavaConverters._
+    val indices = insns.iterator().asScala.zipWithIndex.toMap
+    fansi.Str.join(
+      insns
+        .iterator()
+        .asScala
+        .flatMap{ k =>
+          val rhs = Util.prettyprint(k)
+          val splitIndex0 = rhs.indexWhere(_ != ' ')
+          val splitIndex = rhs.indexWhere(_ == ' ', splitIndex0) match{
+            case -1 => rhs.length
+            case n => n
+          }
+          val (opcode, rest) = rhs.splitAt(splitIndex)
+          Seq[fansi.Str](
+            "\n",
+            fansi.Color.Magenta("#" + indices(k).toString.padTo(3, ' ')),
+            fansi.Color.Yellow(opcode),
+            fansi.Color.Green(rest)
+          )
+        }
+        .toSeq
+        .drop(1):_*
+    )
+  }
+
+  def render(visitedBlocks0: mutable.LinkedHashMap[(AbstractInsnNode, Frame[IType]), Walker.BlockInfo],
+             merges: Seq[(Frame[SSA], Frame[SSA])],
+             originalInsnIndices: Map[AbstractInsnNode, Int]): fansi.Str = {
+    val visitedBlocks = visitedBlocks0.map{case (k, v) => (k, v.asInstanceOf[Walker.BlockResult])}
+    val blocksToIndices = visitedBlocks
+      .values
+      .zipWithIndex
+      .map{case (k, i) => (k.blockInsns, i)}
+      .toMap
+
     val mergeLookup = mutable.Map.empty[SSA, mutable.Buffer[SSA]]
-    val allTerminals = allVisitedBlocks.flatMap(_.terminalInsns)
-
-
+    val allTerminals = visitedBlocks.values.flatMap(_.terminalInsns).toSet
 
     val (allVertices, roots, downstreamEdges) =
-      Util.breadthFirstAggregation[SSA](allTerminals.toSet){ ssa =>
+      Util.breadthFirstAggregation[SSA](allTerminals){ ssa =>
         ssa.upstream ++ mergeLookup.getOrElse(ssa, Nil)
       }
 
-    pprint.log(downstreamEdges)
     val saveable = downstreamEdges
       .groupBy(_._1)
       .map{
@@ -33,10 +66,7 @@ object Renderer {
       }
 
     val out = mutable.Buffer.empty[fansi.Str]
-    for((block, blockIndex) <- allVisitedBlocks.zipWithIndex){
-      pprint.log(blockIndex)
-      pprint.log(block.terminalInsns)
-      pprint.log(block.blockInsns.value)
+    for((((startNode, startFrame), block), blockIndex) <- visitedBlocks.zipWithIndex){
       val renderRoots = block.blockInsns.value.filter(i => block.terminalInsns.contains(i) || saveable.getOrElse(i, false))
       val savedLocals = new util.IdentityHashMap[SSA, Int]()
       for((r, i) <- renderRoots.zipWithIndex) savedLocals.put(r, i)
@@ -45,7 +75,7 @@ object Renderer {
       def atom(lhs: String) = pprint.Tree.Lazy(ctx => Iterator(lhs))
       def literal(lhs: String) = pprint.Tree.Literal(lhs)
       def infix(lhs: pprint.Tree, op: String, rhs: pprint.Tree) = pprint.Tree.Infix(lhs, op, rhs)
-      def blockify(lhs: Block) = atom(fansi.Color.Magenta("block" + allVisitedBlocks.indexWhere(_.blockInsns == lhs).toString).toString)
+      def blockify(lhs: Block) = atom(fansi.Color.Magenta("block" + blocksToIndices(lhs)).toString)
 
       def treeify0(ssa: SSA): pprint.Tree = ssa match{
         case SSA.Arg(index, typeSize) => atom(fansi.Color.Cyan("arg" + index).toString)
@@ -99,9 +129,13 @@ object Renderer {
         if (savedLocals.containsKey(ssa)) atom(fansi.Color.Cyan("local" + savedLocals.get(ssa)).toString())
         else treeify0(ssa)
       }
-      val body = block.terminalInsns
 
       out.append(fansi.Color.Magenta("block" + blockIndex))
+      out.append(" ")
+      out.append(fansi.Color.Blue("#"))
+      out.append(fansi.Color.Blue(originalInsnIndices(startNode).toString))
+      out.append(" ")
+      out.append(fansi.Color.Blue(startFrame.render))
       out.append("\n")
       for(r <- renderRoots){
         val (lhs, sep) =
@@ -119,7 +153,7 @@ object Renderer {
       out.append("\n")
     }
 
-    out.mkString
+    fansi.Str.join(out:_*)
   }
 
   def binOpString(op: SSA.BinOp.Code): String = op match{

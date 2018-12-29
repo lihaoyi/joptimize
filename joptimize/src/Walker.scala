@@ -35,8 +35,10 @@ class Walker(isInterface: JType.Cls => Boolean,
 
     visitedMethods.getOrElseUpdate((sig, args.drop(if (sig.static) 0 else 1)), {
       val seenMethods = seenMethods0 ++ Seq((sig, args.map(_.widen)))
-      pprint.log(originalInsns.iterator().asScala.map(Util.prettyprint).toSeq)
-      val jumpedBasicBlocks = mutable.Map.empty[(AbstractInsnNode, Frame[IType]), Block]
+
+      println("+" * 20 + sig + "+" * 20)
+      println(Renderer.render(originalInsns))
+      val jumpedBasicBlocks = mutable.LinkedHashMap.empty[(AbstractInsnNode, Frame[IType]), Block]
 
       val visitedBlocks = new mutable.LinkedHashMap[(AbstractInsnNode, Frame[IType]), Walker.BlockInfo]
 
@@ -197,7 +199,7 @@ class Walker(isInterface: JType.Cls => Boolean,
 //        }
 //      }
 
-
+      println(Renderer.render(visitedBlocks, merges, originalInsns.iterator().asScala.zipWithIndex.toMap))
       val (outputInsns, liveArguments) = CodeGen(
         allVisitedBlocks,
         merges,
@@ -205,9 +207,13 @@ class Walker(isInterface: JType.Cls => Boolean,
         ssaInterpreter.inferredTypes
       )
 
+      println(Renderer.render(outputInsns))
+
       val liveArgs =
         if (sig.static) sig.desc.args.indices.map(liveArguments)
         else Seq(true) ++ sig.desc.args.indices.map(_+1).map(liveArguments)
+
+      println("-" * 20 + sig + "-" * 20)
 
       Walker.MethodResult(
         liveArgs,
@@ -310,7 +316,6 @@ class Walker(isInterface: JType.Cls => Boolean,
   @tailrec final def walkInsn(currentInsn: AbstractInsnNode,
                               currentFrame: Frame[SSA],
                               ctx: Walker.InsnCtx): Unit = {
-    pprint.log(Util.prettyprint(currentInsn))
     /**
       * Walk the next instruction as a new block, if it is a label. If not
       * then return `false` so we can tail-recursively walk it as a simple
@@ -372,7 +377,6 @@ class Walker(isInterface: JType.Cls => Boolean,
         current.getOpcode match{
           case ARETURN | DRETURN | FRETURN | IRETURN | LRETURN =>
             ctx.basicBlock.value.append(SSA.ReturnVal(currentFrame.stack.last))
-            pprint.log(ctx.basicBlock.value.last)
             ctx.terminalInsns.append(ctx.basicBlock.value.last)
 
           case RETURN =>

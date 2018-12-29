@@ -29,7 +29,6 @@ object CodeGen {
       }
     }
 
-    println(Renderer.render(allVisitedBlocks, merges))
     val (allVertices, roots, downstreamEdges) =
       Util.breadthFirstAggregation[SSA](allTerminals.toSet){ ssa =>
         ssa.upstream ++ mergeLookup.getOrElse(ssa, Nil)
@@ -61,9 +60,8 @@ object CodeGen {
       savedLocals.put(a, i)
     }
     val startLabels = allVisitedBlocks.map(_.blockInsns -> new LabelNode()).toMap
-    pprint.log(startLabels)
+
     val blockInsns: Seq[Seq[AbstractInsnNode]] = for((block, blockIndex) <- allVisitedBlocks.zipWithIndex) yield {
-      pprint.log(blockIndex)
       def rec(ssa: SSA): Seq[AbstractInsnNode] = {
         if (savedLocals.containsKey(ssa)){
           Seq(
@@ -185,15 +183,10 @@ object CodeGen {
       }
 
       val renderRoots = block.blockInsns.value.filter(i => block.terminalInsns.contains(i) || saveable.getOrElse(i, false))
-      val snippet = Seq(startLabels(block.blockInsns)) ++ renderRoots.flatMap(rec)
-      pprint.log(block.blockInsns)
-      pprint.log(snippet.map(Util.prettyprint).toSeq)
-      pprint.log(snippet.toSeq)
-      snippet
+      Seq(startLabels(block.blockInsns)) ++ renderRoots.flatMap(rec)
     }
     val outputInsns = new InsnList()
     blockInsns.flatten.foreach(outputInsns.add)
-    pprint.log(outputInsns.iterator().asScala.map(Util.prettyprint).toSeq)
 
     (outputInsns, liveArgumentIndices.toSet)
   }
