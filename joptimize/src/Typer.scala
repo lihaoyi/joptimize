@@ -47,6 +47,24 @@ class Typer(merge0: Seq[IType] => IType){
         case SSA.BinOp.DMUL => fold(v1, v2, IType.D)(_ * _)
         case SSA.BinOp.DDIV => fold(v1, v2, IType.D)(_ / _)
         case SSA.BinOp.DREM => fold(v1, v2, IType.D)(_ % _)
+
+        case SSA.BinOp.LCMP => fold(v1, v2, IType.J)(java.lang.Long.compare)
+        case SSA.BinOp.FCMPL => fold(v1, v2, IType.F)((f1, f2) =>
+          if (java.lang.Float.isNaN(f1) || java.lang.Float.isNaN(f2)) -1
+          else java.lang.Float.compare(f1, f2)
+        )
+        case SSA.BinOp.FCMPG => fold(v1, v2, IType.F)((f1, f2) =>
+          if (java.lang.Float.isNaN(f1) || java.lang.Float.isNaN(f2)) 1
+          else java.lang.Float.compare(f1, f2)
+        )
+        case SSA.BinOp.DCMPL => fold(v1, v2, IType.D)((f1, f2) =>
+          if (java.lang.Double.isNaN(f1) || java.lang.Double.isNaN(f2)) -1
+          else java.lang.Double.compare(f1, f2)
+        )
+        case SSA.BinOp.DCMPG => fold(v1, v2, IType.D)((f1, f2) =>
+          if (java.lang.Double.isNaN(f1) || java.lang.Double.isNaN(f2)) 1
+          else java.lang.Double.compare(f1, f2)
+        )
       }
     case SSA.UnaryOp(a, opcode) =>
       val value = inferred.get(a)
