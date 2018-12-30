@@ -16,246 +16,182 @@ import scala.collection.mutable
   * generated SSA nodes; we do this to allow immediate constant folding if the
   * node's type is specific enough to be a concrete value.
   */
-class StepEvaluator(typer: Typer, jumpedBasicBlocks: (AbstractInsnNode, Frame[IType]) => Block) {
-  val inferredTypes = new java.util.IdentityHashMap[SSA, IType]()
+object StepEvaluator extends Interpreter[SSA](ASM4){
 
-  val blockStates0 = mutable.Map.empty[Block, SSA.State]
-  def blockStates(b: Block) = blockStates0.getOrElse(b, SSA.State(None))
-  def apply(currentBasicBlock: Block, currentFrame0: Frame[SSA]) = new Sub(currentBasicBlock, currentFrame0)
-  class Sub(currentBasicBlock: Block, currentFrame0: Frame[SSA]) extends Interpreter[SSA](ASM4){
-    val currentFrame = currentFrame0.map(inferredTypes.get)
-    def newValue(tpe: org.objectweb.asm.Type) = {
-      if (tpe == null) SSA.Arg(-1, JType.Prim.V)
-      else {
-        val jtype = JType.read(tpe.getInternalName)
-        val res = SSA.Arg(-1, jtype)
-        inferredTypes.put(res, jtype)
-        res
-      }
-    }
-
-    def constantFold(ssa: SSA) = {
-      val res = {
-        val inferred = typer.visitSSA(ssa, inferredTypes)
-        if (inferred.isConstant){
-          val folded = inferred match{
-            case IType.I(v) => SSA.PushI(v)
-            case IType.F(v) => SSA.PushF(v)
-            case IType.J(v) => SSA.PushJ(v)
-            case IType.D(v) => SSA.PushD(v)
-          }
-          inferredTypes.put(folded, inferred)
-          folded
-        } else {
-          inferredTypes.put(ssa, inferred)
-          ssa
-        }
-      }
-      currentBasicBlock.value.append(res)
+  def newValue(tpe: org.objectweb.asm.Type) = {
+    if (tpe == null) SSA.Arg(-1, JType.Prim.V)
+    else {
+      val jtype = JType.read(tpe.getInternalName)
+      val res = SSA.Arg(-1, jtype)
       res
     }
+  }
 
-    def newOperation(insn: AbstractInsnNode) = constantFold{
-      insn.getOpcode match {
-        case ACONST_NULL => SSA.PushNull()
-        case ICONST_M1 => SSA.PushI(-1)
-        case ICONST_0 => SSA.PushI(0)
-        case ICONST_1 => SSA.PushI(1)
-        case ICONST_2 => SSA.PushI(2)
-        case ICONST_3 => SSA.PushI(3)
-        case ICONST_4 => SSA.PushI(4)
-        case ICONST_5 => SSA.PushI(5)
-        case LCONST_0 => SSA.PushJ(0)
-        case LCONST_1 => SSA.PushJ(1)
-        case FCONST_0 => SSA.PushF(0)
-        case FCONST_1 => SSA.PushF(1)
-        case FCONST_2 => SSA.PushF(2)
-        case DCONST_0 => SSA.PushD(0)
-        case DCONST_1 => SSA.PushD(1)
-        case BIPUSH | SIPUSH => SSA.PushI(insn.asInstanceOf[IntInsnNode].operand)
-        case LDC =>
-          insn.asInstanceOf[LdcInsnNode].cst match {
-            case i: java.lang.Integer => SSA.PushI(i)
-            case f: java.lang.Float => SSA.PushF(f)
-            case d: java.lang.Double => SSA.PushD(d)
-            case s: java.lang.String => SSA.PushS(s)
-            case value: org.objectweb.asm.Type =>
-              value.getSort match {
-                case OBJECT | ARRAY => SSA.PushCls(JType.Cls(value.getClassName))
-                case METHOD => ???
-              }
-            case _: Handle => ???
-          }
-        case JSR => ???
-        case GETSTATIC =>
-          val insn2 = insn.asInstanceOf[FieldInsnNode]
-          SSA.GetStatic(blockStates(currentBasicBlock), JType.Cls(insn2.owner), insn2.name, insn2.desc)
-        case NEW => SSA.New(insn.asInstanceOf[TypeInsnNode].desc)
-      }
-    }
-
-    // We do not record any of these copy operations in the SSA dataflow graph
-    // that we construct during abstract interpretation. Those do not meaningfully
-    // affect the shape of the graph, and we will generate our own copy operations
-    // as-necessary when serializing the graph back out to bytecode
-    def copyOperation(insn: AbstractInsnNode, value: SSA) = value
-
-    def unaryOperation(insn: AbstractInsnNode, value: SSA) = constantFold{
-      insn.getOpcode match {
-        case IINC =>
-          val n = insn.asInstanceOf[IincInsnNode].incr
-          val const = SSA.PushI(n)
-          inferredTypes.put(const, IType.I(n))
-          currentBasicBlock.value.append(const)
-          SSA.BinOp(const, value, SSA.BinOp.IADD)
-
-        case INEG | L2I | F2I | D2I | I2B | I2C | I2S | FNEG | I2F | L2F |
-             D2F | LNEG | I2L | F2L | D2L | DNEG | I2D | L2D | F2D =>
-          SSA.UnaryOp(value, SSA.UnaryOp.lookup(insn.getOpcode))
-
-        case IFEQ | IFNE | IFLT | IFGE | IFGT | IFLE | IFNULL | IFNONNULL =>
-          SSA.UnaryBranch(
-            value,
-            jumpedBasicBlocks(insn.asInstanceOf[JumpInsnNode].label, currentFrame.popPush(1, Nil)),
-            SSA.UnaryBranch.lookup(insn.getOpcode)
-          )
-
-
-        case TABLESWITCH =>
-          val insn2 = insn.asInstanceOf[TableSwitchInsnNode]
-          SSA.TableSwitch(
-            value, insn2.min, insn2.max,
-            jumpedBasicBlocks(insn2.dflt, currentFrame.popPush(1, Nil)),
-            insn2.labels.asScala.map(jumpedBasicBlocks(_, currentFrame.popPush(1, Nil)))
-          )
-
-        case LOOKUPSWITCH =>
-          val insn2 = insn.asInstanceOf[LookupSwitchInsnNode]
-          SSA.LookupSwitch(
-            value, jumpedBasicBlocks(insn2.dflt, currentFrame.popPush(1, Nil)),
-            insn2.keys.asScala.map(_.intValue()),
-            insn2.labels.asScala.map(jumpedBasicBlocks(_, currentFrame.popPush(1, Nil)))
-          )
-
-        case IRETURN | LRETURN | FRETURN | DRETURN | ARETURN => SSA.ReturnVal(value)
-
-        case PUTSTATIC =>
-          val insn2 = insn.asInstanceOf[FieldInsnNode]
-          val res = SSA.PutStatic(blockStates(currentBasicBlock), value, insn2.owner, insn2.name, insn2.desc)
-          blockStates0(currentBasicBlock) = SSA.State(Some(blockStates(currentBasicBlock) -> res))
-          res
-
-        case GETFIELD =>
-          val insn2 = insn.asInstanceOf[FieldInsnNode]
-          SSA.GetField(blockStates(currentBasicBlock), value, insn2.owner, insn2.name, insn2.desc)
-
-        case NEWARRAY =>
-          SSA.NewArray(
-            value,
-            insn.asInstanceOf[IntInsnNode].operand match {
-              case T_BOOLEAN => JType.Arr(JType.Prim.Z)
-              case T_CHAR => JType.Arr(JType.Prim.C)
-              case T_BYTE => JType.Arr(JType.Prim.B)
-              case T_SHORT => JType.Arr(JType.Prim.S)
-              case T_INT => JType.Arr(JType.Prim.I)
-              case T_FLOAT => JType.Arr(JType.Prim.F)
-              case T_DOUBLE => JType.Arr(JType.Prim.D)
-              case T_LONG => JType.Arr(JType.Prim.J)
+  def newOperation(insn: AbstractInsnNode) = {
+    insn.getOpcode match {
+      case ACONST_NULL => SSA.PushNull()
+      case ICONST_M1 => SSA.PushI(-1)
+      case ICONST_0 => SSA.PushI(0)
+      case ICONST_1 => SSA.PushI(1)
+      case ICONST_2 => SSA.PushI(2)
+      case ICONST_3 => SSA.PushI(3)
+      case ICONST_4 => SSA.PushI(4)
+      case ICONST_5 => SSA.PushI(5)
+      case LCONST_0 => SSA.PushJ(0)
+      case LCONST_1 => SSA.PushJ(1)
+      case FCONST_0 => SSA.PushF(0)
+      case FCONST_1 => SSA.PushF(1)
+      case FCONST_2 => SSA.PushF(2)
+      case DCONST_0 => SSA.PushD(0)
+      case DCONST_1 => SSA.PushD(1)
+      case BIPUSH | SIPUSH => SSA.PushI(insn.asInstanceOf[IntInsnNode].operand)
+      case LDC =>
+        insn.asInstanceOf[LdcInsnNode].cst match {
+          case i: java.lang.Integer => SSA.PushI(i)
+          case f: java.lang.Float => SSA.PushF(f)
+          case d: java.lang.Double => SSA.PushD(d)
+          case s: java.lang.String => SSA.PushS(s)
+          case value: org.objectweb.asm.Type =>
+            value.getSort match {
+              case OBJECT | ARRAY => SSA.PushCls(JType.Cls(value.getClassName))
+              case METHOD => ???
             }
-          )
-
-        case ANEWARRAY =>
-          SSA.NewArray(
-            value,
-            JType.Arr(JType.read(insn.asInstanceOf[TypeInsnNode].desc))
-          )
-
-        case ARRAYLENGTH => SSA.ArrayLength(value)
-
-        case ATHROW => SSA.AThrow(value)
-
-        case CHECKCAST => SSA.CheckCast(value, insn.asInstanceOf[TypeInsnNode].desc)
-
-        case INSTANCEOF => SSA.InstanceOf(value, insn.asInstanceOf[TypeInsnNode].desc)
-
-        case MONITORENTER => SSA.MonitorEnter(value)
-
-        case MONITOREXIT => SSA.MonitorExit(value)
-      }
+          case _: Handle => ???
+        }
+      case JSR => ???
+      case GETSTATIC =>
+        val insn2 = insn.asInstanceOf[FieldInsnNode]
+        SSA.GetStatic(JType.Cls(insn2.owner), insn2.name, insn2.desc)
+      case NEW => SSA.New(insn.asInstanceOf[TypeInsnNode].desc)
     }
+  }
 
-    def binaryOperation(insn: AbstractInsnNode, v1: SSA, v2: SSA) = constantFold{
-      insn.getOpcode match {
-        case IALOAD | BALOAD | CALOAD | SALOAD | FALOAD | AALOAD =>
-          SSA.GetArray(blockStates(currentBasicBlock), v1, v2, 1)
+  // We do not record any of these copy operations in the SSA dataflow graph
+  // that we construct during abstract interpretation. Those do not meaningfully
+  // affect the shape of the graph, and we will generate our own copy operations
+  // as-necessary when serializing the graph back out to bytecode
+  def copyOperation(insn: AbstractInsnNode, value: SSA) = value
 
-        case LALOAD | DALOAD => SSA.GetArray(blockStates(currentBasicBlock), v1, v2, 2)
+  def unaryOperation(insn: AbstractInsnNode, value: SSA) = {
+    insn.getOpcode match {
+      case IINC =>
+        val n = insn.asInstanceOf[IincInsnNode].incr
+        val const = SSA.PushI(n)
+        SSA.BinOp(const, value, SSA.BinOp.IADD)
 
-        case IADD | ISUB | IMUL | IDIV | IREM | ISHL | ISHR | IUSHR | IAND | IOR | IXOR |
-             FADD | FSUB | FMUL | FDIV | FREM | LCMP | FCMPL | FCMPG | DCMPL | DCMPG |
-             LADD | LSUB | LMUL | LDIV | LREM | LSHL |
-             LSHR | LUSHR | LAND | LOR | LXOR | DADD | DSUB | DMUL | DDIV | DREM =>
-          SSA.BinOp(v1, v2, SSA.BinOp.lookup(insn.getOpcode))
+      case INEG | L2I | F2I | D2I | I2B | I2C | I2S | FNEG | I2F | L2F |
+           D2F | LNEG | I2L | F2L | D2L | DNEG | I2D | L2D | F2D =>
+        SSA.UnaryOp(value, SSA.UnaryOp.lookup(insn.getOpcode))
 
+      case IFEQ | IFNE | IFLT | IFGE | IFGT | IFLE | IFNULL | IFNONNULL => null
+      case TABLESWITCH => null
+      case LOOKUPSWITCH => null
+      case IRETURN | LRETURN | FRETURN | DRETURN | ARETURN => null
 
-        case IF_ICMPEQ | IF_ICMPNE | IF_ICMPLT | IF_ICMPGE | IF_ICMPGT |
-             IF_ICMPLE | IF_ACMPEQ | IF_ACMPNE =>
-          SSA.BinBranch(
-            v1, v2,
-            jumpedBasicBlocks(insn.asInstanceOf[JumpInsnNode].label, currentFrame.popPush(2, Nil)),
-            SSA.BinBranch.lookup(insn.getOpcode)
-          )
+      case PUTSTATIC =>
+        val insn2 = insn.asInstanceOf[FieldInsnNode]
+        val res = SSA.PutStatic(value, insn2.owner, insn2.name, insn2.desc)
+        res
 
-        case PUTFIELD =>
-          val insn2 = insn.asInstanceOf[FieldInsnNode]
-          val res = SSA.PutField(blockStates(currentBasicBlock), v1, v2, insn2.owner, insn2.name, insn2.desc)
-          blockStates0(currentBasicBlock) = SSA.State(Some(blockStates(currentBasicBlock) -> res))
-          res
-      }
+      case GETFIELD =>
+        val insn2 = insn.asInstanceOf[FieldInsnNode]
+        SSA.GetField(value, insn2.owner, insn2.name, insn2.desc)
+
+      case NEWARRAY =>
+        SSA.NewArray(
+          value,
+          insn.asInstanceOf[IntInsnNode].operand match {
+            case T_BOOLEAN => JType.Arr(JType.Prim.Z)
+            case T_CHAR => JType.Arr(JType.Prim.C)
+            case T_BYTE => JType.Arr(JType.Prim.B)
+            case T_SHORT => JType.Arr(JType.Prim.S)
+            case T_INT => JType.Arr(JType.Prim.I)
+            case T_FLOAT => JType.Arr(JType.Prim.F)
+            case T_DOUBLE => JType.Arr(JType.Prim.D)
+            case T_LONG => JType.Arr(JType.Prim.J)
+          }
+        )
+
+      case ANEWARRAY =>
+        SSA.NewArray(
+          value,
+          JType.Arr(JType.read(insn.asInstanceOf[TypeInsnNode].desc))
+        )
+
+      case ARRAYLENGTH => SSA.ArrayLength(value)
+
+      case ATHROW => SSA.AThrow(value)
+
+      case CHECKCAST => SSA.CheckCast(value, insn.asInstanceOf[TypeInsnNode].desc)
+
+      case INSTANCEOF => SSA.InstanceOf(value, insn.asInstanceOf[TypeInsnNode].desc)
+
+      case MONITORENTER => SSA.MonitorEnter(value)
+
+      case MONITOREXIT => SSA.MonitorExit(value)
     }
+  }
 
-    def ternaryOperation(insn: AbstractInsnNode, v1: SSA, v2: SSA, v3: SSA) = constantFold{
-      SSA.PutArray(blockStates(currentBasicBlock), v1, v2, v3)
+  def binaryOperation(insn: AbstractInsnNode, v1: SSA, v2: SSA) = {
+    insn.getOpcode match {
+      case IALOAD | BALOAD | CALOAD | SALOAD | FALOAD | AALOAD =>
+        SSA.GetArray(v1, v2, 1)
+
+      case LALOAD | DALOAD => SSA.GetArray(v1, v2, 2)
+
+      case IADD | ISUB | IMUL | IDIV | IREM | ISHL | ISHR | IUSHR | IAND | IOR | IXOR |
+           FADD | FSUB | FMUL | FDIV | FREM | LCMP | FCMPL | FCMPG | DCMPL | DCMPG |
+           LADD | LSUB | LMUL | LDIV | LREM | LSHL |
+           LSHR | LUSHR | LAND | LOR | LXOR | DADD | DSUB | DMUL | DDIV | DREM =>
+        SSA.BinOp(v1, v2, SSA.BinOp.lookup(insn.getOpcode))
+
+
+      case IF_ICMPEQ | IF_ICMPNE | IF_ICMPLT | IF_ICMPGE | IF_ICMPGT |
+           IF_ICMPLE | IF_ACMPEQ | IF_ACMPNE => null
+
+      case PUTFIELD => null
     }
+  }
 
-    def naryOperation(insn: AbstractInsnNode, vs: java.util.List[_ <: SSA]) = constantFold{
-      insn.getOpcode match{
-        case MULTIANEWARRAY =>
-          val insn2 = insn.asInstanceOf[MultiANewArrayInsnNode]
-          SSA.MultiANewArray(insn2.desc, vs.asScala)
+  def ternaryOperation(insn: AbstractInsnNode, v1: SSA, v2: SSA, v3: SSA) = null
 
-        case INVOKEDYNAMIC =>
-          val insn2 = insn.asInstanceOf[InvokeDynamicInsnNode]
-          val bsm = insn2.bsm
-          SSA.InvokeDynamic(
-            insn2.name, insn2.desc, bsm.getTag, bsm.getOwner,
-            bsm.getName, bsm.getDesc, insn2.bsmArgs
-          )
+  def naryOperation(insn: AbstractInsnNode, vs: java.util.List[_ <: SSA]) = {
+    insn.getOpcode match{
+      case MULTIANEWARRAY =>
+        val insn2 = insn.asInstanceOf[MultiANewArrayInsnNode]
+        SSA.MultiANewArray(insn2.desc, vs.asScala)
 
-        case INVOKESTATIC =>
-          val insn2 = insn.asInstanceOf[MethodInsnNode]
-          val res = SSA.InvokeStatic(blockStates(currentBasicBlock), vs.asScala, insn2.owner, insn2.name, Desc.read(insn2.desc))
-          blockStates0(currentBasicBlock) = SSA.State(Some(blockStates(currentBasicBlock) -> res))
-          res
+      case INVOKEDYNAMIC =>
+        val insn2 = insn.asInstanceOf[InvokeDynamicInsnNode]
+        val bsm = insn2.bsm
+        SSA.InvokeDynamic(
+          insn2.name, insn2.desc, bsm.getTag, bsm.getOwner,
+          bsm.getName, bsm.getDesc, insn2.bsmArgs
+        )
 
-        case INVOKEVIRTUAL =>
-          val insn2 = insn.asInstanceOf[MethodInsnNode]
-          val res = SSA.InvokeVirtual(blockStates(currentBasicBlock), vs.asScala, insn2.owner, insn2.name, Desc.read(insn2.desc))
-          blockStates0(currentBasicBlock) = SSA.State(Some(blockStates(currentBasicBlock) -> res))
-          res
+      case INVOKESTATIC =>
+        val insn2 = insn.asInstanceOf[MethodInsnNode]
+        SSA.InvokeStatic(vs.asScala, insn2.owner, insn2.name, Desc.read(insn2.desc))
 
-        case INVOKESPECIAL =>
-          val insn2 = insn.asInstanceOf[MethodInsnNode]
-          val res = SSA.InvokeSpecial(blockStates(currentBasicBlock), vs.asScala, insn2.owner, insn2.name, Desc.read(insn2.desc))
-          blockStates0(currentBasicBlock) = SSA.State(Some(blockStates(currentBasicBlock) -> res))
-          res
-      }
+      case INVOKEVIRTUAL =>
+        val insn2 = insn.asInstanceOf[MethodInsnNode]
+        SSA.InvokeVirtual(vs.asScala, insn2.owner, insn2.name, Desc.read(insn2.desc))
+
+      case INVOKESPECIAL =>
+        val insn2 = insn.asInstanceOf[MethodInsnNode]
+        SSA.InvokeSpecial(vs.asScala, insn2.owner, insn2.name, Desc.read(insn2.desc))
     }
-    def returnOperation(insn: AbstractInsnNode, value: SSA, expected: SSA) = ()
+  }
 
-    // We do not use this, since we do the walking
-    // and merging manually in AbstractInterpreter
-    def merge(v1: SSA, v2: SSA) = ???
+  def returnOperation(insn: AbstractInsnNode, value: SSA, expected: SSA) = ()
 
+  def merge(v1: SSA, v2: SSA) = {
+    if (v1 == v2) v1
+    else (v1, v2) match{
+      case (SSA.Phi(xs), SSA.Phi(ys)) => SSA.Phi((xs ++ ys).distinct)
+      case (x, SSA.Phi(ys)) => SSA.Phi((Seq(x) ++ ys).distinct)
+      case (SSA.Phi(xs), y) => SSA.Phi((xs ++ Seq(y)).distinct)
+      case (x, y) => SSA.Phi(Seq(x, y))
+    }
   }
 }

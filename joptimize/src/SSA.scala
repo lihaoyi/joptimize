@@ -2,9 +2,8 @@ package joptimize
 import org.objectweb.asm.Opcodes
 import org.objectweb.asm.tree.analysis.Value
 
+import scala.collection.immutable.SortedSet
 import scala.collection.mutable
-
-class Block(val value: mutable.Buffer[SSA], var fallThrough: Option[Block])
 
 sealed abstract class SSA(size: Int, upstream0: SSA*) extends Frame.Value{
   def upstream = upstream0
@@ -12,6 +11,7 @@ sealed abstract class SSA(size: Int, upstream0: SSA*) extends Frame.Value{
 
   def internalName = toString
 }
+
 
 object SSA{
   trait Codes{
@@ -23,6 +23,8 @@ object SSA{
     def lookup(i: Int) = lookup0(i)
   }
   case class State(base: Option[(State, SSA)]) extends SSA(0)
+  case class Phi(upstreams: Seq[SSA]) extends SSA(upstreams(0).getSize)
+
   case class Arg(index: Int, tpe: IType) extends SSA(tpe.size)
   case class BinOp(a: SSA, b: SSA, opcode: BinOp.Code) extends SSA(opcode.typeSize, a, b)
   object BinOp extends Codes{
@@ -87,7 +89,7 @@ object SSA{
     val F2D = new Code(Opcodes.F2D, 2)
   }
 
-  case class UnaryBranch(a: SSA, target: Block, opcode: UnaryBranch.Code) extends SSA(0, a)
+  case class UnaryBranch(a: SSA, opcode: UnaryBranch.Code) extends SSA(0, a)
   object UnaryBranch  extends Codes{
     val IFEQ = new Code(Opcodes.IFEQ)
     val IFNE = new Code(Opcodes.IFNE)
@@ -98,7 +100,7 @@ object SSA{
     val IFNULL = new Code(Opcodes.IFNULL)
     val IFNONNULL = new Code(Opcodes.IFNONNULL)
   }
-  case class BinBranch(a: SSA, b: SSA, target: Block, opcode: BinBranch.Code) extends SSA(0, a, b)
+  case class BinBranch(a: SSA, b: SSA, opcode: BinBranch.Code) extends SSA(0, a, b)
 
   object BinBranch  extends Codes{
     val IF_ICMPEQ = new Code(Opcodes.IF_ICMPEQ)
@@ -113,9 +115,9 @@ object SSA{
   case class ReturnVal(a: SSA) extends SSA(0, a)
   case class Return() extends SSA(0)
   case class AThrow(src: SSA) extends SSA(0, src)
-  case class TableSwitch(src: SSA, min: Int, max: Int, default: Block, targets: Seq[Block]) extends SSA(0, src)
-  case class LookupSwitch(src: SSA, default: Block, keys: Seq[Int], targets: Seq[Block]) extends SSA(0, src)
-  case class Goto(target: Block) extends SSA(0)
+  case class TableSwitch(src: SSA, min: Int, max: Int) extends SSA(0, src)
+  case class LookupSwitch(src: SSA, keys: Seq[Int]) extends SSA(0, src)
+  case class Goto() extends SSA(0)
 
   case class CheckCast(src: SSA, desc: JType) extends SSA(0, src)
   case class ArrayLength(src: SSA) extends SSA(1, src)
@@ -128,20 +130,17 @@ object SSA{
   case class PushNull() extends SSA(1)
   case class PushCls(value: JType.Cls) extends SSA(1)
 
-  case class InvokeStatic(state: State,
-                          srcs: Seq[SSA],
+  case class InvokeStatic(srcs: Seq[SSA],
                           cls: JType.Cls,
                           name: String,
                           desc: Desc) extends SSA(desc.ret.size, srcs:_*)
 
-  case class InvokeSpecial(state: State,
-                           srcs: Seq[SSA],
+  case class InvokeSpecial(srcs: Seq[SSA],
                            cls: JType.Cls,
                            name: String,
                            desc: Desc) extends SSA(desc.ret.size, srcs:_*)
 
-  case class InvokeVirtual(state: State,
-                           srcs: Seq[SSA],
+  case class InvokeVirtual(srcs: Seq[SSA],
                            cls: JType.Cls,
                            name: String,
                            desc:Desc) extends SSA(desc.ret.size, srcs:_*)
@@ -157,12 +156,12 @@ object SSA{
   case class New(cls: JType.Cls) extends SSA(1)
   case class NewArray(src: SSA, typeRef: JType) extends SSA(1, src)
   case class MultiANewArray(desc: JType, dims: Seq[SSA]) extends SSA(1)
-  case class PutStatic(state: State, src: SSA, cls: JType.Cls, name: String, desc: JType) extends SSA(0, src)
-  case class GetStatic(state: State, cls: JType.Cls, name: String, desc: JType) extends SSA(desc.size)
-  case class PutField(state: State, src: SSA, obj: SSA, owner: JType.Cls, name: String, desc: JType) extends SSA(0, src, obj)
-  case class GetField(state: State, obj: SSA, owner: JType.Cls, name: String, desc: JType) extends SSA(desc.size, obj)
-  case class PutArray(state: State, src: SSA, indexSrc: SSA, array: SSA) extends SSA(0, src)
-  case class GetArray(state: State, indexSrc: SSA, array: SSA, typeSize: Int) extends SSA(typeSize, indexSrc, array)
+  case class PutStatic(src: SSA, cls: JType.Cls, name: String, desc: JType) extends SSA(0, src)
+  case class GetStatic(cls: JType.Cls, name: String, desc: JType) extends SSA(desc.size)
+  case class PutField(src: SSA, obj: SSA, owner: JType.Cls, name: String, desc: JType) extends SSA(0, src, obj)
+  case class GetField(obj: SSA, owner: JType.Cls, name: String, desc: JType) extends SSA(desc.size, obj)
+  case class PutArray(src: SSA, indexSrc: SSA, array: SSA) extends SSA(0, src)
+  case class GetArray(indexSrc: SSA, array: SSA, typeSize: Int) extends SSA(typeSize, indexSrc, array)
 
   case class MonitorEnter(indexSrc: SSA) extends SSA(0, indexSrc)
   case class MonitorExit(indexSrc: SSA) extends SSA(0, indexSrc)

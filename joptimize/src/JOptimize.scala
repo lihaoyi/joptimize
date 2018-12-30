@@ -95,11 +95,8 @@ object JOptimize{
       val mn = originalMethods(entrypoint)
       interp.walkMethod(
         entrypoint,
-        mn.instructions,
-        mn.tryCatchBlocks.asScala,
+        mn,
         Desc.read(mn.desc).args,
-        mn.maxLocals,
-        mn.maxStack,
         Set()
       )
     }

@@ -92,13 +92,13 @@ class Typer(merge0: Seq[IType] => IType){
         case SSA.UnaryOp.L2D => fold1(value, IType.J, IType.D)(_.toDouble)
         case SSA.UnaryOp.F2D => fold1(value, IType.F, IType.D)(_.toDouble)
       }
-    case SSA.UnaryBranch(a, target, opcode) => JType.Null
-    case SSA.BinBranch(a, b, target, opcode) => JType.Null
+    case SSA.UnaryBranch(a, opcode) => JType.Null
+    case SSA.BinBranch(a, b, opcode) => JType.Null
     case SSA.ReturnVal(a) => JType.Null
     case SSA.AThrow(src) => JType.Null
-    case SSA.TableSwitch(src, min, max, default, targets) => JType.Null
-    case SSA.LookupSwitch(src, default, keys, tartargets) => JType.Null
-    case SSA.Goto(target) => JType.Null
+    case SSA.TableSwitch(src, min, max) => JType.Null
+    case SSA.LookupSwitch(src, keys) => JType.Null
+    case SSA.Goto() => JType.Null
     case SSA.CheckCast(src, desc) => desc
     case SSA.ArrayLength(src) => JType.Prim.I
     case SSA.InstanceOf(src, desc) =>
@@ -119,12 +119,12 @@ class Typer(merge0: Seq[IType] => IType){
     case SSA.NewArray(src, typeRef) => typeRef
 
     case SSA.MultiANewArray(desc, dims) => desc
-    case SSA.PutStatic(state, src, cls, name, desc) => JType.Null
-    case SSA.GetStatic(state, cls, name, desc) => desc
-    case SSA.PutField(state, src, obj, owner, name, desc) => JType.Null
-    case SSA.GetField(state, obj, owner, name, desc) => desc
-    case SSA.PutArray(state, src, indexSrc, array) => JType.Null
-    case SSA.GetArray(state, indexSrc, array, typeSize) => inferred.get(array).asInstanceOf[JType.Arr].innerType
+    case SSA.PutStatic(src, cls, name, desc) => JType.Null
+    case SSA.GetStatic(cls, name, desc) => desc
+    case SSA.PutField(src, obj, owner, name, desc) => JType.Null
+    case SSA.GetField(obj, owner, name, desc) => desc
+    case SSA.PutArray(src, indexSrc, array) => JType.Null
+    case SSA.GetArray(indexSrc, array, typeSize) => inferred.get(array).asInstanceOf[JType.Arr].innerType
     case SSA.MonitorEnter(indexSrc) => JType.Null
     case SSA.MonitorExit(indexSrc) => JType.Null
   }
