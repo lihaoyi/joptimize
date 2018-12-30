@@ -140,7 +140,8 @@ class Walker(isInterface: JType.Cls => Boolean,
         merges,
         insnTryCatchBlocks.toMap,
         ssaInterpreter,
-        (n, f) => jumpedBasicBlocks.getOrElseUpdate((n, f), new Block(mutable.Buffer.empty, None))
+        (n, f) => jumpedBasicBlocks.getOrElseUpdate((n, f), new Block(mutable.Buffer.empty, None)),
+        Renderer.render(originalInsns, _)
       )
 
 //      pprint.log(sig -> "END")
@@ -235,11 +236,14 @@ class Walker(isInterface: JType.Cls => Boolean,
                 merges: mutable.Buffer[(Frame[SSA], Frame[SSA])],
                 insnTryCatchBlocks: Map[AbstractInsnNode, Map[Int, (JType.Cls, LabelNode)]],
                 ssaInterpreter: StepEvaluator,
-                jumpedBasicBlocks: (AbstractInsnNode, Frame[IType]) => Block): Walker.BlockInfo = {
+                jumpedBasicBlocks: (AbstractInsnNode, Frame[IType]) => Block,
+                renderer: AbstractInsnNode => fansi.Str): Walker.BlockInfo = {
 
+    val typeState =
+      if (!seenBlocks0.contains(blockStart)) blockStartFrame.map(ssaInterpreter.inferredTypes.get)
+      else blockStartFrame.map(ssaInterpreter.inferredTypes.get(_).widen)
     val seenBlocks = seenBlocks0 + blockStart
 
-    val typeState = blockStartFrame.map(ssaInterpreter.inferredTypes.get)
     //        pprint.log("VISITING BLOCK" + Util.prettyprint(blockStart))
     visitedBlocks.get((blockStart, typeState)) match{
       case Some(res: Walker.BlockStub) =>
@@ -251,12 +255,15 @@ class Walker(isInterface: JType.Cls => Boolean,
         res
 
       case None =>
-        //          println("NEW BLOCK " + (currentInsn, currentFrame))
+        val blockStartStr = renderer(blockStart)
+        val padding = " " * (30 - blockStartStr.length)
+        val blockIndex = visitedBlocks.size
+        println("  " * seenBlocks0.size + "NEW BLOCK" + blockIndex)
 
         def walkBlock1 = walkBlock(
           _, _,
-          seenBlocks, visitedBlocks, sig, seenMethods, recurse,
-          merges, insnTryCatchBlocks, ssaInterpreter, jumpedBasicBlocks
+          seenBlocks, visitedBlocks, sig, seenMethods, recurse, merges,
+          insnTryCatchBlocks, ssaInterpreter, jumpedBasicBlocks, renderer
         )
         val blockInsns = jumpedBasicBlocks(blockStart, typeState)
 
@@ -276,7 +283,8 @@ class Walker(isInterface: JType.Cls => Boolean,
           walkMethod = recurse,
           ssaInterpreter = ssaInterpreter,
           basicBlock = blockInsns,
-          jumpedBasicBlocks = jumpedBasicBlocks
+          jumpedBasicBlocks = jumpedBasicBlocks,
+          renderer = i => fansi.Str("  " * seenBlocks0.size) ++ renderer(i)
         )
 
         visitedBlocks((blockStart, typeState)) = Walker.BlockStub(blockStartFrame)
@@ -304,7 +312,7 @@ class Walker(isInterface: JType.Cls => Boolean,
         )
         visitedBlocks((blockStart, typeState)) = res
 
-        //          println("END BLOCK")
+        println("  " * seenBlocks0.size + "END BLOCK" + blockIndex)
         res
     }
   }
@@ -333,6 +341,9 @@ class Walker(isInterface: JType.Cls => Boolean,
         true
       } else false
     }
+
+    val rendered = ctx.renderer(currentInsn)
+    println(rendered + (" " * (50 - rendered.length)) + currentFrame.map(ctx.ssaInterpreter.inferredTypes.get(_)).render)
 
     currentInsn match{
       case current: FieldInsnNode =>
@@ -686,5 +697,6 @@ object Walker{
                      walkMethod: (MethodSig, Seq[IType]) => Walker.MethodResult,
                      ssaInterpreter: StepEvaluator,
                      basicBlock: Block,
-                     jumpedBasicBlocks: (AbstractInsnNode, Frame[IType]) => Block)
+                     jumpedBasicBlocks: (AbstractInsnNode, Frame[IType]) => Block,
+                     renderer: AbstractInsnNode => fansi.Str)
 }

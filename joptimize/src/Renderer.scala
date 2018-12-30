@@ -1,19 +1,31 @@
 package joptimize
+import java.io.{PrintWriter, StringWriter}
 import java.util
 
 import org.objectweb.asm.tree.{AbstractInsnNode, InsnList}
+import org.objectweb.asm.util.{Textifier, TraceMethodVisitor}
 
 import collection.mutable
 object Renderer {
-  def render(insns: InsnList): fansi.Str = {
+  private val printer = new Textifier
+  private val methodPrinter = new TraceMethodVisitor(printer)
+
+  def prettyprint(insnNode: AbstractInsnNode) = {
+    insnNode.accept(methodPrinter)
+    val sw = new StringWriter
+    printer.print(new PrintWriter(sw))
+    printer.getText.clear
+    sw.toString.stripSuffix("\n")
+  }
+
+  def render(insns: InsnList, target: AbstractInsnNode = null): fansi.Str = {
     import collection.JavaConverters._
+    val listing = if (target == null) insns.iterator.asScala else Iterator(target)
     val indices = insns.iterator().asScala.zipWithIndex.toMap
     fansi.Str.join(
-      insns
-        .iterator()
-        .asScala
+      listing
         .flatMap{ k =>
-          val rhs = Util.prettyprint(k)
+          val rhs = prettyprint(k)
           val splitIndex0 = rhs.indexWhere(_ != ' ')
           val splitIndex = rhs.indexWhere(_ == ' ', splitIndex0) match{
             case -1 => rhs.length

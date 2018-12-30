@@ -11,8 +11,6 @@ import org.objectweb.asm.util.{Textifier, TraceMethodVisitor}
 import scala.collection.mutable
 import collection.JavaConverters._
 object Util{
-  private val printer = new Textifier
-  private val methodPrinter = new TraceMethodVisitor(printer)
 
   def removeFromJavaList[T](list: java.util.List[T])(pred: T => Boolean) = {
     import collection.JavaConverters._
@@ -21,13 +19,7 @@ object Util{
       case n => list.remove(n)
     }
   }
-  def prettyprint(insnNode: AbstractInsnNode) = {
-    insnNode.accept(methodPrinter)
-    val sw = new StringWriter
-    printer.print(new PrintWriter(sw))
-    printer.getText.clear
-    sw.toString.stripSuffix("\n")
-  }
+
   def mangle(name: String,
              inferredTypes: Seq[IType],
              originalTypes: Seq[JType],
