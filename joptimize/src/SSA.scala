@@ -14,6 +14,7 @@ sealed abstract class SSA(size: Int, upstream0: SSA*) extends Frame.Value{
 
 
 object SSA{
+  trait Control
   trait Codes{
     private[this] val lookup0 = mutable.Map.empty[Int, Code]
     class Code private[SSA] (val i: Int, val typeSize: Int = 0)(implicit name: sourcecode.Name){
@@ -23,8 +24,10 @@ object SSA{
     def lookup(i: Int) = lookup0(i)
   }
   case class State(base: Option[(State, SSA)]) extends SSA(0)
-  case class Phi(upstreams: Seq[SSA]) extends SSA(upstreams(0).getSize)
-
+  class Phi(typeSize: Int) extends SSA(typeSize)
+  class Region() extends Control
+  case class True(node: SSA) extends Control
+  case class False(node: SSA) extends Control
   case class Arg(index: Int, tpe: IType) extends SSA(tpe.size)
   case class BinOp(a: SSA, b: SSA, opcode: BinOp.Code) extends SSA(opcode.typeSize, a, b)
   object BinOp extends Codes{
@@ -112,8 +115,8 @@ object SSA{
     val IF_ACMPEQ = new Code(Opcodes.IF_ACMPEQ)
     val IF_ACMPNE = new Code(Opcodes.IF_ACMPNE)
   }
-  case class ReturnVal(a: SSA) extends SSA(0, a)
-  case class Return() extends SSA(0)
+  case class ReturnVal(control: Control, a: SSA) extends SSA(0, a)
+  case class Return(control: Control) extends SSA(0)
   case class AThrow(src: SSA) extends SSA(0, src)
   case class TableSwitch(src: SSA, min: Int, max: Int) extends SSA(0, src)
   case class LookupSwitch(src: SSA, keys: Seq[Int]) extends SSA(0, src)

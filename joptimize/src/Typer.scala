@@ -94,7 +94,7 @@ class Typer(merge0: Seq[IType] => IType){
       }
     case SSA.UnaryBranch(a, opcode) => JType.Null
     case SSA.BinBranch(a, b, opcode) => JType.Null
-    case SSA.ReturnVal(a) => JType.Null
+    case SSA.ReturnVal(control, a) => JType.Null
     case SSA.AThrow(src) => JType.Null
     case SSA.TableSwitch(src, min, max) => JType.Null
     case SSA.LookupSwitch(src, keys) => JType.Null

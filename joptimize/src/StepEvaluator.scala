@@ -16,7 +16,7 @@ import scala.collection.mutable
   * generated SSA nodes; we do this to allow immediate constant folding if the
   * node's type is specific enough to be a concrete value.
   */
-object StepEvaluator extends Interpreter[SSA](ASM4){
+class StepEvaluator(merges: mutable.Set[(SSA.Phi, SSA)]) extends Interpreter[SSA](ASM4){
 
   def newValue(tpe: org.objectweb.asm.Type) = {
     if (tpe == null) SSA.Arg(-1, JType.Prim.V)
@@ -188,10 +188,17 @@ object StepEvaluator extends Interpreter[SSA](ASM4){
   def merge(v1: SSA, v2: SSA) = {
     if (v1 == v2) v1
     else (v1, v2) match{
-      case (SSA.Phi(xs), SSA.Phi(ys)) => SSA.Phi((xs ++ ys).distinct)
-      case (x, SSA.Phi(ys)) => SSA.Phi((Seq(x) ++ ys).distinct)
-      case (SSA.Phi(xs), y) => SSA.Phi((xs ++ Seq(y)).distinct)
-      case (x, y) => SSA.Phi(Seq(x, y))
+      case (x, phi: SSA.Phi) =>
+        merges.add(phi -> x)
+        phi
+      case (phi: SSA.Phi, y) =>
+        merges.add(phi -> y)
+        phi
+      case (x, y) =>
+        val phi = new SSA.Phi(x.getSize)
+        merges.add(phi -> x)
+        merges.add(phi -> y)
+        phi
     }
   }
 }
