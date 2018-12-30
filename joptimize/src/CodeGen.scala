@@ -113,7 +113,10 @@ object CodeGen {
               case 3 => new InsnNode(ICONST_3)
               case 4 => new InsnNode(ICONST_4)
               case 5 => new InsnNode(ICONST_5)
-              case _ => new LdcInsnNode(value)
+              case _ =>
+                if (-128 <= value && value < 127) new IntInsnNode(BIPUSH, value)
+                else if (-32768 <= value && value <= 32767) new IntInsnNode(BIPUSH, value)
+                else new LdcInsnNode(value)
             })
             case SSA.PushJ(value) => Seq(value match{
               case 0 => new InsnNode(LCONST_0)
