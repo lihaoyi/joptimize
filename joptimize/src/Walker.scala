@@ -56,7 +56,7 @@ class Walker(isInterface: JType.Cls => Boolean,
 
         case ((ATHROW, insn), i) => (insn, SSA.AThrow(frameTop(i, 0)), i)
 
-        case ((GOTO, insn), i) => (insn, SSA.Goto(), i)
+        case ((GOTO, insn), i) => (insn, SSA.Goto(initialControl), i)
 
         case ((IFEQ | IFNE | IFLT | IFGE | IFGT | IFLE, insn), i) =>
           (insn, SSA.UnaryBranch(frameTop(i, 0), SSA.UnaryBranch.lookup(insn.getOpcode)), i)
