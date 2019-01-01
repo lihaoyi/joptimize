@@ -220,85 +220,65 @@ object Renderer {
     fansi.Str.join(out:_*)
   }
 
-  def binOpString(op: SSA.BinOp.Code): String = op match{
-    case SSA.BinOp.IADD => "+"
-    case SSA.BinOp.ISUB => "-"
-    case SSA.BinOp.IMUL => "*"
-    case SSA.BinOp.IDIV => "/"
-    case SSA.BinOp.IREM => "%"
-    case SSA.BinOp.ISHL => "<<"
-    case SSA.BinOp.ISHR => ">>"
-    case SSA.BinOp.IUSHR => ">>>"
-    case SSA.BinOp.IAND => "&"
-    case SSA.BinOp.IOR => "|"
-    case SSA.BinOp.IXOR => "^"
-    case SSA.BinOp.FADD => "+"
-    case SSA.BinOp.FSUB => "-"
-    case SSA.BinOp.FMUL => "*"
-    case SSA.BinOp.FDIV => "/"
-    case SSA.BinOp.FREM => "%"
-    case SSA.BinOp.LCMP => "<>"
-    case SSA.BinOp.FCMPL => ">"
-    case SSA.BinOp.FCMPG => "<"
-    case SSA.BinOp.DCMPL => ">"
-    case SSA.BinOp.DCMPG => "<"
-    case SSA.BinOp.LADD => "+"
-    case SSA.BinOp.LSUB => "-"
-    case SSA.BinOp.LMUL => "*"
-    case SSA.BinOp.LDIV => "/"
-    case SSA.BinOp.LREM => "%"
-    case SSA.BinOp.LSHL => "<<"
-    case SSA.BinOp.LSHR => ">>"
-    case SSA.BinOp.LUSHR => ">>>"
-    case SSA.BinOp.LAND => "&"
-    case SSA.BinOp.LOR => "|"
-    case SSA.BinOp.LXOR => "^"
-    case SSA.BinOp.DADD => "+"
-    case SSA.BinOp.DSUB => "-"
-    case SSA.BinOp.DMUL => "*"
-    case SSA.BinOp.DDIV => "/"
-    case SSA.BinOp.DREM => "%"
+  def binOpString(op: SSA.BinOp.Code): String = {
+    import SSA.BinOp._
+    op match{
+      case IADD | FADD | LADD | DADD=> "+"
+      case ISUB | FSUB | LSUB | DSUB=> "-"
+      case IMUL | FMUL | LMUL | DMUL=> "*"
+      case IDIV | FDIV | LDIV | DDIV=> "/"
+      case IREM | FREM | LREM | DREM=> "%"
+      case ISHL | LSHL => "<<"
+      case ISHR | LSHR => ">>"
+      case IUSHR | LUSHR => ">>>"
+      case IAND | LAND => "&"
+      case IOR | LOR => "|"
+      case IXOR | LXOR => "^"
+      case LCMP => "<>"
+      case FCMPL => ">"
+      case FCMPG => "<"
+      case DCMPL => ">"
+      case DCMPG => "<"
+    }
   }
-  def unaryOpString(op: SSA.UnaryOp.Code): String = op match{
-    case SSA.UnaryOp.INEG => "-"
-    case SSA.UnaryOp.L2I => "(int)"
-    case SSA.UnaryOp.F2I => "(int)"
-    case SSA.UnaryOp.D2I => "(int)"
-    case SSA.UnaryOp.I2B => "(byte)"
-    case SSA.UnaryOp.I2C => "(char)"
-    case SSA.UnaryOp.I2S => "(short)"
-    case SSA.UnaryOp.FNEG => "-"
-    case SSA.UnaryOp.I2F => "(float)"
-    case SSA.UnaryOp.L2F => "(float)"
-    case SSA.UnaryOp.D2F => "(float)"
-    case SSA.UnaryOp.LNEG => "-"
-    case SSA.UnaryOp.I2L => "(long)"
-    case SSA.UnaryOp.F2L => "(long)"
-    case SSA.UnaryOp.D2L => "(long)"
-    case SSA.UnaryOp.DNEG => "-"
-    case SSA.UnaryOp.I2D => "(double)"
-    case SSA.UnaryOp.L2D => "(double)"
-    case SSA.UnaryOp.F2D => "(double)"
+  def unaryOpString(op: SSA.UnaryOp.Code): String = {
+    import SSA.UnaryOp._
+    op match{
+      case INEG => "-"
+      case L2I | F2I |D2I => "(int)"
+      case I2B => "(byte)"
+      case I2C => "(char)"
+      case I2S => "(short)"
+      case FNEG => "-"
+      case I2F | L2F | D2F => "(float)"
+      case LNEG => "-"
+      case I2L | F2L | D2L => "(long)"
+      case DNEG => "-"
+      case I2D | L2D | F2D => "(double)"
+    }
   }
-  def binBranchString(op: SSA.BinBranch.Code): String = op match{
-
-    case SSA.BinBranch.IF_ICMPEQ => "=="
-    case SSA.BinBranch.IF_ICMPNE => "!="
-    case SSA.BinBranch.IF_ICMPLT => "<"
-    case SSA.BinBranch.IF_ICMPGE => ">="
-    case SSA.BinBranch.IF_ICMPGT => ">"
-    case SSA.BinBranch.IF_ICMPLE => "<="
-    case SSA.BinBranch.IF_ACMPEQ => "=="
-    case SSA.BinBranch.IF_ACMPNE => "!="
+  def binBranchString(op: SSA.BinBranch.Code): String = {
+    import SSA.BinBranch._
+    op match{
+      case IF_ICMPEQ | IF_ACMPEQ => "=="
+      case IF_ICMPNE | IF_ACMPNE => "!="
+      case IF_ICMPLT => "<"
+      case IF_ICMPGE => ">="
+      case IF_ICMPGT => ">"
+      case IF_ICMPLE => "<="
+    }
   }
-  def unaryBranchString(op: SSA.UnaryBranch.Code): String = op match{
-    case SSA.UnaryBranch.IFEQ => "== 0"
-    case SSA.UnaryBranch.IFNE => "!= 0"
-    case SSA.UnaryBranch.IFLT => "< 0"
-    case SSA.UnaryBranch.IFGE => ">= 0"
-    case SSA.UnaryBranch.IFGT => "> 0"
-    case SSA.UnaryBranch.IFLE => "<= 0"
-    case SSA.UnaryBranch.IFNULL => "== null"
-    case SSA.UnaryBranch.IFNONNULL => "!= null"
+  def unaryBranchString(op: SSA.UnaryBranch.Code): String = {
+    import SSA.UnaryBranch._
+    op match{
+      case IFEQ => "== 0"
+      case IFNE => "!= 0"
+      case IFLT => "< 0"
+      case IFGE => ">= 0"
+      case IFGT => "> 0"
+      case IFLE => "<= 0"
+      case IFNULL => "== null"
+      case IFNONNULL => "!= null"
+    }
   }
 }
