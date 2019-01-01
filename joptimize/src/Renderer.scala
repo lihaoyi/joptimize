@@ -44,10 +44,11 @@ object Renderer {
     )
   }
 
-  def renderSSA(allTerminals: Seq[SSA],
-                regionMerges: Map[SSA.Region, Set[SSA.Control]],
-                phiMerges: Map[SSA.Phi, Set[(SSA.Control, SSA)]]): fansi.Str = {
+  def renderSSA(program: Walker#Program): fansi.Str = {
 
+    val allTerminals = program.allTerminals
+    val regionMerges = program.regionMerges
+    val phiMerges = program.phiMerges
     val (allVertices, roots, downstreamEdges) =
       Util.breadthFirstAggregation[SSA.Token](allTerminals.toSet ++ regionMerges.keysIterator){
         case ctrl: SSA.Region => regionMerges(ctrl).toSeq
