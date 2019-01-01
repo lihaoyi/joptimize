@@ -129,31 +129,25 @@ public class Analyzer<V extends Value> implements Opcodes {
                     if (insnNode instanceof JumpInsnNode) {
                         JumpInsnNode jumpInsn = (JumpInsnNode) insnNode;
                         if (insnOpcode != GOTO) {
-                            currentFrame.initJumpTarget(insnOpcode, /* target = */ null);
                             merge(insnIndex, insnIndex + 1, currentFrame);
                         }
                         int jumpInsnIndex = insnList.indexOf(jumpInsn.label);
-                        currentFrame.initJumpTarget(insnOpcode, jumpInsn.label);
                         merge(insnIndex, jumpInsnIndex, currentFrame);
                     } else if (insnNode instanceof LookupSwitchInsnNode) {
                         LookupSwitchInsnNode lookupSwitchInsn = (LookupSwitchInsnNode) insnNode;
                         int targetInsnIndex = insnList.indexOf(lookupSwitchInsn.dflt);
-                        currentFrame.initJumpTarget(insnOpcode, lookupSwitchInsn.dflt);
                         merge(insnIndex, targetInsnIndex, currentFrame);
                         for (int i = 0; i < lookupSwitchInsn.labels.size(); ++i) {
                             LabelNode label = lookupSwitchInsn.labels.get(i);
                             targetInsnIndex = insnList.indexOf(label);
-                            currentFrame.initJumpTarget(insnOpcode, label);
                             merge(insnIndex, targetInsnIndex, currentFrame);
                         }
                     } else if (insnNode instanceof TableSwitchInsnNode) {
                         TableSwitchInsnNode tableSwitchInsn = (TableSwitchInsnNode) insnNode;
                         int targetInsnIndex = insnList.indexOf(tableSwitchInsn.dflt);
-                        currentFrame.initJumpTarget(insnOpcode, tableSwitchInsn.dflt);
                         merge(insnIndex, targetInsnIndex, currentFrame);
                         for (int i = 0; i < tableSwitchInsn.labels.size(); ++i) {
                             LabelNode label = tableSwitchInsn.labels.get(i);
-                            currentFrame.initJumpTarget(insnOpcode, label);
                             targetInsnIndex = insnList.indexOf(label);
                             merge(insnIndex, targetInsnIndex, currentFrame);
                         }

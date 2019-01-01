@@ -144,11 +144,11 @@ class StepEvaluator(merges: mutable.Set[(SSA.Phi, (Int, SSA))]) extends forked.I
     }
   }
 
-  def naryOperation(insn: AbstractInsnNode, vs: java.util.List[_ <: SSA]) = {
+  def naryOperation(insn: AbstractInsnNode, vs: Seq[SSA]) = {
     insn.getOpcode match{
       case MULTIANEWARRAY =>
         val insn2 = insn.asInstanceOf[MultiANewArrayInsnNode]
-        SSA.MultiANewArray(insn2.desc, vs.asScala)
+        SSA.MultiANewArray(insn2.desc, vs)
 
       case INVOKEDYNAMIC =>
         val insn2 = insn.asInstanceOf[InvokeDynamicInsnNode]
@@ -160,15 +160,15 @@ class StepEvaluator(merges: mutable.Set[(SSA.Phi, (Int, SSA))]) extends forked.I
 
       case INVOKESTATIC =>
         val insn2 = insn.asInstanceOf[MethodInsnNode]
-        SSA.InvokeStatic(vs.asScala, insn2.owner, insn2.name, Desc.read(insn2.desc))
+        SSA.InvokeStatic(vs, insn2.owner, insn2.name, Desc.read(insn2.desc))
 
       case INVOKEVIRTUAL =>
         val insn2 = insn.asInstanceOf[MethodInsnNode]
-        SSA.InvokeVirtual(vs.asScala, insn2.owner, insn2.name, Desc.read(insn2.desc))
+        SSA.InvokeVirtual(vs, insn2.owner, insn2.name, Desc.read(insn2.desc))
 
       case INVOKESPECIAL =>
         val insn2 = insn.asInstanceOf[MethodInsnNode]
-        SSA.InvokeSpecial(vs.asScala, insn2.owner, insn2.name, Desc.read(insn2.desc))
+        SSA.InvokeSpecial(vs, insn2.owner, insn2.name, Desc.read(insn2.desc))
     }
   }
 
