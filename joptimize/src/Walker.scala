@@ -141,15 +141,9 @@ class Walker(isInterface: JType.Cls => Boolean,
       println(Renderer.renderSSA(terminals3, compoundRegions3, phiMerges3))
 
       ???
-//      Walker.MethodResult(
-//        liveArgs,
-//        resultType,
-//        outputInsns,
-//        pure,
-//        outputTcbs
-//      )
     })
   }
+
   def collapseSimpleRegions(allTerminals: Seq[SSA],
                             phiMerges:  Map[SSA.Phi, Set[(SSA.Control, SSA)]],
                             simpleRegions: mutable.LinkedHashMap[SSA.Region, SSA.Control],
@@ -213,7 +207,7 @@ class Walker(isInterface: JType.Cls => Boolean,
     }
     (
       allTerminals.map(rec),
-      phiMerges.map{case (k, v) => (k, v.map(x => (x._1, rec(x._2))))},
+      phiMerges.map{case (k, v) => (k, v.map(x => (rec2(x._1), rec(x._2))))},
       compoundRegions.map{case (k, v) => (k, v.map(rec2))}
     )
   }
@@ -275,7 +269,7 @@ class Walker(isInterface: JType.Cls => Boolean,
     }
     (
       allTerminals.map(rec),
-      phiMerges.map{case (k, v) => (k, v.map(x => (x._1, rec(x._2))))},
+      phiMerges.map{case (k, v) => (k, v.map(x => (rec2(x._1), rec(x._2))))},
       compoundRegions.map{case (k, v) => (k, v.map(rec2))}
     )
   }
