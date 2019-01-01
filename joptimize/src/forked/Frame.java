@@ -665,28 +665,6 @@ public class Frame<V extends Value> {
     }
 
     /**
-     * Merges the given frame into this frame (case of a subroutine). The operand stacks are not
-     * merged, and only the local variables that have not been used by the subroutine are merged.
-     *
-     * @param frame a frame. This frame is left unchanged by this method.
-     * @param localsUsed the local variables that are read or written by the subroutine. The i-th
-     *     element is true if and only if the local variable at index i is read or written by the
-     *     subroutine.
-     * @return {@literal true} if this frame has been changed as a result of the merge operation, or
-     *     {@literal false} otherwise.
-     */
-    public boolean merge(final Frame<? extends V> frame, final boolean[] localsUsed) {
-        boolean changed = false;
-        for (int i = 0; i < numLocals; ++i) {
-            if (!localsUsed[i] && !values[i].equals(frame.values[i])) {
-                values[i] = frame.values[i];
-                changed = true;
-            }
-        }
-        return changed;
-    }
-
-    /**
      * Returns a string representation of this frame.
      *
      * @return a string representation of this frame.
