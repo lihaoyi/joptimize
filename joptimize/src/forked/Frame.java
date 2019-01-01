@@ -79,9 +79,9 @@ public class Frame<V extends Value> {
     }
 
     /**
-     * Initializes a frame corresponding to the target or to the successor of a jump instruction. This
+     * Initializes a frame corresponding to the target or to the successor of a merge0 instruction. This
      * method is called by {@link Analyzer#analyze(String, org.objectweb.asm.tree.MethodNode)} while
-     * interpreting jump instructions. It is called once for each possible target of the jump
+     * interpreting merge0 instructions. It is called once for each possible target of the merge0
      * instruction, and once for its successor instruction (except for GOTO and JSR), before the frame
      * is merged with the existing frame at this location. The default implementation of this method
      * does nothing.
@@ -89,11 +89,11 @@ public class Frame<V extends Value> {
      * <p>Overriding this method and changing the frame values allows implementing branch-sensitive
      * analyses.
      *
-     * @param opcode the opcode of the jump instruction. Can be IFEQ, IFNE, IFLT, IFGE, IFGT, IFLE,
+     * @param opcode the opcode of the merge0 instruction. Can be IFEQ, IFNE, IFLT, IFGE, IFGT, IFLE,
      *     IF_ICMPEQ, IF_ICMPNE, IF_ICMPLT, IF_ICMPGE, IF_ICMPGT, IF_ICMPLE, IF_ACMPEQ, IF_ACMPNE,
      *     GOTO, JSR, IFNULL, IFNONNULL, TABLESWITCH or LOOKUPSWITCH.
-     * @param target a target of the jump instruction this frame corresponds to, or {@literal null} if
-     *     this frame corresponds to the successor of the jump instruction (i.e. the next instruction
+     * @param target a target of the merge0 instruction this frame corresponds to, or {@literal null} if
+     *     this frame corresponds to the successor of the merge0 instruction (i.e. the next instruction
      *     in the instructions sequence).
      */
     public void initJumpTarget(final int opcode, final LabelNode target) {}
@@ -648,14 +648,35 @@ public class Frame<V extends Value> {
      *     {@literal false} otherwise.
      * @throws AnalyzerException if the frames have incompatible sizes.
      */
-    public boolean merge(final Frame<? extends V> frame, final Interpreter<V> interpreter)
+    public boolean merge(final int insnIndex, final Frame<? extends V> frame, final Interpreter<V> interpreter)
             throws AnalyzerException {
         if (numStack != frame.numStack) {
             throw new AnalyzerException(null, "Incompatible stack heights");
         }
         boolean changed = false;
         for (int i = 0; i < numLocals + numStack; ++i) {
-            V v = interpreter.merge(values[i], frame.values[i]);
+            V v = interpreter.merge(values[i], frame.values[i], insnIndex);
+            if (!v.equals(values[i])) {
+                values[i] = v;
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
+    /**
+     * Merges this frame into itself
+     *
+     * @param interpreter the interpreter used to merge values.
+     * @return {@literal true} if this frame has been changed as a result of the merge operation, or
+     *     {@literal false} otherwise.
+     * @throws AnalyzerException if the frames have incompatible sizes.
+     */
+    public boolean merge0(final int insnIndex, final Interpreter<V> interpreter)
+            throws AnalyzerException {
+        boolean changed = false;
+        for (int i = 0; i < numLocals + numStack; ++i) {
+            V v = interpreter.merge0(values[i], insnIndex);
             if (!v.equals(values[i])) {
                 values[i] = v;
                 changed = true;

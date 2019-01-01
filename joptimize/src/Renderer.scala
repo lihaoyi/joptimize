@@ -46,12 +46,12 @@ object Renderer {
 
   def renderSSA(allTerminals: Seq[SSA],
                 regionMerges: mutable.LinkedHashMap[SSA.Region, Set[SSA.Control]],
-                phiMerges: Map[SSA.Phi, Set[SSA]]): fansi.Str = {
+                phiMerges: Map[SSA.Phi, Set[(SSA.Control, SSA)]]): fansi.Str = {
 
     val (allVertices, roots, downstreamEdges) =
       Util.breadthFirstAggregation[SSA](allTerminals.toSet){ ssa =>
         ssa.upstream ++ (ssa match{
-          case phi: SSA.Phi => phiMerges.getOrElse(phi, Nil)
+          case phi: SSA.Phi => phiMerges.getOrElse(phi, Nil).map(_._2)
           case _ => Nil
         })
       }
@@ -94,40 +94,47 @@ object Renderer {
     def literal(lhs: String) = pprint.Tree.Literal(lhs)
     def infix(lhs: pprint.Tree, op: String, rhs: pprint.Tree) = pprint.Tree.Infix(lhs, op, rhs)
 
+    def renderControl(control: SSA.Control) = {
+      atom(
+        fansi.Color.Cyan(
+          regionMerges.zipWithIndex.find(_._1._1 == control)match{
+            case Some(x) => "region" + x._2
+            case None =>
+              if (!savedControls.containsKey(control)){
+                pprint.log(control)
+                import collection.JavaConverters._
+                pprint.log(savedControls.keySet().asScala)
+                pprint.log(regionMerges.keys)
+              }
+              "ctrl" + savedControls.get(control)
+          }
+        ).toString
+      )
+    }
+
+    def renderBranchPrefix(n: SSA) = {
+      fansi.Color.Cyan("ctrl" + savedControls.get(SSA.True(n))) + ", " +
+      fansi.Color.Cyan("ctrl" + savedControls.get(SSA.False(n))) + " = if"
+    }
+
     def treeify0(ssa: SSA): pprint.Tree = ssa match{
-      case phi: SSA.Phi => apply("phi", phiMerges(phi).map(treeify).toSeq:_*)
+      case phi: SSA.Phi =>
+        pprint.log(phiMerges(phi))
+        apply("phi", phiMerges(phi).map{case (ctrl, ssa) => infix(renderControl(ctrl), ":", treeify(ssa))}.toSeq:_*)
       case SSA.Arg(index, typeSize) => atom(fansi.Color.Cyan("arg" + index).toString)
       case SSA.BinOp(a, b, opcode) => infix(treeify(a), binOpString(opcode), treeify(b))
       case SSA.UnaryOp(a, opcode) => apply(unaryOpString(opcode), treeify(a))
       case n @ SSA.UnaryBranch(control, a, opcode) =>
         apply(
-          fansi.Color.Cyan("ctrl" + savedControls.get(SSA.True(n))) + ", " +
-          fansi.Color.Cyan("ctrl" + savedControls.get(SSA.False(n))) + " = if",
-          atom(
-            fansi.Color.Cyan(
-              regionMerges.zipWithIndex.find(_._1._1 == control)match{
-                case Some(x) => "region" + x._2
-                case None => "ctrl" + savedControls.get(control)
-              }
-            ).toString
-          ),
+          renderBranchPrefix(n),
+          renderControl(control),
           treeify(a),
           atom(unaryBranchString(opcode))
         )
       case n @ SSA.BinBranch(control, a, b, opcode) =>
-        pprint.log(control)
-        pprint.log(regionMerges)
         apply(
-          fansi.Color.Cyan("ctrl" + savedControls.get(SSA.True(n))) + ", " +
-          fansi.Color.Cyan("ctrl" + savedControls.get(SSA.False(n))) + " = if",
-          atom(
-            fansi.Color.Cyan(
-              regionMerges.zipWithIndex.find(_._1._1 == control)match{
-                case Some(x) => "region" + x._2
-                case None => "ctrl" + savedControls.get(control)
-              }
-            ).toString
-          ),
+          renderBranchPrefix(n),
+          renderControl(control),
           infix(treeify(a), binBranchString(opcode), treeify(b))
         )
       case SSA.ReturnVal(ctrl, a) =>

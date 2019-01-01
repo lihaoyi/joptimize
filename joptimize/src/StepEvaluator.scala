@@ -16,7 +16,7 @@ import scala.collection.mutable
   * generated SSA nodes; we do this to allow immediate constant folding if the
   * node's type is specific enough to be a concrete value.
   */
-class StepEvaluator(merges: mutable.Set[(SSA.Phi, SSA)]) extends Interpreter[SSA](ASM4){
+class StepEvaluator(merges: mutable.Set[(SSA.Phi, (Int, SSA))]) extends forked.Interpreter[SSA](ASM4){
 
   def newValue(tpe: org.objectweb.asm.Type) = {
     if (tpe == null) SSA.Arg(-1, JType.Prim.V)
@@ -185,20 +185,15 @@ class StepEvaluator(merges: mutable.Set[(SSA.Phi, SSA)]) extends Interpreter[SSA
 
   def returnOperation(insn: AbstractInsnNode, value: SSA, expected: SSA) = ()
 
-  def merge(v1: SSA, v2: SSA) = {
-    if (v1 == v2) v1
-    else (v1, v2) match{
-      case (x, phi: SSA.Phi) =>
-        merges.add(phi -> x)
-        phi
-      case (phi: SSA.Phi, y) =>
-        merges.add(phi -> y)
-        phi
-      case (x, y) =>
-        val phi = new SSA.Phi(x.getSize)
-        merges.add(phi -> x)
-        merges.add(phi -> y)
-        phi
-    }
+  def merge(v1: SSA, v2: SSA, insnIndex: Int) = {
+    val phi = v1.asInstanceOf[SSA.Phi]
+    merges.add((phi, (insnIndex, v2)))
+    phi
+  }
+
+  def merge0(value1: SSA, insnIndex: Int) = {
+    val phi = new SSA.Phi(value1.getSize)
+    merges.add(phi -> (insnIndex, value1))
+    phi
   }
 }

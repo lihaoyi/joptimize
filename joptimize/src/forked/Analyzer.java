@@ -102,7 +102,7 @@ public class Analyzer<V extends Value> implements Opcodes {
 
         // Initializes the data structures for the control flow analysis.
         Frame<V> currentFrame = computeInitialFrame(owner, method);
-        merge(0, currentFrame);
+        merge(0, 0, currentFrame);
         init(owner, method);
 
         // Control flow analysis.
@@ -122,8 +122,7 @@ public class Analyzer<V extends Value> implements Opcodes {
                 if (insnType == AbstractInsnNode.LABEL
                         || insnType == AbstractInsnNode.LINE
                         || insnType == AbstractInsnNode.FRAME) {
-                    merge(insnIndex + 1, oldFrame);
-                    newControlFlowEdge(insnIndex, insnIndex + 1);
+                    merge(insnIndex, insnIndex + 1, oldFrame);
                 } else {
                     currentFrame.init(oldFrame).execute(insnNode, interpreter);
 
@@ -131,42 +130,35 @@ public class Analyzer<V extends Value> implements Opcodes {
                         JumpInsnNode jumpInsn = (JumpInsnNode) insnNode;
                         if (insnOpcode != GOTO) {
                             currentFrame.initJumpTarget(insnOpcode, /* target = */ null);
-                            merge(insnIndex + 1, currentFrame);
-                            newControlFlowEdge(insnIndex, insnIndex + 1);
+                            merge(insnIndex, insnIndex + 1, currentFrame);
                         }
                         int jumpInsnIndex = insnList.indexOf(jumpInsn.label);
                         currentFrame.initJumpTarget(insnOpcode, jumpInsn.label);
-                        merge(jumpInsnIndex, currentFrame);
-                        newControlFlowEdge(insnIndex, jumpInsnIndex);
+                        merge(insnIndex, jumpInsnIndex, currentFrame);
                     } else if (insnNode instanceof LookupSwitchInsnNode) {
                         LookupSwitchInsnNode lookupSwitchInsn = (LookupSwitchInsnNode) insnNode;
                         int targetInsnIndex = insnList.indexOf(lookupSwitchInsn.dflt);
                         currentFrame.initJumpTarget(insnOpcode, lookupSwitchInsn.dflt);
-                        merge(targetInsnIndex, currentFrame);
-                        newControlFlowEdge(insnIndex, targetInsnIndex);
+                        merge(insnIndex, targetInsnIndex, currentFrame);
                         for (int i = 0; i < lookupSwitchInsn.labels.size(); ++i) {
                             LabelNode label = lookupSwitchInsn.labels.get(i);
                             targetInsnIndex = insnList.indexOf(label);
                             currentFrame.initJumpTarget(insnOpcode, label);
-                            merge(targetInsnIndex, currentFrame);
-                            newControlFlowEdge(insnIndex, targetInsnIndex);
+                            merge(insnIndex, targetInsnIndex, currentFrame);
                         }
                     } else if (insnNode instanceof TableSwitchInsnNode) {
                         TableSwitchInsnNode tableSwitchInsn = (TableSwitchInsnNode) insnNode;
                         int targetInsnIndex = insnList.indexOf(tableSwitchInsn.dflt);
                         currentFrame.initJumpTarget(insnOpcode, tableSwitchInsn.dflt);
-                        merge(targetInsnIndex, currentFrame);
-                        newControlFlowEdge(insnIndex, targetInsnIndex);
+                        merge(insnIndex, targetInsnIndex, currentFrame);
                         for (int i = 0; i < tableSwitchInsn.labels.size(); ++i) {
                             LabelNode label = tableSwitchInsn.labels.get(i);
                             currentFrame.initJumpTarget(insnOpcode, label);
                             targetInsnIndex = insnList.indexOf(label);
-                            merge(targetInsnIndex, currentFrame);
-                            newControlFlowEdge(insnIndex, targetInsnIndex);
+                            merge(insnIndex, targetInsnIndex, currentFrame);
                         }
                     } else if (insnOpcode != ATHROW && (insnOpcode < IRETURN || insnOpcode > RETURN)) {
-                        merge(insnIndex + 1, currentFrame);
-                        newControlFlowEdge(insnIndex, insnIndex + 1);
+                        merge(insnIndex, insnIndex + 1, currentFrame);
                     }
                 }
 
@@ -183,7 +175,7 @@ public class Analyzer<V extends Value> implements Opcodes {
                             Frame<V> handler = newFrame(oldFrame);
                             handler.clearStack();
                             handler.push(interpreter.newExceptionValue(tryCatchBlock, handler, catchType));
-                            merge(insnList.indexOf(tryCatchBlock.handler), handler);
+                            merge(insnIndex, insnList.indexOf(tryCatchBlock.handler), handler);
                         }
                     }
                 }
@@ -292,18 +284,6 @@ public class Analyzer<V extends Value> implements Opcodes {
     }
 
     /**
-     * Creates a control flow graph edge. The default implementation of this method does nothing. It
-     * can be overridden in order to construct the control flow graph of a method (this method is
-     * called by the {@link #analyze} method during its visit of the method's code).
-     *
-     * @param insnIndex an instruction index.
-     * @param successorIndex index of a successor instruction.
-     */
-    protected void newControlFlowEdge(final int insnIndex, final int successorIndex) {
-        // Nothing to do.
-    }
-
-    /**
      * Creates a control flow graph edge corresponding to an exception handler. The default
      * implementation of this method does nothing. It can be overridden in order to construct the
      * control flow graph of a method (this method is called by the {@link #analyze} method during its
@@ -344,23 +324,24 @@ public class Analyzer<V extends Value> implements Opcodes {
      * this merge, the instruction index is added to the list of instructions to process (if it is not
      * already the case).
      *
-     * @param insnIndex an instruction index.
+     * @param targetInsnIndex an instruction index.
      * @param frame a frame. This frame is left unchanged by this method.
      * @throws AnalyzerException if the frames have incompatible sizes.
      */
-    private void merge(final int insnIndex, final Frame<V> frame)
+    private void merge(final int insnIndex, final int targetInsnIndex, final Frame<V> frame)
             throws AnalyzerException {
         boolean changed;
-        Frame<V> oldFrame = frames[insnIndex];
+        Frame<V> oldFrame = frames[targetInsnIndex];
         if (oldFrame == null) {
-            frames[insnIndex] = newFrame(frame);
+            frames[targetInsnIndex] = newFrame(frame);
+            frames[targetInsnIndex].merge0(insnIndex, interpreter);
             changed = true;
         } else {
-            changed = oldFrame.merge(frame, interpreter);
+            changed = oldFrame.merge(insnIndex, frame, interpreter);
         }
-        if (changed && !inInstructionsToProcess[insnIndex]) {
-            inInstructionsToProcess[insnIndex] = true;
-            instructionsToProcess[numInstructionsToProcess++] = insnIndex;
+        if (changed && !inInstructionsToProcess[targetInsnIndex]) {
+            inInstructionsToProcess[targetInsnIndex] = true;
+            instructionsToProcess[numInstructionsToProcess++] = targetInsnIndex;
         }
     }
 }

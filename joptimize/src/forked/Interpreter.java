@@ -240,5 +240,7 @@ public abstract class Interpreter<V extends Value> {
      * @return the merged value. If the merged value is equal to {@code value1}, this method
      *     <i>must</i> return {@code value1}.
      */
-    public abstract V merge(V value1, V value2);
+    public abstract V merge(V value1, V value2, int insnIndex);
+
+    public abstract V merge0(V value1, int insnIndex);
 }
