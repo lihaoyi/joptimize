@@ -50,19 +50,17 @@ object Renderer {
     val regionMerges = program.regionMerges
     val phiMerges = program.phiMerges
     val (allVertices, roots, downstreamEdges) =
-      Util.breadthFirstAggregation[SSA.Token](allTerminals.toSet ++ regionMerges.keysIterator){
+      Util.breadthFirstAggregation[SSA.Token](allTerminals.toSet){
         case ctrl: SSA.Region => regionMerges(ctrl).toSeq
         case SSA.True(inner) => Seq(inner)
         case SSA.False(inner) => Seq(inner)
 
         case ssa: SSA =>
-          ssa.upstream ++ (ssa match{
+          ssa.allUpstream ++ (ssa match{
             case phi: SSA.Phi => phiMerges(phi).flatMap(x => Seq(x._1, x._2))
             case _ => Nil
           })
       }
-
-    pprint.log(allVertices)
 
     val saveable = downstreamEdges
       .groupBy(_._1)
@@ -91,9 +89,11 @@ object Renderer {
     val renderRoots = allVertices.filter(i => saveable.getOrElse(i, false))
 
     val savedLocals = new util.IdentityHashMap[SSA.Token, Int]()
+
     for((r, i) <- renderRoots.zipWithIndex) savedLocals.put(r, i)
 
     val savedControls = mutable.LinkedHashMap.empty[SSA.Control, Int]
+    def getControlId(c: SSA.Control) = savedControls.getOrElseUpdate(c, savedControls.size)
     def apply(lhs: String, operands: pprint.Tree*) = pprint.Tree.Apply(lhs, operands.toIterator)
     def atom(lhs: String) = pprint.Tree.Lazy(ctx => Iterator(lhs))
     def literal(lhs: String) = pprint.Tree.Literal(lhs)
@@ -105,15 +105,15 @@ object Renderer {
           regionMerges.zipWithIndex.find(_._1._1 == control)match{
             case Some(x) => "region" + x._2
             case None =>
-              "ctrl" + savedControls.getOrElseUpdate(control, savedControls.size)
+              "ctrl" + getControlId(control)
           }
         ).toString
       )
     }
 
     def renderBranchPrefix(n: SSA) = {
-      fansi.Color.Cyan("ctrl" + savedControls.getOrElseUpdate(SSA.True(n), savedControls.size)) + ", " +
-      fansi.Color.Cyan("ctrl" + savedControls.getOrElseUpdate(SSA.False(n), savedControls.size)) + " = if"
+      fansi.Color.Cyan("ctrl" + getControlId(SSA.True(n))) + ", " +
+      fansi.Color.Cyan("ctrl" + getControlId(SSA.False(n))) + " = if"
     }
 
     def treeify0(ssa: SSA): pprint.Tree = ssa match{
@@ -138,9 +138,9 @@ object Renderer {
         )
       case SSA.ReturnVal(ctrl, a) =>
         pprint.log(ctrl)
-        apply("return", atom(fansi.Color.Cyan("region" + regionMerges.keysIterator.indexOf(ctrl)).toString()), treeify(a))
+        apply("return", atom(fansi.Color.Cyan("region" + getControlId(ctrl)).toString()), treeify(a))
       case SSA.Return(ctrl) =>
-        apply("return", atom(fansi.Color.Cyan("region" + regionMerges.keysIterator.indexOf(ctrl)).toString()))
+        apply("return", atom(fansi.Color.Cyan("region" + getControlId(ctrl)).toString()))
       case SSA.AThrow(src) => apply("throw", treeify(src))
       case SSA.TableSwitch(src, min, max) => ???
 //        val args =

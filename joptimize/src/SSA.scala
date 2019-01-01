@@ -5,8 +5,9 @@ import org.objectweb.asm.tree.analysis.Value
 import scala.collection.immutable.SortedSet
 import scala.collection.mutable
 
-sealed abstract class SSA(size: Int, upstream0: SSA*) extends Frame.Value with SSA.Token{
-  def upstream = upstream0
+sealed abstract class SSA(size: Int, upstream0: SSA.Token*) extends Frame.Value with SSA.Token{
+  def upstream = upstream0.collect{case s: SSA => s}
+  def allUpstream = upstream0
   def getSize = size
 
   def internalName = toString
@@ -93,7 +94,7 @@ object SSA{
     val F2D = new Code(Opcodes.F2D, 2)
   }
 
-  case class UnaryBranch(control: Control, a: SSA, opcode: UnaryBranch.Code) extends SSA(0, a)
+  case class UnaryBranch(control: Control, a: SSA, opcode: UnaryBranch.Code) extends SSA(0, control, a)
   object UnaryBranch  extends Codes{
     val IFEQ = new Code(Opcodes.IFEQ)
     val IFNE = new Code(Opcodes.IFNE)
@@ -104,7 +105,7 @@ object SSA{
     val IFNULL = new Code(Opcodes.IFNULL)
     val IFNONNULL = new Code(Opcodes.IFNONNULL)
   }
-  case class BinBranch(control: Control, a: SSA, b: SSA, opcode: BinBranch.Code) extends SSA(0, a, b)
+  case class BinBranch(control: Control, a: SSA, b: SSA, opcode: BinBranch.Code) extends SSA(0, control, a, b)
 
   object BinBranch  extends Codes{
     val IF_ICMPEQ = new Code(Opcodes.IF_ICMPEQ)
@@ -116,8 +117,8 @@ object SSA{
     val IF_ACMPEQ = new Code(Opcodes.IF_ACMPEQ)
     val IF_ACMPNE = new Code(Opcodes.IF_ACMPNE)
   }
-  case class ReturnVal(control: Control, a: SSA) extends SSA(0, a)
-  case class Return(control: Control) extends SSA(0)
+  case class ReturnVal(control: Control, a: SSA) extends SSA(0, control, a)
+  case class Return(control: Control) extends SSA(0, control)
   case class AThrow(src: SSA) extends SSA(0, src)
   case class TableSwitch(src: SSA, min: Int, max: Int) extends SSA(0, src)
   case class LookupSwitch(src: SSA, keys: Seq[Int]) extends SSA(0, src)
