@@ -67,6 +67,17 @@ Steps:
 - Fold GOTOs
 - Sort by approximate topological order
 
+```
+region0 = region()
+
+ctrl0, ctrl1 = if(region0, 1 < arg-1)
+
+region1 = region(ctrl1, ctrl0)
+
+local1 = phi(1 + 1, 2 + 1)
+
+return(region1, local1)
+```
 Goal
 
 ```

@@ -1,6 +1,7 @@
 package joptimize
 
 
+import java.util
 import java.util.IdentityHashMap
 
 import org.objectweb.asm.{Handle, Opcodes}
@@ -121,14 +122,19 @@ class Walker(isInterface: JType.Cls => Boolean,
       val regionMerges2 = regionStarts.map{case (k, v) => (v, regionMerges(v))}
 
       val phiMerges = phiMerges0.groupBy(_._1).mapValues(_.map(_._2).toSet).toMap
-//      pprint.log(terminals)
-//      pprint.log(blockStarts)
-//      pprint.log(phiMerges)
 
+      val (compoundRegions, simpleRegions0) = regionMerges2.partition(_._2.size != 1)
+      val simpleRegions = simpleRegions0.flatMap{case (k, v) => v.map((k, _))}
 
-//      pprint.log(frames.zipWithIndex.map(_.swap))
+      val (terminals2, phiMerges2, compoundRegions2) = collapseSimpleRegions(
+        terminals.map(_._2),
+        phiMerges,
+        simpleRegions,
+        compoundRegions
+      )
+
       println(regionMerges2.keysIterator.map(r => Renderer.renderInsns(mn.instructions, regionStarts.map(_.swap).apply(r)).toString).toList)
-      println(Renderer.renderSSA(terminals.map(_._2), regionMerges2, phiMerges))
+      println(Renderer.renderSSA(terminals2, compoundRegions2, phiMerges2))
 
       ???
 //      Walker.MethodResult(
@@ -139,6 +145,75 @@ class Walker(isInterface: JType.Cls => Boolean,
 //        outputTcbs
 //      )
     })
+  }
+  def collapseSimpleRegions(allTerminals: Seq[SSA],
+                            phiMerges:  Map[SSA.Phi, Set[SSA]],
+                            simpleRegions: mutable.LinkedHashMap[SSA.Region, SSA.Control],
+                            compoundRegions: mutable.LinkedHashMap[SSA.Region, Set[SSA.Control]])
+  : (Seq[SSA], Map[SSA.Phi, Set[SSA]], mutable.LinkedHashMap[SSA.Region, Set[SSA.Control]]) = {
+    pprint.log(simpleRegions)
+    val current = new util.IdentityHashMap[SSA, SSA]()
+    def rec(x: SSA): SSA = {
+      pprint.log(x)
+      if (current.containsKey(x)) current.get(x)
+      else {
+        val res: SSA = x match{
+          case phi: SSA.Phi => phi
+          case SSA.Arg(index, typeSize) => SSA.Arg(index, typeSize)
+          case SSA.BinOp(a, b, opcode) => SSA.BinOp(rec(a), rec(b), opcode)
+          case SSA.UnaryOp(a, opcode) => SSA.UnaryOp(rec(a), opcode)
+          case SSA.UnaryBranch(ctrl, a, opcode) => SSA.UnaryBranch(rec2(ctrl), rec(a), opcode)
+          case SSA.BinBranch(ctrl, a, b, opcode) => SSA.BinBranch(rec2(ctrl), rec(a), rec(b), opcode)
+          case SSA.ReturnVal(ctrl, a) => SSA.ReturnVal(rec2(ctrl), rec(a))
+          case SSA.Return(ctrl) => SSA.Return(rec2(ctrl))
+          case SSA.AThrow(src) => SSA.AThrow(rec(src))
+          case SSA.TableSwitch(src, min, max) => SSA.TableSwitch(rec(src), min, max)
+          case SSA.LookupSwitch(src, keys) => SSA.LookupSwitch(rec(src), keys)
+          case SSA.CheckCast(src, desc) => SSA.CheckCast(rec(src), desc)
+          case SSA.ArrayLength(src) => SSA.ArrayLength(rec(src))
+          case SSA.InstanceOf(src, desc) => SSA.InstanceOf(rec(src), desc)
+          case SSA.PushI(value) => SSA.PushI(value)
+          case SSA.PushJ(value) => SSA.PushJ(value)
+          case SSA.PushF(value) => SSA.PushF(value)
+          case SSA.PushD(value) => SSA.PushD(value)
+          case SSA.PushS(value) => SSA.PushS(value)
+          case SSA.PushNull() => SSA.PushNull()
+          case SSA.PushCls(value) => SSA.PushCls(value)
+          case SSA.InvokeStatic(srcs, cls, name, desc) => SSA.InvokeStatic(srcs.map(rec), cls, name, desc)
+          case SSA.InvokeSpecial(srcs, cls, name, desc) => SSA.InvokeSpecial(srcs.map(rec), cls, name, desc)
+          case SSA.InvokeVirtual(srcs, cls, name, desc) => SSA.InvokeVirtual(srcs.map(rec), cls, name, desc)
+          case SSA.InvokeDynamic(name, desc, bsTag, bsOwner, bsName, bsDesc, bsArgs) => SSA.InvokeDynamic(name, desc, bsTag, bsOwner, bsName, bsDesc, bsArgs)
+          case SSA.NewArray(src, typeRef) => SSA.NewArray(rec(src), typeRef)
+          case SSA.MultiANewArray(desc, dims) => SSA.MultiANewArray(desc, dims)
+          case SSA.PutStatic(src, cls, name, desc) => SSA.PutStatic(rec(src), cls, name, desc)
+          case SSA.GetStatic(cls, name, desc) => SSA.GetStatic(cls, name, desc)
+          case SSA.PutField(src, obj, owner, name, desc) => SSA.PutField(rec(src), rec(obj), owner, name, desc)
+          case SSA.GetField(obj, owner, name, desc) => SSA.GetField(rec(obj), owner, name, desc)
+          case SSA.PutArray(src, indexSrc, array) => SSA.PutArray(rec(src), rec(indexSrc), rec(array))
+          case SSA.GetArray(indexSrc, array, typeSize) => SSA.GetArray(rec(indexSrc), rec(array), typeSize)
+          case SSA.MonitorEnter(indexSrc) => SSA.MonitorEnter(indexSrc)
+          case SSA.MonitorExit(indexSrc) => SSA.MonitorExit(indexSrc)
+        }
+        current.put(x, res)
+        res
+      }
+    }
+    def rec2(x: SSA.Control): SSA.Control = {
+      x match{
+        case r: SSA.Region =>
+          simpleRegions.get(r) match{
+            case None => r
+            case Some(simple) => rec2(simple)
+          }
+        case SSA.True(inner) => SSA.True(rec(inner))
+        case SSA.False(inner) => SSA.False(rec(inner))
+      }
+    }
+    (
+      allTerminals.map(rec),
+      phiMerges.map{case (k, v) => (k, v.map(rec))},
+      compoundRegions.map{case (k, v) => (k, v.map(rec2))}
+    )
   }
 }
 

@@ -100,11 +100,36 @@ object Renderer {
       case SSA.BinOp(a, b, opcode) => infix(treeify(a), binOpString(opcode), treeify(b))
       case SSA.UnaryOp(a, opcode) => apply(unaryOpString(opcode), treeify(a))
       case n @ SSA.UnaryBranch(control, a, opcode) =>
-        apply(fansi.Color.Cyan("ctrl" + savedControls.get(SSA.True(n))) + ", " + fansi.Color.Cyan("ctrl" + savedControls.get(SSA.False(n))) + " = if", atom(fansi.Color.Cyan("region" + regionMerges.zipWithIndex.find(_._1._1 == control).get._2).toString), treeify(a), atom(unaryBranchString(opcode)))
+        apply(
+          fansi.Color.Cyan("ctrl" + savedControls.get(SSA.True(n))) + ", " +
+          fansi.Color.Cyan("ctrl" + savedControls.get(SSA.False(n))) + " = if",
+          atom(
+            fansi.Color.Cyan(
+              regionMerges.zipWithIndex.find(_._1._1 == control)match{
+                case Some(x) => "region" + x._2
+                case None => "ctrl" + savedControls.get(control)
+              }
+            ).toString
+          ),
+          treeify(a),
+          atom(unaryBranchString(opcode))
+        )
       case n @ SSA.BinBranch(control, a, b, opcode) =>
         pprint.log(control)
         pprint.log(regionMerges)
-        apply(fansi.Color.Cyan("ctrl" + savedControls.get(SSA.True(n))) + ", " + fansi.Color.Cyan("ctrl" + savedControls.get(SSA.False(n))) + " = if", atom(fansi.Color.Cyan("region" + regionMerges.zipWithIndex.find(_._1._1 == control).get._2).toString), infix(treeify(a), binBranchString(opcode), treeify(b)))
+        apply(
+          fansi.Color.Cyan("ctrl" + savedControls.get(SSA.True(n))) + ", " +
+          fansi.Color.Cyan("ctrl" + savedControls.get(SSA.False(n))) + " = if",
+          atom(
+            fansi.Color.Cyan(
+              regionMerges.zipWithIndex.find(_._1._1 == control)match{
+                case Some(x) => "region" + x._2
+                case None => "ctrl" + savedControls.get(control)
+              }
+            ).toString
+          ),
+          infix(treeify(a), binBranchString(opcode), treeify(b))
+        )
       case SSA.ReturnVal(ctrl, a) =>
         pprint.log(ctrl)
         apply("return", atom(fansi.Color.Cyan("region" + regionMerges.keysIterator.indexOf(ctrl)).toString()), treeify(a))
