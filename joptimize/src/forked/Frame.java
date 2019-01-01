@@ -24,12 +24,6 @@ import org.objectweb.asm.tree.analysis.Value;
  * @author Eric Bruneton
  */
 public class Frame<V extends Value> {
-
-    /**
-     * The expected return type of the analyzed method, or {@literal null} if the method returns void.
-     */
-    private V returnValue;
-
     /**
      * The local variables and the operand stack of this frame. The first {@link #numLocals} elements
      * correspond to the local variables. The following {@link #numStack} elements correspond to the
@@ -72,7 +66,6 @@ public class Frame<V extends Value> {
      * @return this frame.
      */
     public Frame<V> init(final Frame<? extends V> frame) {
-        returnValue = frame.returnValue;
         System.arraycopy(frame.values, 0, values, 0, values.length);
         numStack = frame.numStack;
         return this;
@@ -97,16 +90,6 @@ public class Frame<V extends Value> {
      *     in the instructions sequence).
      */
     public void initJumpTarget(final int opcode, final LabelNode target) {}
-
-    /**
-     * Sets the expected return type of the analyzed method.
-     *
-     * @param v the expected return type of the analyzed method, or {@literal null} if the method
-     *     returns void.
-     */
-    public void setReturn(final V v) {
-        returnValue = v;
-    }
 
     /**
      * Returns the maximum number of local variables of this frame.
@@ -292,7 +275,6 @@ public class Frame<V extends Value> {
                 value3 = pop();
                 value2 = pop();
                 value1 = pop();
-                interpreter.ternaryOperation(insn, value1, value2, value3);
                 break;
             case Opcodes.POP:
                 if (pop().getSize() == 2) {
@@ -554,12 +536,8 @@ public class Frame<V extends Value> {
             case Opcodes.ARETURN:
                 value1 = pop();
                 interpreter.unaryOperation(insn, value1);
-                interpreter.returnOperation(insn, value1, returnValue);
                 break;
             case Opcodes.RETURN:
-                if (returnValue != null) {
-                    throw new AnalyzerException(insn, "Incompatible return type");
-                }
                 break;
             case Opcodes.GETSTATIC:
                 push(interpreter.newOperation(insn));

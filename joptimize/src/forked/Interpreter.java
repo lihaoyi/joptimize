@@ -19,73 +19,18 @@ import org.objectweb.asm.tree.analysis.Value;
  * @author Eric Bruneton
  */
 public abstract class Interpreter<V extends Value> {
-
-    /**
-     * The ASM API version supported by this interpreter. The value of this field must be one of
-     * {@link org.objectweb.asm.Opcodes#ASM4}, {@link org.objectweb.asm.Opcodes#ASM5}, {@link
-     * org.objectweb.asm.Opcodes#ASM6} or {@link org.objectweb.asm.Opcodes#ASM7}.
-     */
-    protected final int api;
-
-    /**
-     * Constructs a new {@link org.objectweb.asm.tree.analysis.Interpreter}.
-     *
-     * @param api the ASM API version supported by this interpreter. Must be one of {@link
-     *     org.objectweb.asm.Opcodes#ASM4}, {@link org.objectweb.asm.Opcodes#ASM5}, {@link
-     *     org.objectweb.asm.Opcodes#ASM6} or {@link org.objectweb.asm.Opcodes#ASM7}.
-     */
-    protected Interpreter(final int api) {
-        this.api = api;
-    }
-
-    /**
-     * Creates a new value that represents the given type.
-     *
-     * <p>Called for method parameters (including <code>this</code>), exception handler variable and
-     * with <code>null</code> type for variables reserved by long and double types.
-     *
-     * <p>An interpreter may choose to implement one or more of {@link
-     * org.objectweb.asm.tree.analysis.Interpreter#newReturnTypeValue(Type)}, {@link org.objectweb.asm.tree.analysis.Interpreter#newParameterValue(boolean, int,
-     * Type)}, {@link org.objectweb.asm.tree.analysis.Interpreter#newEmptyValue(int)}, {@link
-     * org.objectweb.asm.tree.analysis.Interpreter#newExceptionValue(TryCatchBlockNode, Frame, Type)} to distinguish different types
-     * of new value.
-     *
-     * @param type a primitive or reference type, or {@literal null} to represent an uninitialized
-     *     value.
-     * @return a value that represents the given type. The size of the returned value must be equal to
-     *     the size of the given type.
-     */
-    public abstract V newValue(Type type);
-
     /**
      * Creates a new value that represents the given parameter type. This method is called to
      * initialize the value of a local corresponding to a method parameter in a frame.
      *
      * <p>By default, calls <code>newValue(type)</code>.
      *
-     * @param isInstanceMethod {@literal true} if the method is non-static.
      * @param local the local variable index.
      * @param type a primitive or reference type.
      * @return a value that represents the given type. The size of the returned value must be equal to
      *     the size of the given type.
      */
-    public V newParameterValue(final boolean isInstanceMethod, final int local, final Type type) {
-        return newValue(type);
-    }
-
-    /**
-     * Creates a new value that represents the given return type. This method is called to initialize
-     * the return type value of a frame.
-     *
-     * <p>By default, calls <code>newValue(type)</code>.
-     *
-     * @param type a primitive or reference type.
-     * @return a value that represents the given type. The size of the returned value must be equal to
-     *     the size of the given type.
-     */
-    public V newReturnTypeValue(final Type type) {
-        return newValue(type);
-    }
+    abstract public V newParameterValue(final int local, final Type type);
 
     /**
      * Creates a new uninitialized value for a local variable. This method is called to initialize the
@@ -98,9 +43,7 @@ public abstract class Interpreter<V extends Value> {
      * @return a value representing an uninitialized value. The size of the returned value must be
      *     equal to 1.
      */
-    public V newEmptyValue(final int local) {
-        return newValue(null);
-    }
+    public abstract V newEmptyValue(final int local);
 
     /**
      * Creates a new value that represents the given exception type. This method is called to
@@ -114,12 +57,10 @@ public abstract class Interpreter<V extends Value> {
      * @return a value that represents the given {@code exceptionType}. The size of the returned value
      *     must be equal to 1.
      */
-    public V newExceptionValue(
+    public abstract V newExceptionValue(
             final TryCatchBlockNode tryCatchBlockNode,
             final Frame<V> handlerFrame,
-            final Type exceptionType) {
-        return newValue(exceptionType);
-    }
+            final Type exceptionType);
 
     /**
      * Interprets a bytecode instruction without arguments. This method is called for the following
@@ -186,22 +127,6 @@ public abstract class Interpreter<V extends Value> {
             throws AnalyzerException;
 
     /**
-     * Interprets a bytecode instruction with three arguments. This method is called for the following
-     * opcodes:
-     *
-     * <p>IASTORE, LASTORE, FASTORE, DASTORE, AASTORE, BASTORE, CASTORE, SASTORE
-     *
-     * @param insn the bytecode instruction to be interpreted.
-     * @param value1 the first argument of the instruction to be interpreted.
-     * @param value2 the second argument of the instruction to be interpreted.
-     * @param value3 the third argument of the instruction to be interpreted.
-     * @return the result of the interpretation of the given instruction.
-     * @throws AnalyzerException if an error occurred during the interpretation.
-     */
-    public abstract V ternaryOperation(AbstractInsnNode insn, V value1, V value2, V value3)
-            throws AnalyzerException;
-
-    /**
      * Interprets a bytecode instruction with a variable number of arguments. This method is called
      * for the following opcodes:
      *
@@ -214,19 +139,6 @@ public abstract class Interpreter<V extends Value> {
      * @throws AnalyzerException if an error occurred during the interpretation.
      */
     public abstract V naryOperation(AbstractInsnNode insn, List<? extends V> values)
-            throws AnalyzerException;
-
-    /**
-     * Interprets a bytecode return instruction. This method is called for the following opcodes:
-     *
-     * <p>IRETURN, LRETURN, FRETURN, DRETURN, ARETURN
-     *
-     * @param insn the bytecode instruction to be interpreted.
-     * @param value the argument of the instruction to be interpreted.
-     * @param expected the expected return type of the analyzed method.
-     * @throws AnalyzerException if an error occurred during the interpretation.
-     */
-    public abstract void returnOperation(AbstractInsnNode insn, V value, V expected)
             throws AnalyzerException;
 
     /**

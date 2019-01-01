@@ -2,7 +2,7 @@ package joptimize
 import org.objectweb.asm.Opcodes._
 import org.objectweb.asm.Type._
 import org.objectweb.asm.tree.analysis._
-import org.objectweb.asm.Handle
+import org.objectweb.asm.{Handle, Type}
 import org.objectweb.asm.tree._
 
 import collection.JavaConverters._
@@ -16,16 +16,7 @@ import scala.collection.mutable
   * generated SSA nodes; we do this to allow immediate constant folding if the
   * node's type is specific enough to be a concrete value.
   */
-class StepEvaluator(merges: mutable.Set[(SSA.Phi, (Int, SSA))]) extends forked.Interpreter[SSA](ASM4){
-
-  def newValue(tpe: org.objectweb.asm.Type) = {
-    if (tpe == null) SSA.Arg(-1, JType.Prim.V)
-    else {
-      val jtype = JType.read(tpe.getInternalName)
-      val res = SSA.Arg(-1, jtype)
-      res
-    }
-  }
+class StepEvaluator(merges: mutable.Set[(SSA.Phi, (Int, SSA))]) extends forked.Interpreter[SSA]{
 
   def newOperation(insn: AbstractInsnNode) = {
     insn.getOpcode match {
@@ -153,8 +144,6 @@ class StepEvaluator(merges: mutable.Set[(SSA.Phi, (Int, SSA))]) extends forked.I
     }
   }
 
-  def ternaryOperation(insn: AbstractInsnNode, v1: SSA, v2: SSA, v3: SSA) = null
-
   def naryOperation(insn: AbstractInsnNode, vs: java.util.List[_ <: SSA]) = {
     insn.getOpcode match{
       case MULTIANEWARRAY =>
@@ -195,5 +184,21 @@ class StepEvaluator(merges: mutable.Set[(SSA.Phi, (Int, SSA))]) extends forked.I
     val phi = new SSA.Phi(value1.getSize)
     merges.add(phi -> (insnIndex, value1))
     phi
+  }
+
+  def newParameterValue(local: Int, tpe: Type) = {
+    val jtype = JType.read(tpe.getInternalName)
+    val res = SSA.Arg(local, jtype)
+    res
+  }
+
+  def newEmptyValue(local: Int) = {
+    SSA.Arg(-1, JType.Prim.V)
+  }
+
+  def newExceptionValue(tryCatchBlockNode: TryCatchBlockNode,
+                        handlerFrame: forked.Frame[SSA],
+                        exceptionType: Type) = {
+    SSA.Arg(-1, JType.read(exceptionType.getInternalName))
   }
 }

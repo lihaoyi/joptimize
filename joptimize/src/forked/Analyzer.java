@@ -171,12 +171,11 @@ public class Analyzer<V extends Value> implements Opcodes {
                         } else {
                             catchType = Type.getObjectType(tryCatchBlock.type);
                         }
-                        if (newControlFlowExceptionEdge(insnIndex, tryCatchBlock)) {
-                            Frame<V> handler = newFrame(oldFrame);
-                            handler.clearStack();
-                            handler.push(interpreter.newExceptionValue(tryCatchBlock, handler, catchType));
-                            merge(insnIndex, insnList.indexOf(tryCatchBlock.handler), handler);
-                        }
+
+                        Frame<V> handler = newFrame(oldFrame);
+                        handler.clearStack();
+                        handler.push(interpreter.newExceptionValue(tryCatchBlock, handler, catchType));
+                        merge(insnIndex, insnList.indexOf(tryCatchBlock.handler), handler);
                     }
                 }
             } catch (AnalyzerException e) {
@@ -206,14 +205,14 @@ public class Analyzer<V extends Value> implements Opcodes {
         if (isInstanceMethod) {
             Type ownerType = Type.getObjectType(owner);
             frame.setLocal(
-                    currentLocal, interpreter.newParameterValue(isInstanceMethod, currentLocal, ownerType));
+                    currentLocal, interpreter.newParameterValue(currentLocal, ownerType));
             currentLocal++;
         }
         Type[] argumentTypes = Type.getArgumentTypes(method.desc);
         for (Type argumentType : argumentTypes) {
             frame.setLocal(
                     currentLocal,
-                    interpreter.newParameterValue(isInstanceMethod, currentLocal, argumentType));
+                    interpreter.newParameterValue(currentLocal, argumentType));
             currentLocal++;
             if (argumentType.getSize() == 2) {
                 frame.setLocal(currentLocal, interpreter.newEmptyValue(currentLocal));
@@ -224,7 +223,6 @@ public class Analyzer<V extends Value> implements Opcodes {
             frame.setLocal(currentLocal, interpreter.newEmptyValue(currentLocal));
             currentLocal++;
         }
-        frame.setReturn(interpreter.newReturnTypeValue(Type.getReturnType(method.desc)));
         return frame;
     }
 
@@ -281,39 +279,6 @@ public class Analyzer<V extends Value> implements Opcodes {
      */
     protected Frame<V> newFrame(final Frame<? extends V> frame) {
         return new Frame<V>(frame);
-    }
-
-    /**
-     * Creates a control flow graph edge corresponding to an exception handler. The default
-     * implementation of this method does nothing. It can be overridden in order to construct the
-     * control flow graph of a method (this method is called by the {@link #analyze} method during its
-     * visit of the method's code).
-     *
-     * @param insnIndex an instruction index.
-     * @param successorIndex index of a successor instruction.
-     * @return true if this edge must be considered in the data flow analysis performed by this
-     *     analyzer, or false otherwise. The default implementation of this method always returns
-     *     true.
-     */
-    protected boolean newControlFlowExceptionEdge(final int insnIndex, final int successorIndex) {
-        return true;
-    }
-
-    /**
-     * Creates a control flow graph edge corresponding to an exception handler. The default
-     * implementation of this method delegates to {@link #newControlFlowExceptionEdge(int, int)}. It
-     * can be overridden in order to construct the control flow graph of a method (this method is
-     * called by the {@link #analyze} method during its visit of the method's code).
-     *
-     * @param insnIndex an instruction index.
-     * @param tryCatchBlock TryCatchBlockNode corresponding to this edge.
-     * @return true if this edge must be considered in the data flow analysis performed by this
-     *     analyzer, or false otherwise. The default implementation of this method delegates to {@link
-     *     #newControlFlowExceptionEdge(int, int)}.
-     */
-    protected boolean newControlFlowExceptionEdge(
-            final int insnIndex, final TryCatchBlockNode tryCatchBlock) {
-        return newControlFlowExceptionEdge(insnIndex, insnList.indexOf(tryCatchBlock.handler));
     }
 
     // -----------------------------------------------------------------------------------------------

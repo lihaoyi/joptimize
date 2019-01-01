@@ -143,18 +143,7 @@ object Renderer {
         apply("return", atom(fansi.Color.Cyan("region" + getControlId(ctrl)).toString()))
       case SSA.AThrow(src) => apply("throw", treeify(src))
       case SSA.TableSwitch(src, min, max) => ???
-//        val args =
-//          Seq(treeify(src), atom(min.toString), atom(max.toString), blockify(default)) ++
-//          targets.map(blockify)
-//        apply("tableswitch", args:_*)
-
       case SSA.LookupSwitch(src, keys) => ???
-//        val args =
-//          Seq(treeify(src)) ++ keys.map(i => atom(i.toString)) ++
-//          Seq(blockify(default)) ++ targets.map(blockify)
-//        apply("lookupswitch", args:_*)
-
-
       case SSA.CheckCast(src, desc) => apply("cast", treeify(src), atom(desc.name))
       case SSA.ArrayLength(src) => apply("arraylength", treeify(src))
       case SSA.InstanceOf(src, desc) => apply("instanceof", treeify(src), atom(desc.name))
