@@ -90,10 +90,9 @@ class Walker(isInterface: JType.Cls => Boolean,
         case ((ATHROW, insn), i) => (insn, SSA.AThrow(frameTop(i, 0)), i) :: Nil
 
         case ((GOTO, insn: JumpInsnNode), i) =>
-          val n = SSA.Goto(findStartRegion(insn))
           regionMerges(regionStarts(insn.label)) =
-            regionMerges.getOrElse(regionStarts(insn.label), Set.empty) + SSA.True(n)
-          (insn, n, i) :: Nil
+            regionMerges.getOrElse(regionStarts(insn.label), Set.empty) + findStartRegion(insn)
+          Nil
 
         case ((IFEQ | IFNE | IFLT | IFGE | IFGT | IFLE, insn: JumpInsnNode), i) =>
           val n = SSA.UnaryBranch(findStartRegion(insn), frameTop(i, 0), SSA.UnaryBranch.lookup(insn.getOpcode))

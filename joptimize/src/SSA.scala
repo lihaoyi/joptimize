@@ -120,7 +120,6 @@ object SSA{
   case class AThrow(src: SSA) extends SSA(0, src)
   case class TableSwitch(src: SSA, min: Int, max: Int) extends SSA(0, src)
   case class LookupSwitch(src: SSA, keys: Seq[Int]) extends SSA(0, src)
-  case class Goto(control: Control) extends SSA(0)
 
   case class CheckCast(src: SSA, desc: JType) extends SSA(0, src)
   case class ArrayLength(src: SSA) extends SSA(1, src)

@@ -87,8 +87,6 @@ object Renderer {
       case n: SSA.BinBranch =>
         savedControls.put(SSA.True(n), savedControls.size)
         savedControls.put(SSA.False(n), savedControls.size)
-      case n: SSA.Goto =>
-        savedControls.put(SSA.True(n), savedControls.size)
     }
 
     def apply(lhs: String, operands: pprint.Tree*) = pprint.Tree.Apply(lhs, operands.toIterator)
@@ -101,8 +99,6 @@ object Renderer {
       case SSA.Arg(index, typeSize) => atom(fansi.Color.Cyan("arg" + index).toString)
       case SSA.BinOp(a, b, opcode) => infix(treeify(a), binOpString(opcode), treeify(b))
       case SSA.UnaryOp(a, opcode) => apply(unaryOpString(opcode), treeify(a))
-      case n @ SSA.Goto(control) =>
-        apply(fansi.Color.Cyan("ctrl" + savedControls.get(SSA.True(n))) + " = goto", atom(fansi.Color.Cyan("region" + regionMerges.zipWithIndex.find(_._1._1 == control).get._2).toString))
       case n @ SSA.UnaryBranch(control, a, opcode) =>
         apply(fansi.Color.Cyan("ctrl" + savedControls.get(SSA.True(n))) + ", " + fansi.Color.Cyan("ctrl" + savedControls.get(SSA.False(n))) + " = if", atom(fansi.Color.Cyan("region" + regionMerges.zipWithIndex.find(_._1._1 == control).get._2).toString), treeify(a), atom(unaryBranchString(opcode)))
       case n @ SSA.BinBranch(control, a, b, opcode) =>
