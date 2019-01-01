@@ -92,7 +92,7 @@ object SSA{
     val F2D = new Code(Opcodes.F2D, 2)
   }
 
-  case class UnaryBranch(a: SSA, opcode: UnaryBranch.Code) extends SSA(0, a)
+  case class UnaryBranch(control: Control, a: SSA, opcode: UnaryBranch.Code) extends SSA(0, a)
   object UnaryBranch  extends Codes{
     val IFEQ = new Code(Opcodes.IFEQ)
     val IFNE = new Code(Opcodes.IFNE)
@@ -103,7 +103,7 @@ object SSA{
     val IFNULL = new Code(Opcodes.IFNULL)
     val IFNONNULL = new Code(Opcodes.IFNONNULL)
   }
-  case class BinBranch(a: SSA, b: SSA, opcode: BinBranch.Code) extends SSA(0, a, b)
+  case class BinBranch(control: Control, a: SSA, b: SSA, opcode: BinBranch.Code) extends SSA(0, a, b)
 
   object BinBranch  extends Codes{
     val IF_ICMPEQ = new Code(Opcodes.IF_ICMPEQ)

@@ -45,6 +45,7 @@ object Renderer {
   }
 
   def render(allTerminals: Seq[SSA],
+             regionMerges: mutable.LinkedHashMap[SSA.Region, Set[SSA.Control]],
              phiMerges: Map[SSA.Phi, Set[SSA]]): fansi.Str = {
 
     val (allVertices, roots, downstreamEdges) =
@@ -74,8 +75,21 @@ object Renderer {
     val out = mutable.Buffer.empty[fansi.Str]
 
     val renderRoots = allVertices.filter(i => allTerminals.contains(i) || saveable.getOrElse(i, false))
+
     val savedLocals = new util.IdentityHashMap[SSA, Int]()
     for((r, i) <- renderRoots.zipWithIndex) savedLocals.put(r, i)
+
+    val savedControls = new util.HashMap[SSA.Control, Int]()
+    allTerminals.collect{
+      case n: SSA.UnaryBranch =>
+        savedControls.put(SSA.True(n), savedControls.size)
+        savedControls.put(SSA.False(n), savedControls.size)
+      case n: SSA.BinBranch =>
+        savedControls.put(SSA.True(n), savedControls.size)
+        savedControls.put(SSA.False(n), savedControls.size)
+      case n: SSA.Goto =>
+        savedControls.put(SSA.True(n), savedControls.size)
+    }
 
     def apply(lhs: String, operands: pprint.Tree*) = pprint.Tree.Apply(lhs, operands.toIterator)
     def atom(lhs: String) = pprint.Tree.Lazy(ctx => Iterator(lhs))
@@ -87,10 +101,19 @@ object Renderer {
       case SSA.Arg(index, typeSize) => atom(fansi.Color.Cyan("arg" + index).toString)
       case SSA.BinOp(a, b, opcode) => infix(treeify(a), binOpString(opcode), treeify(b))
       case SSA.UnaryOp(a, opcode) => apply(unaryOpString(opcode), treeify(a))
-      case SSA.UnaryBranch(a, opcode) => apply("if", treeify(a), atom(unaryBranchString(opcode)))
-      case SSA.BinBranch(a, b, opcode) => apply("if", infix(treeify(a), binBranchString(opcode), treeify(b)))
-      case SSA.ReturnVal(_, a) => apply("return", treeify(a))
-      case SSA.Return(_) => apply("return")
+      case n @ SSA.Goto(control) =>
+        apply(fansi.Color.Cyan("ctrl" + savedControls.get(SSA.True(n))) + " = goto", atom("region" + regionMerges.zipWithIndex.find(_._1._1 == control).get._2))
+      case n @ SSA.UnaryBranch(control, a, opcode) =>
+        apply(fansi.Color.Cyan("ctrl" + savedControls.get(SSA.True(n))) + ", " + fansi.Color.Cyan("ctrl" + savedControls.get(SSA.False(n))) + " = if", atom("region" + regionMerges.zipWithIndex.find(_._1._1 == control).get._2), treeify(a), atom(unaryBranchString(opcode)))
+      case n @ SSA.BinBranch(control, a, b, opcode) =>
+        pprint.log(control)
+        pprint.log(regionMerges)
+        apply(fansi.Color.Cyan("ctrl" + savedControls.get(SSA.True(n))) + ", " + fansi.Color.Cyan("ctrl" + savedControls.get(SSA.False(n))) + " = if", atom("region" + regionMerges.zipWithIndex.find(_._1._1 == control).get._2), infix(treeify(a), binBranchString(opcode), treeify(b)))
+      case SSA.ReturnVal(ctrl, a) =>
+        pprint.log(ctrl)
+        apply("return", atom(fansi.Color.Cyan("region" + regionMerges.keysIterator.indexOf(ctrl)).toString()), treeify(a))
+      case SSA.Return(ctrl) =>
+        apply("return", atom(fansi.Color.Cyan("region" + regionMerges.keysIterator.indexOf(ctrl)).toString()))
       case SSA.AThrow(src) => apply("throw", treeify(src))
       case SSA.TableSwitch(src, min, max) => ???
 //        val args =
@@ -104,7 +127,7 @@ object Renderer {
 //          Seq(blockify(default)) ++ targets.map(blockify)
 //        apply("lookupswitch", args:_*)
 
-      case SSA.Goto() => apply("goto")
+
       case SSA.CheckCast(src, desc) => apply("cast", treeify(src), atom(desc.name))
       case SSA.ArrayLength(src) => apply("arraylength", treeify(src))
       case SSA.InstanceOf(src, desc) => apply("instanceof", treeify(src), atom(desc.name))
@@ -137,10 +160,16 @@ object Renderer {
     }
 
     out.append("\n")
+    for(((reg, upstreams), i) <- regionMerges.zipWithIndex){
+      out.append(fansi.Color.Cyan("region" + i), " = ", fansi.Color.Yellow("region"), "(")
+      out.append(upstreams.map(c => fansi.Color.Cyan("ctrl" + savedControls.get(c))).mkString(", "))
+      out.append(")\n")
+
+    }
     for(r <- renderRoots){
       val (lhs, sep) =
-        if (r.getSize == 0) ("  ", "")
-        else ("  local" + savedLocals.get(r), " = ")
+        if (r.getSize == 0) ("", "")
+        else ("local" + savedLocals.get(r), " = ")
 
       out.append(fansi.Color.Cyan(lhs))
       out.append(sep)

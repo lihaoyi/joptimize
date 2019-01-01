@@ -39,33 +39,13 @@ class Walker(isInterface: JType.Cls => Boolean,
       println("+" * 20 + sig + "+" * 20)
       println(Renderer.render(mn.instructions))
 
-      val initialControl = new SSA.Control{}
-
       val phiMerges0 = mutable.Set.empty[(SSA.Phi, SSA)]
       val analyzer = new Analyzer(new StepEvaluator(phiMerges0))
       val frames = analyzer.analyze(sig.cls.name, mn)
 
       val insns = mn.instructions.iterator().asScala.toVector
 
-      def frameTop(i: Int, n: Int) = frames(i).getStack(frames(i).getStackSize - 1 - n)
-      val terminals = insns.map(i => (i.getOpcode, i)).zipWithIndex.collect{
-        case ((RETURN, insn), i) => (insn, SSA.Return(initialControl), i)
-
-        case ((IRETURN | LRETURN | FRETURN | DRETURN | ARETURN, insn), i) =>
-          (insn, SSA.ReturnVal(initialControl, frameTop(i, 0)), i)
-
-        case ((ATHROW, insn), i) => (insn, SSA.AThrow(frameTop(i, 0)), i)
-
-        case ((GOTO, insn), i) => (insn, SSA.Goto(initialControl), i)
-
-        case ((IFEQ | IFNE | IFLT | IFGE | IFGT | IFLE, insn), i) =>
-          (insn, SSA.UnaryBranch(frameTop(i, 0), SSA.UnaryBranch.lookup(insn.getOpcode)), i)
-
-        case ((IF_ICMPEQ | IF_ICMPNE | IF_ICMPLT | IF_ICMPGE | IF_ICMPGT | IF_ICMPLE | IF_ACMPEQ | IF_ACMPNE, insn), i) =>
-          (insn, SSA.BinBranch(frameTop(i, 0), frameTop(i, 1), SSA.BinBranch.lookup(insn.getOpcode)), i)
-      }
-
-      val blockStarts = insns.take(0) ++ insns
+      val blockStarts = insns.take(1) ++ insns
         .collect{
           case n: TableSwitchInsnNode => Seq(n.dflt) ++ n.labels.asScala
           case n: LookupSwitchInsnNode => Seq(n.dflt) ++ n.labels.asScala
@@ -73,15 +53,77 @@ class Walker(isInterface: JType.Cls => Boolean,
         }
         .flatten
 
+      val regionStarts = blockStarts.map(_ -> new SSA.Region()).toMap
+
+
+      def frameTop(i: Int, n: Int) = frames(i).getStack(frames(i).getStackSize - 1 - n)
+
+//      regionStarts.keys.map("RSK " + Renderer.render(mn.instructions, _)).foreach(println)
+      def findStartRegion(insn: AbstractInsnNode): SSA.Region = {
+        var current = insn
+        var region: SSA.Region = null
+        while({
+//          println("XXX " + Renderer.render(mn.instructions, current))
+          regionStarts.get(current) match{
+            case None =>
+              current = current.getPrevious
+              true
+            case Some(x) =>
+              region = x
+              false
+          }
+        })()
+
+        region
+      }
+
+      val regionMerges = mutable.LinkedHashMap.empty[SSA.Region, Set[SSA.Control]]
+      regionMerges(regionStarts(insns.head)) = Set.empty
+
+      val terminals = insns.map(i => (i.getOpcode, i)).zipWithIndex.collect{
+        case ((RETURN, insn), i) => (insn, SSA.Return(findStartRegion(insn)), i)
+
+        case ((IRETURN | LRETURN | FRETURN | DRETURN | ARETURN, insn), i) =>
+//          println(Renderer.render(mn.instructions, insn).toString -> Renderer.render(mn.instructions, regionStarts.find(_._2 == findStartRegion(insn)).get._1))
+          (insn, SSA.ReturnVal(findStartRegion(insn), frameTop(i, 0)), i)
+
+        case ((ATHROW, insn), i) => (insn, SSA.AThrow(frameTop(i, 0)), i)
+
+        case ((GOTO, insn: JumpInsnNode), i) =>
+//          println(Renderer.render(mn.instructions, insn).toString -> Renderer.render(mn.instructions, regionStarts.find(_._2 == findStartRegion(insn)).get._1))
+          val n = SSA.Goto(findStartRegion(insn))
+          regionMerges(regionStarts(insn.label)) =
+            regionMerges.getOrElse(regionStarts(insn.label), Set.empty) + SSA.True(n)
+          (insn, n, i)
+
+        case ((IFEQ | IFNE | IFLT | IFGE | IFGT | IFLE, insn: JumpInsnNode), i) =>
+//          println(Renderer.render(mn.instructions, insn).toString -> Renderer.render(mn.instructions, regionStarts.find(_._2 == findStartRegion(insn)).get._1))
+          val n = SSA.UnaryBranch(findStartRegion(insn), frameTop(i, 0), SSA.UnaryBranch.lookup(insn.getOpcode))
+          regionMerges(regionStarts(insn.label)) =
+            regionMerges.getOrElse(regionStarts(insn.label), Set.empty) + SSA.True(n)
+          regionMerges(regionStarts(insn.getNext)) =
+            regionMerges.getOrElse(regionStarts(insn.label), Set.empty) + SSA.False(n)
+
+          (insn, n, i)
+
+        case ((IF_ICMPEQ | IF_ICMPNE | IF_ICMPLT | IF_ICMPGE | IF_ICMPGT | IF_ICMPLE | IF_ACMPEQ | IF_ACMPNE, insn: JumpInsnNode), i) =>
+//          println(Renderer.render(mn.instructions, insn).toString -> Renderer.render(mn.instructions, regionStarts.find(_._2 == findStartRegion(insn)).get._1))
+          val n = SSA.BinBranch(findStartRegion(insn), frameTop(i, 0), frameTop(i, 1), SSA.BinBranch.lookup(insn.getOpcode))
+          regionMerges(regionStarts(insn.label)) =
+            regionMerges.getOrElse(regionStarts(insn.label), Set.empty) + SSA.True(n)
+          regionMerges(regionStarts(insn.getNext)) =
+            regionMerges.getOrElse(regionStarts(insn.label), Set.empty) + SSA.False(n)
+          (insn, n, i)
+      }
+
       val phiMerges = phiMerges0.groupBy(_._1).mapValues(_.map(_._2).toSet).toMap
-      pprint.log(terminals)
-      pprint.log(blockStarts)
-      pprint.log(phiMerges)
+//      pprint.log(terminals)
+//      pprint.log(blockStarts)
+//      pprint.log(phiMerges)
 
-      val controlDependencies = new IdentityHashMap[SSA, SSA]()
 
-      pprint.log(frames.zipWithIndex.map(_.swap))
-      println(Renderer.render(terminals.map(_._2), phiMerges))
+//      pprint.log(frames.zipWithIndex.map(_.swap))
+      println(Renderer.render(terminals.map(_._2), regionMerges, phiMerges))
 
       ???
 //      Walker.MethodResult(
@@ -120,31 +162,4 @@ object Walker{
                           methodBody: InsnList,
                           pure: Boolean,
                           seenTryCatchBlocks: Seq[TryCatchBlockNode])
-//
-//  trait BlockInfo{
-//    def startFrame: Frame[SSA]
-//  }
-//
-//  case class BlockStub(startFrame: Frame[SSA]) extends BlockInfo
-//
-//  case class BlockResult(startFrame: Frame[SSA],
-//                         terminalInsns: Seq[SSA],
-//                         pure: Boolean,
-//                         subCallArgLiveness: Map[AbstractInsnNode, Seq[Boolean]],
-//                         lineNumberNodes: Set[LineNumberNode],
-//                         tryHandlers: Seq[(LabelNode, JType.Cls)],
-//                         blockInsns: Block) extends BlockInfo
-//
-//  case class InsnCtx(sig: MethodSig,
-//                     terminalInsns: mutable.Buffer[SSA],
-//                     var pure: Boolean,
-//                     subCallArgLiveness: mutable.Map[AbstractInsnNode, Seq[Boolean]],
-//                     lineNumberNodes: mutable.Set[LineNumberNode],
-//                     walkBlock: (AbstractInsnNode, Frame[SSA]) => BlockInfo,
-//                     seenMethods: Set[(MethodSig, Seq[IType])],
-//                     walkMethod: (MethodSig, Seq[IType]) => Walker.MethodResult,
-//                     ssaInterpreter: StepEvaluator,
-//                     basicBlock: Block,
-//                     jumpedBasicBlocks: (AbstractInsnNode, Frame[IType]) => Block,
-//                     renderer: AbstractInsnNode => fansi.Str)
 }
