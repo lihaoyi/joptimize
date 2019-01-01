@@ -73,7 +73,7 @@ class StepEvaluator(merges: mutable.Set[(SSA.Phi, (Int, SSA))]) extends joptimiz
 
       case INEG | L2I | F2I | D2I | I2B | I2C | I2S | FNEG | I2F | L2F |
            D2F | LNEG | I2L | F2L | D2L | DNEG | I2D | L2D | F2D =>
-        SSA.UnaryOp(value, SSA.UnaryOp.lookup(insn.getOpcode))
+        SSA.UnaOp(value, SSA.UnaOp.lookup(insn.getOpcode))
 
       case IFEQ | IFNE | IFLT | IFGE | IFGT | IFLE | IFNULL | IFNONNULL => null
       case TABLESWITCH => null

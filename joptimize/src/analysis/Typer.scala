@@ -68,33 +68,33 @@ class Typer(merge0: Seq[IType] => IType){
           else java.lang.Double.compare(f1, f2)
         )
       }
-    case SSA.UnaryOp(a, opcode) =>
+    case SSA.UnaOp(a, opcode) =>
       val value = inferred.get(a)
       opcode match{
-        case SSA.UnaryOp.INEG => fold1(value, CType.I, CType.I)(-_)
-        case SSA.UnaryOp.L2I => fold1(value, CType.J, CType.I)(_.toInt)
-        case SSA.UnaryOp.F2I => fold1(value, CType.F, CType.I)(_.toInt)
-        case SSA.UnaryOp.D2I => fold1(value, CType.D, CType.I)(_.toInt)
-        case SSA.UnaryOp.I2B => fold1(value, CType.I, CType.I)(_.toByte)
-        case SSA.UnaryOp.I2C => fold1(value, CType.I, CType.I)(_.toChar)
-        case SSA.UnaryOp.I2S => fold1(value, CType.J, CType.I)(_.toShort)
+        case SSA.UnaOp.INEG => fold1(value, CType.I, CType.I)(-_)
+        case SSA.UnaOp.L2I => fold1(value, CType.J, CType.I)(_.toInt)
+        case SSA.UnaOp.F2I => fold1(value, CType.F, CType.I)(_.toInt)
+        case SSA.UnaOp.D2I => fold1(value, CType.D, CType.I)(_.toInt)
+        case SSA.UnaOp.I2B => fold1(value, CType.I, CType.I)(_.toByte)
+        case SSA.UnaOp.I2C => fold1(value, CType.I, CType.I)(_.toChar)
+        case SSA.UnaOp.I2S => fold1(value, CType.J, CType.I)(_.toShort)
 
-        case SSA.UnaryOp.FNEG => fold1(value, CType.F, CType.F)(-_)
-        case SSA.UnaryOp.I2F => fold1(value, CType.I, CType.F)(_.toFloat)
-        case SSA.UnaryOp.L2F => fold1(value, CType.J, CType.F)(_.toFloat)
-        case SSA.UnaryOp.D2F => fold1(value, CType.D, CType.F)(_.toFloat)
+        case SSA.UnaOp.FNEG => fold1(value, CType.F, CType.F)(-_)
+        case SSA.UnaOp.I2F => fold1(value, CType.I, CType.F)(_.toFloat)
+        case SSA.UnaOp.L2F => fold1(value, CType.J, CType.F)(_.toFloat)
+        case SSA.UnaOp.D2F => fold1(value, CType.D, CType.F)(_.toFloat)
 
-        case SSA.UnaryOp.LNEG => fold1(value, CType.J, CType.J)(-_)
-        case SSA.UnaryOp.I2L => fold1(value, CType.I, CType.J)(_.toLong)
-        case SSA.UnaryOp.F2L => fold1(value, CType.F, CType.J)(_.toLong)
-        case SSA.UnaryOp.D2L => fold1(value, CType.D, CType.J)(_.toLong)
+        case SSA.UnaOp.LNEG => fold1(value, CType.J, CType.J)(-_)
+        case SSA.UnaOp.I2L => fold1(value, CType.I, CType.J)(_.toLong)
+        case SSA.UnaOp.F2L => fold1(value, CType.F, CType.J)(_.toLong)
+        case SSA.UnaOp.D2L => fold1(value, CType.D, CType.J)(_.toLong)
 
-        case SSA.UnaryOp.DNEG => fold1(value, CType.D, CType.D)(-_)
-        case SSA.UnaryOp.I2D => fold1(value, CType.I, CType.D)(_.toDouble)
-        case SSA.UnaryOp.L2D => fold1(value, CType.J, CType.D)(_.toDouble)
-        case SSA.UnaryOp.F2D => fold1(value, CType.F, CType.D)(_.toDouble)
+        case SSA.UnaOp.DNEG => fold1(value, CType.D, CType.D)(-_)
+        case SSA.UnaOp.I2D => fold1(value, CType.I, CType.D)(_.toDouble)
+        case SSA.UnaOp.L2D => fold1(value, CType.J, CType.D)(_.toDouble)
+        case SSA.UnaOp.F2D => fold1(value, CType.F, CType.D)(_.toDouble)
       }
-    case SSA.UnaryBranch(control, a, opcode) => JType.Null
+    case SSA.UnaBranch(control, a, opcode) => JType.Null
     case SSA.BinBranch(control, a, b, opcode) => JType.Null
     case SSA.ReturnVal(control, a) => JType.Null
     case SSA.AThrow(src) => JType.Null

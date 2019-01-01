@@ -71,8 +71,8 @@ object SSA{
     val DDIV = new Code(Opcodes.DDIV, 2)
     val DREM = new Code(Opcodes.DREM, 2)
   }
-  case class UnaryOp(a: SSA, opcode: UnaryOp.Code) extends SSA(opcode.typeSize, a)
-  object UnaryOp extends Codes{
+  case class UnaOp(a: SSA, opcode: UnaOp.Code) extends SSA(opcode.typeSize, a)
+  object UnaOp extends Codes{
     val INEG = new Code(Opcodes.INEG, 1)
     val L2I = new Code(Opcodes.L2I, 1)
     val F2I = new Code(Opcodes.F2I, 1)
@@ -94,8 +94,8 @@ object SSA{
     val F2D = new Code(Opcodes.F2D, 2)
   }
 
-  case class UnaryBranch(control: Control, a: SSA, opcode: UnaryBranch.Code) extends SSA(0, control, a)
-  object UnaryBranch  extends Codes{
+  case class UnaBranch(control: Control, a: SSA, opcode: UnaBranch.Code) extends SSA(0, control, a)
+  object UnaBranch  extends Codes{
     val IFEQ = new Code(Opcodes.IFEQ)
     val IFNE = new Code(Opcodes.IFNE)
     val IFLT = new Code(Opcodes.IFLT)

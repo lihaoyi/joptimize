@@ -23,8 +23,8 @@ case class Program(allTerminals: Seq[SSA],
           case phi: SSA.Phi => phi
           case SSA.Arg(index, typeSize) => SSA.Arg(index, typeSize)
           case SSA.BinOp(a, b, opcode) => SSA.BinOp(rec(a), rec(b), opcode)
-          case SSA.UnaryOp(a, opcode) => SSA.UnaryOp(rec(a), opcode)
-          case SSA.UnaryBranch(ctrl, a, opcode) => SSA.UnaryBranch(rec2(ctrl), rec(a), opcode)
+          case SSA.UnaOp(a, opcode) => SSA.UnaOp(rec(a), opcode)
+          case SSA.UnaBranch(ctrl, a, opcode) => SSA.UnaBranch(rec2(ctrl), rec(a), opcode)
           case SSA.BinBranch(ctrl, a, b, opcode) => SSA.BinBranch(rec2(ctrl), rec(a), rec(b), opcode)
           case SSA.ReturnVal(ctrl, a) => SSA.ReturnVal(rec2(ctrl), rec(a))
           case SSA.Return(ctrl) => SSA.Return(rec2(ctrl))

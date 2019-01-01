@@ -81,7 +81,7 @@ object Renderer {
       } ++ allVertices.collect{
         case b: SSA.Region => (b, true)
         case b: SSA.BinBranch => (b, true)
-        case b: SSA.UnaryBranch => (b, true)
+        case b: SSA.UnaBranch => (b, true)
         case b: SSA.Return => (b, true)
         case b: SSA.ReturnVal => (b, true)
       }
@@ -124,8 +124,8 @@ object Renderer {
         apply("phi", phiMerges(phi).map{case (ctrl, ssa) => infix(renderControl(ctrl), ":", treeify(ssa))}.toSeq:_*)
       case SSA.Arg(index, typeSize) => atom(fansi.Color.Cyan("arg" + index).toString)
       case SSA.BinOp(a, b, opcode) => infix(treeify(a), binOpString(opcode), treeify(b))
-      case SSA.UnaryOp(a, opcode) => apply(unaryOpString(opcode), treeify(a))
-      case n @ SSA.UnaryBranch(control, a, opcode) =>
+      case SSA.UnaOp(a, opcode) => apply(unaryOpString(opcode), treeify(a))
+      case n @ SSA.UnaBranch(control, a, opcode) =>
         apply(
           renderBranchPrefix(n),
           renderControl(control),
@@ -241,8 +241,8 @@ object Renderer {
       case DCMPG => "<"
     }
   }
-  def unaryOpString(op: SSA.UnaryOp.Code): String = {
-    import SSA.UnaryOp._
+  def unaryOpString(op: SSA.UnaOp.Code): String = {
+    import SSA.UnaOp._
     op match{
       case INEG => "-"
       case L2I | F2I |D2I => "(int)"
@@ -268,8 +268,8 @@ object Renderer {
       case IF_ICMPLE => "<="
     }
   }
-  def unaryBranchString(op: SSA.UnaryBranch.Code): String = {
-    import SSA.UnaryBranch._
+  def unaryBranchString(op: SSA.UnaBranch.Code): String = {
+    import SSA.UnaBranch._
     op match{
       case IFEQ => "== 0"
       case IFNE => "!= 0"
