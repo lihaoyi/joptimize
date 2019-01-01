@@ -45,7 +45,7 @@ object Renderer {
   }
 
   def renderSSA(allTerminals: Seq[SSA],
-                regionMerges: mutable.LinkedHashMap[SSA.Region, Set[SSA.Control]],
+                regionMerges: Map[SSA.Region, Set[SSA.Control]],
                 phiMerges: Map[SSA.Phi, Set[(SSA.Control, SSA)]]): fansi.Str = {
 
     val (allVertices, roots, downstreamEdges) =

@@ -129,8 +129,8 @@ class Walker(isInterface: JType.Cls => Boolean,
       val (terminals2, phiMerges2, compoundRegions2) = collapseSimpleRegions(
         terminals.map(_._2),
         phiMerges.map{case (k, vs) => (k, vs.map{case (idx, ssa) => (findStartRegion(insns(idx)): SSA.Control, ssa)})},
-        simpleRegions,
-        compoundRegions
+        simpleRegions.toMap,
+        compoundRegions.toMap
       )
       val (terminals3, phiMerges3, compoundRegions3) = collapseSimplePhis(
         terminals2,
@@ -146,9 +146,9 @@ class Walker(isInterface: JType.Cls => Boolean,
 
   def collapseSimpleRegions(allTerminals: Seq[SSA],
                             phiMerges:  Map[SSA.Phi, Set[(SSA.Control, SSA)]],
-                            simpleRegions: mutable.LinkedHashMap[SSA.Region, SSA.Control],
-                            compoundRegions: mutable.LinkedHashMap[SSA.Region, Set[SSA.Control]])
-  : (Seq[SSA], Map[SSA.Phi, Set[(SSA.Control, SSA)]], mutable.LinkedHashMap[SSA.Region, Set[SSA.Control]]) = {
+                            simpleRegions: Map[SSA.Region, SSA.Control],
+                            compoundRegions: Map[SSA.Region, Set[SSA.Control]])
+  : (Seq[SSA], Map[SSA.Phi, Set[(SSA.Control, SSA)]], Map[SSA.Region, Set[SSA.Control]]) = {
     val current = new util.IdentityHashMap[SSA, SSA]()
     def rec(x: SSA): SSA = {
       if (current.containsKey(x)) current.get(x)
@@ -213,8 +213,8 @@ class Walker(isInterface: JType.Cls => Boolean,
   }
   def collapseSimplePhis(allTerminals: Seq[SSA],
                          phiMerges:  Map[SSA.Phi, Set[(SSA.Control, SSA)]],
-                         compoundRegions: mutable.LinkedHashMap[SSA.Region, Set[SSA.Control]])
-  : (Seq[SSA], Map[SSA.Phi, Set[(SSA.Control, SSA)]], mutable.LinkedHashMap[SSA.Region, Set[SSA.Control]]) = {
+                         compoundRegions: Map[SSA.Region, Set[SSA.Control]])
+  : (Seq[SSA], Map[SSA.Phi, Set[(SSA.Control, SSA)]], Map[SSA.Region, Set[SSA.Control]]) = {
     val current = new util.IdentityHashMap[SSA, SSA]()
     def rec(x: SSA): SSA = {
       if (current.containsKey(x)) current.get(x)
