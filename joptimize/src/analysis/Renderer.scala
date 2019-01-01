@@ -1,7 +1,9 @@
-package joptimize
+package joptimize.analysis
 import java.io.{PrintWriter, StringWriter}
 import java.util
 
+import joptimize.Util
+import joptimize.model.{Program, SSA}
 import org.objectweb.asm.tree.{AbstractInsnNode, InsnList}
 import org.objectweb.asm.util.{Textifier, TraceMethodVisitor}
 
@@ -44,7 +46,7 @@ object Renderer {
     )
   }
 
-  def renderSSA(program: Walker#Program): fansi.Str = {
+  def renderSSA(program: Program): fansi.Str = {
 
     val allTerminals = program.allTerminals
     val regionMerges = program.regionMerges

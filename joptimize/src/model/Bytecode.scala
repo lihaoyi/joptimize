@@ -1,4 +1,4 @@
-package joptimize
+package joptimize.model
 import org.objectweb.asm.Opcodes._
 import org.objectweb.asm.tree.{AbstractInsnNode, LdcInsnNode, MethodInsnNode, MultiANewArrayInsnNode}
 /**

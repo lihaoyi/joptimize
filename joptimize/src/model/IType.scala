@@ -1,4 +1,4 @@
-package joptimize
+package joptimize.model
 
 import org.objectweb.asm.tree.AbstractInsnNode
 import org.objectweb.asm.tree.analysis.Value
@@ -10,7 +10,7 @@ import scala.collection.mutable
   *
   * Can be a concrete JType, an intersection type, or a concrete value
   */
-trait IType extends Frame.Value{
+trait IType extends Value{
   def size: Int
   def isRef: Boolean
   def internalName: String

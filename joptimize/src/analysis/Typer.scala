@@ -1,5 +1,7 @@
-package joptimize
+package joptimize.analysis
 import java.util
+
+import joptimize.model.{IType, JType, SSA}
 
 /**
   * Performs type inference on a single SSA node, given the types of its upstream

@@ -1,6 +1,7 @@
 package joptimize
 import java.net.URLClassLoader
 
+import joptimize.model.{Desc, JType, MethodSig}
 import utest._
 import utest.framework.TestPath
 

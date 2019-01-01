@@ -1,5 +1,7 @@
 package joptimize
 
+import joptimize.analysis.{PostLivenessDCE, Typer, Walker}
+import joptimize.model.{Desc, IType, JType, MethodSig}
 import org.objectweb.asm.{ClassReader, ClassWriter, Opcodes}
 import org.objectweb.asm.tree._
 

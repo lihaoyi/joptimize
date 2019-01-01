@@ -1,4 +1,4 @@
-package forked
+package joptimize.bytecode
 import collection.JavaConverters._
 import org.objectweb.asm.Opcodes
 import org.objectweb.asm.Type

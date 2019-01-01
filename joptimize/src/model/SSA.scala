@@ -1,11 +1,11 @@
-package joptimize
+package joptimize.model
 import org.objectweb.asm.Opcodes
 import org.objectweb.asm.tree.analysis.Value
 
 import scala.collection.immutable.SortedSet
 import scala.collection.mutable
 
-sealed abstract class SSA(size: Int, upstream0: SSA.Token*) extends Frame.Value with SSA.Token{
+sealed abstract class SSA(size: Int, upstream0: SSA.Token*) extends Value with SSA.Token{
   def upstream = upstream0.collect{case s: SSA => s}
   def allUpstream = upstream0
   def getSize = size

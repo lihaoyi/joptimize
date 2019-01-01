@@ -1,4 +1,4 @@
-package joptimize
+package joptimize.model
 
 import collection.mutable
 import reflect.ClassTag

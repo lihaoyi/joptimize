@@ -1,4 +1,4 @@
-package joptimize
+package joptimize.analysis
 
 import java.util
 

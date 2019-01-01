@@ -1,5 +1,7 @@
-package joptimize
+package joptimize.analysis
 
+import joptimize.Util
+import joptimize.model.{Desc, JType, MethodSig}
 import org.objectweb.asm.tree.InvokeDynamicInsnNode
 import org.objectweb.asm.{Handle, Opcodes}
 import org.objectweb.asm.tree.{ClassNode, FieldInsnNode, MethodInsnNode, TypeInsnNode}

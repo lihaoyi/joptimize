@@ -3,6 +3,7 @@ package joptimize
 import java.io.PrintWriter
 import java.io.StringWriter
 
+import joptimize.model.{Desc, IType, JType}
 import org.objectweb.asm.{Handle, Opcodes}
 import org.objectweb.asm.Opcodes._
 import org.objectweb.asm.tree._

@@ -1,4 +1,5 @@
-package joptimize
+package joptimize.analysis
+import joptimize.model.{Desc, JType, SSA}
 import org.objectweb.asm.Opcodes._
 import org.objectweb.asm.Type._
 import org.objectweb.asm.tree.analysis._
@@ -16,7 +17,7 @@ import scala.collection.mutable
   * generated SSA nodes; we do this to allow immediate constant folding if the
   * node's type is specific enough to be a concrete value.
   */
-class StepEvaluator(merges: mutable.Set[(SSA.Phi, (Int, SSA))]) extends forked.Interpreter[SSA]{
+class StepEvaluator(merges: mutable.Set[(SSA.Phi, (Int, SSA))]) extends joptimize.bytecode.Interpreter[SSA]{
 
   def newOperation(insn: AbstractInsnNode) = {
     insn.getOpcode match {
@@ -197,7 +198,7 @@ class StepEvaluator(merges: mutable.Set[(SSA.Phi, (Int, SSA))]) extends forked.I
   }
 
   def newExceptionValue(tryCatchBlockNode: TryCatchBlockNode,
-                        handlerFrame: forked.Frame[SSA],
+                        handlerFrame: joptimize.bytecode.Frame[SSA],
                         exceptionType: Type) = {
     SSA.Arg(-1, JType.read(exceptionType.getInternalName))
   }
