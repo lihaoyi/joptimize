@@ -3,7 +3,7 @@ package joptimize
 import java.io.PrintWriter
 import java.io.StringWriter
 
-import joptimize.model.{Desc, IType, JType}
+import joptimize.model.{CType, Desc, IType, JType}
 import org.objectweb.asm.{Handle, Opcodes}
 import org.objectweb.asm.Opcodes._
 import org.objectweb.asm.tree._
@@ -27,8 +27,8 @@ object Util{
              narrowReturnType: IType,
              originalReturnType: JType) = {
     val mangledName = name + "__" + inferredTypes.map(_.name).mkString("__").replace('/', '_')
-    val jTypeArgs = inferredTypes.zip(originalTypes).map(t => JType.fromIType(t._1, t._2))
-    val jTypeRet = JType.fromIType(narrowReturnType, originalReturnType)
+    val jTypeArgs = inferredTypes.zip(originalTypes).map(t => CType.toJType(t._1, t._2))
+    val jTypeRet = CType.toJType(narrowReturnType, originalReturnType)
     val mangledJTypeDesc = Desc(jTypeArgs, jTypeRet)
     (mangledName, mangledJTypeDesc)
   }
@@ -81,12 +81,12 @@ object Util{
     inferredTypes.length == originalTypes.length &&
     inferredTypes.iterator.zip(originalTypes.iterator).forall{
       case (JType.Prim.I, JType.Prim.Z | JType.Prim.B | JType.Prim.S) => true
-      case (IType.I(_), x) => x == JType.Prim.I
-      case (IType.J(_), x) => x == JType.Prim.J
-      case (IType.F(_), x) => x == JType.Prim.F
-      case (IType.D(_), x) => x == JType.Prim.D
+      case (CType.I(_), x) => x == JType.Prim.I
+      case (CType.J(_), x) => x == JType.Prim.J
+      case (CType.F(_), x) => x == JType.Prim.F
+      case (CType.D(_), x) => x == JType.Prim.D
       case (inf: JType, orig: JType) => inf == orig
-      case (IType.Intersect(classes), orig: JType) => ???
+      case (CType.Intersect(classes), orig: JType) => ???
     }
   }
   def clone(input: AbstractInsnNode, labelMapping: mutable.Map[AbstractInsnNode, AbstractInsnNode]) = {
@@ -131,9 +131,9 @@ object Util{
   }
 
 
-  def constantToInstruction(tpe: IType.Constant[_]) = {
+  def constantToInstruction(tpe: CType.Constant[_]) = {
     tpe match{
-      case IType.I(v) =>
+      case CType.I(v) =>
         v match{
           case -1 => new InsnNode(ICONST_M1)
           case 0 => new InsnNode(ICONST_0)
@@ -144,20 +144,20 @@ object Util{
           case 5 => new InsnNode(ICONST_5)
           case _ => new LdcInsnNode(java.lang.Integer.valueOf(v))
         }
-      case IType.J(v) =>
+      case CType.J(v) =>
         v match{
           case 0 => new InsnNode(LCONST_0)
           case 1 => new InsnNode(LCONST_1)
           case _ => new LdcInsnNode(java.lang.Long.valueOf(v))
         }
-      case IType.F(v) =>
+      case CType.F(v) =>
         v match{
           case 0 => new InsnNode(FCONST_0)
           case 1 => new InsnNode(FCONST_1)
           case 2 => new InsnNode(FCONST_2)
           case _ => new LdcInsnNode(java.lang.Float.valueOf(v))
         }
-      case IType.D(v) =>
+      case CType.D(v) =>
         v match{
           case 0 => new InsnNode(DCONST_0)
           case 1 => new InsnNode(DCONST_1)

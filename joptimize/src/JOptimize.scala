@@ -1,7 +1,7 @@
 package joptimize
 
 import joptimize.analysis.{PostLivenessDCE, Typer, Walker}
-import joptimize.model.{Desc, IType, JType, MethodSig}
+import joptimize.model._
 import org.objectweb.asm.{ClassReader, ClassWriter, Opcodes}
 import org.objectweb.asm.tree._
 
@@ -47,7 +47,7 @@ object JOptimize{
 
     def merge(itypes: Seq[IType]): IType = {
       val flattened = itypes.flatMap{
-        case IType.Intersect(values) => values
+        case CType.Intersect(values) => values
         case j => Seq(j)
       }.distinct
       if (flattened.length == 1) flattened.head
@@ -55,13 +55,13 @@ object JOptimize{
         if (flattened.exists(_.isInstanceOf[JType.Arr])) JType.Cls("java/lang/Object")
         else leastUpperBound(flattened.map(_.asInstanceOf[JType.Cls])) match{
           case Seq(single) => single
-          case many => IType.Intersect(many)
+          case many => CType.Intersect(many)
         }
       }
-      else if(flattened.forall(x => x.widen == JType.Prim.Z || x.getClass == classOf[IType.I])) JType.Prim.Z
-      else if(flattened.forall(x => x.widen == JType.Prim.B || x.getClass == classOf[IType.I])) JType.Prim.B
-      else if(flattened.forall(x => x.widen == JType.Prim.C || x.getClass == classOf[IType.I])) JType.Prim.C
-      else if(flattened.forall(x => x.widen == JType.Prim.S || x.getClass == classOf[IType.I])) JType.Prim.S
+      else if(flattened.forall(x => x.widen == JType.Prim.Z || x.getClass == classOf[CType.I])) JType.Prim.Z
+      else if(flattened.forall(x => x.widen == JType.Prim.B || x.getClass == classOf[CType.I])) JType.Prim.B
+      else if(flattened.forall(x => x.widen == JType.Prim.C || x.getClass == classOf[CType.I])) JType.Prim.C
+      else if(flattened.forall(x => x.widen == JType.Prim.S || x.getClass == classOf[CType.I])) JType.Prim.S
       else if(flattened.forall(_.widen == JType.Prim.I)) JType.Prim.I
       else if(flattened.forall(_.widen == JType.Prim.F)) JType.Prim.F
       else if(flattened.forall(_.widen == JType.Prim.J)) JType.Prim.J

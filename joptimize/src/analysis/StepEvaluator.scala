@@ -198,7 +198,6 @@ class StepEvaluator(merges: mutable.Set[(SSA.Phi, (Int, SSA))]) extends joptimiz
   }
 
   def newExceptionValue(tryCatchBlockNode: TryCatchBlockNode,
-                        handlerFrame: joptimize.bytecode.Frame[SSA],
                         exceptionType: Type) = {
     SSA.Arg(-1, JType.read(exceptionType.getInternalName))
   }

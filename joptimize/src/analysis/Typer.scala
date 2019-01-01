@@ -1,7 +1,7 @@
 package joptimize.analysis
 import java.util
 
-import joptimize.model.{IType, JType, SSA}
+import joptimize.model.{CType, IType, JType, SSA}
 
 /**
   * Performs type inference on a single SSA node, given the types of its upstream
@@ -14,56 +14,56 @@ class Typer(merge0: Seq[IType] => IType){
       val v1 = inferred.get(a)
       val v2 = inferred.get(b)
       opcode match{
-        case SSA.BinOp.IADD => fold(v1, v2, IType.I)(_ + _)
-        case SSA.BinOp.ISUB => fold(v1, v2, IType.I)(_ - _)
-        case SSA.BinOp.IMUL => fold(v1, v2, IType.I)(_ * _)
-        case SSA.BinOp.IDIV => fold(v1, v2, IType.I)(_ / _)
-        case SSA.BinOp.IREM => fold(v1, v2, IType.I)(_ % _)
-        case SSA.BinOp.ISHL => fold(v1, v2, IType.I)(_ << _)
-        case SSA.BinOp.ISHR => fold(v1, v2, IType.I)(_ >> _)
-        case SSA.BinOp.IUSHR => fold(v1, v2, IType.I)(_ >>> _)
-        case SSA.BinOp.IAND => fold(v1, v2, IType.I)(_ & _)
-        case SSA.BinOp.IOR => fold(v1, v2, IType.I)(_ | _)
-        case SSA.BinOp.IXOR => fold(v1, v2, IType.I)(_ ^ _)
+        case SSA.BinOp.IADD => fold(v1, v2, CType.I)(_ + _)
+        case SSA.BinOp.ISUB => fold(v1, v2, CType.I)(_ - _)
+        case SSA.BinOp.IMUL => fold(v1, v2, CType.I)(_ * _)
+        case SSA.BinOp.IDIV => fold(v1, v2, CType.I)(_ / _)
+        case SSA.BinOp.IREM => fold(v1, v2, CType.I)(_ % _)
+        case SSA.BinOp.ISHL => fold(v1, v2, CType.I)(_ << _)
+        case SSA.BinOp.ISHR => fold(v1, v2, CType.I)(_ >> _)
+        case SSA.BinOp.IUSHR => fold(v1, v2, CType.I)(_ >>> _)
+        case SSA.BinOp.IAND => fold(v1, v2, CType.I)(_ & _)
+        case SSA.BinOp.IOR => fold(v1, v2, CType.I)(_ | _)
+        case SSA.BinOp.IXOR => fold(v1, v2, CType.I)(_ ^ _)
 
-        case SSA.BinOp.FADD => fold(v1, v2, IType.F)(_ + _)
-        case SSA.BinOp.FSUB => fold(v1, v2, IType.F)(_ - _)
-        case SSA.BinOp.FMUL => fold(v1, v2, IType.F)(_ * _)
-        case SSA.BinOp.FDIV => fold(v1, v2, IType.F)(_ / _)
-        case SSA.BinOp.FREM => fold(v1, v2, IType.F)(_ % _)
+        case SSA.BinOp.FADD => fold(v1, v2, CType.F)(_ + _)
+        case SSA.BinOp.FSUB => fold(v1, v2, CType.F)(_ - _)
+        case SSA.BinOp.FMUL => fold(v1, v2, CType.F)(_ * _)
+        case SSA.BinOp.FDIV => fold(v1, v2, CType.F)(_ / _)
+        case SSA.BinOp.FREM => fold(v1, v2, CType.F)(_ % _)
 
-        case SSA.BinOp.LADD => fold(v1, v2, IType.J)(_ + _)
-        case SSA.BinOp.LSUB => fold(v1, v2, IType.J)(_ - _)
-        case SSA.BinOp.LMUL => fold(v1, v2, IType.J)(_ * _)
-        case SSA.BinOp.LDIV => fold(v1, v2, IType.J)(_ / _)
-        case SSA.BinOp.LREM => fold(v1, v2, IType.J)(_ % _)
-        case SSA.BinOp.LSHL => fold(v1, v2, IType.J)(_ << _)
-        case SSA.BinOp.LSHR => fold(v1, v2, IType.J)(_ >> _)
-        case SSA.BinOp.LUSHR => fold(v1, v2, IType.J)(_ >>> _)
-        case SSA.BinOp.LAND => fold(v1, v2, IType.J)(_ & _)
-        case SSA.BinOp.LOR => fold(v1, v2, IType.J)(_ | _)
-        case SSA.BinOp.LXOR => fold(v1, v2, IType.J)(_ ^ _)
+        case SSA.BinOp.LADD => fold(v1, v2, CType.J)(_ + _)
+        case SSA.BinOp.LSUB => fold(v1, v2, CType.J)(_ - _)
+        case SSA.BinOp.LMUL => fold(v1, v2, CType.J)(_ * _)
+        case SSA.BinOp.LDIV => fold(v1, v2, CType.J)(_ / _)
+        case SSA.BinOp.LREM => fold(v1, v2, CType.J)(_ % _)
+        case SSA.BinOp.LSHL => fold(v1, v2, CType.J)(_ << _)
+        case SSA.BinOp.LSHR => fold(v1, v2, CType.J)(_ >> _)
+        case SSA.BinOp.LUSHR => fold(v1, v2, CType.J)(_ >>> _)
+        case SSA.BinOp.LAND => fold(v1, v2, CType.J)(_ & _)
+        case SSA.BinOp.LOR => fold(v1, v2, CType.J)(_ | _)
+        case SSA.BinOp.LXOR => fold(v1, v2, CType.J)(_ ^ _)
 
-        case SSA.BinOp.DADD => fold(v1, v2, IType.D)(_ + _)
-        case SSA.BinOp.DSUB => fold(v1, v2, IType.D)(_ - _)
-        case SSA.BinOp.DMUL => fold(v1, v2, IType.D)(_ * _)
-        case SSA.BinOp.DDIV => fold(v1, v2, IType.D)(_ / _)
-        case SSA.BinOp.DREM => fold(v1, v2, IType.D)(_ % _)
+        case SSA.BinOp.DADD => fold(v1, v2, CType.D)(_ + _)
+        case SSA.BinOp.DSUB => fold(v1, v2, CType.D)(_ - _)
+        case SSA.BinOp.DMUL => fold(v1, v2, CType.D)(_ * _)
+        case SSA.BinOp.DDIV => fold(v1, v2, CType.D)(_ / _)
+        case SSA.BinOp.DREM => fold(v1, v2, CType.D)(_ % _)
 
-        case SSA.BinOp.LCMP => fold(v1, v2, IType.J)(java.lang.Long.compare)
-        case SSA.BinOp.FCMPL => fold(v1, v2, IType.F)((f1, f2) =>
+        case SSA.BinOp.LCMP => fold(v1, v2, CType.J)(java.lang.Long.compare)
+        case SSA.BinOp.FCMPL => fold(v1, v2, CType.F)((f1, f2) =>
           if (java.lang.Float.isNaN(f1) || java.lang.Float.isNaN(f2)) -1
           else java.lang.Float.compare(f1, f2)
         )
-        case SSA.BinOp.FCMPG => fold(v1, v2, IType.F)((f1, f2) =>
+        case SSA.BinOp.FCMPG => fold(v1, v2, CType.F)((f1, f2) =>
           if (java.lang.Float.isNaN(f1) || java.lang.Float.isNaN(f2)) 1
           else java.lang.Float.compare(f1, f2)
         )
-        case SSA.BinOp.DCMPL => fold(v1, v2, IType.D)((f1, f2) =>
+        case SSA.BinOp.DCMPL => fold(v1, v2, CType.D)((f1, f2) =>
           if (java.lang.Double.isNaN(f1) || java.lang.Double.isNaN(f2)) -1
           else java.lang.Double.compare(f1, f2)
         )
-        case SSA.BinOp.DCMPG => fold(v1, v2, IType.D)((f1, f2) =>
+        case SSA.BinOp.DCMPG => fold(v1, v2, CType.D)((f1, f2) =>
           if (java.lang.Double.isNaN(f1) || java.lang.Double.isNaN(f2)) 1
           else java.lang.Double.compare(f1, f2)
         )
@@ -71,28 +71,28 @@ class Typer(merge0: Seq[IType] => IType){
     case SSA.UnaryOp(a, opcode) =>
       val value = inferred.get(a)
       opcode match{
-        case SSA.UnaryOp.INEG => fold1(value, IType.I, IType.I)(-_)
-        case SSA.UnaryOp.L2I => fold1(value, IType.J, IType.I)(_.toInt)
-        case SSA.UnaryOp.F2I => fold1(value, IType.F, IType.I)(_.toInt)
-        case SSA.UnaryOp.D2I => fold1(value, IType.D, IType.I)(_.toInt)
-        case SSA.UnaryOp.I2B => fold1(value, IType.I, IType.I)(_.toByte)
-        case SSA.UnaryOp.I2C => fold1(value, IType.I, IType.I)(_.toChar)
-        case SSA.UnaryOp.I2S => fold1(value, IType.J, IType.I)(_.toShort)
+        case SSA.UnaryOp.INEG => fold1(value, CType.I, CType.I)(-_)
+        case SSA.UnaryOp.L2I => fold1(value, CType.J, CType.I)(_.toInt)
+        case SSA.UnaryOp.F2I => fold1(value, CType.F, CType.I)(_.toInt)
+        case SSA.UnaryOp.D2I => fold1(value, CType.D, CType.I)(_.toInt)
+        case SSA.UnaryOp.I2B => fold1(value, CType.I, CType.I)(_.toByte)
+        case SSA.UnaryOp.I2C => fold1(value, CType.I, CType.I)(_.toChar)
+        case SSA.UnaryOp.I2S => fold1(value, CType.J, CType.I)(_.toShort)
 
-        case SSA.UnaryOp.FNEG => fold1(value, IType.F, IType.F)(-_)
-        case SSA.UnaryOp.I2F => fold1(value, IType.I, IType.F)(_.toFloat)
-        case SSA.UnaryOp.L2F => fold1(value, IType.J, IType.F)(_.toFloat)
-        case SSA.UnaryOp.D2F => fold1(value, IType.D, IType.F)(_.toFloat)
+        case SSA.UnaryOp.FNEG => fold1(value, CType.F, CType.F)(-_)
+        case SSA.UnaryOp.I2F => fold1(value, CType.I, CType.F)(_.toFloat)
+        case SSA.UnaryOp.L2F => fold1(value, CType.J, CType.F)(_.toFloat)
+        case SSA.UnaryOp.D2F => fold1(value, CType.D, CType.F)(_.toFloat)
 
-        case SSA.UnaryOp.LNEG => fold1(value, IType.J, IType.J)(-_)
-        case SSA.UnaryOp.I2L => fold1(value, IType.I, IType.J)(_.toLong)
-        case SSA.UnaryOp.F2L => fold1(value, IType.F, IType.J)(_.toLong)
-        case SSA.UnaryOp.D2L => fold1(value, IType.D, IType.J)(_.toLong)
+        case SSA.UnaryOp.LNEG => fold1(value, CType.J, CType.J)(-_)
+        case SSA.UnaryOp.I2L => fold1(value, CType.I, CType.J)(_.toLong)
+        case SSA.UnaryOp.F2L => fold1(value, CType.F, CType.J)(_.toLong)
+        case SSA.UnaryOp.D2L => fold1(value, CType.D, CType.J)(_.toLong)
 
-        case SSA.UnaryOp.DNEG => fold1(value, IType.D, IType.D)(-_)
-        case SSA.UnaryOp.I2D => fold1(value, IType.I, IType.D)(_.toDouble)
-        case SSA.UnaryOp.L2D => fold1(value, IType.J, IType.D)(_.toDouble)
-        case SSA.UnaryOp.F2D => fold1(value, IType.F, IType.D)(_.toDouble)
+        case SSA.UnaryOp.DNEG => fold1(value, CType.D, CType.D)(-_)
+        case SSA.UnaryOp.I2D => fold1(value, CType.I, CType.D)(_.toDouble)
+        case SSA.UnaryOp.L2D => fold1(value, CType.J, CType.D)(_.toDouble)
+        case SSA.UnaryOp.F2D => fold1(value, CType.F, CType.D)(_.toDouble)
       }
     case SSA.UnaryBranch(control, a, opcode) => JType.Null
     case SSA.BinBranch(control, a, b, opcode) => JType.Null
@@ -105,14 +105,14 @@ class Typer(merge0: Seq[IType] => IType){
     case SSA.InstanceOf(src, desc) =>
       val cls = inferred.get(src)
       val merged = merge0(Seq(desc, cls))
-      if (merged == desc) IType.I(1)
+      if (merged == desc) CType.I(1)
       else if (merged == cls) JType.Prim.Z
-      else IType.I(0)
+      else CType.I(0)
 
-    case SSA.PushI(value) => IType.I(value)
-    case SSA.PushJ(value) => IType.J(value)
-    case SSA.PushF(value) => IType.F(value)
-    case SSA.PushD(value) => IType.D(value)
+    case SSA.PushI(value) => CType.I(value)
+    case SSA.PushJ(value) => CType.J(value)
+    case SSA.PushF(value) => CType.F(value)
+    case SSA.PushD(value) => CType.D(value)
     case SSA.PushS(value) => JType.Cls("java/lang/String")
     case SSA.PushNull() => JType.Null
     case SSA.PushCls(value) => JType.Cls("java/lang/Class")
@@ -130,7 +130,7 @@ class Typer(merge0: Seq[IType] => IType){
     case SSA.MonitorExit(indexSrc) => JType.Null
   }
 
-  def fold[T](v1: IType, v2: IType, const: IType.ConstantCompanion[T])
+  def fold[T](v1: IType, v2: IType, const: CType.ConstantCompanion[T])
              (f: (T, T) => T): IType = {
 
     (v1, v2) match {
@@ -140,8 +140,8 @@ class Typer(merge0: Seq[IType] => IType){
   }
 
   def fold1[T, V](v1: IType,
-                  const1: IType.ConstantCompanion[T],
-                  const2: IType.ConstantCompanion[V])
+                  const1: CType.ConstantCompanion[T],
+                  const2: CType.ConstantCompanion[V])
                  (f: T => V): IType = {
 
     v1 match {

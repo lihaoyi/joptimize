@@ -59,7 +59,6 @@ abstract class Interpreter[V <: Value] {
     *                                                   must be equal to 1.
     */
   def newExceptionValue(tryCatchBlockNode: TryCatchBlockNode,
-                        handlerFrame: Frame[V],
                         exceptionType: Type): V
 
   /**

@@ -134,7 +134,7 @@ object Analyzer{
 
             val handler = new Frame[V](oldFrame)
             handler.clearStack()
-            handler.push(interpreter.newExceptionValue(tryCatchBlock, handler, catchType))
+            handler.push(interpreter.newExceptionValue(tryCatchBlock, catchType))
             merge(insnIndex, insnList.indexOf(tryCatchBlock.handler), handler)
           }
         }

@@ -11,6 +11,9 @@ object joptimize extends ScalaModule{
     ivy"com.lihaoyi::os-lib:0.2.5",
     ivy"com.lihaoyi::pprint:0.5.3"
   )
+  def compileIvyDeps = Agg(ivy"com.lihaoyi::acyclic:0.1.7")
+  def scalacOptions = Seq("-P:acyclic:force")
+  def scalacPluginIvyDeps = Agg(ivy"com.lihaoyi::acyclic:0.1.7")
   object test extends Tests{
     def ivyDeps = Agg(
       ivy"com.lihaoyi::utest::0.6.6",
