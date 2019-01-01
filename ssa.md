@@ -51,14 +51,15 @@ int foo(int n) {
 Actual
 
 ```
-region0 = region()
-region1 = region(ctrl1)
-region2 = region(ctrl0)
-region3 = region(ctrl2, region2)
-return(region3, local1)
-local1 = phi(1 + 1, 2 + 1)
-ctrl0, ctrl1 = if(region0, 1 < arg-1)
-ctrl2 = goto(region1)
+local0 = phi(ctrl0 : 0, ctrl1 : 1 + local0)
+local1 = phi(ctrl0 : 1, ctrl1 : local1 * 2)
+
+local3 = phi(ctrl0 : arg0, ctrl1 : local3)
+ctrl2 = region(ctrl0, ctrl1)
+
+ctrl3, ctrl1 = if(ctrl2, local3 >= local0)
+return(ctrl3, local1)
+ctrl0 = region()
 ```
 
 Steps:
@@ -68,15 +69,17 @@ Steps:
 - Sort by approximate topological order
 
 ```
-region0 = region()
+ctrl0 = region()
 
-ctrl1, ctrl0 = if(region0, 1 < arg-1)
+ctrl3, ctrl1 = if(ctrl2, local3 >= local0)
 
-local0 = phi(ctrl0 : 1 + 1, ctrl1 : 2 + 1)
+local0 = phi(ctrl0 : 0, ctrl1 : 1 + local0)
+local1 = phi(ctrl0 : 1, ctrl1 : local1 * 2)
 
-region1 = region(ctrl0, ctrl1)
+local3 = phi(ctrl0 : arg0, ctrl1 : local3)
+ctrl2 = region(ctrl0, ctrl1)
 
-return(region1, local0)
+return(ctrl3, local1)
 ```
 
 Goal
