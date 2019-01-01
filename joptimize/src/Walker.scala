@@ -102,7 +102,7 @@ class Walker(isInterface: JType.Cls => Boolean,
           regionMerges(regionStarts(insn.getNext)) =
             regionMerges.getOrElse(regionStarts(insn.getNext), Set.empty) + SSA.False(n)
 
-          (insn, n, i) :: Nil
+          Nil
 
         case ((IF_ICMPEQ | IF_ICMPNE | IF_ICMPLT | IF_ICMPGE | IF_ICMPGT | IF_ICMPLE | IF_ACMPEQ | IF_ACMPNE, insn: JumpInsnNode), i) =>
           val n = SSA.BinBranch(findStartRegion(insn), frameTop(i, 0), frameTop(i, 1), SSA.BinBranch.lookup(insn.getOpcode))
@@ -111,7 +111,7 @@ class Walker(isInterface: JType.Cls => Boolean,
 
           regionMerges(regionStarts(insn.getNext)) =
             regionMerges.getOrElse(regionStarts(insn.getNext), Set.empty) + SSA.False(n)
-          (insn, n, i) :: Nil
+          Nil
 
         case ((_, insn), i) if Option(insn.getNext).exists(regionStarts.contains) =>
           regionMerges(regionStarts(insn.getNext)) =

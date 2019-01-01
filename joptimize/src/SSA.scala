@@ -5,7 +5,7 @@ import org.objectweb.asm.tree.analysis.Value
 import scala.collection.immutable.SortedSet
 import scala.collection.mutable
 
-sealed abstract class SSA(size: Int, upstream0: SSA*) extends Frame.Value{
+sealed abstract class SSA(size: Int, upstream0: SSA*) extends Frame.Value with SSA.Token{
   def upstream = upstream0
   def getSize = size
 
@@ -14,7 +14,8 @@ sealed abstract class SSA(size: Int, upstream0: SSA*) extends Frame.Value{
 
 
 object SSA{
-  trait Control
+  trait Token
+  trait Control extends Token
   trait Codes{
     private[this] val lookup0 = mutable.Map.empty[Int, Code]
     class Code private[SSA] (val i: Int, val typeSize: Int = 0)(implicit name: sourcecode.Name){

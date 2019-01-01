@@ -70,14 +70,15 @@ Steps:
 ```
 region0 = region()
 
-ctrl0, ctrl1 = if(region0, 1 < arg-1)
+ctrl1, ctrl0 = if(region0, 1 < arg-1)
 
-region1 = region(ctrl1, ctrl0)
+local0 = phi(ctrl0 : 1 + 1, ctrl1 : 2 + 1)
 
-local1 = phi(1 + 1, 2 + 1)
+region1 = region(ctrl0, ctrl1)
 
-return(region1, local1)
+return(region1, local0)
 ```
+
 Goal
 
 ```
@@ -85,9 +86,9 @@ region0 = region()
 
 ctrl0, ctrl1 = if(region0, 1 < arg-1)
 
-region3 = region(ctrl1, ctrl0)
+region1 = region(ctrl1, ctrl0)
 
-local1 = phi(region3, 1 + 1, 2 + 1)
+local0 = phi(ctrl1 : 1 + 1, ctrl0 : 2 + 1)
 
-return(region3, local1)
+return(region1, local0)
 ```

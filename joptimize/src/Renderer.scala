@@ -49,12 +49,19 @@ object Renderer {
                 phiMerges: Map[SSA.Phi, Set[(SSA.Control, SSA)]]): fansi.Str = {
 
     val (allVertices, roots, downstreamEdges) =
-      Util.breadthFirstAggregation[SSA](allTerminals.toSet){ ssa =>
-        ssa.upstream ++ (ssa match{
-          case phi: SSA.Phi => phiMerges.getOrElse(phi, Nil).map(_._2)
-          case _ => Nil
-        })
+      Util.breadthFirstAggregation[SSA.Token](allTerminals.toSet ++ regionMerges.keysIterator){
+        case ctrl: SSA.Region => regionMerges(ctrl).toSeq
+        case SSA.True(inner) => Seq(inner)
+        case SSA.False(inner) => Seq(inner)
+
+        case ssa: SSA =>
+          ssa.upstream ++ (ssa match{
+            case phi: SSA.Phi => phiMerges(phi).flatMap(x => Seq(x._1, x._2))
+            case _ => Nil
+          })
       }
+
+    pprint.log(allVertices)
 
     val saveable = downstreamEdges
       .groupBy(_._1)
@@ -70,25 +77,22 @@ object Renderer {
         case (k, x) =>
           val n = x.distinct.size
           (k, n > 1 || n == 1 && allTerminals.contains(k))
+      } ++ allVertices.collect{
+        case b: SSA.Region => (b, true)
+        case b: SSA.BinBranch => (b, true)
+        case b: SSA.UnaryBranch => (b, true)
+        case b: SSA.Return => (b, true)
+        case b: SSA.ReturnVal => (b, true)
       }
 
     val out = mutable.Buffer.empty[fansi.Str]
 
-    val renderRoots = allVertices.filter(i => allTerminals.contains(i) || saveable.getOrElse(i, false))
+    val renderRoots = allVertices.filter(i => saveable.getOrElse(i, false))
 
-    val savedLocals = new util.IdentityHashMap[SSA, Int]()
+    val savedLocals = new util.IdentityHashMap[SSA.Token, Int]()
     for((r, i) <- renderRoots.zipWithIndex) savedLocals.put(r, i)
 
-    val savedControls = new util.HashMap[SSA.Control, Int]()
-    allTerminals.collect{
-      case n: SSA.UnaryBranch =>
-        savedControls.put(SSA.True(n), savedControls.size)
-        savedControls.put(SSA.False(n), savedControls.size)
-      case n: SSA.BinBranch =>
-        savedControls.put(SSA.True(n), savedControls.size)
-        savedControls.put(SSA.False(n), savedControls.size)
-    }
-
+    val savedControls = mutable.LinkedHashMap.empty[SSA.Control, Int]
     def apply(lhs: String, operands: pprint.Tree*) = pprint.Tree.Apply(lhs, operands.toIterator)
     def atom(lhs: String) = pprint.Tree.Lazy(ctx => Iterator(lhs))
     def literal(lhs: String) = pprint.Tree.Literal(lhs)
@@ -100,21 +104,15 @@ object Renderer {
           regionMerges.zipWithIndex.find(_._1._1 == control)match{
             case Some(x) => "region" + x._2
             case None =>
-              if (!savedControls.containsKey(control)){
-                pprint.log(control)
-                import collection.JavaConverters._
-                pprint.log(savedControls.keySet().asScala)
-                pprint.log(regionMerges.keys)
-              }
-              "ctrl" + savedControls.get(control)
+              "ctrl" + savedControls.getOrElseUpdate(control, savedControls.size)
           }
         ).toString
       )
     }
 
     def renderBranchPrefix(n: SSA) = {
-      fansi.Color.Cyan("ctrl" + savedControls.get(SSA.True(n))) + ", " +
-      fansi.Color.Cyan("ctrl" + savedControls.get(SSA.False(n))) + " = if"
+      fansi.Color.Cyan("ctrl" + savedControls.getOrElseUpdate(SSA.True(n), savedControls.size)) + ", " +
+      fansi.Color.Cyan("ctrl" + savedControls.getOrElseUpdate(SSA.False(n), savedControls.size)) + " = if"
     }
 
     def treeify0(ssa: SSA): pprint.Tree = ssa match{
@@ -189,33 +187,40 @@ object Renderer {
 
     out.append("\n")
     val regionIndices = regionMerges.keysIterator.zipWithIndex.toMap
-    for((reg, upstreams) <- regionMerges){
-      println("region " + reg)
-      out.append(fansi.Color.Cyan("region" + regionIndices(reg)), " = ", fansi.Color.Yellow("region"), "(")
-      out.append(
-        upstreams.map { c =>
-          fansi.Color.Cyan(
-            Option(savedControls.get(c)) match{
-              case None => "region" + regionIndices(c.asInstanceOf[SSA.Region])
-              case Some(x) => "ctrl" + x
-            }
-          )
-        }.mkString(", ")
-      )
-      out.append(")\n")
 
-    }
+    pprint.log(renderRoots)
     for(r <- renderRoots){
-      val (lhs, sep) =
-        if (r.getSize == 0) ("", "")
-        else ("local" + savedLocals.get(r), " = ")
+      r match{
+        case reg: SSA.Region =>
+          out.append(fansi.Color.Cyan("region" + regionIndices(reg)), " = ", fansi.Color.Yellow("region"), "(")
+          out.append(
+            regionMerges(reg).map { c =>
+              fansi.Color.Cyan(
+                Option(savedControls.getOrElseUpdate(c, savedControls.size)) match{
+                  case None => "region" + regionIndices(c.asInstanceOf[SSA.Region])
+                  case Some(x) => "ctrl" + x
+                }
+              )
+            }.mkString(", ")
+          )
+          out.append(")\n")
+        case SSA.True(inner) => Seq(inner)
+        case SSA.False(inner) => Seq(inner)
+        case r: SSA =>
+          val (lhs, sep) =
+            if (r.getSize == 0) ("", "")
+            else ("local" + savedLocals.get(r), " = ")
+          out.append(fansi.Color.Cyan(lhs))
+          out.append(sep)
 
-      out.append(fansi.Color.Cyan(lhs))
-      out.append(sep)
-      out.appendAll(
-        new pprint.Renderer(80, fansi.Color.Yellow, fansi.Color.Green, 2)
-          .rec(treeify0(r), lhs.length + sep.length, 1).iter
-      )
+          out.appendAll(
+            new pprint.Renderer(80, fansi.Color.Yellow, fansi.Color.Green, 2)
+              .rec(treeify0(r), lhs.length + sep.length, 1).iter
+          )
+      }
+
+
+
       out.append("\n")
     }
     out.append("\n")
