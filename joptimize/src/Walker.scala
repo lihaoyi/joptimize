@@ -154,7 +154,6 @@ class Walker(isInterface: JType.Cls => Boolean,
     pprint.log(simpleRegions)
     val current = new util.IdentityHashMap[SSA, SSA]()
     def rec(x: SSA): SSA = {
-      pprint.log(x)
       if (current.containsKey(x)) current.get(x)
       else {
         val res: SSA = x match{
