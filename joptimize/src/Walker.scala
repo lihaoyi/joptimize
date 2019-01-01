@@ -41,8 +41,7 @@ class Walker(isInterface: JType.Cls => Boolean,
       println(Renderer.renderInsns(mn.instructions))
 
       val phiMerges0 = mutable.Set.empty[(SSA.Phi, (Int, SSA))]
-      val analyzer = new forked.Analyzer(new StepEvaluator(phiMerges0))
-      val frames = analyzer.analyze(sig.cls.name, mn)
+      val frames = forked.Analyzer.analyze(sig.cls.name, mn, new StepEvaluator(phiMerges0))
 
       val insns = mn.instructions.iterator().asScala.toVector
 
