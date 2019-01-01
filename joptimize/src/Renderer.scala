@@ -102,13 +102,13 @@ object Renderer {
       case SSA.BinOp(a, b, opcode) => infix(treeify(a), binOpString(opcode), treeify(b))
       case SSA.UnaryOp(a, opcode) => apply(unaryOpString(opcode), treeify(a))
       case n @ SSA.Goto(control) =>
-        apply(fansi.Color.Cyan("ctrl" + savedControls.get(SSA.True(n))) + " = goto", atom("region" + regionMerges.zipWithIndex.find(_._1._1 == control).get._2))
+        apply(fansi.Color.Cyan("ctrl" + savedControls.get(SSA.True(n))) + " = goto", atom(fansi.Color.Cyan("region" + regionMerges.zipWithIndex.find(_._1._1 == control).get._2).toString))
       case n @ SSA.UnaryBranch(control, a, opcode) =>
-        apply(fansi.Color.Cyan("ctrl" + savedControls.get(SSA.True(n))) + ", " + fansi.Color.Cyan("ctrl" + savedControls.get(SSA.False(n))) + " = if", atom("region" + regionMerges.zipWithIndex.find(_._1._1 == control).get._2), treeify(a), atom(unaryBranchString(opcode)))
+        apply(fansi.Color.Cyan("ctrl" + savedControls.get(SSA.True(n))) + ", " + fansi.Color.Cyan("ctrl" + savedControls.get(SSA.False(n))) + " = if", atom(fansi.Color.Cyan("region" + regionMerges.zipWithIndex.find(_._1._1 == control).get._2).toString), treeify(a), atom(unaryBranchString(opcode)))
       case n @ SSA.BinBranch(control, a, b, opcode) =>
         pprint.log(control)
         pprint.log(regionMerges)
-        apply(fansi.Color.Cyan("ctrl" + savedControls.get(SSA.True(n))) + ", " + fansi.Color.Cyan("ctrl" + savedControls.get(SSA.False(n))) + " = if", atom("region" + regionMerges.zipWithIndex.find(_._1._1 == control).get._2), infix(treeify(a), binBranchString(opcode), treeify(b)))
+        apply(fansi.Color.Cyan("ctrl" + savedControls.get(SSA.True(n))) + ", " + fansi.Color.Cyan("ctrl" + savedControls.get(SSA.False(n))) + " = if", atom(fansi.Color.Cyan("region" + regionMerges.zipWithIndex.find(_._1._1 == control).get._2).toString), infix(treeify(a), binBranchString(opcode), treeify(b)))
       case SSA.ReturnVal(ctrl, a) =>
         pprint.log(ctrl)
         apply("return", atom(fansi.Color.Cyan("region" + regionMerges.keysIterator.indexOf(ctrl)).toString()), treeify(a))
@@ -160,9 +160,20 @@ object Renderer {
     }
 
     out.append("\n")
-    for(((reg, upstreams), i) <- regionMerges.zipWithIndex){
-      out.append(fansi.Color.Cyan("region" + i), " = ", fansi.Color.Yellow("region"), "(")
-      out.append(upstreams.map(c => fansi.Color.Cyan("ctrl" + savedControls.get(c))).mkString(", "))
+    val regionIndices = regionMerges.keysIterator.zipWithIndex.toMap
+    for((reg, upstreams) <- regionMerges){
+      println("region " + reg)
+      out.append(fansi.Color.Cyan("region" + regionIndices(reg)), " = ", fansi.Color.Yellow("region"), "(")
+      out.append(
+        upstreams.map { c =>
+          fansi.Color.Cyan(
+            Option(savedControls.get(c)) match{
+              case None => "region" + regionIndices(c.asInstanceOf[SSA.Region])
+              case Some(x) => "ctrl" + x
+            }
+          )
+        }.mkString(", ")
+      )
       out.append(")\n")
 
     }

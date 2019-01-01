@@ -82,18 +82,18 @@ class Walker(isInterface: JType.Cls => Boolean,
       regionMerges(regionStarts(insns.head)) = Set.empty
 
       val terminals = insns.map(i => (i.getOpcode, i)).zipWithIndex.collect{
-        case ((RETURN, insn), i) => (insn, SSA.Return(findStartRegion(insn)), i)
+        case ((RETURN, insn), i) => (insn, SSA.Return(findStartRegion(insn)), i) :: Nil
 
         case ((IRETURN | LRETURN | FRETURN | DRETURN | ARETURN, insn), i) =>
-          (insn, SSA.ReturnVal(findStartRegion(insn), frameTop(i, 0)), i)
+          (insn, SSA.ReturnVal(findStartRegion(insn), frameTop(i, 0)), i) :: Nil
 
-        case ((ATHROW, insn), i) => (insn, SSA.AThrow(frameTop(i, 0)), i)
+        case ((ATHROW, insn), i) => (insn, SSA.AThrow(frameTop(i, 0)), i) :: Nil
 
         case ((GOTO, insn: JumpInsnNode), i) =>
           val n = SSA.Goto(findStartRegion(insn))
           regionMerges(regionStarts(insn.label)) =
             regionMerges.getOrElse(regionStarts(insn.label), Set.empty) + SSA.True(n)
-          (insn, n, i)
+          (insn, n, i) :: Nil
 
         case ((IFEQ | IFNE | IFLT | IFGE | IFGT | IFLE, insn: JumpInsnNode), i) =>
           val n = SSA.UnaryBranch(findStartRegion(insn), frameTop(i, 0), SSA.UnaryBranch.lookup(insn.getOpcode))
@@ -102,16 +102,22 @@ class Walker(isInterface: JType.Cls => Boolean,
           regionMerges(regionStarts(insn.getNext)) =
             regionMerges.getOrElse(regionStarts(insn.getNext), Set.empty) + SSA.False(n)
 
-          (insn, n, i)
+          (insn, n, i) :: Nil
 
         case ((IF_ICMPEQ | IF_ICMPNE | IF_ICMPLT | IF_ICMPGE | IF_ICMPGT | IF_ICMPLE | IF_ACMPEQ | IF_ACMPNE, insn: JumpInsnNode), i) =>
           val n = SSA.BinBranch(findStartRegion(insn), frameTop(i, 0), frameTop(i, 1), SSA.BinBranch.lookup(insn.getOpcode))
           regionMerges(regionStarts(insn.label)) =
             regionMerges.getOrElse(regionStarts(insn.label), Set.empty) + SSA.True(n)
+
           regionMerges(regionStarts(insn.getNext)) =
             regionMerges.getOrElse(regionStarts(insn.getNext), Set.empty) + SSA.False(n)
-          (insn, n, i)
-      }
+          (insn, n, i) :: Nil
+
+        case ((_, insn), i) if Option(insn.getNext).exists(regionStarts.contains) =>
+          regionMerges(regionStarts(insn.getNext)) =
+            regionMerges.getOrElse(regionStarts(insn.getNext), Set.empty) + findStartRegion(insn)
+          Nil
+      }.flatten
 
       val regionMerges2 = regionStarts.map{case (k, v) => (v, regionMerges(v))}
 
