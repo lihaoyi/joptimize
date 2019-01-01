@@ -52,11 +52,31 @@ Actual
 
 ```
 region0 = region()
-ctrl0, ctrl1 = if(region0, 1 < arg-1)
 region1 = region(ctrl1)
-ctrl2 = goto(region1)
 region2 = region(ctrl0)
-region3 = region(ctrl2)
+region3 = region(ctrl2, region2)
+return(region3, local1)
 local1 = phi(1 + 1, 2 + 1)
+ctrl0, ctrl1 = if(region0, 1 < arg-1)
+ctrl2 = goto(region1)
+```
+
+Steps:
+
+- Fold pass-through regions
+- Fold GOTOs
+- Sort by approximate topological order
+
+Goal
+
+```
+region0 = region()
+
+ctrl0, ctrl1 = if(region0, 1 < arg-1)
+
+region3 = region(ctrl1, ctrl0)
+
+local1 = phi(region3, 1 + 1, 2 + 1)
+
 return(region3, local1)
 ```
