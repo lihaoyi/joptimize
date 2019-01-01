@@ -37,7 +37,7 @@ class Walker(isInterface: JType.Cls => Boolean,
       val seenMethods = seenMethods0 ++ Seq((sig, args.map(_.widen)))
 
       println("+" * 20 + sig + "+" * 20)
-      println(Renderer.render(mn.instructions))
+      println(Renderer.renderInsns(mn.instructions))
 
       val phiMerges0 = mutable.Set.empty[(SSA.Phi, SSA)]
       val analyzer = new Analyzer(new StepEvaluator(phiMerges0))
@@ -52,8 +52,9 @@ class Walker(isInterface: JType.Cls => Boolean,
           case n: JumpInsnNode => Seq(n.label) ++ Option(n.getNext)
         }
         .flatten
+        .sortBy(insns.indexOf)
 
-      val regionStarts = blockStarts.map(_ -> new SSA.Region()).toMap
+      val regionStarts = mutable.LinkedHashMap(blockStarts.map(_ -> new SSA.Region()):_*)
 
 
       def frameTop(i: Int, n: Int) = frames(i).getStack(frames(i).getStackSize - 1 - n)
@@ -84,37 +85,35 @@ class Walker(isInterface: JType.Cls => Boolean,
         case ((RETURN, insn), i) => (insn, SSA.Return(findStartRegion(insn)), i)
 
         case ((IRETURN | LRETURN | FRETURN | DRETURN | ARETURN, insn), i) =>
-//          println(Renderer.render(mn.instructions, insn).toString -> Renderer.render(mn.instructions, regionStarts.find(_._2 == findStartRegion(insn)).get._1))
           (insn, SSA.ReturnVal(findStartRegion(insn), frameTop(i, 0)), i)
 
         case ((ATHROW, insn), i) => (insn, SSA.AThrow(frameTop(i, 0)), i)
 
         case ((GOTO, insn: JumpInsnNode), i) =>
-//          println(Renderer.render(mn.instructions, insn).toString -> Renderer.render(mn.instructions, regionStarts.find(_._2 == findStartRegion(insn)).get._1))
           val n = SSA.Goto(findStartRegion(insn))
           regionMerges(regionStarts(insn.label)) =
             regionMerges.getOrElse(regionStarts(insn.label), Set.empty) + SSA.True(n)
           (insn, n, i)
 
         case ((IFEQ | IFNE | IFLT | IFGE | IFGT | IFLE, insn: JumpInsnNode), i) =>
-//          println(Renderer.render(mn.instructions, insn).toString -> Renderer.render(mn.instructions, regionStarts.find(_._2 == findStartRegion(insn)).get._1))
           val n = SSA.UnaryBranch(findStartRegion(insn), frameTop(i, 0), SSA.UnaryBranch.lookup(insn.getOpcode))
           regionMerges(regionStarts(insn.label)) =
             regionMerges.getOrElse(regionStarts(insn.label), Set.empty) + SSA.True(n)
           regionMerges(regionStarts(insn.getNext)) =
-            regionMerges.getOrElse(regionStarts(insn.label), Set.empty) + SSA.False(n)
+            regionMerges.getOrElse(regionStarts(insn.getNext), Set.empty) + SSA.False(n)
 
           (insn, n, i)
 
         case ((IF_ICMPEQ | IF_ICMPNE | IF_ICMPLT | IF_ICMPGE | IF_ICMPGT | IF_ICMPLE | IF_ACMPEQ | IF_ACMPNE, insn: JumpInsnNode), i) =>
-//          println(Renderer.render(mn.instructions, insn).toString -> Renderer.render(mn.instructions, regionStarts.find(_._2 == findStartRegion(insn)).get._1))
           val n = SSA.BinBranch(findStartRegion(insn), frameTop(i, 0), frameTop(i, 1), SSA.BinBranch.lookup(insn.getOpcode))
           regionMerges(regionStarts(insn.label)) =
             regionMerges.getOrElse(regionStarts(insn.label), Set.empty) + SSA.True(n)
           regionMerges(regionStarts(insn.getNext)) =
-            regionMerges.getOrElse(regionStarts(insn.label), Set.empty) + SSA.False(n)
+            regionMerges.getOrElse(regionStarts(insn.getNext), Set.empty) + SSA.False(n)
           (insn, n, i)
       }
+
+      val regionMerges2 = regionStarts.map{case (k, v) => (v, regionMerges(v))}
 
       val phiMerges = phiMerges0.groupBy(_._1).mapValues(_.map(_._2).toSet).toMap
 //      pprint.log(terminals)
@@ -123,7 +122,8 @@ class Walker(isInterface: JType.Cls => Boolean,
 
 
 //      pprint.log(frames.zipWithIndex.map(_.swap))
-      println(Renderer.render(terminals.map(_._2), regionMerges, phiMerges))
+      println(regionMerges2.keysIterator.map(r => Renderer.renderInsns(mn.instructions, regionStarts.map(_.swap).apply(r)).toString).toList)
+      println(Renderer.renderSSA(terminals.map(_._2), regionMerges2, phiMerges))
 
       ???
 //      Walker.MethodResult(

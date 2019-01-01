@@ -18,7 +18,7 @@ object Renderer {
     sw.toString.stripSuffix("\n")
   }
 
-  def render(insns: InsnList, target: AbstractInsnNode = null): fansi.Str = {
+  def renderInsns(insns: InsnList, target: AbstractInsnNode = null): fansi.Str = {
     import collection.JavaConverters._
     val listing = if (target == null) insns.iterator.asScala else Iterator(target)
     val indices = insns.iterator().asScala.zipWithIndex.toMap
@@ -44,9 +44,9 @@ object Renderer {
     )
   }
 
-  def render(allTerminals: Seq[SSA],
-             regionMerges: mutable.LinkedHashMap[SSA.Region, Set[SSA.Control]],
-             phiMerges: Map[SSA.Phi, Set[SSA]]): fansi.Str = {
+  def renderSSA(allTerminals: Seq[SSA],
+                regionMerges: mutable.LinkedHashMap[SSA.Region, Set[SSA.Control]],
+                phiMerges: Map[SSA.Phi, Set[SSA]]): fansi.Str = {
 
     val (allVertices, roots, downstreamEdges) =
       Util.breadthFirstAggregation[SSA](allTerminals.toSet){ ssa =>

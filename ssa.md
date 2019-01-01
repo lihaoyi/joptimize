@@ -53,16 +53,9 @@ Actual
 ```
 region0 = region()
 ctrl0, ctrl1 = if(region0, 1 < arg-1)
-
-region1 = region(ctrl0)
-
-region2 = region(ctrl0, ctrl1)
-
-ctrl2 = goto(region2)
-
+region1 = region(ctrl1)
+ctrl2 = goto(region1)
 region3 = region(ctrl2)
-
-local2 = phi(1 + 1, 2 + 1)
-
-return(region3, local2)
+local1 = phi(1 + 1, 2 + 1)
+return(region3, local1)
 ```
