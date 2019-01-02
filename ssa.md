@@ -70,15 +70,11 @@ Steps:
 
 ```
 ctrl0 = region()
+ctrl1 = region(ctrl0, ctrl2)
+local0 = phi(ctrl0 : 0, ctrl2 : 1 + local0)
+ctrl3, ctrl2 = if(ctrl1, arg0 >= local0)
 
-ctrl3, ctrl1 = if(ctrl2, local3 >= local0)
-
-local0 = phi(ctrl0 : 0, ctrl1 : 1 + local0)
-local1 = phi(ctrl0 : 1, ctrl1 : local1 * 2)
-
-local3 = phi(ctrl0 : arg0, ctrl1 : local3)
-ctrl2 = region(ctrl0, ctrl1)
-
+local1 = phi(ctrl0 : 1, ctrl2 : local1 * 2)
 return(ctrl3, local1)
 ```
 

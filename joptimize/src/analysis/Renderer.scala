@@ -2,10 +2,12 @@ package joptimize.analysis
 import java.io.{PrintWriter, StringWriter}
 import java.util
 
+import fansi.Str
 import joptimize.Util
 import joptimize.model.{Program, SSA}
 import org.objectweb.asm.tree.{AbstractInsnNode, InsnList}
 import org.objectweb.asm.util.{Textifier, TraceMethodVisitor}
+import pprint.Tree
 
 import collection.mutable
 object Renderer {
@@ -64,6 +66,8 @@ object Renderer {
           })
       }
 
+    val finalOrderingMap = sortVerticesForPrinting(allVertices, downstreamEdges)
+
     val saveable = downstreamEdges
       .groupBy(_._1)
       .map{
@@ -86,7 +90,7 @@ object Renderer {
         case b: SSA.ReturnVal => (b, true)
       }
 
-    val out = mutable.Buffer.empty[fansi.Str]
+    val out = mutable.Buffer.empty[Str]
 
     val renderRoots = allVertices.filter(i => saveable.getOrElse(i, false))
 
@@ -96,10 +100,10 @@ object Renderer {
 
     val savedControls = mutable.LinkedHashMap.empty[SSA.Control, Int]
     def getControlId(c: SSA.Control) = savedControls.getOrElseUpdate(c, savedControls.size)
-    def apply(lhs: String, operands: pprint.Tree*) = pprint.Tree.Apply(lhs, operands.toIterator)
+    def apply(lhs: String, operands: Tree*) = pprint.Tree.Apply(lhs, operands.toIterator)
     def atom(lhs: String) = pprint.Tree.Lazy(ctx => Iterator(lhs))
     def literal(lhs: String) = pprint.Tree.Literal(lhs)
-    def infix(lhs: pprint.Tree, op: String, rhs: pprint.Tree) = pprint.Tree.Infix(lhs, op, rhs)
+    def infix(lhs: Tree, op: String, rhs: Tree) = pprint.Tree.Infix(lhs, op, rhs)
 
     def getControlStr(control: SSA.Control) = {
       fansi.Color.Cyan("ctrl" + getControlId(control))
@@ -112,12 +116,9 @@ object Renderer {
       getControlStr(SSA.True(n)) + ", " + getControlStr(SSA.False(n)) + " = if"
     }
 
-    def treeify0(ssa: SSA): pprint.Tree = {
-      pprint.log(ssa)
+    def treeify0(ssa: SSA): Tree = {
       ssa match{
-        case phi: SSA.Phi =>
-          pprint.log(phi -> phiMerges(phi))
-          apply("phi", phiMerges(phi).map{case (ctrl, ssa) => infix(renderControl(ctrl), ":", treeify(ssa))}.toSeq:_*)
+        case phi: SSA.Phi => apply("phi", phiMerges(phi).map{case (ctrl, ssa) => infix(renderControl(ctrl), ":", treeify(ssa))}.toSeq:_*)
         case SSA.Arg(index, typeSize) => atom(fansi.Color.Cyan("arg" + index).toString)
         case SSA.BinOp(a, b, opcode) => infix(treeify(a), binOpString(opcode), treeify(b))
         case SSA.UnaOp(a, opcode) => apply(unaryOpString(opcode), treeify(a))
@@ -168,23 +169,20 @@ object Renderer {
         case SSA.MonitorExit(indexSrc) => ???
       }
     }
-    def treeify(ssa: SSA): pprint.Tree = {
+    def treeify(ssa: SSA): Tree = {
       if (savedLocals.containsKey(ssa)) atom(fansi.Color.Cyan("local" + savedLocals.get(ssa)).toString())
       else treeify0(ssa)
     }
 
-    out.append("\n")
 
-
-    pprint.log(renderRoots)
-    for(r <- renderRoots){
+    for(r <- renderRoots.toSeq.sortBy(finalOrderingMap)){
       r match{
         case reg: SSA.Region =>
           out.append(getControlStr(reg), " = ", fansi.Color.Yellow("region"), "(")
           out.append(
             regionMerges(reg).map(getControlStr).mkString(", ")
           )
-          out.append(")\n")
+          out.append(")")
         case SSA.True(inner) => Seq(inner)
         case SSA.False(inner) => Seq(inner)
         case r: SSA =>
@@ -200,13 +198,54 @@ object Renderer {
           )
       }
 
-
-
       out.append("\n")
     }
     out.append("\n")
 
     fansi.Str.join(out:_*)
+  }
+
+  /**
+    * We order vertices in two ways:
+    *
+    * 1) Between cycles, in topological data/control-flow order
+    * 2) Within cycles, in dataflow order *ignoring phis/regions* to break the cycle
+    *
+    * That gives us roughly a sequence of instructions that start from top to
+    * bottom, and within each cycle data/control always flows downwards except for
+    * jumps which may return to an earlier phi/region node.
+    */
+  def sortVerticesForPrinting(allVertices: Set[SSA.Token], downstreamEdges: Seq[(SSA.Token, SSA.Token)]) = {
+    val vertexToIndex = allVertices.zipWithIndex.toMap
+    val indexToVertex = vertexToIndex.map(_.swap)
+
+    def edgeListToIndexMap(edges: Seq[(SSA.Token, SSA.Token)]) = {
+      edges
+        .map { case (k, v) => (vertexToIndex(k), vertexToIndex(v)) }
+        .groupBy(_._1)
+        .map { case (k, vs) => (k, vs.map(_._2)) }
+    }
+
+    def mapToAdjacencyLists(indexMap: Map[Int, Seq[Int]]) = {
+      Range(0, allVertices.size).map(indexMap.getOrElse(_, Nil))
+    }
+
+    val brokenEdgeLists = edgeListToIndexMap(
+      downstreamEdges.filter(x => !x._2.isInstanceOf[SSA.Phi] && !x._2.isInstanceOf[SSA.Region])
+    )
+
+    val brokenOrderingList = Tarjans(mapToAdjacencyLists(brokenEdgeLists)).map { case Seq(x) => x }
+
+    val brokenOrdering = brokenOrderingList.zipWithIndex.toMap
+
+    val groupedEdgeLists = edgeListToIndexMap(downstreamEdges)
+
+    val groupedOrdering = Tarjans(mapToAdjacencyLists(groupedEdgeLists))
+
+    val orderingList = groupedOrdering.flatMap(_.sortBy(brokenOrdering)).map(indexToVertex)
+
+    val finalOrderingMap = orderingList.reverse.zipWithIndex.toMap
+    finalOrderingMap
   }
 
   def binOpString(op: SSA.BinOp.Code): String = {
