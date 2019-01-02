@@ -25,7 +25,16 @@ case class Program(allTerminals: Seq[SSA],
           case SSA.BinOp(a, b, opcode) => SSA.BinOp(rec(a), rec(b), opcode)
           case SSA.UnaOp(a, opcode) => SSA.UnaOp(rec(a), opcode)
           case SSA.UnaBranch(ctrl, a, opcode) => SSA.UnaBranch(rec2(ctrl), rec(a), opcode)
-          case SSA.BinBranch(ctrl, a, b, opcode) => SSA.BinBranch(rec2(ctrl), rec(a), rec(b), opcode)
+          case SSA.BinBranch(ctrl, a, b, opcode) =>
+            a match{
+              case p: SSA.Phi => pprint.log(p -> phiMerges(p))
+              case _ =>
+            }
+            b match{
+              case p: SSA.Phi => pprint.log(p -> phiMerges(p))
+              case _ =>
+            }
+            SSA.BinBranch(rec2(ctrl), rec(a), rec(b), opcode)
           case SSA.ReturnVal(ctrl, a) => SSA.ReturnVal(rec2(ctrl), rec(a))
           case SSA.Return(ctrl) => SSA.Return(rec2(ctrl))
           case SSA.AThrow(src) => SSA.AThrow(rec(src))

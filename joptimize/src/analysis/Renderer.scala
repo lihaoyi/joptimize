@@ -116,6 +116,7 @@ object Renderer {
       pprint.log(ssa)
       ssa match{
         case phi: SSA.Phi =>
+          pprint.log(phi -> phiMerges(phi))
           apply("phi", phiMerges(phi).map{case (ctrl, ssa) => infix(renderControl(ctrl), ":", treeify(ssa))}.toSeq:_*)
         case SSA.Arg(index, typeSize) => atom(fansi.Color.Cyan("arg" + index).toString)
         case SSA.BinOp(a, b, opcode) => infix(treeify(a), binOpString(opcode), treeify(b))

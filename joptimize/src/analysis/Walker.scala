@@ -131,17 +131,22 @@ class Walker(isInterface: JType.Cls => Boolean,
         regionMerges2.toMap
       )
 
-      println(Renderer.renderSSA(
-        program.transform(
-          onValue = {
-            case phi: SSA.Phi if phiMerges(phi).size == 1 => phiMerges(phi).head._2
-          },
-          onControl = {
-            case r: SSA.Region if program.regionMerges(r).size == 1 =>
-              program.regionMerges(r).head
-          }
-        )
-      ))
+      val program2 = program.transform(
+        onValue = {
+          case phi: SSA.Phi if phiMerges(phi).size == 1 => phiMerges(phi).head._2
+        },
+        onControl = {
+          case r: SSA.Region if program.regionMerges(r).size == 1 =>
+            program.regionMerges(r).head
+        }
+      )
+
+      val program3 = program2.transform(
+        onValue = {
+          case phi: SSA.Phi if program2.phiMerges(phi).count(_._2 != phi) == 1 => phiMerges(phi).find(_._2 != phi).get._2
+        }
+      )
+      println(Renderer.renderSSA(program3))
 
       ???
     })
