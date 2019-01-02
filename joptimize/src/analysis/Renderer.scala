@@ -112,10 +112,6 @@ object Renderer {
       atom(getControlStr(control).toString)
     }
 
-    def renderBranchPrefix(n: SSA) = {
-      getControlStr(SSA.True(n)) + ", " + getControlStr(SSA.False(n)) + " = if"
-    }
-
     def treeify0(ssa: SSA): Tree = {
       ssa match{
         case phi: SSA.Phi => apply("phi", phiMerges(phi).map{case (ctrl, ssa) => infix(renderControl(ctrl), ":", treeify(ssa))}.toSeq:_*)
@@ -124,14 +120,14 @@ object Renderer {
         case SSA.UnaOp(a, opcode) => apply(unaryOpString(opcode), treeify(a))
         case n @ SSA.UnaBranch(control, a, opcode) =>
           apply(
-            renderBranchPrefix(n),
+            "if",
             renderControl(control),
             treeify(a),
             atom(unaryBranchString(opcode))
           )
         case n @ SSA.BinBranch(control, a, b, opcode) =>
           apply(
-            renderBranchPrefix(n),
+            "if",
             renderControl(control),
             infix(treeify(a), binBranchString(opcode), treeify(b))
           )
@@ -183,24 +179,25 @@ object Renderer {
             regionMerges(reg).map(getControlStr).mkString(", ")
           )
           out.append(")")
-        case SSA.True(inner) => Seq(inner)
-        case SSA.False(inner) => Seq(inner)
+          out.append("\n")
+        case SSA.True(_) | SSA.False(_) => // do nothing
         case r: SSA =>
           val (lhs, sep) =
-            if (r.getSize == 0) ("", "")
-            else ("local" + savedLocals.get(r), " = ")
-          out.append(fansi.Color.Cyan(lhs))
+            if (r.isInstanceOf[SSA.BinBranch] || r.isInstanceOf[SSA.UnaBranch]){
+              (getControlStr(SSA.True(r)) ++ ", " ++ getControlStr(SSA.False(r)), " = ")
+            }
+            else if (r.getSize == 0) (fansi.Color.Cyan(""), "")
+            else (fansi.Color.Cyan("local" + savedLocals.get(r)), " = ")
+          out.append(lhs)
           out.append(sep)
 
           out.appendAll(
             new pprint.Renderer(80, fansi.Color.Yellow, fansi.Color.Green, 2)
               .rec(treeify0(r), lhs.length + sep.length, 1).iter
           )
+          out.append("\n")
       }
-
-      out.append("\n")
     }
-    out.append("\n")
 
     fansi.Str.join(out:_*)
   }
