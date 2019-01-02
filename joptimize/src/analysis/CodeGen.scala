@@ -2,6 +2,7 @@ package joptimize.analysis
 
 import java.util
 
+import joptimize.model.{Program, SSA}
 import org.objectweb.asm.Opcodes._
 import org.objectweb.asm.tree._
 
@@ -13,6 +14,65 @@ import scala.collection.mutable
   * back into executable bytecode, without all the unreachable, unused or
   * constant-folded instructions
   */
+
+object CodeGen{
+  def renderGraph(edges: Seq[(fansi.Str, fansi.Str)]): fansi.Str = {
+    val allStrings = edges.flatMap(x => Seq(x._1, x._2)).distinct
+    val stringToIndex = allStrings.zipWithIndex.toMap
+    val indexToString = stringToIndex.map(_.swap)
+    val edgeGroups = edges.groupBy(_._2).map{case (k, v) => (k, v.map(_._1))}
+    val sorted = Tarjans(allStrings.map(edgeGroups.getOrElse(_, Nil).map(stringToIndex))).flatten
+    val out = mutable.Buffer.empty[fansi.Str]
+
+    for(i <- sorted){
+      val dest = allStrings(i)
+      val srcs = edgeGroups.getOrElse(dest, Nil)
+      out.append(dest, " <- ")
+      out.append(srcs.flatMap(src => Seq(fansi.Str(", "), src)).drop(1):_*)
+      out.append("\n")
+    }
+    fansi.Str.join(out:_*)
+  }
+  def apply(program: Program, mapping: Map[SSA.Token, String]): InsnList = {
+    val controlFlowEdges = mutable.Buffer.empty[(SSA.Control, SSA.Control)]
+    val visited = mutable.Set.empty[SSA.Control]
+    def findCtrl(ssa: SSA) = ssa match{
+      case SSA.Return(ctrl) => ctrl
+      case SSA.ReturnVal(ctrl, _) => ctrl
+      case SSA.UnaBranch(ctrl, _, _) => ctrl
+      case SSA.BinBranch(ctrl, _, _, _) => ctrl
+    }
+    def rec(start: SSA.Control): Unit = if (!visited(start)){
+      visited.add(start)
+
+      val upstreams = start match{
+        case SSA.True(x) => Seq(findCtrl(x))
+        case SSA.False(x) => Seq(findCtrl(x))
+        case r: SSA.Region => program.regionMerges(r)
+      }
+
+      for(control <- upstreams){
+        rec(control)
+        controlFlowEdges.append(control -> start)
+      }
+    }
+
+    program.allTerminals.foreach(x => rec(findCtrl(x)))
+
+    println(
+      renderGraph(
+        controlFlowEdges.map{case (k, v) => (fansi.Color.Cyan(mapping(k)), fansi.Color.Cyan(mapping(v)))} ++
+        program.allTerminals.map{t =>
+          (
+            fansi.Color.Cyan(mapping(findCtrl(t))),
+            t match{ case _: SSA.Return | _: SSA.ReturnVal => fansi.Color.Yellow("return")}
+          )
+        }
+      )
+    )
+    ???
+  }
+}
 //object CodeGen {
 //
 //  def apply(allVisitedBlocks: Seq[Walker.BlockResult],

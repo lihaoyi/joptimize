@@ -17,6 +17,9 @@ sealed abstract class SSA(size: Int, upstream0: SSA.Token*) extends Value with S
 object SSA{
   trait Token
   trait Control extends Token
+  trait Controlled extends SSA{
+    def control: Control
+  }
   trait Codes{
     private[this] val lookup0 = mutable.Map.empty[Int, Code]
     class Code private[SSA] (val i: Int, val typeSize: Int = 0)(implicit name: sourcecode.Name){
@@ -28,8 +31,8 @@ object SSA{
   case class State(base: Option[(State, SSA)]) extends SSA(0)
   class Phi(typeSize: Int) extends SSA(typeSize)
   class Region() extends Control
-  case class True(node: SSA) extends Control
-  case class False(node: SSA) extends Control
+  case class True(node: SSA.Controlled) extends Control
+  case class False(node: SSA.Controlled) extends Control
   case class Arg(index: Int, tpe: IType) extends SSA(tpe.size)
   case class BinOp(a: SSA, b: SSA, opcode: BinOp.Code) extends SSA(opcode.typeSize, a, b)
   object BinOp extends Codes{
@@ -94,7 +97,7 @@ object SSA{
     val F2D = new Code(Opcodes.F2D, 2)
   }
 
-  case class UnaBranch(control: Control, a: SSA, opcode: UnaBranch.Code) extends SSA(0, control, a)
+  case class UnaBranch(control: Control, a: SSA, opcode: UnaBranch.Code) extends SSA(0, control, a) with Controlled
   object UnaBranch  extends Codes{
     val IFEQ = new Code(Opcodes.IFEQ)
     val IFNE = new Code(Opcodes.IFNE)
@@ -105,7 +108,7 @@ object SSA{
     val IFNULL = new Code(Opcodes.IFNULL)
     val IFNONNULL = new Code(Opcodes.IFNONNULL)
   }
-  case class BinBranch(control: Control, a: SSA, b: SSA, opcode: BinBranch.Code) extends SSA(0, control, a, b)
+  case class BinBranch(control: Control, a: SSA, b: SSA, opcode: BinBranch.Code) extends SSA(0, control, a, b) with Controlled
 
   object BinBranch  extends Codes{
     val IF_ICMPEQ = new Code(Opcodes.IF_ICMPEQ)
@@ -117,8 +120,8 @@ object SSA{
     val IF_ACMPEQ = new Code(Opcodes.IF_ACMPEQ)
     val IF_ACMPNE = new Code(Opcodes.IF_ACMPNE)
   }
-  case class ReturnVal(control: Control, a: SSA) extends SSA(0, control, a)
-  case class Return(control: Control) extends SSA(0, control)
+  case class ReturnVal(control: Control, a: SSA) extends SSA(0, control, a) with Controlled
+  case class Return(control: Control) extends SSA(0, control) with Controlled
   case class AThrow(src: SSA) extends SSA(0, src)
   case class TableSwitch(src: SSA, min: Int, max: Int) extends SSA(0, src)
   case class LookupSwitch(src: SSA, keys: Seq[Int]) extends SSA(0, src)

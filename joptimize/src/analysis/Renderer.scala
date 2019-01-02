@@ -48,7 +48,7 @@ object Renderer {
     )
   }
 
-  def renderSSA(program: Program): fansi.Str = {
+  def renderSSA(program: Program): (fansi.Str, Map[SSA.Token, String]) = {
 
     val allTerminals = program.allTerminals
     val regionMerges = program.regionMerges
@@ -94,9 +94,9 @@ object Renderer {
 
     val renderRoots = allVertices.filter(i => saveable.getOrElse(i, false))
 
-    val savedLocals = new util.IdentityHashMap[SSA.Token, Int]()
+    val savedLocals = new util.IdentityHashMap[SSA, Int]()
 
-    for((r, i) <- renderRoots.zipWithIndex) savedLocals.put(r, i)
+    for((r: SSA, i) <- renderRoots.zipWithIndex) savedLocals.put(r, i)
 
     val savedControls = mutable.LinkedHashMap.empty[SSA.Control, Int]
     def getControlId(c: SSA.Control) = savedControls.getOrElseUpdate(c, savedControls.size)
@@ -183,11 +183,15 @@ object Renderer {
         case SSA.True(_) | SSA.False(_) => // do nothing
         case r: SSA =>
           val (lhs, sep) =
-            if (r.isInstanceOf[SSA.BinBranch] || r.isInstanceOf[SSA.UnaBranch]){
-              (getControlStr(SSA.True(r)) ++ ", " ++ getControlStr(SSA.False(r)), " = ")
+            r match{
+              case r: SSA.BinBranch =>
+                (getControlStr(SSA.True(r)) ++ ", " ++ getControlStr(SSA.False(r)), " = ")
+              case r: SSA.UnaBranch =>
+                (getControlStr(SSA.True(r)) ++ ", " ++ getControlStr(SSA.False(r)), " = ")
+              case _ =>
+                if (r.getSize == 0) (fansi.Color.Cyan(""), "")
+                else (fansi.Color.Cyan("local" + savedLocals.get(r)), " = ")
             }
-            else if (r.getSize == 0) (fansi.Color.Cyan(""), "")
-            else (fansi.Color.Cyan("local" + savedLocals.get(r)), " = ")
           out.append(lhs)
           out.append(sep)
 
@@ -199,7 +203,11 @@ object Renderer {
       }
     }
 
-    fansi.Str.join(out:_*)
+    import collection.JavaConverters._
+    pprint.log(savedLocals.asScala.keys)
+    pprint.log(savedControls.keys)
+    val mapping = (savedLocals.asScala.mapValues("local" + _) ++ savedControls.mapValues("ctrl" + _)).toMap
+    (fansi.Str.join(out:_*), mapping)
   }
 
   /**

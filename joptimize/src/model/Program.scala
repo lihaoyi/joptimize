@@ -3,6 +3,14 @@ package joptimize.model
 import java.util
 
 
+/**
+  * Represents the combined control/data-flow graph of a SSA program.
+  *
+  * Note that the [[SSA]] data structure is acyclic; thus in order to model
+  * cycles in the graph, we maintain separate lookaside tables [[phiMerges]]
+  * and [[regionMerges]] to handle the possibly backwards edges caused by jumps
+  * and merges.
+  */
 case class Program(allTerminals: Seq[SSA],
                    phiMerges:  Map[SSA.Phi, Set[(SSA.Control, SSA)]],
                    regionMerges: Map[SSA.Region, Set[SSA.Control]]){
@@ -65,8 +73,8 @@ case class Program(allTerminals: Seq[SSA],
     def recControl(x: SSA.Control): SSA.Control = {
       val res = x match{
         case r: SSA.Region => r
-        case SSA.True(inner) => SSA.True(recSSA(inner))
-        case SSA.False(inner) => SSA.False(recSSA(inner))
+        case SSA.True(inner) => SSA.True(recSSA(inner).asInstanceOf[SSA.Controlled])
+        case SSA.False(inner) => SSA.False(recSSA(inner).asInstanceOf[SSA.Controlled])
       }
 
       val res2 = if (onControl.isDefinedAt(res)) recControl(onControl(res)) else res
