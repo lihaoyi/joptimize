@@ -182,10 +182,11 @@ object CodeGen{
       lsg
     )
     lsg.calculateNestingLevel
+    val loopIndices = lsg.loops.zipWithIndex.toMap
     def rec(l: SimpleLoop, depth: Int): Unit = {
       if (l.header != -1) println("  " * depth + mapping(indicesToNode(l.header)))
       println("  " * depth + l.basicBlocks.map(b => mapping(indicesToNode(b))))
-      l.dump(depth)
+      l.dump(loopIndices(l), depth)
       l.children.foreach(rec(_, depth + 1))
     }
 

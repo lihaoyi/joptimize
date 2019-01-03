@@ -1,5 +1,7 @@
 package joptimize.analysis
 
+import scala.collection.mutable
+
 //
 // class SimpleLoop
 //
@@ -11,29 +13,25 @@ package joptimize.analysis
 // it can be an irreducible loop, have control flow, be
 // a candidate for transformations, and what not.
 //
-class SimpleLoop(val header: Int = -1){
+class SimpleLoop(val header: Int = -1, isReducible: Boolean = true){
   var basicBlocks  = Set[Int]()
   if (header != -1) basicBlocks += header
   var children     = Set[SimpleLoop]()
   var parent       : SimpleLoop = null
 
   var isRoot       : Boolean = false
-  var isReducible  : Boolean = true
-  var counter      : Int = 0
   var nestingLevel : Int = 0
-  var depthLevel   : Int = 0
 
   def addNode(bb : Int) = basicBlocks += bb
   def addChildLoop(loop : SimpleLoop) = children += loop
 
-  def dump(indent : Int) {
+  def dump(id: Int, indent : Int) {
     for (i <- 0 until indent)
       System.out.format("  ")
 
-    System.out.format("loop-%d nest: %d depth %d %s\n",
-      counter.asInstanceOf[AnyRef],
+    System.out.format("loop-%d nest: %d %s\n",
+      id.asInstanceOf[AnyRef],
       nestingLevel.asInstanceOf[AnyRef],
-      depthLevel.asInstanceOf[AnyRef],
       if (isReducible) ""
       else "(Irreducible) " )
 
@@ -75,16 +73,6 @@ class LSG {
 
   def addLoop(loop : SimpleLoop) = loops = loop :: loops
 
-  def dump = dumpRec(root,0)
-
-  // Interesting - needs return type
-  def dumpRec(loop : SimpleLoop, indent : Int) : Unit = {
-    loop.dump(indent)
-
-    for (liter <- loop.children)
-      dumpRec(liter, indent + 1)
-  }
-
   def calculateNestingLevel = {
     for (liter <- loops) {
       if (!liter.isRoot)
@@ -98,7 +86,6 @@ class LSG {
   def max(a : Int, b : Int) = if (a > b) a else b
 
   def calculateNestingLevelRec(loop : SimpleLoop, depth : Int) {
-    loop.depthLevel_=(depth)
     for (liter <- loop.children) {
       calculateNestingLevelRec(liter, depth+1)
 
@@ -116,12 +103,10 @@ class LSG {
 
 object HavlakLoopFinder {
   object BasicBlockClass extends Enumeration {
-    val BB_TOP,      // uninitialized
-    BB_NONHEADER,    // a regular BB
-    BB_REDUCIBLE,    // reducible loop
-    BB_SELF,         // single BB loop
-    BB_IRREDUCIBLE,  // irreducible loop
-    BB_LAST = Value  // Sentinel
+    val BB_NONHEADER,    // a regular BB
+        BB_REDUCIBLE,    // reducible loop
+        BB_SELF,         // single BB loop
+        BB_IRREDUCIBLE = Value  // Sentinel
   }
 
   /**
@@ -135,16 +120,12 @@ object HavlakLoopFinder {
 
     var parent    : UnionFindNode = null
     var bb        : Int    = -1
-    var loop      : SimpleLoop    = null
-    var dfsNumber : Int           = 0
 
     // Initialize this node.
     //
-    def initNode(bb : Int, dfsNumber : Int) = {
+    def initNode(bb : Int) = {
       this.parent     = this
       this.bb         = bb
-      this.dfsNumber  = dfsNumber
-      this.loop       = null
     }
 
     // Union/Find Algorithm - The find routine.
@@ -175,9 +156,7 @@ object HavlakLoopFinder {
     // Trivial. Assigning parent pointer is enough,
     // we rely on path compression.
     //
-    def union(basicBlock : UnionFindNode) = {
-      parent_=(basicBlock)
-    }
+    def union(basicBlock : UnionFindNode) = parent = basicBlock
   }
 
   //
@@ -213,15 +192,14 @@ object HavlakLoopFinder {
           last: Array[Int],
           current: Int,
           outEdges: Map[Int, Seq[Int]]) : Int = {
-    nodes(current).initNode(currentNode, current)
-    number +=(currentNode -> current)
+    nodes(current).initNode(currentNode)
+    number(currentNode) = current
 
     var lastid = current
-    for {
-      target <- outEdges.getOrElse(currentNode, Nil)
-      if number(target) == UNVISITED
-    } {
-      lastid = DFS(target, nodes, number, last, lastid + 1, outEdges)
+    for (target <- outEdges.getOrElse(currentNode, Nil)){
+      if (!number.contains(target)){
+        lastid = DFS(target, nodes, number, last, lastid + 1, outEdges)
+      }
     }
     last(number(currentNode)) = lastid
     lastid
@@ -265,9 +243,6 @@ object HavlakLoopFinder {
     //   - depth-first traversal and numbering.
     //   - unreached BB's are marked as dead.
     //
-    for (value <- allNodes) {
-      number(value) = UNVISITED
-    }
 
     DFS(startNode, nodes, number, last, 0, outEdges)
 
@@ -289,13 +264,9 @@ object HavlakLoopFinder {
 
       val in = inEdges.getOrElse(nodeW, Nil)
       for (nodeV <- in) {
-        val v = number(nodeV)
-        if (v != UNVISITED) {
-          if (isAncestor(w, v, last)) {
-            backPreds(w) = v :: backPreds(w)
-          } else {
-            nonBackPreds(w) += v
-          }
+        for(v <- number.get(nodeV)){
+          if (isAncestor(w, v, last)) backPreds(w) = v :: backPreds(w)
+          else nonBackPreds(w) += v
         }
       }
     }
@@ -315,25 +286,23 @@ object HavlakLoopFinder {
     // we ensure that inner loop headers will be processed before the
     // headers for surrounding loops.
     //
+    val loopMap = mutable.Map.empty[Int, SimpleLoop]
     for (w <- Range.inclusive(size - 1, 0, -1)) {
       // this is 'P' in Havlak's paper
-      var nodePool = List[UnionFindNode]()
+      var nodePool = List.empty[UnionFindNode]
 
       val nodeW = nodes(w).bb
 
       // Step d:
       for (v <- backPreds(w)) {
-        if (v != w) {
-          nodePool = nodes(v).findSet :: nodePool
-        } else {
-          types(w) = BasicBlockClass.BB_SELF
-        }
+        if (v != w) nodePool = nodes(v).findSet :: nodePool
+        else types(w) = BasicBlockClass.BB_SELF
       }
 
       // Copy nodePool to workList.
       //
-      var workList = List[UnionFindNode]()
-      workList = nodePool filter (p => true)
+      var workList = List.empty[UnionFindNode]
+      workList = nodePool
 
       if (nodePool.nonEmpty) {
         types(w) = BasicBlockClass.BB_REDUCIBLE
@@ -354,15 +323,15 @@ object HavlakLoopFinder {
         // into this loop that avoids w.
         //
 
-        for (iter <- nonBackPreds(x.dfsNumber)) {
+        for (iter <- nonBackPreds(number(x.bb))) {
           val y = nodes(iter)
           val ydash = y.findSet
 
-          if (!isAncestor(w, ydash.dfsNumber, last)) {
+          if (!isAncestor(w, number(ydash.bb), last)) {
             types(w) = BasicBlockClass.BB_IRREDUCIBLE
-            nonBackPreds(w) += ydash.dfsNumber
+            nonBackPreds(w) += number(ydash.bb)
           } else {
-            if (ydash.dfsNumber != w) {
+            if (number(ydash.bb) != w) {
               if (!nodePool.contains(ydash)) {
                 workList = ydash :: workList
                 nodePool = ydash :: nodePool
@@ -372,13 +341,12 @@ object HavlakLoopFinder {
         }
       }
 
+
       // Collapse/Unionize nodes in a SCC to a single node
       // For every SCC found, create a loop descriptor and link it in.
       //
       if (nodePool.nonEmpty || types(w) == BasicBlockClass.BB_SELF) {
-        val loop = new SimpleLoop(nodeW)
-
-        loop.isReducible = types(w) != BasicBlockClass.BB_IRREDUCIBLE
+        val loop = new SimpleLoop(nodeW, types(w) != BasicBlockClass.BB_IRREDUCIBLE)
 
         // At this point, one can set attributes to the loop, such as:
         //
@@ -392,19 +360,16 @@ object HavlakLoopFinder {
         // whether this loop is reducible:
         //    types(w) != BB_IRREDUCIBLE
         //
-        nodes(w).loop = loop
+        loopMap(nodes(w).bb) = loop
 
         for (node <- nodePool) {
           // Add nodes to loop descriptor.
-          header(node.dfsNumber) = w
+          header(number(node.bb)) = w
           node.union(nodes(w))
 
           // Nested loops are not added, but linked together.
-          if (node.loop != null) {
-            node.loop.setParent(loop)
-          } else {
-            loop.addNode(node.bb)
-          }
+          if (loopMap.contains(node.bb)) loopMap(node.bb).setParent(loop)
+          else loop.addNode(node.bb)
         }
 
         lsg.addLoop(loop)
