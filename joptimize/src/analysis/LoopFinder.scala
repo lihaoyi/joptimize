@@ -13,36 +13,24 @@ import scala.collection.mutable
 // it can be an irreducible loop, have control flow, be
 // a candidate for transformations, and what not.
 //
-class SimpleLoop(val header: Int = -1, isReducible: Boolean = true){
-  var basicBlocks  = Set[Int]()
-  if (header != -1) basicBlocks += header
+class SimpleLoop(val header: Int, val isReducible: Boolean = true){
+  var basicBlocks  = Set[Int](header)
+
   var children     = Set[SimpleLoop]()
-  var parent       : SimpleLoop = null
+  var parent      : SimpleLoop = null
 
-  var isRoot       : Boolean = false
-  var nestingLevel : Int = 0
+  var isRoot      : Boolean = false
+  var nestingLevel: Int = 0
 
-  def addNode(bb : Int) = basicBlocks += bb
-  def addChildLoop(loop : SimpleLoop) = children += loop
+  def addNode(bb: Int) = basicBlocks += bb
+  def addChildLoop(loop: SimpleLoop) = children += loop
 
-  def dump(id: Int, indent : Int) {
-    for (i <- 0 until indent)
-      System.out.format("  ")
-
-    System.out.format("loop-%d nest: %d %s\n",
-      id.asInstanceOf[AnyRef],
-      nestingLevel.asInstanceOf[AnyRef],
-      if (isReducible) ""
-      else "(Irreducible) " )
-
-  }
-
-  def setParent(parent : SimpleLoop) = {
+  def setParent(parent: SimpleLoop) = {
     this.parent = parent
     this.parent.addChildLoop(this)
   }
 
-  def setNestingLevel(level : Int) = {
+  def setNestingLevel(level: Int) = {
     nestingLevel = level
     if (level == 0) isRoot_=(true)
   }
@@ -64,14 +52,14 @@ class SimpleLoop(val header: Int = -1, isReducible: Boolean = true){
 //   loop-3    1                1
 //     loop-2  0                2
 //
-class LSG {
+class LSG(rootBlock: Int) {
   var loops = List[SimpleLoop]()
-  var root  = new SimpleLoop()
+  var root  = new SimpleLoop(rootBlock)
   root.setNestingLevel(0)
   addLoop(root)
 
 
-  def addLoop(loop : SimpleLoop) = loops = loop :: loops
+  def addLoop(loop: SimpleLoop) = loops = loop :: loops
 
   def calculateNestingLevel = {
     for (liter <- loops) {
@@ -83,18 +71,15 @@ class LSG {
     calculateNestingLevelRec(root, 0)
   }
 
-  def max(a : Int, b : Int) = if (a > b) a else b
-
-  def calculateNestingLevelRec(loop : SimpleLoop, depth : Int) {
+  def calculateNestingLevelRec(loop: SimpleLoop, depth: Int) {
     for (liter <- loop.children) {
       calculateNestingLevelRec(liter, depth+1)
 
-      loop.setNestingLevel(max(loop.nestingLevel,
-        1+liter.nestingLevel))
+      loop.setNestingLevel(math.max(loop.nestingLevel, 1+liter.nestingLevel))
     }
   }
 
-  def getNumLoops : Int = loops.size
+  def getNumLoops: Int = loops.size
 }
 
 //======================================================
@@ -118,12 +103,12 @@ object HavlakLoopFinder {
     */
   class UnionFindNode {
 
-    var parent    : UnionFindNode = null
-    var bb        : Int    = -1
+    var parent   : UnionFindNode = null
+    var bb       : Int    = -1
 
     // Initialize this node.
     //
-    def initNode(bb : Int) = {
+    def initNode(bb: Int) = {
       this.parent     = this
       this.bb         = bb
     }
@@ -134,7 +119,7 @@ object HavlakLoopFinder {
     // visited and collapsed once, however, deep nests would still
     // result in significant traversals).
     //
-    def findSet : UnionFindNode = {
+    def findSet: UnionFindNode = {
       var nodeList = List[UnionFindNode]()
 
       var node = this
@@ -156,14 +141,14 @@ object HavlakLoopFinder {
     // Trivial. Assigning parent pointer is enough,
     // we rely on path compression.
     //
-    def union(basicBlock : UnionFindNode) = parent = basicBlock
+    def union(basicBlock: UnionFindNode) = parent = basicBlock
   }
 
   //
   // Constants
   //
   // Marker for uninitialized nodes.
-  val UNVISITED : Int = -1
+  val UNVISITED: Int = -1
 
 
   //
@@ -176,9 +161,7 @@ object HavlakLoopFinder {
   // for depth-first spanning trees. This is why DFS is the first
   // thing we run below.
   //
-  def isAncestor(w : Int, v : Int, last : Array[Int]) : Boolean = {
-    (w <= v) && (v <= last(w))
-  }
+  def isAncestor(w: Int, v: Int, last: Array[Int])= (w <= v) && (v <= last(w))
 
   //
   // DFS - Depth-First-Search
@@ -191,7 +174,7 @@ object HavlakLoopFinder {
           number: scala.collection.mutable.Map[Int, Int],
           last: Array[Int],
           current: Int,
-          outEdges: Map[Int, Seq[Int]]) : Int = {
+          outEdges: Map[Int, Seq[Int]]): Int = {
     nodes(current).initNode(currentNode)
     number(currentNode) = current
 
@@ -213,8 +196,8 @@ object HavlakLoopFinder {
   // been chosen to be identical to the nomenclature in Havlak's
   // paper (which, in turn, is similar to the one used by Tarjan).
   //
-  def findLoops(edgeList: Seq[(Int, Int)],
-                lsg : LSG): Int = {
+  def findLoops(edgeList: Seq[(Int, Int)]): SimpleLoop = {
+
     val allNodes = edgeList.flatMap{case (k, v) => Seq(k, v)}.distinct
     val size = allNodes.size
 
@@ -238,6 +221,7 @@ object HavlakLoopFinder {
     val inEdges = edgeList.groupBy(_._2).map{case (k, v) => (k, v.map(_._1))}
 
     val startNode = allNodes.find(!inEdges.contains(_)).get
+    val lsg = new LSG(startNode)
     // Step a:
     //   - initialize all nodes as unvisited.
     //   - depth-first traversal and numbering.
@@ -376,6 +360,7 @@ object HavlakLoopFinder {
       }  // nodePool.size
     }  // Step c
 
-    lsg.getNumLoops
+    lsg.calculateNestingLevel
+    lsg.root
   }  // findLoops
 }
