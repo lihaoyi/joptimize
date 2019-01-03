@@ -36,48 +36,6 @@ class SimpleLoop(val header: Int, val isReducible: Boolean = true){
   }
 }
 
-
-//
-// LoopStructureGraph
-//
-// Maintain loop structure for a given CFG.
-//
-// Two values are maintained for this loop graph, depth, and nesting level.
-// For example:
-//
-// loop        nesting level    depth
-//----------------------------------------
-// loop-0      2                0
-//   loop-1    1                1
-//   loop-3    1                1
-//     loop-2  0                2
-//
-class LSG(rootBlock: Int) {
-  var loops = List[SimpleLoop]()
-  var root  = new SimpleLoop(rootBlock)
-  root.setNestingLevel(0)
-  addLoop(root)
-
-
-  def addLoop(loop: SimpleLoop) = loops = loop :: loops
-
-  def calculateNestingLevel = {
-    for (liter <- loops) {
-      if (!liter.isRoot && liter.parent == null) liter.setParent(root)
-    }
-
-    calculateNestingLevelRec(root, 0)
-  }
-
-  def calculateNestingLevelRec(loop: SimpleLoop, depth: Int) {
-    for (liter <- loop.children) {
-      calculateNestingLevelRec(liter, depth+1)
-
-      loop.setNestingLevel(math.max(loop.nestingLevel, 1+liter.nestingLevel))
-    }
-  }
-}
-
 //======================================================
 // Main Algorithm
 //======================================================
@@ -217,7 +175,7 @@ object HavlakLoopFinder {
     val inEdges = edgeList.groupBy(_._2).map{case (k, v) => (k, v.map(_._1))}
 
     val startNode = allNodes.find(!inEdges.contains(_)).get
-    val lsg = new LSG(startNode)
+
     // Step a:
     //   - initialize all nodes as unvisited.
     //   - depth-first traversal and numbering.
@@ -351,12 +309,27 @@ object HavlakLoopFinder {
           if (loopMap.contains(node.bb)) loopMap(node.bb).setParent(loop)
           else loop.addNode(node.bb)
         }
-
-        lsg.addLoop(loop)
       }  // nodePool.size
     }  // Step c
 
-    lsg.calculateNestingLevel
-    lsg.root
+    val root  = new SimpleLoop(startNode)
+    root.setNestingLevel(0)
+    val loops = root :: loopMap.values.toList
+
+    def calculateNestingLevelRec(loop: SimpleLoop, depth: Int) {
+      for (liter <- loop.children) {
+        calculateNestingLevelRec(liter, depth+1)
+
+        loop.setNestingLevel(math.max(loop.nestingLevel, 1 + liter.nestingLevel))
+      }
+    }
+
+    for (liter <- loops) {
+      if (!liter.isRoot && liter.parent == null) liter.setParent(root)
+    }
+
+    calculateNestingLevelRec(root, 0)
+
+    root
   }  // findLoops
 }
