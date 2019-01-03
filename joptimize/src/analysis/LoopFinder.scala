@@ -13,14 +13,13 @@ import scala.collection.mutable
 // it can be an irreducible loop, have control flow, be
 // a candidate for transformations, and what not.
 //
-class SimpleLoop(val header: Int, val isReducible: Boolean = true){
+class SimpleLoop(val header: Int,
+                 val isReducible: Boolean,
+                 val isRoot: Boolean){
   var basicBlocks  = Set[Int](header)
 
   var children     = Set[SimpleLoop]()
   var parent      : SimpleLoop = null
-
-  var isRoot      : Boolean = false
-  var nestingLevel: Int = 0
 
   def addNode(bb: Int) = basicBlocks += bb
   def addChildLoop(loop: SimpleLoop) = children += loop
@@ -28,11 +27,6 @@ class SimpleLoop(val header: Int, val isReducible: Boolean = true){
   def setParent(parent: SimpleLoop) = {
     this.parent = parent
     this.parent.addChildLoop(this)
-  }
-
-  def setNestingLevel(level: Int) = {
-    nestingLevel = level
-    if (level == 0) isRoot_=(true)
   }
 }
 
@@ -284,7 +278,7 @@ object HavlakLoopFinder {
       // For every SCC found, create a loop descriptor and link it in.
       //
       if (nodePool.nonEmpty || types(w) == BasicBlockClass.BB_SELF) {
-        val loop = new SimpleLoop(nodeW, types(w) != BasicBlockClass.BB_IRREDUCIBLE)
+        val loop = new SimpleLoop(nodeW, types(w) != BasicBlockClass.BB_IRREDUCIBLE, false)
 
         // At this point, one can set attributes to the loop, such as:
         //
@@ -312,23 +306,14 @@ object HavlakLoopFinder {
       }  // nodePool.size
     }  // Step c
 
-    val root  = new SimpleLoop(startNode)
-    root.setNestingLevel(0)
+    val root  = new SimpleLoop(startNode, true, true)
     val loops = root :: loopMap.values.toList
 
-    def calculateNestingLevelRec(loop: SimpleLoop, depth: Int) {
-      for (liter <- loop.children) {
-        calculateNestingLevelRec(liter, depth+1)
-
-        loop.setNestingLevel(math.max(loop.nestingLevel, 1 + liter.nestingLevel))
-      }
-    }
 
     for (liter <- loops) {
       if (!liter.isRoot && liter.parent == null) liter.setParent(root)
     }
 
-    calculateNestingLevelRec(root, 0)
 
     root
   }  // findLoops
