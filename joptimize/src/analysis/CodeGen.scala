@@ -165,13 +165,31 @@ object CodeGen{
     val (loopSets, tpe, nodes, header) = analyzeLoops(
       graph,
       program.regionMerges.find(_._2.isEmpty).get._1,
-      mapping)
+      mapping
+    )
 
     val prettyLoops = loopSets.map(_.map(x =>
       (mapping(nodes(x)), tpe(x), header(x).map(nodes).map(mapping))
     ))
+
     pprint.log(prettyLoops)
 
+    val lsg = new LSG
+    val nodeToIndices = mapping.keys.zipWithIndex.toMap
+    val indicesToNode = nodeToIndices.map(_.swap)
+    HavlakLoopFinder.findLoops(
+      graph.map{case (k, v) => (nodeToIndices(k), nodeToIndices(v))},
+      lsg
+    )
+    lsg.calculateNestingLevel
+    def rec(l: SimpleLoop, depth: Int): Unit = {
+      if (l.header != -1) println("  " * depth + mapping(indicesToNode(l.header)))
+      println("  " * depth + l.basicBlocks.map(b => mapping(indicesToNode(b))))
+      l.dump(depth)
+      l.children.foreach(rec(_, depth + 1))
+    }
+
+    rec(lsg.root, 0)
     ???
   }
 }
