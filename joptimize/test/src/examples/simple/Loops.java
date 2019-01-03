@@ -15,6 +15,17 @@ public class Loops {
         return c;
     }
 
+    @joptimize.Test(inputs = {0, 1, 2, 3, 4, 5, 6, 7, 9})
+    public static int liftableFor(int a) {
+        int c = 0;
+
+        for (int i = 0; i < a; i++) {
+            int delta = a * 2;
+            c = c + delta;
+        }
+        return c;
+    }
+
     public static int nullWhile(int a) {
         int c = 1;
         while (c > a) c++;

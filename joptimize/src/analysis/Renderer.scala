@@ -71,6 +71,7 @@ object Renderer {
     val saveable = downstreamEdges
       .groupBy(_._1)
       .map{
+        case (k: SSA.Arg, _) => (k, false)
         case (k: SSA.PushI, _) => (k, false)
         case (k: SSA.PushJ, _) => (k, false)
         case (k: SSA.PushF, _) => (k, false)
