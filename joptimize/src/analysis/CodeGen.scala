@@ -77,16 +77,14 @@ object CodeGen{
       )
     )
 
-    val nodeToIndices = mapping.keys.zipWithIndex.toMap
-    val indicesToNode = nodeToIndices.map(_.swap)
-    val rootLoop = LoopFinder.analyzeLoops(graph.map{case (k, v) => (nodeToIndices(k), nodeToIndices(v))})
+    val rootLoop = LoopFinder.analyzeLoops(graph)
 
-    def rec(l: LoopFinder.SimpleLoop, depth: Int, label0: List[Int]): Unit = {
+    def rec(l: LoopFinder.SimpleLoop[SSA.Token], depth: Int, label0: List[Int]): Unit = {
       val indent = "    " * depth
       val id = label0.reverseIterator.map("-" + _).mkString
       val reducible = if (l.isReducible) "" else " (Irreducible)"
-      val header = mapping(indicesToNode(l.header))
-      val blockStr = l.basicBlocks.filter(_ != l.header).map(x => mapping(indicesToNode(x))).mkString("[", ", ", "]")
+      val header = mapping(l.header)
+      val blockStr = l.basicBlocks.filter(_ != l.header).map(x => mapping(x)).mkString("[", ", ", "]")
       println(s"${indent}loop$id$reducible, header: $header, blocks: $blockStr")
 
       for((c, i) <- l.children.zipWithIndex)rec(c, depth + 1, i :: label0)

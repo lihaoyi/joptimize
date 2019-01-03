@@ -4,22 +4,22 @@ import scala.collection.mutable
 
 
 object LoopFinder {
-  trait SimpleLoop{
-    def header: Int
+  trait SimpleLoop[T]{
+    def header: T
     def isReducible: Boolean
-    def basicBlocks: Set[Int]
-    def children: Set[SimpleLoop]
+    def basicBlocks: Set[T]
+    def children: Set[SimpleLoop[T]]
   }
-  private[this] class MutableSimpleLoop(val header: Int,
-                                        val isReducible: Boolean,
-                                        val isRoot: Boolean) extends SimpleLoop{
-    var basicBlocks  = Set[Int](header)
+  private[this] class MutableSimpleLoop[T](val header: T,
+                                           val isReducible: Boolean,
+                                           val isRoot: Boolean) extends SimpleLoop[T]{
+    var basicBlocks  = Set[T](header)
 
-    var children     = Set[SimpleLoop]()
+    var children     = Set[SimpleLoop[T]]()
 
-    var parent: MutableSimpleLoop = null
+    var parent: MutableSimpleLoop[T] = null
 
-    def setParent(parent: MutableSimpleLoop) = {
+    def setParent(parent: MutableSimpleLoop[T]) = {
       this.parent = parent
       this.parent.children += this
     }
@@ -39,14 +39,14 @@ object LoopFinder {
     * complete loops into a single node. These nodes and the
     * corresponding functionality are implemented with this class
     */
-  class UnionFindNode {
+  class UnionFindNode[T] {
 
-    var parent   : UnionFindNode = null
-    var bb       : Int    = -1
+    var parent   : UnionFindNode[T] = null
+    var bb       : T    = null.asInstanceOf[T]
 
     // Initialize this node.
     //
-    def initNode(bb: Int) = {
+    def initNode(bb: T) = {
       this.parent     = this
       this.bb         = bb
     }
@@ -57,8 +57,8 @@ object LoopFinder {
     // visited and collapsed once, however, deep nests would still
     // result in significant traversals).
     //
-    def findSet: UnionFindNode = {
-      var nodeList = List[UnionFindNode]()
+    def findSet: UnionFindNode[T] = {
+      var nodeList = List[UnionFindNode[T]]()
 
       var node = this
       while (node != node.parent) {
@@ -79,7 +79,7 @@ object LoopFinder {
     // Trivial. Assigning parent pointer is enough,
     // we rely on path compression.
     //
-    def union(basicBlock: UnionFindNode) = parent = basicBlock
+    def union(basicBlock: UnionFindNode[T]) = parent = basicBlock
   }
 
   //
@@ -107,11 +107,11 @@ object LoopFinder {
   // DESCRIPTION:
   // Simple depth first traversal along out edges with node numbering.
   //
-  def DFS(currentNode: Int,
-          number: scala.collection.mutable.Map[Int, Int],
-          last: Array[Int],
-          current: Int,
-          outEdges: Map[Int, Seq[Int]]): Int = {
+  def DFS[T](currentNode: T,
+             number: scala.collection.mutable.Map[T, Int],
+             last: Array[Int],
+             current: Int,
+             outEdges: Map[T, Seq[T]]): Int = {
 
     number(currentNode) = current
 
@@ -130,7 +130,7 @@ object LoopFinder {
   // been chosen to be identical to the nomenclature in Havlak's
   // paper (which, in turn, is similar to the one used by Tarjan).
   //
-  def analyzeLoops(edgeList: Seq[(Int, Int)]): SimpleLoop = {
+  def analyzeLoops[T](edgeList: Seq[(T, T)]): SimpleLoop[T] = {
 
     val allNodes = edgeList.flatMap{case (k, v) => Seq(k, v)}.distinct
     val size = allNodes.size
@@ -138,12 +138,12 @@ object LoopFinder {
     val nonBackPreds    = new Array[Set[Int]](size)
     val backPreds       = new Array[List[Int]](size)
 
-    val number          = scala.collection.mutable.Map[Int, Int]()
+    val number          = scala.collection.mutable.Map[T, Int]()
 
     val header          = new Array[Int](size)
     val types           = new Array[BasicBlockClass.Value](size)
     val last            = new Array[Int](size)
-    val nodes           = new Array[UnionFindNode](size)
+    val nodes           = new Array[UnionFindNode[T]](size)
 
     for (i <- 0 until size) {
       nonBackPreds(i) = Set[Int]()
@@ -206,10 +206,10 @@ object LoopFinder {
     // we ensure that inner loop headers will be processed before the
     // headers for surrounding loops.
     //
-    val loopMap = mutable.Map.empty[Int, MutableSimpleLoop]
+    val loopMap = mutable.Map.empty[T, MutableSimpleLoop[T]]
     for (w <- Range.inclusive(size - 1, 0, -1)) {
       // this is 'P' in Havlak's paper
-      var nodePool = List.empty[UnionFindNode]
+      var nodePool = List.empty[UnionFindNode[T]]
 
       val nodeW = nodes(w).bb
 
@@ -221,7 +221,7 @@ object LoopFinder {
 
       // Copy nodePool to workList.
       //
-      var workList = List.empty[UnionFindNode]
+      var workList = List.empty[UnionFindNode[T]]
       workList = nodePool
 
       if (nodePool.nonEmpty) {
