@@ -15,6 +15,35 @@ public class Loops {
         return c;
     }
 
+
+    @joptimize.Test(inputs = {0, 1, 2, 3, 4, 5, 6, 7, 9})
+    public static int nestedFor(int a) {
+        int c = 1;
+        for (int i = 0; i < a; i++) {
+            c += 1;
+            for (int j = 0; j < i; j++) {
+                c += j;
+            }
+        }
+        return c;
+    }
+
+
+    @joptimize.Test(inputs = {0, 1, 2, 3, 4, 5, 6, 7, 9})
+    public static int nestedFor2(int a) {
+        int c = 1;
+        for (int i = 0; i < a; i++) {
+            c += 1;
+            for (int j = 0; j < i; j++) {
+                c += j;
+            }
+            for (int j = 0; j < i; j++) {
+                c *= j;
+            }
+        }
+        return c;
+    }
+
     @joptimize.Test(inputs = {0, 1, 2, 3, 4, 5, 6, 7, 9})
     public static int liftableFor(int a) {
         int c = 0;

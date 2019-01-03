@@ -141,16 +141,10 @@ class Walker(isInterface: JType.Cls => Boolean,
         }
       )
 
-      val program3 = program2.transform(
-        onValue = {
-          case phi: SSA.Phi if program2.phiMerges(phi).count(_._2 != phi) == 1 => phiMerges(phi).find(_._2 != phi).get._2
-        }
-      )
-
-      val (printed, mapping) = Renderer.renderSSA(program3)
+      val (printed, mapping) = Renderer.renderSSA(program2)
       println(printed)
 
-      CodeGen(program3, mapping)
+      CodeGen(program2, mapping)
       ???
     })
   }

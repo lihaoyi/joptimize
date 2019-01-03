@@ -22,6 +22,8 @@ object MainTests extends TestSuite{
       'Loops - {
         'basicFor - annotatedTest
         'liftableFor - annotatedTest
+        'nestedFor - annotatedTest
+        'nestedFor2 - annotatedTest
         'basicWhile - annotatedTest
         'sqrtFinder - annotatedTest
 

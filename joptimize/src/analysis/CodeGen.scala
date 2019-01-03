@@ -63,20 +63,115 @@ object CodeGen{
     program.allTerminals.foreach(x => rec(findCtrl(x)))
     controlFlowEdges
   }
+
+  def analyzeLoops(controlFlowGraph: Seq[(SSA.Token, SSA.Token)],
+                   start: SSA.Control,
+                   mapping: Map[SSA.Token, String]) = {
+    val (numbers, last) = numberVertices(controlFlowGraph, start)
+
+    val nodes = numbers.map(_.swap)
+    def isAncestor(w: Int, v: Int) = w <= v && v <= last(nodes(w))
+    val upstreamEdges = controlFlowGraph.groupBy(x => numbers(x._2)).map{case (k, vs) => (k, vs.map(x => numbers(x._1)))}
+
+    val nonBackPreds = new Array[Set[Int]](numbers.size)
+    val backPreds = new Array[Set[Int]](numbers.size)
+    val header = new Array[Option[Int]](numbers.size)
+    val tpe = new Array[String](numbers.size)
+    for(w <- Range(0, numbers.size)){
+      nonBackPreds(w) = Set()
+      backPreds(w) = Set()
+      header(w) = Some(0)
+      tpe(w) = "nonheader"
+
+      for(v <- upstreamEdges.getOrElse(w, Set.empty)){
+        if (isAncestor(w, v)) backPreds(w) += v
+        else nonBackPreds(w) += v
+      }
+    }
+
+    header(0) = None
+
+    val disjointSet = DisjointSet.empty[Int]
+    numbers.values.foreach(disjointSet +=)
+
+    for(w <- Range.inclusive(numbers.size - 1, 0, -1)){
+      var p = Set.empty[Int]
+      for(v <- backPreds(w)){
+        if (v != w) p += disjointSet(v)
+        else tpe(w) = "self"
+      }
+      var worklist = p
+      if (p.nonEmpty) tpe(w) = "reducible"
+      while(worklist.nonEmpty){
+        val x = worklist.head
+        worklist = worklist.tail
+
+        for(y <- nonBackPreds(x)){
+          val yPrime = disjointSet(y)
+          if (!isAncestor(w, yPrime)) {
+            tpe(w) = "irreducible"
+            nonBackPreds(w) += yPrime
+          } else if (!p.contains(yPrime) && yPrime != w){
+            p += yPrime
+            worklist += yPrime
+          }
+        }
+      }
+
+
+      for(x <- p){
+        header(x) = Some(w)
+        disjointSet.union(x, w)
+      }
+    }
+
+    (disjointSet.sets, tpe, nodes, header)
+  }
+
+  def numberVertices(controlFlowGraph: Seq[(SSA.Token, SSA.Token)], start: SSA.Control) = {
+    val downstreamEdges = controlFlowGraph.groupBy(_._1).map { case (k, vs) => (k, vs.map(_._2)) }
+    val numbers = mutable.Map.empty[SSA.Token, Int]
+
+
+    var current = 0
+    val last = mutable.Map.empty[SSA.Token, Int]
+
+    def dfs(a: SSA.Token): Unit = {
+      numbers(a) = current
+      current += 1
+      for (b <- downstreamEdges.getOrElse(a, Nil)) {
+        if (!numbers.contains(b)) dfs(b)
+      }
+      last(a) = current - 1
+
+    }
+
+    dfs(start)
+    (numbers, last)
+  }
+
   def apply(program: Program, mapping: Map[SSA.Token, String]): InsnList = {
     val controlFlowEdges = findControlFlowGraph(program)
-
+    val graph = controlFlowEdges ++ program.allTerminals.map{ case r: SSA.Controlled => (r.control, r)}
     println(
       renderGraph(
-        controlFlowEdges.map{case (k, v) => (fansi.Color.Cyan(mapping(k)), fansi.Color.Cyan(mapping(v)))} ++
-        program.allTerminals.map{t =>
-          (
-            fansi.Color.Cyan(mapping(findCtrl(t))),
-            t match{ case _: SSA.Return | _: SSA.ReturnVal => fansi.Color.Yellow("return")}
-          )
+        graph.map{
+          case (l: SSA.Control, r: SSA.Controlled) => (fansi.Color.Cyan(mapping(l)), fansi.Color.Yellow("return"))
+          case (l: SSA.Control, r: SSA.Control) => (fansi.Color.Cyan(mapping(l)), fansi.Color.Cyan(mapping(r)))
         }
       )
     )
+
+    val (loopSets, tpe, nodes, header) = analyzeLoops(
+      graph,
+      program.regionMerges.find(_._2.isEmpty).get._1,
+      mapping)
+
+    val prettyLoops = loopSets.map(_.map(x =>
+      (mapping(nodes(x)), tpe(x), header(x).map(nodes).map(mapping))
+    ))
+    pprint.log(prettyLoops)
+
     ???
   }
 }
