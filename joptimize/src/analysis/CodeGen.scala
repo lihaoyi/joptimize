@@ -33,15 +33,18 @@ object CodeGen{
     }
     fansi.Str.join(out:_*)
   }
-  def apply(program: Program, mapping: Map[SSA.Token, String]): InsnList = {
+
+  def findCtrl(ssa: SSA) = ssa match{
+    case SSA.Return(ctrl) => ctrl
+    case SSA.ReturnVal(ctrl, _) => ctrl
+    case SSA.UnaBranch(ctrl, _, _) => ctrl
+    case SSA.BinBranch(ctrl, _, _, _) => ctrl
+  }
+
+  def findControlFlowGraph(program: Program) = {
     val controlFlowEdges = mutable.Buffer.empty[(SSA.Control, SSA.Control)]
     val visited = mutable.Set.empty[SSA.Control]
-    def findCtrl(ssa: SSA) = ssa match{
-      case SSA.Return(ctrl) => ctrl
-      case SSA.ReturnVal(ctrl, _) => ctrl
-      case SSA.UnaBranch(ctrl, _, _) => ctrl
-      case SSA.BinBranch(ctrl, _, _, _) => ctrl
-    }
+
     def rec(start: SSA.Control): Unit = if (!visited(start)){
       visited.add(start)
 
@@ -58,6 +61,10 @@ object CodeGen{
     }
 
     program.allTerminals.foreach(x => rec(findCtrl(x)))
+    controlFlowEdges
+  }
+  def apply(program: Program, mapping: Map[SSA.Token, String]): InsnList = {
+    val controlFlowEdges = findControlFlowGraph(program)
 
     println(
       renderGraph(
