@@ -63,9 +63,7 @@ class LSG(rootBlock: Int) {
 
   def calculateNestingLevel = {
     for (liter <- loops) {
-      if (!liter.isRoot)
-        if (liter.parent == null)
-          liter.setParent(root)
+      if (!liter.isRoot && liter.parent == null) liter.setParent(root)
     }
 
     calculateNestingLevelRec(root, 0)
@@ -78,8 +76,6 @@ class LSG(rootBlock: Int) {
       loop.setNestingLevel(math.max(loop.nestingLevel, 1+liter.nestingLevel))
     }
   }
-
-  def getNumLoops: Int = loops.size
 }
 
 //======================================================
