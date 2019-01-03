@@ -2,32 +2,29 @@ package joptimize.analysis
 
 import scala.collection.mutable
 
-class SimpleLoop(val header: Int,
-                 val isReducible: Boolean,
-                 val isRoot: Boolean){
-  def basicBlocks = basicBlocks0
-  private[this] var basicBlocks0  = Set[Int](header)
 
-  def children = children0
-  private[this] var children0     = Set[SimpleLoop]()
-
-  def parent = parent0
-  private[this] var parent0      : SimpleLoop = null
-
-  def addNode(bb: Int) = basicBlocks0 += bb
-  def addChildLoop(loop: SimpleLoop) = children0 += loop
-
-  def setParent(parent: SimpleLoop) = {
-    this.parent0 = parent
-    this.parent0.addChildLoop(this)
+object LoopFinder {
+  trait SimpleLoop{
+    def header: Int
+    def isReducible: Boolean
+    def basicBlocks: Set[Int]
+    def children: Set[SimpleLoop]
   }
-}
+  private[this] class MutableSimpleLoop(val header: Int,
+                                        val isReducible: Boolean,
+                                        val isRoot: Boolean) extends SimpleLoop{
+    var basicBlocks  = Set[Int](header)
 
-//======================================================
-// Main Algorithm
-//======================================================
+    var children     = Set[SimpleLoop]()
 
-object HavlakLoopFinder {
+    var parent: MutableSimpleLoop = null
+
+    def setParent(parent: MutableSimpleLoop) = {
+      this.parent = parent
+      this.parent.children += this
+    }
+  }
+
   object BasicBlockClass extends Enumeration {
     val BB_NONHEADER,    // a regular BB
         BB_REDUCIBLE,    // reducible loop
@@ -111,33 +108,29 @@ object HavlakLoopFinder {
   // Simple depth first traversal along out edges with node numbering.
   //
   def DFS(currentNode: Int,
-          nodes: Array[UnionFindNode],
           number: scala.collection.mutable.Map[Int, Int],
           last: Array[Int],
           current: Int,
           outEdges: Map[Int, Seq[Int]]): Int = {
-    nodes(current).initNode(currentNode)
+
     number(currentNode) = current
 
     var lastid = current
     for (target <- outEdges.getOrElse(currentNode, Nil)){
       if (!number.contains(target)){
-        lastid = DFS(target, nodes, number, last, lastid + 1, outEdges)
+        lastid = DFS(target, number, last, lastid + 1, outEdges)
       }
     }
     last(number(currentNode)) = lastid
     lastid
   }
 
-  //
-  // findLoops
-  //
   // Find loops and build loop forest using Havlak's algorithm, which
   // is derived from Tarjan. Variable names and step numbering has
   // been chosen to be identical to the nomenclature in Havlak's
   // paper (which, in turn, is similar to the one used by Tarjan).
   //
-  def findLoops(edgeList: Seq[(Int, Int)]): SimpleLoop = {
+  def analyzeLoops(edgeList: Seq[(Int, Int)]): SimpleLoop = {
 
     val allNodes = edgeList.flatMap{case (k, v) => Seq(k, v)}.distinct
     val size = allNodes.size
@@ -169,7 +162,9 @@ object HavlakLoopFinder {
     //   - unreached BB's are marked as dead.
     //
 
-    DFS(startNode, nodes, number, last, 0, outEdges)
+    DFS(startNode, number, last, 0, outEdges)
+
+    for((currentNode, current) <- number) nodes(current).initNode(currentNode)
 
     // Step b:
     //   - iterate over all nodes.
@@ -190,7 +185,7 @@ object HavlakLoopFinder {
       val in = inEdges.getOrElse(nodeW, Nil)
       for (nodeV <- in) {
         for(v <- number.get(nodeV)){
-          if (isAncestor(w, v, last)) backPreds(w) = v :: backPreds(w)
+          if (isAncestor(w, v, last)) backPreds(w) ::= v
           else nonBackPreds(w) += v
         }
       }
@@ -211,7 +206,7 @@ object HavlakLoopFinder {
     // we ensure that inner loop headers will be processed before the
     // headers for surrounding loops.
     //
-    val loopMap = mutable.Map.empty[Int, SimpleLoop]
+    val loopMap = mutable.Map.empty[Int, MutableSimpleLoop]
     for (w <- Range.inclusive(size - 1, 0, -1)) {
       // this is 'P' in Havlak's paper
       var nodePool = List.empty[UnionFindNode]
@@ -220,7 +215,7 @@ object HavlakLoopFinder {
 
       // Step d:
       for (v <- backPreds(w)) {
-        if (v != w) nodePool = nodes(v).findSet :: nodePool
+        if (v != w) nodePool ::= nodes(v).findSet
         else types(w) = BasicBlockClass.BB_SELF
       }
 
@@ -249,8 +244,7 @@ object HavlakLoopFinder {
         //
 
         for (iter <- nonBackPreds(number(x.bb))) {
-          val y = nodes(iter)
-          val ydash = y.findSet
+          val ydash = nodes(iter).findSet
 
           if (!isAncestor(w, number(ydash.bb), last)) {
             types(w) = BasicBlockClass.BB_IRREDUCIBLE
@@ -271,7 +265,7 @@ object HavlakLoopFinder {
       // For every SCC found, create a loop descriptor and link it in.
       //
       if (nodePool.nonEmpty || types(w) == BasicBlockClass.BB_SELF) {
-        val loop = new SimpleLoop(nodeW, types(w) != BasicBlockClass.BB_IRREDUCIBLE, false)
+        val loop = new MutableSimpleLoop(nodeW, types(w) != BasicBlockClass.BB_IRREDUCIBLE, false)
 
         // At this point, one can set attributes to the loop, such as:
         //
@@ -294,16 +288,14 @@ object HavlakLoopFinder {
 
           // Nested loops are not added, but linked together.
           if (loopMap.contains(node.bb)) loopMap(node.bb).setParent(loop)
-          else loop.addNode(node.bb)
+          else loop.basicBlocks += node.bb
         }
       }  // nodePool.size
     }  // Step c
 
-    val root  = new SimpleLoop(startNode, true, true)
-    val loops = root :: loopMap.values.toList
+    val root  = new MutableSimpleLoop(startNode, true, true)
 
-
-    for (liter <- loops) {
+    for (liter <- loopMap.values) {
       if (!liter.isRoot && liter.parent == null) liter.setParent(root)
     }
 
