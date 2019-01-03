@@ -2,31 +2,24 @@ package joptimize.analysis
 
 import scala.collection.mutable
 
-//
-// class SimpleLoop
-//
-// Basic representation of loops, a loop has an entry point,
-// one or more exit edges, a set of basic blocks, and potentially
-// an outer loop - a "parent" loop.
-//
-// Furthermore, it can have any set of properties, e.g.,
-// it can be an irreducible loop, have control flow, be
-// a candidate for transformations, and what not.
-//
 class SimpleLoop(val header: Int,
                  val isReducible: Boolean,
                  val isRoot: Boolean){
-  var basicBlocks  = Set[Int](header)
+  def basicBlocks = basicBlocks0
+  private[this] var basicBlocks0  = Set[Int](header)
 
-  var children     = Set[SimpleLoop]()
-  var parent      : SimpleLoop = null
+  def children = children0
+  private[this] var children0     = Set[SimpleLoop]()
 
-  def addNode(bb: Int) = basicBlocks += bb
-  def addChildLoop(loop: SimpleLoop) = children += loop
+  def parent = parent0
+  private[this] var parent0      : SimpleLoop = null
+
+  def addNode(bb: Int) = basicBlocks0 += bb
+  def addChildLoop(loop: SimpleLoop) = children0 += loop
 
   def setParent(parent: SimpleLoop) = {
-    this.parent = parent
-    this.parent.addChildLoop(this)
+    this.parent0 = parent
+    this.parent0.addChildLoop(this)
   }
 }
 
