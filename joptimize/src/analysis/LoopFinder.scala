@@ -166,26 +166,10 @@ object LoopFinder {
 
     val startNode = allNodes.find(!inEdges.contains(_)).get
 
-    // Step a:
-    //   - initialize all nodes as unvisited.
-    //   - depth-first traversal and numbering.
-    //   - unreached BB's are marked as dead.
-    //
-
     DFS(startNode, number, last, 0, outEdges)
 
     for((currentNode, current) <- number) nodes(current).initNode(currentNode)
 
-    // Step b:
-    //   - iterate over all nodes.
-    //
-    //   A backedge comes from a descendant in the DFS tree, and non-backedges
-    //   from non-descendants (following Tarjan).
-    //
-    //   - check incoming edges 'v' and add them to either
-    //     - the list of backedges (backPreds) or
-    //     - the list of non-backedges (nonBackPreds)
-    //
     for (w <- Range(0, size)) {
       header(w) = 0
       types(w)  = BasicBlockClass.BB_NONHEADER
@@ -201,21 +185,8 @@ object LoopFinder {
       }
     }
 
-    // Start node is root of all other loops.
     header(0) = 0
 
-    // Step c:
-    //
-    // The outer loop, unchanged from Tarjan. It does nothing except
-    // for those nodes which are the destinations of backedges.
-    // For a header node w, we chase backward from the sources of the
-    // backedges adding nodes to the set P, representing the body of
-    // the loop headed by w.
-    //
-    // By running through the nodes in reverse of the DFST preorder,
-    // we ensure that inner loop headers will be processed before the
-    // headers for surrounding loops.
-    //
     val loopMap = mutable.Map.empty[T, MutableSimpleLoop[T]]
     for (w <- Range.inclusive(size - 1, 0, -1)) {
       // this is 'P' in Havlak's paper
@@ -223,14 +194,11 @@ object LoopFinder {
 
       val nodeW = nodes(w).bb
 
-      // Step d:
       for (v <- backPreds(w)) {
         if (v != w) nodePool ::= nodes(v).findSet
         else types(w) = BasicBlockClass.BB_SELF
       }
 
-      // Copy nodePool to workList.
-      //
       var workList = List.empty[UnionFindNode[T]]
       workList = nodePool
 
@@ -238,20 +206,10 @@ object LoopFinder {
         types(w) = BasicBlockClass.BB_REDUCIBLE
       }
 
-      // work the list...
-      //
       while (workList.nonEmpty) {
         val x = workList.head
         workList = workList.tail
 
-        // Step e:
-        //
-        // Step e represents the main difference from Tarjan's method.
-        // Chasing upwards from the sources of a node w's backedges. If
-        // there is a node y' that is not a descendant of w, w is marked
-        // the header of an irreducible loop, there is another entry
-        // into this loop that avoids w.
-        //
 
         for (iter <- nonBackPreds(number(x.bb))) {
           val ydash = nodes(iter).findSet
@@ -272,9 +230,6 @@ object LoopFinder {
       }
 
 
-      // Collapse/Unionize nodes in a SCC to a single node
-      // For every SCC found, create a loop descriptor and link it in.
-      //
       if (nodePool.nonEmpty || types(w) == BasicBlockClass.BB_SELF) {
         val loop = new MutableSimpleLoop(
           nodeW,
@@ -282,26 +237,12 @@ object LoopFinder {
           false
         )
 
-        // At this point, one can set attributes to the loop, such as:
-        //
-        // the bottom node:
-        //    iter  = backPreds(w).begin();
-        //    loop bottom is: nodes(iter).node;
-        //
-        // the number of backedges:
-        //    backPreds(w).size()
-        //
-        // whether this loop is reducible:
-        //    types(w) != BB_IRREDUCIBLE
-        //
         loopMap(nodes(w).bb) = loop
 
         for (node <- nodePool) {
-          // Add nodes to loop descriptor.
           header(number(node.bb)) = w
           node.union(nodes(w))
 
-          // Nested loops are not added, but linked together.
           if (loopMap.contains(node.bb)) loopMap(node.bb).setParent(loop)
           else {
             if (types(number(node.bb)) == BasicBlockClass.BB_REDUCIBLE || types(number(node.bb)) == BasicBlockClass.BB_IRREDUCIBLE){
@@ -310,8 +251,8 @@ object LoopFinder {
             loop.basicBlocks += node.bb
           }
         }
-      }  // nodePool.size
-    }  // Step c
+      }
+    }
 
     val root = new MutableSimpleLoop(startNode, true, true)
 
