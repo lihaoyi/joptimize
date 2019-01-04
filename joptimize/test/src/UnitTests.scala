@@ -16,25 +16,37 @@ object UnitTests extends TestSuite{
         assert(analyzed == expected)
       }
       'reducible - {
-
+        // 0 -> 1
         'twoNode - check[Int](
           args = Seq(0 -> 1),
           expected = Loop(Set(0), true, Set(0, 1), Set())
         )
+        // 0 -> 1 -> 2
         'threeNode - check[Int](
           args = Seq(0 -> 1, 1 -> 2),
           expected = Loop(Set(0), true, Set(0, 1, 2), Set())
         )
+        //         2
+        //        ^ \
+        //       /   v
+        // 0 -> 1     4
+        //       \   ^
+        //        v /
+        //         3
         'diamond - check[Int](
           args = Seq(0 -> 1, 1 -> 2, 1 -> 3, 2 -> 4, 3 -> 4),
           expected = Loop(Set(0), true, Set(0, 1, 2, 3, 4), Set())
         )
+
+        // 0 -> 1 <-> 2
         'loop - check[Int](
           args = Seq(0 -> 1, 1 -> 2, 2 -> 1),
           expected = Loop(Set(0), true, Set(0), Set(
             Loop(Set(1), true, Set(1, 2), Set())
           ))
         )
+
+        // 0 -> 1 <-> 2 <-> 3
         'nestedLoop - check[Int](
           args = Seq(0 -> 1, 1 -> 2, 2 -> 1, 2 -> 3, 3 -> 2),
           expected = Loop(Set(0), true, Set(0), Set(
@@ -43,6 +55,15 @@ object UnitTests extends TestSuite{
             ))
           ))
         )
+
+        //            4
+        //            ^
+        //            |
+        //            v
+        // 0 -> 1 -> 2 -> 3 <-> 5
+        //      ^        /
+        //       \      /
+        //        ------
         'twoNestedLoops - check[Int](
           args = Seq(
             0 -> 1,
@@ -63,6 +84,11 @@ object UnitTests extends TestSuite{
         )
       }
       'irreducible - {
+        //         -----> 3
+        //        /       ^
+        //  0 -> 1        |
+        //        \       v
+        //         -----> 2
         'simple - check[Int](
           args = Seq(
             0 -> 1,
@@ -73,6 +99,32 @@ object UnitTests extends TestSuite{
           ),
           expected = Loop(Set(0), true, Set(0, 1), Set(
             Loop(Set(2, 3), false, Set(2, 3), Set())
+          ))
+        )
+        //          ----> 3
+        //         /     ^ \
+        //        /     /   v
+        //  0 -> 1     4 <-> 5
+        //        \     ^   /
+        //         \     \ v
+        //          ----> 2
+        'nested - check[Int](
+          args = Seq(
+            0 -> 1,
+            1 -> 2,
+            1 -> 3,
+            2 -> 4,
+            4 -> 3,
+            3 -> 5,
+            5 -> 2,
+            4 -> 5,
+            5 -> 4
+
+          ),
+          expected = Loop(Set(0), true, Set(0, 1), Set(
+            Loop(Set(2), false, Set(2), Set(
+              Loop(Set(4, 3), false, Set(4, 3, 5), Set())
+            ))
           ))
         )
         'paper - check[String](
