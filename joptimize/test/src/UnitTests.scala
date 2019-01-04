@@ -91,6 +91,39 @@ object UnitTests extends TestSuite{
           ))
         )
 
+        //           4 -> 6
+        //           ^
+        //           |
+        //           v
+        // 0 -> 1 -> 2 -> 3 <-> 5 -> 7 <-> 8 -> 9
+        //      ^        /
+        //       \      /
+        //        ------
+        'twoNestedLoopsEnds - check[Int](
+          args = Seq(
+            0 -> 1,
+            1 -> 2,
+            2 -> 3,
+            3 -> 1,
+            2 -> 4,
+            4 -> 2,
+            3 -> 5,
+            5 -> 3,
+            4 -> 6,
+            5 -> 7,
+            7 -> 8,
+            8 -> 7,
+            8 -> 9
+          ),
+          expected = Loop(Set(0), true, Set(0, 9, 6), Set(
+            Loop(Set(7), true, Set(7, 8), Set()),
+            Loop(Set(1), true, Set(1), Set(
+              Loop(Set(2), true, Set(2, 4), Set()),
+              Loop(Set(3), true, Set(3, 5), Set())
+            ))
+          ))
+        )
+
         //           4
         //           ^             6
         //           |            ^ \

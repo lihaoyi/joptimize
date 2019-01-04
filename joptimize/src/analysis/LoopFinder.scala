@@ -133,8 +133,16 @@ object LoopFinder {
   //
   def analyzeLoops[T](edgeList: Seq[(T, T)]): Loop[T] = {
 
-    val allNodes = edgeList.flatMap{case (k, v) => Seq(k, v)}.distinct
-    val size = allNodes.size
+    val outEdges = edgeList.groupBy(_._1).map{case (k, v) => (k, v.map(_._2))}
+    val inEdges = edgeList.groupBy(_._2).map{case (k, v) => (k, v.map(_._1))}
+
+    val (size, startNode) = {
+      // Avoid using allNodes throughout the body of this function, because
+      // we should be using `number` and `numberToNode` instead.
+      val allNodes = edgeList.flatMap{case (k, v) => Seq(k, v)}.distinct
+      val startNode = allNodes.find(!inEdges.contains(_)).get
+      (allNodes.size, startNode)
+    }
 
     val nonBackPreds    = new Array[Set[Int]](size)
     val backPreds       = new Array[Set[Int]](size)
@@ -145,11 +153,6 @@ object LoopFinder {
     val types           = new Array[BlockType](size)
     val last            = new Array[Int](size)
     val nodes           = new Array[UnionFindNode[T]](size)
-
-    val outEdges = edgeList.groupBy(_._1).map{case (k, v) => (k, v.map(_._2))}
-    val inEdges = edgeList.groupBy(_._2).map{case (k, v) => (k, v.map(_._1))}
-
-    val startNode = allNodes.find(!inEdges.contains(_)).get
 
     DFS(startNode, number, last, 0, outEdges)
     val numberToNode = number.map(_.swap)
@@ -235,9 +238,9 @@ object LoopFinder {
 
     val root = new LoopBuilder(startNode, true, true)
 
-    for(i <- allNodes.indices){
+    for(i <- Range(0, numberToNode.size)){
       if (types(i) == BlockType.NonHeader && header(i) == 0){
-        root.basicBlocks += allNodes(i)
+        root.basicBlocks += numberToNode(i)
       }
     }
 
@@ -246,5 +249,5 @@ object LoopFinder {
     }
 
     root.build()
-  }  // findLoops
+  }
 }
