@@ -33,11 +33,14 @@ object LoopFinder {
     )
   }
 
-  object BasicBlockClass extends Enumeration {
-    val BB_NONHEADER,    // a regular BB
-        BB_REDUCIBLE,    // reducible loop
-        BB_SELF,         // single BB loop
-        BB_IRREDUCIBLE = Value  // Sentinel
+  sealed class BlockType private ()(implicit name: sourcecode.Name){
+    override def toString = name.value
+  }
+  object BlockType {
+    val NonHeader = new BlockType()
+    val Reducible = new BlockType()
+    val Self = new BlockType()
+    val Irreducible = new BlockType()
   }
 
   /**
@@ -149,7 +152,7 @@ object LoopFinder {
     val number          = scala.collection.mutable.Map[T, Int]()
 
     val header          = new Array[Int](size)
-    val types           = new Array[BasicBlockClass.Value](size)
+    val types           = new Array[BlockType](size)
     val last            = new Array[Int](size)
     val nodes           = new Array[UnionFindNode[T]](size)
 
@@ -170,7 +173,7 @@ object LoopFinder {
 
     for (w <- Range(0, size)) {
       header(w) = 0
-      types(w)  = BasicBlockClass.BB_NONHEADER
+      types(w)  = BlockType.NonHeader
 
       val nodeW = nodes(w).bb
 
@@ -194,14 +197,14 @@ object LoopFinder {
 
       for (v <- backPreds(w)) {
         if (v != w) nodePool ::= nodes(v).findSet
-        else types(w) = BasicBlockClass.BB_SELF
+        else types(w) = BlockType.Self
       }
 
       var workList = List.empty[UnionFindNode[T]]
       workList = nodePool
 
       if (nodePool.nonEmpty) {
-        types(w) = BasicBlockClass.BB_REDUCIBLE
+        types(w) = BlockType.Reducible
       }
 
       while (workList.nonEmpty) {
@@ -213,8 +216,8 @@ object LoopFinder {
           val ydash = nodes(iter).findSet
 
           if (!isAncestor(w, number(ydash.bb), last)) {
-            types(w) = BasicBlockClass.BB_IRREDUCIBLE
-            types(number(x.bb)) = BasicBlockClass.BB_IRREDUCIBLE
+            types(w) = BlockType.Irreducible
+            types(number(x.bb)) = BlockType.Irreducible
             nonBackPreds(w) += number(ydash.bb)
           } else {
             if (number(ydash.bb) != w) {
@@ -228,10 +231,10 @@ object LoopFinder {
       }
 
 
-      if (nodePool.nonEmpty || types(w) == BasicBlockClass.BB_SELF) {
+      if (nodePool.nonEmpty || types(w) == BlockType.Self) {
         val loop = new LoopBuilder(
           nodeW,
-          types(w) != BasicBlockClass.BB_IRREDUCIBLE,
+          types(w) != BlockType.Irreducible,
           false
         )
 
@@ -243,9 +246,12 @@ object LoopFinder {
 
           if (loopMap.contains(node.bb)) loopMap(node.bb).setParent(loop)
           else {
-            if (types(number(node.bb)) == BasicBlockClass.BB_REDUCIBLE || types(number(node.bb)) == BasicBlockClass.BB_IRREDUCIBLE){
-              loop.allHeaders += node.bb
+            types(number(node.bb)) match{
+              case BlockType.Reducible | BlockType.Irreducible =>
+                loop.allHeaders += node.bb
+              case _ => // do nothing
             }
+
             loop.basicBlocks += node.bb
           }
         }
@@ -255,7 +261,7 @@ object LoopFinder {
     val root = new LoopBuilder(startNode, true, true)
 
     for(i <- allNodes.indices){
-      if (types(i) == BasicBlockClass.BB_NONHEADER && header(i) == 0){
+      if (types(i) == BlockType.NonHeader && header(i) == 0){
         root.basicBlocks += allNodes(i)
       }
     }
