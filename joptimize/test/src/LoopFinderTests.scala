@@ -343,6 +343,30 @@ object LoopFinderTests extends TestSuite{
           Loop(Set(3), false, Set(3, 4), Set())
         ))
       )
+
+      //               ------ 3
+      //              v       ^
+      //  0 -> 1 <-> 2        |
+      //              \       v
+      //               -----> 4
+      'irreducibleReducible2 - check[Int](
+        args = Seq(
+          0 -> 1,
+          1 -> 2,
+          2 -> 1,
+          3 -> 2,
+          2 -> 4,
+          3 -> 4,
+          4 -> 3
+        ),
+        expected = Loop(Set(0), true, Set(0), Set(
+          Loop(Set(1), true, Set(1), Set(
+            Loop(Set(2), true, Set(2), Set(
+              Loop(Set(4),true,Set(4, 3),Set())
+            ))
+          ))
+        ))
+      )
     }
   }
 }
