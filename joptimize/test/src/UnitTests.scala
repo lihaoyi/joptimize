@@ -101,6 +101,7 @@ object UnitTests extends TestSuite{
             Loop(Set(2, 3), false, Set(2, 3), Set())
           ))
         )
+
         //          ----> 3
         //         /     ^ \
         //        /     /   v
@@ -108,6 +109,7 @@ object UnitTests extends TestSuite{
         //        \     ^   /
         //         \     \ v
         //          ----> 2
+
         'nested - check[Int](
           args = Seq(
             0 -> 1,
@@ -157,6 +159,46 @@ object UnitTests extends TestSuite{
           ))
         )
       }
+
+      //         -----> 3
+      //        /       ^
+      //  0 -> 1        |
+      //        \       v
+      //         -----> 2 <-> 4
+      'reducibleInIrreducible - check[Int](
+        args = Seq(
+          0 -> 1,
+          1 -> 2,
+          1 -> 3,
+          2 -> 3,
+          3 -> 2,
+          2 -> 4,
+          4 -> 2
+        ),
+        expected = Loop(Set(0), true, Set(0, 1), Set(
+          Loop(Set(2, 3), false, Set(2, 3, 4), Set())
+        ))
+      )
+      //               -----> 3
+      //              /       ^
+      //  0 -> 1 <-> 2        |
+      //              \       v
+      //               -----> 4
+      'irreducibleInReducible - check[Int](
+        args = Seq(
+          0 -> 1,
+          1 -> 2,
+          2 -> 1,
+          2 -> 3,
+          2 -> 4,
+          3 -> 4,
+          4 -> 3
+        ),
+        expected = Loop(Set(0),true,Set(0),Set(
+          Loop(Set(1),true,Set(1, 2),Set()),
+          Loop(Set(3, 4),false,Set(3, 4),Set())
+        ))
+      )
     }
   }
 }

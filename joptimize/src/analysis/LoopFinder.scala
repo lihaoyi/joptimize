@@ -204,6 +204,7 @@ object LoopFinder {
       workList = nodePool
 
       if (nodePool.nonEmpty) {
+        pprint.log(w, "REDUCIBLE")
         types(w) = BlockType.Reducible
       }
 
@@ -216,6 +217,7 @@ object LoopFinder {
           val ydash = nodes(iter).findSet
 
           if (!isAncestor(w, number(ydash.bb), last)) {
+            pprint.log((w, number(x.bb)), "IRREDUCIBLE")
             types(w) = BlockType.Irreducible
             types(number(x.bb)) = BlockType.Irreducible
             nonBackPreds(w) += number(ydash.bb)
