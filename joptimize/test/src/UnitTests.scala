@@ -15,6 +15,7 @@ object UnitTests extends TestSuite{
         val analyzed = LoopFinder.analyzeLoops(args)
         assert(analyzed == expected)
       }
+
       'reducible - {
         // 0 -> 1
         'twoNode - check[Int](
@@ -98,7 +99,7 @@ object UnitTests extends TestSuite{
             3 -> 2
           ),
           expected = Loop(Set(0), true, Set(0, 1), Set(
-            Loop(Set(2, 3), false, Set(2, 3), Set())
+            Loop(Set(2), false, Set(2, 3), Set())
           ))
         )
 
@@ -109,7 +110,6 @@ object UnitTests extends TestSuite{
         //        \     ^   /
         //         \     \ v
         //          ----> 2
-
         'nested - check[Int](
           args = Seq(
             0 -> 1,
@@ -125,7 +125,7 @@ object UnitTests extends TestSuite{
           ),
           expected = Loop(Set(0), true, Set(0, 1), Set(
             Loop(Set(2), false, Set(2), Set(
-              Loop(Set(4, 3), false, Set(4, 3, 5), Set())
+              Loop(Set(4), false, Set(4, 3, 5), Set())
             ))
           ))
         )
@@ -160,45 +160,123 @@ object UnitTests extends TestSuite{
         )
       }
 
-      //         -----> 3
-      //        /       ^
-      //  0 -> 1        |
-      //        \       v
-      //         -----> 2 <-> 4
-      'reducibleInIrreducible - check[Int](
-        args = Seq(
-          0 -> 1,
-          1 -> 2,
-          1 -> 3,
-          2 -> 3,
-          3 -> 2,
-          2 -> 4,
-          4 -> 2
-        ),
-        expected = Loop(Set(0), true, Set(0, 1), Set(
-          Loop(Set(2, 3), false, Set(2, 3, 4), Set())
-        ))
-      )
-      //               -----> 3
-      //              /       ^
-      //  0 -> 1 <-> 2        |
-      //              \       v
-      //               -----> 4
-      'irreducibleInReducible - check[Int](
-        args = Seq(
-          0 -> 1,
-          1 -> 2,
-          2 -> 1,
-          2 -> 3,
-          2 -> 4,
-          3 -> 4,
-          4 -> 3
-        ),
-        expected = Loop(Set(0),true,Set(0),Set(
-          Loop(Set(1),true,Set(1, 2),Set()),
-          Loop(Set(3, 4),false,Set(3, 4),Set())
-        ))
-      )
+      'chains - {
+        //         -----> 3
+        //        /       ^
+        //  0 -> 1        |
+        //        \       v
+        //         -----> 2 -> 4 <-> 5
+        'reducibleIrreducible - check[Int](
+          args = Seq(
+            0 -> 1,
+            1 -> 2,
+            1 -> 3,
+            2 -> 3,
+            3 -> 2,
+            2 -> 4,
+            4 -> 5,
+            5 -> 4
+          ),
+          expected = Loop(Set(0), true, Set(0, 1), Set(
+            Loop(Set(2), false, Set(2, 3), Set()),
+            Loop(Set(4), true, Set(4, 5), Set())
+          ))
+        )
+
+        //         -----> 3
+        //        /       ^
+        //  0 -> 1        |
+        //        \       v
+        //         -----> 2 <-> 4
+        'reducibleIrreducible2 - check[Int](
+          args = Seq(
+            0 -> 1,
+            1 -> 2,
+            1 -> 3,
+            2 -> 3,
+            3 -> 2,
+            2 -> 4,
+            4 -> 2
+          ),
+          expected = Loop(Set(0), true, Set(0, 1), Set(
+            Loop(Set(2), false, Set(2, 4, 3), Set())
+          ))
+        )
+
+        //          -----> 4
+        //         /       ^
+        //        /        v
+        //  0 -> 1         3 -> 5 <-> 6
+        //        \        ^
+        //         \       v
+        //          -----> 2
+        'reducibleIrreducible3 - check[Int](
+          args = Seq(
+            0 -> 1,
+            1 -> 2,
+            1 -> 4,
+            2 -> 3,
+            3 -> 2,
+            3 -> 4,
+            4 -> 3,
+            3 -> 5,
+            5 -> 6,
+            6 -> 5
+          ),
+          expected = Loop(Set(0), true, Set(0, 1), Set(
+            Loop(Set(2), false, Set(2), Set(
+              Loop(Set(3), false, Set(3, 4), Set())
+            )),
+            Loop(Set(5), true, Set(5, 6), Set())
+          ))
+        )
+        //          -----> 4
+        //         /       ^
+        //        /        v
+        //  0 -> 1         3 <-> 5
+        //        \        ^
+        //         \       v
+        //          -----> 2
+        'reducibleIrreducible4 - check[Int](
+          args = Seq(
+            0 -> 1,
+            1 -> 2,
+            1 -> 4,
+            2 -> 3,
+            3 -> 2,
+            3 -> 4,
+            4 -> 3,
+            3 -> 5,
+            5 -> 3
+          ),
+          expected = Loop(Set(0), true, Set(0, 1), Set(
+            Loop(Set(2), false, Set(2), Set(
+              Loop(Set(3), false, Set(3, 5, 4), Set())
+            ))
+          ))
+        )
+
+        //               -----> 3
+        //              /       ^
+        //  0 -> 1 <-> 2        |
+        //              \       v
+        //               -----> 4
+        'irreducibleReducible - check[Int](
+          args = Seq(
+            0 -> 1,
+            1 -> 2,
+            2 -> 1,
+            2 -> 3,
+            2 -> 4,
+            3 -> 4,
+            4 -> 3
+          ),
+          expected = Loop(Set(0), true, Set(0), Set(
+            Loop(Set(1), true, Set(1, 2), Set()),
+            Loop(Set(3), false, Set(3, 4), Set())
+          ))
+        )
+      }
     }
   }
 }

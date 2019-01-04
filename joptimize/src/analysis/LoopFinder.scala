@@ -50,7 +50,7 @@ object LoopFinder {
     * complete loops into a single node. These nodes and the
     * corresponding functionality are implemented with this class
     */
-  class UnionFindNode[T](var bb: T) {
+  class UnionFindNode[T](var value: T) {
     var parent   : UnionFindNode[T] = this
 
     // Union/Find Algorithm - The find routine.
@@ -174,11 +174,9 @@ object LoopFinder {
 
     val loopMap = mutable.Map.empty[T, LoopBuilder[T]]
     for (w <- Range.inclusive(size - 1, 0, -1)) {
-      pprint.log(w)
       // this is 'P' in Havlak's paper
       var nodePool = List.empty[UnionFindNode[T]]
 
-      pprint.log(backPreds(w))
       for (v <- backPreds(w)) {
         if (v != w) nodePool ::= nodes(v).findSet
         else types(w) = BlockType.Self
@@ -187,26 +185,21 @@ object LoopFinder {
       var workList = nodePool
 
       if (nodePool.nonEmpty) {
-        pprint.log(w, "REDUCIBLE")
         types(w) = BlockType.Reducible
       }
 
       while (workList.nonEmpty) {
         val x = workList.head
-        pprint.log(x.bb)
         workList = workList.tail
 
-
-        pprint.log(nonBackPreds(number(x.bb)))
-        for (y <- nonBackPreds(number(x.bb))) {
+        for (y <- nonBackPreds(number(x.value))) {
           val ydash = nodes(y).findSet
 
-          if (!isAncestor(w, number(ydash.bb), last)) {
-            pprint.log((w, number(x.bb)), "IRREDUCIBLE")
+          if (!isAncestor(w, number(ydash.value), last)) {
             types(w) = BlockType.Irreducible
-            types(number(x.bb)) = BlockType.Irreducible
-            nonBackPreds(w) += number(ydash.bb)
-          } else if (!nodePool.contains(ydash) && number(ydash.bb) != w) {
+
+            nonBackPreds(w) += number(ydash.value)
+          } else if (!nodePool.contains(ydash) && number(ydash.value) != w) {
             workList = ydash :: workList
             nodePool = ydash :: nodePool
           }
@@ -221,21 +214,20 @@ object LoopFinder {
           false
         )
 
-        loopMap(nodes(w).bb) = loop
+        loopMap(nodes(w).value) = loop
 
-        for (node <- nodePool) {
-          pprint.log((number(node.bb), w))
-          header(number(node.bb)) = w
-          node.union(nodes(w))
-          if (loopMap.contains(node.bb)) loopMap(node.bb).setParent(loop)
+        for (x <- nodePool) {
+          header(number(x.value)) = w
+          x.union(nodes(w))
+          if (loopMap.contains(x.value)) loopMap(x.value).setParent(loop)
           else {
-            types(number(node.bb)) match{
+            types(number(x.value)) match{
               case BlockType.Reducible | BlockType.Irreducible =>
-                loop.allHeaders += node.bb
+                loop.allHeaders += x.value
               case _ => // do nothing
             }
 
-            loop.basicBlocks += node.bb
+            loop.basicBlocks += x.value
           }
         }
       }
@@ -249,13 +241,10 @@ object LoopFinder {
       }
     }
 
-    for ((k, liter) <- loopMap) {
-      pprint.log((k, liter.isRoot , liter.parent))
+    for (liter <- loopMap.values) {
       if (!liter.isRoot && liter.parent == null) liter.setParent(root)
     }
 
-    pprint.log(header)
-    pprint.log(number)
     root.build()
   }  // findLoops
 }
