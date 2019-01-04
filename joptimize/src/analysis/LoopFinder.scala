@@ -190,11 +190,13 @@ object LoopFinder {
 
     val loopMap = mutable.Map.empty[T, LoopBuilder[T]]
     for (w <- Range.inclusive(size - 1, 0, -1)) {
+      pprint.log(w)
       // this is 'P' in Havlak's paper
       var nodePool = List.empty[UnionFindNode[T]]
 
       val nodeW = nodes(w).bb
 
+      pprint.log(backPreds(w))
       for (v <- backPreds(w)) {
         if (v != w) nodePool ::= nodes(v).findSet
         else types(w) = BlockType.Self
@@ -210,9 +212,11 @@ object LoopFinder {
 
       while (workList.nonEmpty) {
         val x = workList.head
+        pprint.log(x.bb)
         workList = workList.tail
 
 
+        pprint.log(nonBackPreds(number(x.bb)))
         for (iter <- nonBackPreds(number(x.bb))) {
           val ydash = nodes(iter).findSet
 
@@ -221,13 +225,9 @@ object LoopFinder {
             types(w) = BlockType.Irreducible
             types(number(x.bb)) = BlockType.Irreducible
             nonBackPreds(w) += number(ydash.bb)
-          } else {
-            if (number(ydash.bb) != w) {
-              if (!nodePool.contains(ydash)) {
-                workList = ydash :: workList
-                nodePool = ydash :: nodePool
-              }
-            }
+          } else if (!nodePool.contains(ydash) && number(ydash.bb) != w) {
+            workList = ydash :: workList
+            nodePool = ydash :: nodePool
           }
         }
       }
@@ -243,9 +243,9 @@ object LoopFinder {
         loopMap(nodes(w).bb) = loop
 
         for (node <- nodePool) {
+          pprint.log((number(node.bb), w))
           header(number(node.bb)) = w
           node.union(nodes(w))
-
           if (loopMap.contains(node.bb)) loopMap(node.bb).setParent(loop)
           else {
             types(number(node.bb)) match{
@@ -267,10 +267,14 @@ object LoopFinder {
         root.basicBlocks += allNodes(i)
       }
     }
-    for (liter <- loopMap.values) {
+
+    for ((k, liter) <- loopMap) {
+      pprint.log((k, liter.isRoot , liter.parent))
       if (!liter.isRoot && liter.parent == null) liter.setParent(root)
     }
 
+    pprint.log(header)
+    pprint.log(number)
     root.build()
   }  // findLoops
 }
