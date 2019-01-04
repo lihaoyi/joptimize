@@ -46,6 +46,13 @@ object UnitTests extends TestSuite{
             Loop(Set(1), true, Set(1, 2), Set())
           ))
         )
+        // 0 -> 1 <-> 2 -> 3
+        'loopEnd - check[Int](
+          args = Seq(0 -> 1, 1 -> 2, 2 -> 1, 2 -> 3),
+          expected = Loop(Set(0), true, Set(0, 3), Set(
+            Loop(Set(1), true, Set(1, 2), Set())
+          ))
+        )
 
         // 0 -> 1 <-> 2 <-> 3
         'nestedLoop - check[Int](
@@ -57,10 +64,10 @@ object UnitTests extends TestSuite{
           ))
         )
 
-        //            4
-        //            ^
-        //            |
-        //            v
+        //           4
+        //           ^
+        //           |
+        //           v
         // 0 -> 1 -> 2 -> 3 <-> 5
         //      ^        /
         //       \      /
@@ -80,6 +87,39 @@ object UnitTests extends TestSuite{
             Loop(Set(1), true, Set(1), Set(
               Loop(Set(2), true, Set(2, 4), Set()),
               Loop(Set(3), true, Set(3, 5), Set())
+            ))
+          ))
+        )
+
+        //           4
+        //           ^             6
+        //           |            ^ \
+        //           v           /   v
+        // 0 -> 1 -> 2 -> 3 <-> 5     7
+        //      ^        /       ^   /
+        //       \      /         \ v
+        //        ------           8
+        'twoDoublyNestedLoops - check[Int](
+          args = Seq(
+            0 -> 1,
+            1 -> 2,
+            2 -> 3,
+            3 -> 1,
+            2 -> 4,
+            4 -> 2,
+            3 -> 5,
+            5 -> 3,
+            5 -> 6,
+            6 -> 7,
+            7 -> 8,
+            8 -> 5
+          ),
+          expected = Loop(Set(0), true, Set(0), Set(
+            Loop(Set(1), true, Set(1), Set(
+              Loop(Set(2), true, Set(2, 4), Set()),
+              Loop(Set(3), true, Set(3), Set(
+                Loop(Set(5), true, Set(5, 6, 7, 8), Set())
+              ))
             ))
           ))
         )
