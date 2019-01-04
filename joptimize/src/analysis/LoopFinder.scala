@@ -50,17 +50,8 @@ object LoopFinder {
     * complete loops into a single node. These nodes and the
     * corresponding functionality are implemented with this class
     */
-  class UnionFindNode[T] {
-
-    var parent   : UnionFindNode[T] = null
-    var bb       : T    = null.asInstanceOf[T]
-
-    // Initialize this node.
-    //
-    def initNode(bb: T) = {
-      this.parent     = this
-      this.bb         = bb
-    }
+  class UnionFindNode[T](var bb: T) {
+    var parent   : UnionFindNode[T] = this
 
     // Union/Find Algorithm - The find routine.
     //
@@ -80,8 +71,7 @@ object LoopFinder {
       }
 
       // Path Compression, all nodes' parents point to the 1st level parent.
-      for (iter <- nodeList)
-        iter.parent_=(node.parent)
+      for (iter <- nodeList) iter.parent = node.parent
       node
     }
 
@@ -147,7 +137,7 @@ object LoopFinder {
     val size = allNodes.size
 
     val nonBackPreds    = new Array[Set[Int]](size)
-    val backPreds       = new Array[List[Int]](size)
+    val backPreds       = new Array[Set[Int]](size)
 
     val number          = scala.collection.mutable.Map[T, Int]()
 
@@ -156,33 +146,27 @@ object LoopFinder {
     val last            = new Array[Int](size)
     val nodes           = new Array[UnionFindNode[T]](size)
 
-    for (i <- 0 until size) {
-      nonBackPreds(i) = Set[Int]()
-      backPreds(i)    = List[Int]()
-      nodes(i)        = new UnionFindNode()
-    }
-
     val outEdges = edgeList.groupBy(_._1).map{case (k, v) => (k, v.map(_._2))}
     val inEdges = edgeList.groupBy(_._2).map{case (k, v) => (k, v.map(_._1))}
 
     val startNode = allNodes.find(!inEdges.contains(_)).get
 
     DFS(startNode, number, last, 0, outEdges)
-
-    for((currentNode, current) <- number) nodes(current).initNode(currentNode)
+    val numberToNode = number.map(_.swap)
 
     for (w <- Range(0, size)) {
+
+      nonBackPreds(w) = Set[Int]()
+      backPreds(w) = Set[Int]()
+      nodes(w) = new UnionFindNode(numberToNode(w))
       header(w) = 0
       types(w)  = BlockType.NonHeader
 
-      val nodeW = nodes(w).bb
-
-      val in = inEdges.getOrElse(nodeW, Nil)
+      val in = inEdges.getOrElse(numberToNode(w), Nil)
       for (nodeV <- in) {
-        for(v <- number.get(nodeV)){
-          if (isAncestor(w, v, last)) backPreds(w) ::= v
-          else nonBackPreds(w) += v
-        }
+        val v = number(nodeV)
+        if (isAncestor(w, v, last)) backPreds(w) += v
+        else nonBackPreds(w) += v
       }
     }
 
@@ -194,16 +178,13 @@ object LoopFinder {
       // this is 'P' in Havlak's paper
       var nodePool = List.empty[UnionFindNode[T]]
 
-      val nodeW = nodes(w).bb
-
       pprint.log(backPreds(w))
       for (v <- backPreds(w)) {
         if (v != w) nodePool ::= nodes(v).findSet
         else types(w) = BlockType.Self
       }
 
-      var workList = List.empty[UnionFindNode[T]]
-      workList = nodePool
+      var workList = nodePool
 
       if (nodePool.nonEmpty) {
         pprint.log(w, "REDUCIBLE")
@@ -217,8 +198,8 @@ object LoopFinder {
 
 
         pprint.log(nonBackPreds(number(x.bb)))
-        for (iter <- nonBackPreds(number(x.bb))) {
-          val ydash = nodes(iter).findSet
+        for (y <- nonBackPreds(number(x.bb))) {
+          val ydash = nodes(y).findSet
 
           if (!isAncestor(w, number(ydash.bb), last)) {
             pprint.log((w, number(x.bb)), "IRREDUCIBLE")
@@ -235,7 +216,7 @@ object LoopFinder {
 
       if (nodePool.nonEmpty || types(w) == BlockType.Self) {
         val loop = new LoopBuilder(
-          nodeW,
+          numberToNode(w),
           types(w) != BlockType.Irreducible,
           false
         )
