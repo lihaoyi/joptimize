@@ -19,15 +19,15 @@ object UnitTests extends TestSuite{
 
         'twoNode - check[Int](
           args = Seq(0 -> 1),
-          expected = SimpleLoop(0, Set(0), true, Set(0), Set())
+          expected = SimpleLoop(0, Set(0), true, Set(0, 1), Set())
         )
         'threeNode - check[Int](
           args = Seq(0 -> 1, 1 -> 2),
-          expected = SimpleLoop(0, Set(0), true, Set(0), Set())
+          expected = SimpleLoop(0, Set(0), true, Set(0, 1, 2), Set())
         )
-        'diamong - check[Int](
+        'diamond - check[Int](
           args = Seq(0 -> 1, 1 -> 2, 1 -> 3, 2 -> 4, 3 -> 4),
-          expected = SimpleLoop(0, Set(0), true, Set(0), Set())
+          expected = SimpleLoop(0, Set(0), true, Set(0, 1, 2, 3, 4), Set())
         )
         'loop - check[Int](
           args = Seq(0 -> 1, 1 -> 2, 2 -> 1),
@@ -71,7 +71,7 @@ object UnitTests extends TestSuite{
             2 -> 3,
             3 -> 2
           ),
-          expected = SimpleLoop(0, Set(0), true, Set(0), Set(
+          expected = SimpleLoop(0, Set(0), true, Set(0, 1), Set(
             SimpleLoop(2, Set(2, 3), false, Set(2, 3), Set())
           ))
         )
@@ -93,13 +93,13 @@ object UnitTests extends TestSuite{
             "l" -> "a",
             "l" -> "END"
           ),
-          expected = SimpleLoop("START",Set("START"),true,Set("START"),Set(
-            SimpleLoop("a",Set("a"),true,Set("a", "l"),Set(
-              SimpleLoop("b",Set("b"),false,Set("b"),Set(
-                SimpleLoop("y",Set("y"),false,Set("y"),Set(
-                  SimpleLoop("d",Set("d"),true,Set("d", "t"),Set())
+          expected = SimpleLoop("START",Set("START"),true,Set("START", "END"),Set(
+            SimpleLoop("a", Set("a"), true, Set("a", "l"), Set(
+              SimpleLoop("b", Set("b"), false, Set("b"), Set(
+                SimpleLoop("y", Set("y"), false, Set("y"), Set(
+                  SimpleLoop("d", Set("d"), true, Set("d", "t"), Set())
                 )),
-                SimpleLoop("k",Set("k"),true,Set("k"),Set())
+                SimpleLoop("k", Set("k"), true, Set("k"), Set())
               ))
             ))
           ))

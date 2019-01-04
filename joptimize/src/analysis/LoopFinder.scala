@@ -256,6 +256,11 @@ object LoopFinder {
 
     val root = new MutableSimpleLoop(startNode, true, true)
 
+    for(i <- allNodes.indices){
+      if (types(i) == BasicBlockClass.BB_NONHEADER && header(i) == 0){
+        root.basicBlocks += allNodes(i)
+      }
+    }
     for (liter <- loopMap.values) {
       if (!liter.isRoot && liter.parent == null) liter.setParent(root)
     }
