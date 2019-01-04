@@ -4,18 +4,20 @@ import scala.collection.mutable
 
 
 object LoopFinder {
-  trait SimpleLoop[T]{
-    def header: T
-    def isReducible: Boolean
-    def basicBlocks: Set[T]
-    def children: Set[SimpleLoop[T]]
-  }
+  case class SimpleLoop[T](
+    header: T,
+    allHeaders: Set[T],
+    isReducible: Boolean,
+    basicBlocks: Set[T],
+    children: Set[SimpleLoop[T]]
+  )
   private[this] class MutableSimpleLoop[T](val header: T,
                                            val isReducible: Boolean,
-                                           val isRoot: Boolean) extends SimpleLoop[T]{
+                                           val isRoot: Boolean) {
     var basicBlocks  = Set[T](header)
+    var allHeaders = Set[T](header)
 
-    var children     = Set[SimpleLoop[T]]()
+    var children = Set[MutableSimpleLoop[T]]()
 
     var parent: MutableSimpleLoop[T] = null
 
@@ -23,6 +25,14 @@ object LoopFinder {
       this.parent = parent
       this.parent.children += this
     }
+
+    def freeze(): SimpleLoop[T] = SimpleLoop(
+      header,
+      allHeaders,
+      isReducible,
+      basicBlocks,
+      children.map(_.freeze())
+    )
   }
 
   object BasicBlockClass extends Enumeration {
@@ -265,7 +275,11 @@ object LoopFinder {
       // For every SCC found, create a loop descriptor and link it in.
       //
       if (nodePool.nonEmpty || types(w) == BasicBlockClass.BB_SELF) {
-        val loop = new MutableSimpleLoop(nodeW, types(w) != BasicBlockClass.BB_IRREDUCIBLE, false)
+        val loop = new MutableSimpleLoop(
+          nodeW,
+          types(w) != BasicBlockClass.BB_IRREDUCIBLE,
+          false
+        )
 
         // At this point, one can set attributes to the loop, such as:
         //
@@ -288,18 +302,22 @@ object LoopFinder {
 
           // Nested loops are not added, but linked together.
           if (loopMap.contains(node.bb)) loopMap(node.bb).setParent(loop)
-          else loop.basicBlocks += node.bb
+          else {
+            if (types(number(node.bb)) == BasicBlockClass.BB_REDUCIBLE || types(number(node.bb)) == BasicBlockClass.BB_IRREDUCIBLE){
+              loop.allHeaders += node.bb
+            }
+            loop.basicBlocks += node.bb
+          }
         }
       }  // nodePool.size
     }  // Step c
 
-    val root  = new MutableSimpleLoop(startNode, true, true)
+    val root = new MutableSimpleLoop(startNode, true, true)
 
     for (liter <- loopMap.values) {
       if (!liter.isRoot && liter.parent == null) liter.setParent(root)
     }
 
-
-    root
+    root.freeze()
   }  // findLoops
 }
