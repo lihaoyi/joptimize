@@ -258,6 +258,7 @@ object LoopFinder {
 
           if (!isAncestor(w, number(ydash.bb), last)) {
             types(w) = BasicBlockClass.BB_IRREDUCIBLE
+            types(number(x.bb)) = BasicBlockClass.BB_IRREDUCIBLE
             nonBackPreds(w) += number(ydash.bb)
           } else {
             if (number(ydash.bb) != w) {
