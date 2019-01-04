@@ -79,12 +79,12 @@ object CodeGen{
 
     val rootLoop = LoopFinder.analyzeLoops(graph)
 
-    def rec(l: LoopFinder.SimpleLoop[SSA.Token], depth: Int, label0: List[Int]): Unit = {
+    def rec(l: LoopFinder.Loop[SSA.Token], depth: Int, label0: List[Int]): Unit = {
       val indent = "    " * depth
       val id = label0.reverseIterator.map("-" + _).mkString
       val reducible = if (l.isReducible) "" else " (Irreducible)"
-      val header = mapping(l.header)
-      val blockStr = l.basicBlocks.filter(_ != l.header).map(x => mapping(x)).mkString("[", ", ", "]")
+      val header = l.headers.map(mapping).mkString("[", ", ", "]")
+      val blockStr = l.basicBlocks.filter(!l.headers(_)).map(x => mapping(x)).mkString("[", ", ", "]")
       println(s"${indent}loop$id$reducible, header: $header, blocks: $blockStr")
 
       for((c, i) <- l.children.zipWithIndex)rec(c, depth + 1, i :: label0)

@@ -4,34 +4,32 @@ import scala.collection.mutable
 
 
 object LoopFinder {
-  case class SimpleLoop[T](
-    header: T,
-    allHeaders: Set[T],
+  case class Loop[T](
+    headers: Set[T],
     isReducible: Boolean,
     basicBlocks: Set[T],
-    children: Set[SimpleLoop[T]]
+    children: Set[Loop[T]]
   )
-  private[this] class MutableSimpleLoop[T](val header: T,
-                                           val isReducible: Boolean,
-                                           val isRoot: Boolean) {
-    var basicBlocks  = Set[T](header)
-    var allHeaders = Set[T](header)
+  private[this] class LoopBuilder[T](val primaryHeader: T,
+                                     val isReducible: Boolean,
+                                     val isRoot: Boolean) {
+    var basicBlocks  = Set[T](primaryHeader)
+    var allHeaders = Set[T](primaryHeader)
 
-    var children = Set[MutableSimpleLoop[T]]()
+    var children = Set[LoopBuilder[T]]()
 
-    var parent: MutableSimpleLoop[T] = null
+    var parent: LoopBuilder[T] = null
 
-    def setParent(parent: MutableSimpleLoop[T]) = {
+    def setParent(parent: LoopBuilder[T]) = {
       this.parent = parent
       this.parent.children += this
     }
 
-    def freeze(): SimpleLoop[T] = SimpleLoop(
-      header,
+    def build(): Loop[T] = Loop(
       allHeaders,
       isReducible,
       basicBlocks,
-      children.map(_.freeze())
+      children.map(_.build())
     )
   }
 
@@ -140,7 +138,7 @@ object LoopFinder {
   // been chosen to be identical to the nomenclature in Havlak's
   // paper (which, in turn, is similar to the one used by Tarjan).
   //
-  def analyzeLoops[T](edgeList: Seq[(T, T)]): SimpleLoop[T] = {
+  def analyzeLoops[T](edgeList: Seq[(T, T)]): Loop[T] = {
 
     val allNodes = edgeList.flatMap{case (k, v) => Seq(k, v)}.distinct
     val size = allNodes.size
@@ -187,7 +185,7 @@ object LoopFinder {
 
     header(0) = 0
 
-    val loopMap = mutable.Map.empty[T, MutableSimpleLoop[T]]
+    val loopMap = mutable.Map.empty[T, LoopBuilder[T]]
     for (w <- Range.inclusive(size - 1, 0, -1)) {
       // this is 'P' in Havlak's paper
       var nodePool = List.empty[UnionFindNode[T]]
@@ -231,7 +229,7 @@ object LoopFinder {
 
 
       if (nodePool.nonEmpty || types(w) == BasicBlockClass.BB_SELF) {
-        val loop = new MutableSimpleLoop(
+        val loop = new LoopBuilder(
           nodeW,
           types(w) != BasicBlockClass.BB_IRREDUCIBLE,
           false
@@ -254,7 +252,7 @@ object LoopFinder {
       }
     }
 
-    val root = new MutableSimpleLoop(startNode, true, true)
+    val root = new LoopBuilder(startNode, true, true)
 
     for(i <- allNodes.indices){
       if (types(i) == BasicBlockClass.BB_NONHEADER && header(i) == 0){
@@ -265,6 +263,6 @@ object LoopFinder {
       if (!liter.isRoot && liter.parent == null) liter.setParent(root)
     }
 
-    root.freeze()
+    root.build()
   }  // findLoops
 }
