@@ -24,7 +24,8 @@ abstract class Scheduler(dominatorDepth: Map[SSA.Token, Int],
       if (!control.contains(in)) scheduleEarly(in)
     }
 
-    if (!control.contains(n) && upstream(n).nonEmpty){
+    if (!control.contains(n)){
+      pprint.log(upstream(n))
       val b = upstream(n).flatMap(control.get).minBy(dominatorDepth)
       control(n) = b
     }
@@ -33,13 +34,15 @@ abstract class Scheduler(dominatorDepth: Map[SSA.Token, Int],
     if (!visited.containsKey(n)){
       pprint.log(mapping.get(n))
       pprint.log(n)
+      pprint.log(isPinned(n))
       visited.put(n, ())
       for(out <- downstream(n)){
         if (!isPinned(out)) scheduleLate(out)
       }
       if (!isPinned(n)){
         var lca: SSA.Token = null
-        for(out <- downstream(n) if !isPinned(out)){
+        pprint.log(downstream(n))
+        for(out <- downstream(n)){
 //          pprint.log(out)
 
           out match{
@@ -49,17 +52,16 @@ abstract class Scheduler(dominatorDepth: Map[SSA.Token, Int],
               }
             case _ =>
               val outb: SSA.Token = control(out)
+              pprint.log(outb)
               lca = findLca(lca, outb)
           }
         }
         var best = lca
-        if (control.contains(n)){
-          while(lca ne control(n)){
-            pprint.log(lca)
-            pprint.log(best)
-            if (loopNest(lca) < loopNest(best)) best = lca
-            lca = immediateDominator(lca)
-          }
+        while(lca != control(n)){
+          pprint.log(lca)
+          pprint.log(best)
+          if (loopNest(lca) < loopNest(best)) best = lca
+          lca = immediateDominator(lca)
         }
         control(n) = best
 
