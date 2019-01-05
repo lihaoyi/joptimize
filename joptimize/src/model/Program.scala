@@ -12,7 +12,7 @@ import java.util
   * and merges.
   */
 case class Program(allTerminals: Seq[SSA],
-                   phiMerges:  Map[SSA.Phi, Set[(SSA.Control, SSA)]],
+                   phiMerges:  Map[SSA.Phi, (SSA.Control, Set[(SSA.Control, SSA)])],
                    regionMerges: Map[SSA.Region, Set[SSA.Control]]){
   /**
     * Transforms this program by trying to apply a callback on every node.
@@ -83,7 +83,7 @@ case class Program(allTerminals: Seq[SSA],
     }
     Program(
       allTerminals.map(recSSA),
-      phiMerges.map{case (k, v) => (k, v.map(x => (recControl(x._1), recSSA(x._2))))},
+      phiMerges.map{case (k, (c, v)) => (k, (c, v.map(x => (recControl(x._1), recSSA(x._2)))))},
       regionMerges.map{case (k, v) => (k, v.map(recControl))}
     )
   }

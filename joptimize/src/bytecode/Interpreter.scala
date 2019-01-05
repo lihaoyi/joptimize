@@ -151,7 +151,7 @@ abstract class Interpreter[V <: Value] {
     * @return the merged value. If the merged value is equal to { @code value1}, this method
     *                                                                   <i>must</i> return { @code value1}.
     */
-  def merge(value1: V, value2: V, insnIndex: Int): V
+  def merge(value1: V, value2: V, insnIndex: Int, targetInsnIndex: Int): V
 
-  def merge0(value1: V, insnIndex: Int): V
+  def merge0(value1: V, insnIndex: Int, targetInsnIndex: Int): V
 }

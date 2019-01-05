@@ -61,7 +61,7 @@ object Renderer {
 
         case ssa: SSA =>
           ssa.allUpstream ++ (ssa match{
-            case phi: SSA.Phi => phiMerges(phi).flatMap(x => Seq(x._1, x._2))
+            case phi: SSA.Phi => phiMerges(phi)._2.flatMap(x => Seq(x._1, x._2))
             case _ => Nil
           })
       }
@@ -115,7 +115,7 @@ object Renderer {
 
     def treeify0(ssa: SSA): Tree = {
       ssa match{
-        case phi: SSA.Phi => apply("phi", phiMerges(phi).map{case (ctrl, ssa) => infix(renderControl(ctrl), ":", treeify(ssa))}.toSeq:_*)
+        case phi: SSA.Phi => apply("phi", phiMerges(phi)._2.map{case (ctrl, ssa) => infix(renderControl(ctrl), ":", treeify(ssa))}.toSeq:_*)
         case SSA.Arg(index, typeSize) => atom(fansi.Color.Cyan("arg" + index).toString)
         case SSA.BinOp(a, b, opcode) => infix(treeify(a), binOpString(opcode), treeify(b))
         case SSA.UnaOp(a, opcode) => apply(unaryOpString(opcode), treeify(a))

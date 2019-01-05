@@ -6,7 +6,8 @@ import scala.collection.mutable
 
 abstract class Scheduler(dominatorDepth: Map[SSA.Token, Int],
                          immediateDominator: Map[SSA.Token, SSA.Token],
-                         phiMerges:  Map[SSA.Phi, Set[(SSA.Control, SSA)]]) {
+                         phiMerges:  Map[SSA.Phi, (SSA.Control, Set[(SSA.Control, SSA)])],
+                         mapping: Map[SSA.Token, String]) {
   def downstream(ssa: SSA.Token): Seq[SSA.Token]
   def upstream(ssa: SSA.Token): Seq[SSA.Token]
   def isPinned(ssa: SSA.Token): Boolean
@@ -14,9 +15,24 @@ abstract class Scheduler(dominatorDepth: Map[SSA.Token, Int],
   val visited = new java.util.IdentityHashMap[SSA.Token, Unit]()
 
   val control = mutable.Map.empty[SSA.Token, SSA.Token]
+
+  def scheduleEarly(n: SSA.Token): Unit = {
+    pprint.log(n)
+    pprint.log(upstream(n))
+
+    for(in <- upstream(n)){
+      if (!control.contains(in)) scheduleEarly(in)
+    }
+
+    if (!control.contains(n) && upstream(n).nonEmpty){
+      val b = upstream(n).flatMap(control.get).minBy(dominatorDepth)
+      control(n) = b
+    }
+  }
   def scheduleLate(n: SSA.Token): Unit = {
     if (!visited.containsKey(n)){
-//      pprint.log(n)
+      pprint.log(mapping.get(n))
+      pprint.log(n)
       visited.put(n, ())
       for(out <- downstream(n)){
         if (!isPinned(out)) scheduleLate(out)
@@ -28,7 +44,7 @@ abstract class Scheduler(dominatorDepth: Map[SSA.Token, Int],
 
           out match{
             case phi: SSA.Phi =>
-              for((ctrl, value) <- phiMerges(phi)){
+              for((ctrl, value) <- phiMerges(phi)._2){
                 if (value eq n) lca = findLca(lca, ctrl)
               }
             case _ =>
@@ -39,6 +55,8 @@ abstract class Scheduler(dominatorDepth: Map[SSA.Token, Int],
         var best = lca
         if (control.contains(n)){
           while(lca ne control(n)){
+            pprint.log(lca)
+            pprint.log(best)
             if (loopNest(lca) < loopNest(best)) best = lca
             lca = immediateDominator(lca)
           }

@@ -96,7 +96,7 @@ object CodeGen{
 
     val (immediateDominators, dominatorDepth) = findDominators(graph)
 
-    val nodesToBlocks = schedule(program, loopTree, dominatorDepth, immediateDominators, graph)
+    val nodesToBlocks = schedule(program, loopTree, dominatorDepth, immediateDominators, graph, mapping)
     pprint.log(nodesToBlocks, height=99999)
 //    val pinnedNodes = program
 //    for(controlFlow)
@@ -107,7 +107,8 @@ object CodeGen{
                loopTree: LoopFinder.Loop[SSA.Token],
                dominatorDepth: Map[SSA.Token, Int],
                immediateDominator: Map[SSA.Token, SSA.Token],
-               graph: Seq[(SSA.Token, SSA.Token)]): Map[SSA.Token, SSA.Token] = {
+               graph: Seq[(SSA.Token, SSA.Token)],
+               mapping: Map[SSA.Token, String]): Map[SSA.Token, SSA.Token] = {
     val (allVertices, roots, downstreamEdges) =
       Util.breadthFirstAggregation[SSA.Token](program.allTerminals.toSet){
         case ctrl: SSA.Region => program.regionMerges(ctrl).toSeq
@@ -116,7 +117,7 @@ object CodeGen{
 
         case ssa: SSA =>
           ssa.allUpstream ++ (ssa match{
-            case phi: SSA.Phi => program.phiMerges(phi).flatMap(x => Seq(x._1, x._2))
+            case phi: SSA.Phi => program.phiMerges(phi)._2.flatMap(x => Seq(x._1, x._2))
             case _ => Nil
           })
       }
@@ -129,17 +130,42 @@ object CodeGen{
 
     val downstreamMap = downstreamEdges.groupBy(_._1).map{case (k, vs) => (k, vs.map(_._2))}
     val upstreamMap = downstreamEdges.groupBy(_._2).map{case (k, vs) => (k, vs.map(_._1))}
-    val scheduler = new Scheduler(dominatorDepth, immediateDominator, program.phiMerges) {
+    val scheduler = new Scheduler(dominatorDepth, immediateDominator, program.phiMerges, mapping) {
       override def downstream(ssa: SSA.Token) = downstreamMap.getOrElse(ssa, Nil)
 
       override def upstream(ssa: SSA.Token) = upstreamMap.getOrElse(ssa, Nil).filter(!_.isInstanceOf[SSA.Control])
 
       override def isPinned(ssa: SSA.Token) = ssa.isInstanceOf[SSA.Controlled]
 
-      override def loopNest(block: SSA.Token) = loopNestMap(block)
+      override def loopNest(block: SSA.Token) = {
+        assert(block != null)
+        loopNestMap(block)
+      }
     }
 
-    allVertices.collect{case c: SSA.Controlled => c}.foreach(scheduler.scheduleLate)
+    allVertices.collect{
+      case c: SSA.Control => scheduler.control(c) = c
+      case c: SSA.Controlled => scheduler.control(c) = c.control
+      case c: SSA.Phi => scheduler.control(c) = program.phiMerges(c)._1
+    }
+
+    allVertices.collect{
+      case scheduleRoot: SSA.Control =>
+        pprint.log(scheduleRoot)
+        scheduler.scheduleEarly(scheduleRoot)
+      case scheduleRoot: SSA.Controlled =>
+        pprint.log(scheduleRoot)
+        scheduler.scheduleEarly(scheduleRoot)
+    }
+
+    allVertices.collect{
+      case scheduleRoot: SSA.Control =>
+        pprint.log(scheduleRoot)
+        scheduler.scheduleLate(scheduleRoot)
+      case scheduleRoot: SSA.Controlled =>
+        pprint.log(scheduleRoot)
+        scheduler.scheduleLate(scheduleRoot)
+    }
 
     scheduler.control.filter{case (k, v) => v != null}.toMap
   }

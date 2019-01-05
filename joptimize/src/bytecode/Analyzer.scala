@@ -43,10 +43,10 @@ object Analyzer{
       val oldFrame = frames(targetInsnIndex)
       if (oldFrame == null) {
         frames(targetInsnIndex) = new Frame[V](frame)
-        frames(targetInsnIndex).merge0(insnIndex, interpreter)
+        frames(targetInsnIndex).merge0(insnIndex, targetInsnIndex, interpreter)
         changed = true
       }
-      else changed = oldFrame.merge(insnIndex, frame, interpreter)
+      else changed = oldFrame.merge(insnIndex, targetInsnIndex, frame, interpreter)
       if (changed && !inInstructionsToProcess(targetInsnIndex)) {
         inInstructionsToProcess(targetInsnIndex) = true
 

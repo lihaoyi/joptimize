@@ -41,7 +41,7 @@ class Walker(isInterface: JType.Cls => Boolean,
       println("+" * 20 + sig + "+" * 20)
       println(Renderer.renderInsns(mn.instructions))
 
-      val phiMerges0 = mutable.Set.empty[(SSA.Phi, (Int, SSA))]
+      val phiMerges0 = mutable.Set.empty[(SSA.Phi, (Int, Int, SSA))]
       val frames = joptimize.bytecode.Analyzer.analyze(sig.cls.name, mn, new StepEvaluator(phiMerges0))
 
       val insns = mn.instructions.iterator().asScala.toVector
@@ -121,18 +121,20 @@ class Walker(isInterface: JType.Cls => Boolean,
 
       val regionMerges2 = regionStarts.map{case (k, v) => (v, regionMerges(v))}
 
-      val phiMerges = phiMerges0.groupBy(_._1).mapValues(_.map(_._2).toSet).toMap
+      val phiMerges = phiMerges0.groupBy(_._1).mapValues(vs => (vs.head._2._2, vs.map(x => (x._2._1, x._2._3)).toSet)).toMap
 
 
 
       val program = Program(
         terminals.map(_._2),
-        phiMerges.map{case (k, vs) => (k, vs.map{case (idx, ssa) => (findStartRegion(insns(idx)): SSA.Control, ssa)})},
+        phiMerges.map{case (k, (c, vs)) =>
+          (k, (findStartRegion(insns(c)): SSA.Control, vs.map{case (idx, ssa) => (findStartRegion(insns(idx)): SSA.Control, ssa)}))
+        },
         regionMerges2.toMap
       )
 
       val uselessPhis = program.phiMerges.flatMap{ case (phi, incoming) =>
-        val unique = incoming.filter(_._2 != phi)
+        val unique = incoming._2.filter(_._2 != phi)
         if (unique.size == 1) Some(phi -> unique.head._2)
         else None
       }

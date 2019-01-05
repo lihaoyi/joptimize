@@ -17,7 +17,7 @@ import scala.collection.mutable
   * generated SSA nodes; we do this to allow immediate constant folding if the
   * node's type is specific enough to be a concrete value.
   */
-class StepEvaluator(merges: mutable.Set[(SSA.Phi, (Int, SSA))]) extends joptimize.bytecode.Interpreter[SSA]{
+class StepEvaluator(merges: mutable.Set[(SSA.Phi, (Int, Int, SSA))]) extends joptimize.bytecode.Interpreter[SSA]{
 
   def newOperation(insn: AbstractInsnNode) = {
     insn.getOpcode match {
@@ -175,15 +175,15 @@ class StepEvaluator(merges: mutable.Set[(SSA.Phi, (Int, SSA))]) extends joptimiz
 
   def returnOperation(insn: AbstractInsnNode, value: SSA, expected: SSA) = ()
 
-  def merge(v1: SSA, v2: SSA, insnIndex: Int) = {
+  def merge(v1: SSA, v2: SSA, insnIndex: Int, targetInsnIndex: Int) = {
     val phi = v1.asInstanceOf[SSA.Phi]
-    merges.add((phi, (insnIndex, v2)))
+    merges.add((phi, (insnIndex, targetInsnIndex, v2)))
     phi
   }
 
-  def merge0(value1: SSA, insnIndex: Int) = {
+  def merge0(value1: SSA, insnIndex: Int, targetInsnIndex: Int) = {
     val phi = new SSA.Phi(value1.getSize)
-    merges.add(phi -> (insnIndex, value1))
+    merges.add(phi -> (insnIndex, targetInsnIndex, value1))
     phi
   }
 
