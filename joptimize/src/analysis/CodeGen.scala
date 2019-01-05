@@ -2,6 +2,7 @@ package joptimize.analysis
 
 import java.util
 
+import joptimize.Util
 import joptimize.model.{Program, SSA}
 import org.objectweb.asm.Opcodes._
 import org.objectweb.asm.tree._
@@ -67,6 +68,7 @@ object CodeGen{
 
   def apply(program: Program, mapping: Map[SSA.Token, String]): InsnList = {
     val controlFlowEdges = findControlFlowGraph(program)
+
     val graph = controlFlowEdges ++ program.allTerminals.map{ case r: SSA.Controlled => (r.control, r)}
     println(
       renderGraph(
@@ -96,10 +98,51 @@ object CodeGen{
 
     pprint.log(immediateDominators)
     pprint.log(dominatorDepth)
-    val nodesToBlocks = schedule(program, loopTree)
+    val nodesToBlocks = schedule(program, loopTree, dominatorDepth, immediateDominators, graph)
 //    val pinnedNodes = program
 //    for(controlFlow)
     ???
+  }
+
+  def schedule(program: Program,
+               loopTree: LoopFinder.Loop[SSA.Token],
+               dominatorDepth: Map[SSA.Token, Int],
+               immediateDominator: Map[SSA.Token, SSA.Token],
+               graph: Seq[(SSA.Token, SSA.Token)]): Map[SSA.Token, SSA.Token] = {
+    val (allVertices, roots, downstreamEdges) =
+      Util.breadthFirstAggregation[SSA.Token](program.allTerminals.toSet){
+        case ctrl: SSA.Region => program.regionMerges(ctrl).toSeq
+        case SSA.True(inner) => Seq(inner)
+        case SSA.False(inner) => Seq(inner)
+
+        case ssa: SSA =>
+          ssa.allUpstream ++ (ssa match{
+            case phi: SSA.Phi => program.phiMerges(phi).flatMap(x => Seq(x._1, x._2))
+            case _ => Nil
+          })
+      }
+    val loopNestMap = mutable.Map.empty[SSA.Token, Int]
+    def recLoop(loop: LoopFinder.Loop[SSA.Token], depth: Int): Unit = {
+      loop.basicBlocks.foreach(loopNestMap(_) = depth)
+      loop.children.foreach(recLoop(_, depth + 1))
+    }
+    recLoop(loopTree, 0)
+
+    val downstreamMap = downstreamEdges.groupBy(_._1).map{case (k, vs) => (k, vs.map(_._2))}
+    val upstreamMap = downstreamEdges.groupBy(_._2).map{case (k, vs) => (k, vs.map(_._1))}
+    val scheduler = new Scheduler(dominatorDepth, immediateDominator, program.phiMerges) {
+      override def downstream(ssa: SSA.Token) = downstreamMap.getOrElse(ssa, Nil)
+
+      override def upstream(ssa: SSA.Token) = upstreamMap.getOrElse(ssa, Nil)
+
+      override def isPinned(ssa: SSA.Token) = ssa.isInstanceOf[SSA.Phi]
+
+      override def loopNest(block: SSA.Token) = loopNestMap(block)
+    }
+
+    allVertices.collect{case c: SSA.Controlled => c}.foreach(scheduler.scheduleLate)
+
+    scheduler.control.toMap
   }
 
   def findDominators[T](edges: Seq[(T, T)]): (Map[T, T], Map[T, Int]) = {
@@ -130,39 +173,6 @@ object CodeGen{
       dominatorDepth.zipWithIndex.map{case (v, i) => (nodes(i), v)}.toMap
     )
   }
-
-  def schedule(program: Program,
-               loopTree: LoopFinder.Loop[SSA.Token]): Map[SSA, SSA.Token] = {
-
-    ???
-  }
-//
-//  def findUsages(ssa: SSA): Seq[SSA] = ???
-//  def findUsed(ssa: SSA): Seq[SSA] = ???
-//  def isPinned(ssa: SSA): Boolean = ???
-//  def scheduleLate(n: SSA, visited: java.util.IdentityHashMap[SSA, Unit]): Unit = {
-//    if (!visited.containsKey(n)){
-//      visited.put(n, ())
-//      for(out <- findUsages(n)){
-//        if (!isPinned(out)) scheduleLate(out, visited)
-//      }
-//      if (!isPinned(n)){
-//        val lca = Option.empty[SSA.Control]
-//        for(out <- findUsages(n)){
-//          val outb: SSA.Control = out.control.block
-//          if (out.isInstanceOf[SSA.Phi]){
-//            for()
-//          }else{
-//            lca = Some(findLca(lca, outb))
-//          }
-//
-//        }
-//      }
-//    }
-//  }
-//  def findLca(a: SSA.Control, b: SSA.Control): SSA.Control = {
-//
-//  }
 }
 //object CodeGen {
 //
