@@ -1,25 +1,37 @@
 package joptimize
-import joptimize.analysis.LoopFinder
+import joptimize.analysis.{CodeGen, LoopFinder}
 import joptimize.analysis.LoopFinder.Loop
 import utest._
 
 object LoopFinderTests extends TestSuite{
   val tests = Tests{
-    def check[T](args: Seq[(T, T)], expected: Loop[T]) = {
+    def check[T](args: Seq[(T, T)],
+                 expected: Loop[T],
+                 expectedImmediateDominators: Map[T, T] = null,
+                 expectedDominatorDepths: Map[T, Int] = null) = {
       val analyzed = LoopFinder.analyzeLoops(args)
       assert(analyzed == expected)
+      if (expectedImmediateDominators!= null){
+        val (immediateDominators, dominatorDepths) = CodeGen.findDominators(args)
+        assert(immediateDominators == expectedImmediateDominators)
+        assert(dominatorDepths == expectedDominatorDepths)
+      }
     }
 
     'reducible - {
       // 0 -> 1
       'twoNode - check[Int](
         args = Seq(0 -> 1),
-        expected = Loop(Set(0), true, Set(0, 1), Set())
+        expected = Loop(Set(0), true, Set(0, 1), Set()),
+        expectedImmediateDominators = Map(1 -> 0),
+        expectedDominatorDepths = Map(0 -> 0, 1 -> 1)
       )
       // 0 -> 1 -> 2
       'threeNode - check[Int](
         args = Seq(0 -> 1, 1 -> 2),
-        expected = Loop(Set(0), true, Set(0, 1, 2), Set())
+        expected = Loop(Set(0), true, Set(0, 1, 2), Set()),
+        expectedImmediateDominators = Map(1 -> 0, 2 -> 1),
+        expectedDominatorDepths = Map(0 -> 0, 1 -> 1, 2 -> 2)
       )
       //         2
       //        ^ \
@@ -30,7 +42,9 @@ object LoopFinderTests extends TestSuite{
       //         3
       'diamond - check[Int](
         args = Seq(0 -> 1, 1 -> 2, 1 -> 3, 2 -> 4, 3 -> 4),
-        expected = Loop(Set(0), true, Set(0, 1, 2, 3, 4), Set())
+        expected = Loop(Set(0), true, Set(0, 1, 2, 3, 4), Set()),
+        expectedImmediateDominators = Map(1 -> 0, 2 -> 1, 3 -> 1, 4 -> 1),
+        expectedDominatorDepths = Map(0 -> 0, 1 -> 1, 2 -> 2, 3 -> 2, 4 -> 2)
       )
 
       // 0 -> 1 <-> 2
@@ -38,14 +52,18 @@ object LoopFinderTests extends TestSuite{
         args = Seq(0 -> 1, 1 -> 2, 2 -> 1),
         expected = Loop(Set(0), true, Set(0), Set(
           Loop(Set(1), true, Set(1, 2), Set())
-        ))
+        )),
+        expectedImmediateDominators = Map(1 -> 0, 2 -> 1),
+        expectedDominatorDepths = Map(0 -> 0, 1 -> 1, 2 -> 2)
       )
       // 0 -> 1 <-> 2 -> 3
       'loopEnd - check[Int](
         args = Seq(0 -> 1, 1 -> 2, 2 -> 1, 2 -> 3),
         expected = Loop(Set(0), true, Set(0, 3), Set(
           Loop(Set(1), true, Set(1, 2), Set())
-        ))
+        )),
+        expectedImmediateDominators = Map(1 -> 0, 2 -> 1, 3 -> 2),
+        expectedDominatorDepths = Map(0 -> 0, 1 -> 1, 2 -> 2, 3 -> 3)
       )
 
       // 0 -> 1 <-> 2 <-> 3
@@ -55,7 +73,9 @@ object LoopFinderTests extends TestSuite{
           Loop(Set(1), true, Set(1), Set(
             Loop(Set(2), true, Set(2, 3), Set())
           ))
-        ))
+        )),
+        expectedImmediateDominators = Map(1 -> 0, 2 -> 1, 3 -> 2),
+        expectedDominatorDepths = Map(0 -> 0, 1 -> 1, 2 -> 2, 3 -> 3)
       )
 
       //           4
@@ -82,7 +102,9 @@ object LoopFinderTests extends TestSuite{
             Loop(Set(2), true, Set(2, 4), Set()),
             Loop(Set(3), true, Set(3, 5), Set())
           ))
-        ))
+        )),
+        expectedImmediateDominators = Map(1 -> 0, 2 -> 1, 3 -> 2, 4 -> 2, 5 -> 3),
+        expectedDominatorDepths = Map(0 -> 0, 1 -> 1, 2 -> 2, 3 -> 3, 4 -> 3, 5 -> 4)
       )
 
       //           4 -> 6
@@ -115,7 +137,13 @@ object LoopFinderTests extends TestSuite{
             Loop(Set(2), true, Set(2, 4), Set()),
             Loop(Set(3), true, Set(3, 5), Set())
           ))
-        ))
+        )),
+        expectedImmediateDominators = Map(
+          1 -> 0, 2 -> 1, 3 -> 2, 4 -> 2, 6 -> 4, 5 -> 3, 7 -> 5, 8 -> 7, 9 -> 8
+        ),
+        expectedDominatorDepths = Map(
+          0 -> 0, 1 -> 1, 2 -> 2, 3 -> 3, 4 -> 3, 6 -> 4, 5 -> 4, 7 -> 5, 8 -> 6, 9 -> 7
+        )
       )
 
       //           4
@@ -148,7 +176,13 @@ object LoopFinderTests extends TestSuite{
               Loop(Set(5), true, Set(5, 6, 7, 8), Set())
             ))
           ))
-        ))
+        )),
+        expectedImmediateDominators = Map(
+          1 -> 0, 2 -> 1, 3 -> 2, 4 -> 2, 5 -> 3, 6 -> 5, 7 -> 6, 8 -> 7
+        ),
+        expectedDominatorDepths = Map(
+          0 -> 0, 1 -> 1, 2 -> 2, 3 -> 3, 4 -> 3, 5 -> 4, 6 -> 5, 7 -> 6, 8 -> 7
+        )
       )
     }
     'irreducible - {
@@ -167,7 +201,18 @@ object LoopFinderTests extends TestSuite{
         ),
         expected = Loop(Set(0), true, Set(0, 1), Set(
           Loop(Set(2), false, Set(2, 3), Set())
-        ))
+        )),
+        expectedImmediateDominators = Map(
+          1 -> 0,
+          2 -> 1,
+          3 -> 1
+        ),
+        expectedDominatorDepths = Map(
+          0 -> 0,
+          1 -> 1,
+          2 -> 2,
+          3 -> 2
+        )
       )
 
       //          ----> 3
@@ -194,7 +239,22 @@ object LoopFinderTests extends TestSuite{
           Loop(Set(2), false, Set(2), Set(
             Loop(Set(4), false, Set(4, 3, 5), Set())
           ))
-        ))
+        )),
+        expectedImmediateDominators = Map(
+          1 -> 0,
+          2 -> 1,
+          3 -> 1,
+          4 -> 1,
+          5 -> 1
+        ),
+        expectedDominatorDepths = Map(
+          0 -> 0,
+          1 -> 1,
+          2 -> 2,
+          3 -> 2,
+          4 -> 2,
+          5 -> 2
+        )
       )
       'paper - check[String](
         args = Seq(
@@ -247,7 +307,22 @@ object LoopFinderTests extends TestSuite{
         expected = Loop(Set(0), true, Set(0, 1), Set(
           Loop(Set(2), false, Set(2, 3), Set()),
           Loop(Set(4), true, Set(4, 5), Set())
-        ))
+        )),
+        expectedImmediateDominators = Map(
+          1 -> 0,
+          2 -> 1,
+          3 -> 1,
+          4 -> 2,
+          5 -> 4
+        ),
+        expectedDominatorDepths = Map(
+          0 -> 0,
+          1 -> 1,
+          2 -> 2,
+          3 -> 2,
+          4 -> 3,
+          5 -> 4
+        )
       )
 
       //         -----> 3
@@ -267,7 +342,20 @@ object LoopFinderTests extends TestSuite{
         ),
         expected = Loop(Set(0), true, Set(0, 1), Set(
           Loop(Set(2), false, Set(2, 4, 3), Set())
-        ))
+        )),
+        expectedImmediateDominators = Map(
+          1 -> 0,
+          2 -> 1,
+          3 -> 1,
+          4 -> 2
+        ),
+        expectedDominatorDepths = Map(
+          0 -> 0,
+          1 -> 1,
+          2 -> 2,
+          3 -> 2,
+          4 -> 3
+        )
       )
 
       //          -----> 4
@@ -295,7 +383,24 @@ object LoopFinderTests extends TestSuite{
             Loop(Set(3), false, Set(3, 4), Set())
           )),
           Loop(Set(5), true, Set(5, 6), Set())
-        ))
+        )),
+        expectedImmediateDominators = Map(
+          1 -> 0,
+          2 -> 1,
+          3 -> 1,
+          4 -> 1,
+          5 -> 3,
+          6 -> 5
+        ),
+        expectedDominatorDepths = Map(
+          0 -> 0,
+          1 -> 1,
+          2 -> 2,
+          3 -> 2,
+          4 -> 2,
+          5 -> 3,
+          6 -> 4
+        )
       )
       //          -----> 4
       //         /       ^
@@ -320,7 +425,22 @@ object LoopFinderTests extends TestSuite{
           Loop(Set(2), false, Set(2), Set(
             Loop(Set(3), false, Set(3, 5, 4), Set())
           ))
-        ))
+        )),
+        expectedImmediateDominators = Map(
+          1 -> 0,
+          2 -> 1,
+          3 -> 1,
+          4 -> 1,
+          5 -> 3
+        ),
+        expectedDominatorDepths = Map(
+          0 -> 0,
+          1 -> 1,
+          2 -> 2,
+          3 -> 2,
+          4 -> 2,
+          5 -> 3
+        )
       )
 
       //               -----> 3
@@ -341,7 +461,20 @@ object LoopFinderTests extends TestSuite{
         expected = Loop(Set(0), true, Set(0), Set(
           Loop(Set(1), true, Set(1, 2), Set()),
           Loop(Set(3), false, Set(3, 4), Set())
-        ))
+        )),
+        expectedImmediateDominators = Map(
+          1 -> 0,
+          2 -> 1,
+          3 -> 2,
+          4 -> 2
+        ),
+        expectedDominatorDepths = Map(
+          0 -> 0,
+          1 -> 1,
+          2 -> 2,
+          3 -> 3,
+          4 -> 3
+        )
       )
 
       //               ------ 3
@@ -365,7 +498,20 @@ object LoopFinderTests extends TestSuite{
               Loop(Set(4),true,Set(4, 3),Set())
             ))
           ))
-        ))
+        )),
+        expectedImmediateDominators = Map(
+          1 -> 0,
+          2 -> 1,
+          3 -> 4,
+          4 -> 2
+        ),
+        expectedDominatorDepths = Map(
+          0 -> 0,
+          1 -> 1,
+          2 -> 2,
+          3 -> 4,
+          4 -> 3
+        )
       )
     }
   }

@@ -92,37 +92,76 @@ object CodeGen{
 
     rec(loopTree, 0, Nil)
 
+    val (immediateDominators, dominatorDepth) = findDominators(graph)
+
+    pprint.log(immediateDominators)
+    pprint.log(dominatorDepth)
     val nodesToBlocks = schedule(program, loopTree)
 //    val pinnedNodes = program
 //    for(controlFlow)
     ???
   }
 
+  def findDominators[T](edges: Seq[(T, T)]): (Map[T, T], Map[T, Int]) = {
+    val indices = edges.flatMap{case (x, y) => Seq(x, y)}.distinct.zipWithIndex.toMap
+    val nodes = indices.map(_.swap)
+    val successorMap = edges.groupBy(_._1).map{case (k, v) => (indices(k), v.map(_._2).map(indices))}
+    val predecessorMap = edges.groupBy(_._2).map{case (k, v) => (indices(k), v.map(_._1).map(indices))}
+
+    val immediateDominators = new LengauerTarjan {
+      def successors(v: Int) = successorMap.getOrElse(v, Nil)
+      def predecessors(v: Int) = predecessorMap.getOrElse(v, Nil)
+      def numNodes = indices.size
+    }.computeDominatorTree()
+
+    val dominatorDepth = {
+      Array.tabulate(immediateDominators.length) { i =>
+        var current = i
+        var n = 0
+        while (immediateDominators(current) != -1){
+          current = immediateDominators(current)
+          n += 1
+        }
+        n
+      }
+    }
+    (
+      immediateDominators.zipWithIndex.collect{case (v, i) if v != -1 => (nodes(i), nodes(v))}.toMap,
+      dominatorDepth.zipWithIndex.map{case (v, i) => (nodes(i), v)}.toMap
+    )
+  }
+
   def schedule(program: Program,
-               loopTree: LoopFinder.Loop[SSA.Token]): Map[SSA.Token, SSA.Token] = {
+               loopTree: LoopFinder.Loop[SSA.Token]): Map[SSA, SSA.Token] = {
 
     ???
   }
-
-//  def scheduleEarly(n: SSA,
-//                    control: mutable.Map[SSA, SSA.Control],
-//                    dominatorDepth: mutable.Map[SSA, Int]) = {
-//    val incoming: Seq[SSA] = n.incoming
-//    for(in <- incoming){
-//      if (!in.isControl){
-//        scheduleEarly(in)
+//
+//  def findUsages(ssa: SSA): Seq[SSA] = ???
+//  def findUsed(ssa: SSA): Seq[SSA] = ???
+//  def isPinned(ssa: SSA): Boolean = ???
+//  def scheduleLate(n: SSA, visited: java.util.IdentityHashMap[SSA, Unit]): Unit = {
+//    if (!visited.containsKey(n)){
+//      visited.put(n, ())
+//      for(out <- findUsages(n)){
+//        if (!isPinned(out)) scheduleLate(out, visited)
 //      }
-//    }
-//    if (!n.isControl){
-//      val b = control(incoming(0))
-//      for(in <- incoming.drop(1)){
-//        val inb = control(in)
-//        if (dominatorDepth(b) < dominatorDepth(inb)){
-//          dominatorDepth(b) = dominatorDepth(inb)
+//      if (!isPinned(n)){
+//        val lca = Option.empty[SSA.Control]
+//        for(out <- findUsages(n)){
+//          val outb: SSA.Control = out.control.block
+//          if (out.isInstanceOf[SSA.Phi]){
+//            for()
+//          }else{
+//            lca = Some(findLca(lca, outb))
+//          }
+//
 //        }
 //      }
-//      control(n) =
 //    }
+//  }
+//  def findLca(a: SSA.Control, b: SSA.Control): SSA.Control = {
+//
 //  }
 }
 //object CodeGen {
