@@ -77,7 +77,7 @@ object CodeGen{
       )
     )
 
-    val rootLoop = LoopFinder.analyzeLoops(graph)
+    val loopTree = LoopFinder.analyzeLoops(graph)
 
     def rec(l: LoopFinder.Loop[SSA.Token], depth: Int, label0: List[Int]): Unit = {
       val indent = "    " * depth
@@ -90,9 +90,40 @@ object CodeGen{
       for((c, i) <- l.children.zipWithIndex)rec(c, depth + 1, i :: label0)
     }
 
-    rec(rootLoop, 0, Nil)
+    rec(loopTree, 0, Nil)
+
+    val nodesToBlocks = schedule(program, loopTree)
+//    val pinnedNodes = program
+//    for(controlFlow)
     ???
   }
+
+  def schedule(program: Program,
+               loopTree: LoopFinder.Loop[SSA.Token]): Map[SSA.Token, SSA.Token] = {
+
+    ???
+  }
+
+//  def scheduleEarly(n: SSA,
+//                    control: mutable.Map[SSA, SSA.Control],
+//                    dominatorDepth: mutable.Map[SSA, Int]) = {
+//    val incoming: Seq[SSA] = n.incoming
+//    for(in <- incoming){
+//      if (!in.isControl){
+//        scheduleEarly(in)
+//      }
+//    }
+//    if (!n.isControl){
+//      val b = control(incoming(0))
+//      for(in <- incoming.drop(1)){
+//        val inb = control(in)
+//        if (dominatorDepth(b) < dominatorDepth(inb)){
+//          dominatorDepth(b) = dominatorDepth(inb)
+//        }
+//      }
+//      control(n) =
+//    }
+//  }
 }
 //object CodeGen {
 //

@@ -131,10 +131,14 @@ class Walker(isInterface: JType.Cls => Boolean,
         regionMerges2.toMap
       )
 
+      val uselessPhis = program.phiMerges.flatMap{ case (phi, incoming) =>
+        val unique = incoming.filter(_._2 != phi)
+        if (unique.size == 1) Some(phi -> unique.head._2)
+        else None
+      }
+
       val program2 = program.transform(
-        onValue = {
-          case phi: SSA.Phi if phiMerges(phi).size == 1 => phiMerges(phi).head._2
-        },
+        onValue = { case phi: SSA.Phi if uselessPhis.contains(phi) => uselessPhis(phi) },
         onControl = {
           case r: SSA.Region if program.regionMerges(r).size == 1 =>
             program.regionMerges(r).head
