@@ -96,9 +96,8 @@ object CodeGen{
 
     val (immediateDominators, dominatorDepth) = findDominators(graph)
 
-    pprint.log(immediateDominators)
-    pprint.log(dominatorDepth)
     val nodesToBlocks = schedule(program, loopTree, dominatorDepth, immediateDominators, graph)
+    pprint.log(nodesToBlocks, height=99999)
 //    val pinnedNodes = program
 //    for(controlFlow)
     ???
@@ -133,16 +132,16 @@ object CodeGen{
     val scheduler = new Scheduler(dominatorDepth, immediateDominator, program.phiMerges) {
       override def downstream(ssa: SSA.Token) = downstreamMap.getOrElse(ssa, Nil)
 
-      override def upstream(ssa: SSA.Token) = upstreamMap.getOrElse(ssa, Nil)
+      override def upstream(ssa: SSA.Token) = upstreamMap.getOrElse(ssa, Nil).filter(!_.isInstanceOf[SSA.Control])
 
-      override def isPinned(ssa: SSA.Token) = ssa.isInstanceOf[SSA.Phi]
+      override def isPinned(ssa: SSA.Token) = ssa.isInstanceOf[SSA.Controlled]
 
       override def loopNest(block: SSA.Token) = loopNestMap(block)
     }
 
     allVertices.collect{case c: SSA.Controlled => c}.foreach(scheduler.scheduleLate)
 
-    scheduler.control.toMap
+    scheduler.control.filter{case (k, v) => v != null}.toMap
   }
 
   def findDominators[T](edges: Seq[(T, T)]): (Map[T, T], Map[T, Int]) = {
