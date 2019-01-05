@@ -17,33 +17,24 @@ abstract class Scheduler(dominatorDepth: Map[SSA.Token, Int],
   val control = mutable.Map.empty[SSA.Token, SSA.Token]
 
   def scheduleEarly(n: SSA.Token): Unit = {
-    pprint.log(n)
-    pprint.log(upstream(n))
-
     for(in <- upstream(n)){
       if (!control.contains(in)) scheduleEarly(in)
     }
 
     if (!control.contains(n)){
-      pprint.log(upstream(n))
       val b = upstream(n).flatMap(control.get).minBy(dominatorDepth)
       control(n) = b
     }
   }
   def scheduleLate(n: SSA.Token): Unit = {
     if (!visited.containsKey(n)){
-      pprint.log(mapping.get(n))
-      pprint.log(n)
-      pprint.log(isPinned(n))
       visited.put(n, ())
       for(out <- downstream(n)){
         if (!isPinned(out)) scheduleLate(out)
       }
       if (!isPinned(n)){
         var lca: SSA.Token = null
-        pprint.log(downstream(n))
         for(out <- downstream(n)){
-//          pprint.log(out)
 
           out match{
             case phi: SSA.Phi =>
@@ -52,14 +43,11 @@ abstract class Scheduler(dominatorDepth: Map[SSA.Token, Int],
               }
             case _ =>
               val outb: SSA.Token = control(out)
-              pprint.log(outb)
               lca = findLca(lca, outb)
           }
         }
         var best = lca
         while(lca != control(n)){
-          pprint.log(lca)
-          pprint.log(best)
           if (loopNest(lca) < loopNest(best)) best = lca
           lca = immediateDominator(lca)
         }
@@ -73,8 +61,8 @@ abstract class Scheduler(dominatorDepth: Map[SSA.Token, Int],
     else{
       var a: SSA.Token = a0
       var b: SSA.Token = b0
-      while(dominatorDepth(a) < dominatorDepth(b)) a = immediateDominator(a)
-      while(dominatorDepth(b) < dominatorDepth(a)) b = immediateDominator(b)
+      while(dominatorDepth(a) > dominatorDepth(b)) a = immediateDominator(a)
+      while(dominatorDepth(b) > dominatorDepth(a)) b = immediateDominator(b)
       while(a != b){
         a = immediateDominator(a)
         b = immediateDominator(b)

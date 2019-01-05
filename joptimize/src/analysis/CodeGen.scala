@@ -159,26 +159,16 @@ object CodeGen{
     }
 
     allVertices.collect{
-      case scheduleRoot: SSA.Phi =>
-        pprint.log(scheduleRoot)
-        scheduler.scheduleEarly(scheduleRoot)
-      case scheduleRoot: SSA.Control =>
-        pprint.log(scheduleRoot)
-        scheduler.scheduleEarly(scheduleRoot)
-      case scheduleRoot: SSA.Controlled =>
-        pprint.log(scheduleRoot)
-        scheduler.scheduleEarly(scheduleRoot)
+      case scheduleRoot: SSA.Phi => scheduler.scheduleEarly(scheduleRoot)
+      case scheduleRoot: SSA.Control => scheduler.scheduleEarly(scheduleRoot)
+      case scheduleRoot: SSA.Controlled => scheduler.scheduleEarly(scheduleRoot)
     }
 
-    pprint.log(scheduler.control, height=9999)
+//    pprint.log(scheduler.control, height=9999)
 
     allVertices.collect{
-      case scheduleRoot: SSA.Control =>
-        pprint.log(scheduleRoot)
-        scheduler.scheduleLate(scheduleRoot)
-      case scheduleRoot: SSA.Controlled =>
-        pprint.log(scheduleRoot)
-        scheduler.scheduleLate(scheduleRoot)
+      case scheduleRoot: SSA.Control => scheduler.scheduleLate(scheduleRoot)
+      case scheduleRoot: SSA.Controlled => scheduler.scheduleLate(scheduleRoot)
     }
 
     scheduler.control.filter{case (k, v) => v != null}.toMap

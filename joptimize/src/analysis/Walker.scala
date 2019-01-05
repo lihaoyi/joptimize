@@ -138,6 +138,7 @@ class Walker(isInterface: JType.Cls => Boolean,
         if (unique.size == 1) Some(phi -> unique.head._2)
         else None
       }
+      pprint.log(uselessPhis)
 
       val program2 = program.transform(
         onValue = { case phi: SSA.Phi if uselessPhis.contains(phi) => uselessPhis(phi) },
@@ -147,10 +148,19 @@ class Walker(isInterface: JType.Cls => Boolean,
         }
       )
 
-      val (printed, mapping) = Renderer.renderSSA(program2)
+      val uselessPhis2 = program2.phiMerges.flatMap{ case (phi, incoming) =>
+        val unique = incoming._2.filter(_._2 != phi)
+        if (unique.size == 1) Some(phi -> unique.head._2)
+        else None
+      }
+      val program3 = program2.transform(
+        onValue = { case phi: SSA.Phi if uselessPhis2.contains(phi) => uselessPhis2(phi) },
+      )
+
+      val (printed, mapping) = Renderer.renderSSA(program3)
       println(printed)
 
-      CodeGen(program2, mapping)
+      CodeGen(program3, mapping)
       ???
     })
   }
