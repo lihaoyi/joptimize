@@ -80,9 +80,9 @@ object CodeGen{
       )
     )
 
-    val loopTree = HavlakLoopTree.analyzeLoops(graph)
+    val loopTree = HavlakLoopTree.analyzeLoops(controlFlowEdges)
 
-    def rec(l: HavlakLoopTree.Loop[SSA.Token], depth: Int, label0: List[Int]): Unit = {
+    def rec(l: HavlakLoopTree.Loop[SSA.Control], depth: Int, label0: List[Int]): Unit = {
       val indent = "    " * depth
       val id = label0.reverseIterator.map("-" + _).mkString
       val reducible = if (l.isReducible) "" else " (Irreducible)"
@@ -95,9 +95,13 @@ object CodeGen{
 
     rec(loopTree, 0, Nil)
 
-    val (immediateDominators, dominatorDepth) = findDominators(graph)
+    val (immediateDominators, dominatorDepth) = findDominators(controlFlowEdges)
 
-    val nodesToBlocks = schedule(program, loopTree, dominatorDepth, immediateDominators, graph, mapping)
+    val nodesToBlocks = schedule(
+      program, loopTree,
+      dominatorDepth, immediateDominators,
+      controlFlowEdges, mapping.collect{case (k: SSA.Control, v) => (k, v)}
+    )
     pprint.log(nodesToBlocks, height=99999)
 //    val pinnedNodes = program
 //    for(controlFlow)
@@ -105,11 +109,11 @@ object CodeGen{
   }
 
   def schedule(program: Program,
-               loopTree: HavlakLoopTree.Loop[SSA.Token],
-               dominatorDepth: Map[SSA.Token, Int],
-               immediateDominator: Map[SSA.Token, SSA.Token],
-               graph: Seq[(SSA.Token, SSA.Token)],
-               mapping: Map[SSA.Token, String]): Map[SSA.Token, SSA.Token] = {
+               loopTree: HavlakLoopTree.Loop[SSA.Control],
+               dominatorDepth: Map[SSA.Control, Int],
+               immediateDominator: Map[SSA.Control, SSA.Control],
+               graph: Seq[(SSA.Control, SSA.Control)],
+               mapping: Map[SSA.Control, String]): Map[SSA.Token, SSA.Token] = {
     val (allVertices, roots, downstreamEdges) =
       Util.breadthFirstAggregation[SSA.Token](program.allTerminals.toSet){
         case ctrl: SSA.Region => program.regionMerges(ctrl).toSeq
@@ -123,7 +127,7 @@ object CodeGen{
           })
       }
     val loopNestMap = mutable.Map.empty[SSA.Token, Int]
-    def recLoop(loop: HavlakLoopTree.Loop[SSA.Token], depth: Int): Unit = {
+    def recLoop(loop: HavlakLoopTree.Loop[SSA.Control], depth: Int): Unit = {
       loop.basicBlocks.foreach(loopNestMap(_) = depth)
       loop.children.foreach(recLoop(_, depth + 1))
     }

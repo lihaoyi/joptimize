@@ -4,17 +4,17 @@ import joptimize.model.SSA
 
 import scala.collection.mutable
 
-abstract class Scheduler(dominatorDepth: Map[SSA.Token, Int],
-                         immediateDominator: Map[SSA.Token, SSA.Token],
+abstract class Scheduler(dominatorDepth: Map[SSA.Control, Int],
+                         immediateDominator: Map[SSA.Control, SSA.Control],
                          phiMerges:  Map[SSA.Phi, (SSA.Control, Set[(SSA.Control, SSA)])],
-                         mapping: Map[SSA.Token, String]) {
+                         mapping: Map[SSA.Control, String]) {
   def downstream(ssa: SSA.Token): Seq[SSA.Token]
   def upstream(ssa: SSA.Token): Seq[SSA.Token]
   def isPinned(ssa: SSA.Token): Boolean
   def loopNest(block: SSA.Token): Int
   val visited = new java.util.IdentityHashMap[SSA.Token, Unit]()
 
-  val control = mutable.Map.empty[SSA.Token, SSA.Token]
+  val control = mutable.Map.empty[SSA.Token, SSA.Control]
 
   def scheduleEarly(n: SSA.Token): Unit = {
     for(in <- upstream(n)){
@@ -33,7 +33,7 @@ abstract class Scheduler(dominatorDepth: Map[SSA.Token, Int],
         if (!isPinned(out)) scheduleLate(out)
       }
       if (!isPinned(n)){
-        var lca: SSA.Token = null
+        var lca: SSA.Control = null
         for(out <- downstream(n)){
 
           out match{
@@ -42,7 +42,7 @@ abstract class Scheduler(dominatorDepth: Map[SSA.Token, Int],
                 if (value eq n) lca = findLca(lca, ctrl)
               }
             case _ =>
-              val outb: SSA.Token = control(out)
+              val outb = control(out)
               lca = findLca(lca, outb)
           }
         }
@@ -56,11 +56,11 @@ abstract class Scheduler(dominatorDepth: Map[SSA.Token, Int],
       }
     }
   }
-  def findLca(a0: SSA.Token, b0: SSA.Token): SSA.Token = {
+  def findLca(a0: SSA.Control, b0: SSA.Control): SSA.Control = {
     if (a0 == null) b0
     else{
-      var a: SSA.Token = a0
-      var b: SSA.Token = b0
+      var a = a0
+      var b = b0
       while(dominatorDepth(a) > dominatorDepth(b)) a = immediateDominator(a)
       while(dominatorDepth(b) > dominatorDepth(a)) b = immediateDominator(b)
       while(a != b){
