@@ -57,6 +57,8 @@ object Renderer {
     val (allVertices, roots, downstreamEdges) =
       Util.breadthFirstAggregation[SSA.Node](allTerminals.toSet){
         case ctrl: SSA.Region => regionMerges(ctrl).toSeq
+        case SSA.UnaBranch(ctrl, a, opcode) => Seq(ctrl, a)
+        case SSA.BinBranch(ctrl, a, b, opcode) => Seq(ctrl, a, b)
         case SSA.True(inner) => Seq(inner)
         case SSA.False(inner) => Seq(inner)
 
@@ -120,19 +122,6 @@ object Renderer {
         case SSA.Arg(index, typeSize) => atom(fansi.Color.Cyan("arg" + index).toString)
         case SSA.BinOp(a, b, opcode) => infix(treeify(a), binOpString(opcode), treeify(b))
         case SSA.UnaOp(a, opcode) => apply(unaryOpString(opcode), treeify(a))
-        case n @ SSA.UnaBranch(control, a, opcode) =>
-          apply(
-            "if",
-            renderControl(control),
-            treeify(a),
-            atom(unaryBranchString(opcode))
-          )
-        case n @ SSA.BinBranch(control, a, b, opcode) =>
-          apply(
-            "if",
-            renderControl(control),
-            infix(treeify(a), binBranchString(opcode), treeify(b))
-          )
         case SSA.ReturnVal(ctrl, a) =>
           apply("return", atom(getControlStr(ctrl).toString()), treeify(a))
         case SSA.Return(ctrl) =>
@@ -167,6 +156,7 @@ object Renderer {
         case SSA.MonitorExit(indexSrc) => ???
       }
     }
+
     def treeify(ssa: SSA.Val): Tree = {
       if (savedLocals.containsKey(ssa)) atom(fansi.Color.Cyan("local" + savedLocals.get(ssa)).toString())
       else treeify0(ssa)
@@ -182,14 +172,31 @@ object Renderer {
           )
           out.append(")")
           out.append("\n")
+        case n @ SSA.UnaBranch(control, a, opcode) =>
+          val rhs = apply(
+            "if",
+            renderControl(control),
+            treeify(a),
+            atom(unaryBranchString(opcode))
+          )
+          out.append(getControlStr(SSA.True(n)) ++ ", " ++ getControlStr(SSA.False(n)))
+          out.append(" = ")
+          out.appendAll(new pprint.Renderer(80, fansi.Color.Yellow, fansi.Color.Green, 2).rec(rhs, 0, 1).iter)
+          out.append("\n")
+        case n @ SSA.BinBranch(control, a, b, opcode) =>
+          val rhs = apply(
+            "if",
+            renderControl(control),
+            infix(treeify(a), binBranchString(opcode), treeify(b))
+          )
+          out.append(getControlStr(SSA.True(n)) ++ ", " ++ getControlStr(SSA.False(n)))
+          out.append(" = ")
+          out.appendAll(new pprint.Renderer(80, fansi.Color.Yellow, fansi.Color.Green, 2).rec(rhs, 0, 1).iter)
+          out.append("\n")
         case SSA.True(_) | SSA.False(_) => // do nothing
         case r: SSA.Val =>
           val (lhs, sep) =
             r match{
-              case r: SSA.BinBranch =>
-                (getControlStr(SSA.True(r)) ++ ", " ++ getControlStr(SSA.False(r)), " = ")
-              case r: SSA.UnaBranch =>
-                (getControlStr(SSA.True(r)) ++ ", " ++ getControlStr(SSA.False(r)), " = ")
               case _ =>
                 if (r.getSize == 0) (fansi.Color.Cyan(""), "")
                 else (fansi.Color.Cyan("local" + savedLocals.get(r)), " = ")

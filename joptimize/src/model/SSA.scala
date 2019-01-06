@@ -29,8 +29,8 @@ object SSA{
   case class State(base: Option[(State, Val)]) extends Val(0)
   class Phi(typeSize: Int) extends Val(typeSize)
   class Region() extends Ctrl
-  case class True(node: SSA.Controlled) extends Ctrl
-  case class False(node: SSA.Controlled) extends Ctrl
+  case class True(node: Ctrl) extends Ctrl
+  case class False(node: Ctrl) extends Ctrl
   case class Arg(index: Int, tpe: IType) extends Val(tpe.size)
   case class BinOp(a: Val, b: Val, opcode: BinOp.Code) extends Val(opcode.typeSize, a, b)
   object BinOp extends Codes{
@@ -95,7 +95,7 @@ object SSA{
     val F2D = new Code(Opcodes.F2D, 2)
   }
 
-  case class UnaBranch(control: Ctrl, a: Val, opcode: UnaBranch.Code) extends Val(0, control, a) with Controlled
+  case class UnaBranch(control: Ctrl, a: Val, opcode: UnaBranch.Code) extends Ctrl
   object UnaBranch  extends Codes{
     val IFEQ = new Code(Opcodes.IFEQ)
     val IFNE = new Code(Opcodes.IFNE)
@@ -106,7 +106,7 @@ object SSA{
     val IFNULL = new Code(Opcodes.IFNULL)
     val IFNONNULL = new Code(Opcodes.IFNONNULL)
   }
-  case class BinBranch(control: Ctrl, a: Val, b: Val, opcode: BinBranch.Code) extends Val(0, control, a, b) with Controlled
+  case class BinBranch(control: Ctrl, a: Val, b: Val, opcode: BinBranch.Code) extends Ctrl
 
   object BinBranch  extends Codes{
     val IF_ICMPEQ = new Code(Opcodes.IF_ICMPEQ)

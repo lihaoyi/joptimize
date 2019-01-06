@@ -36,7 +36,7 @@ object CodeGen{
     fansi.Str.join(out:_*)
   }
 
-  def findCtrl(ssa: SSA.Val) = ssa match{
+  def findCtrl(ssa: SSA.Node) = ssa match{
     case SSA.Return(ctrl) => ctrl
     case SSA.ReturnVal(ctrl, _) => ctrl
     case SSA.UnaBranch(ctrl, _, _) => ctrl
@@ -102,7 +102,7 @@ object CodeGen{
       dominatorDepth, immediateDominators,
       controlFlowEdges, mapping.collect{case (k: SSA.Ctrl, v) => (k, v)}
     )
-    pprint.log(nodesToBlocks, height=99999)
+//    pprint.log(nodesToBlocks, height=99999)
 //    val pinnedNodes = program
 //    for(controlFlow)
     ???
@@ -117,6 +117,8 @@ object CodeGen{
     val (allVertices, roots, downstreamEdges) =
       Util.breadthFirstAggregation[SSA.Node](program.allTerminals.toSet){
         case ctrl: SSA.Region => program.regionMerges(ctrl).toSeq
+        case SSA.UnaBranch(ctrl, a, opcode) => Seq(ctrl, a)
+        case SSA.BinBranch(ctrl, a, b, opcode) => Seq(ctrl, a, b)
         case SSA.True(inner) => Seq(inner)
         case SSA.False(inner) => Seq(inner)
 

@@ -32,9 +32,6 @@ case class Program(allTerminals: Seq[SSA.Val],
           case SSA.Arg(index, typeSize) => SSA.Arg(index, typeSize)
           case SSA.BinOp(a, b, opcode) => SSA.BinOp(recSSA(a), recSSA(b), opcode)
           case SSA.UnaOp(a, opcode) => SSA.UnaOp(recSSA(a), opcode)
-          case SSA.UnaBranch(ctrl, a, opcode) => SSA.UnaBranch(recControl(ctrl), recSSA(a), opcode)
-          case SSA.BinBranch(ctrl, a, b, opcode) =>
-            SSA.BinBranch(recControl(ctrl), recSSA(a), recSSA(b), opcode)
           case SSA.ReturnVal(ctrl, a) => SSA.ReturnVal(recControl(ctrl), recSSA(a))
           case SSA.Return(ctrl) => SSA.Return(recControl(ctrl))
           case SSA.AThrow(src) => SSA.AThrow(recSSA(src))
@@ -73,8 +70,11 @@ case class Program(allTerminals: Seq[SSA.Val],
     def recControl(x: SSA.Ctrl): SSA.Ctrl = {
       val res = x match{
         case r: SSA.Region => r
-        case SSA.True(inner) => SSA.True(recSSA(inner).asInstanceOf[SSA.Controlled])
-        case SSA.False(inner) => SSA.False(recSSA(inner).asInstanceOf[SSA.Controlled])
+        case SSA.True(inner) => SSA.True(recControl(inner))
+        case SSA.False(inner) => SSA.False(recControl(inner))
+        case SSA.UnaBranch(ctrl, a, opcode) => SSA.UnaBranch(recControl(ctrl), recSSA(a), opcode)
+        case SSA.BinBranch(ctrl, a, b, opcode) =>
+          SSA.BinBranch(recControl(ctrl), recSSA(a), recSSA(b), opcode)
       }
 
       val res2 = if (onControl.isDefinedAt(res)) recControl(onControl(res)) else res

@@ -94,8 +94,6 @@ class Typer(merge0: Seq[IType] => IType){
         case SSA.UnaOp.L2D => fold1(value, CType.J, CType.D)(_.toDouble)
         case SSA.UnaOp.F2D => fold1(value, CType.F, CType.D)(_.toDouble)
       }
-    case SSA.UnaBranch(control, a, opcode) => JType.Null
-    case SSA.BinBranch(control, a, b, opcode) => JType.Null
     case SSA.ReturnVal(control, a) => JType.Null
     case SSA.AThrow(src) => JType.Null
     case SSA.TableSwitch(src, min, max) => JType.Null
