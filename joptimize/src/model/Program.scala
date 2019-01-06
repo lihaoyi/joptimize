@@ -14,6 +14,12 @@ import java.util
 case class Program(allTerminals: Seq[SSA.Ctrl],
                    phiMerges:  Map[SSA.Phi, (SSA.Ctrl, Set[(SSA.Ctrl, SSA.Val)])],
                    regionMerges: Map[SSA.Region, Set[SSA.Ctrl]]){
+
+  def upstream(n: SSA.Node): Seq[SSA.Node] = n match{
+    case phi: SSA.Phi => phiMerges(phi)._2.iterator.flatMap{case (k, v) => Seq(k, v)}.toSeq
+    case reg: SSA.Region => regionMerges(reg).toSeq
+    case _ => n.upstream
+  }
   /**
     * Transforms this program by trying to apply a callback on every node.
     *

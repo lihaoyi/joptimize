@@ -119,21 +119,7 @@ object CodeGen{
                graph: Seq[(SSA.Ctrl, SSA.Ctrl)],
                mapping: Map[SSA.Ctrl, String]): Map[SSA.Node, SSA.Node] = {
     val (allVertices, roots, downstreamEdges) =
-      Util.breadthFirstAggregation[SSA.Node](program.allTerminals.toSet){
-        case ctrl: SSA.Region => program.regionMerges(ctrl).toSeq
-        case SSA.UnaBranch(ctrl, a, opcode) => Seq(ctrl, a)
-        case SSA.BinBranch(ctrl, a, b, opcode) => Seq(ctrl, a, b)
-        case SSA.Return(ctrl) => Seq(ctrl)
-        case SSA.ReturnVal(ctrl, a) => Seq(ctrl, a)
-        case SSA.True(inner) => Seq(inner)
-        case SSA.False(inner) => Seq(inner)
-
-        case ssa: SSA.Val =>
-          ssa.allUpstream ++ (ssa match{
-            case phi: SSA.Phi => program.phiMerges(phi)._2.flatMap(x => Seq(x._1, x._2))
-            case _ => Nil
-          })
-      }
+      Util.breadthFirstAggregation[SSA.Node](program.allTerminals.toSet)(program.upstream)
     val loopNestMap = mutable.Map.empty[SSA.Node, Int]
     def recLoop(loop: HavlakLoopTree.Loop[SSA.Ctrl], depth: Int): Unit = {
       loop.basicBlocks.foreach(loopNestMap(_) = depth)

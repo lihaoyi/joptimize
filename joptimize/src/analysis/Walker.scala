@@ -132,7 +132,6 @@ class Walker(isInterface: JType.Cls => Boolean,
         if (unique.size == 1) Some(phi -> unique.head._2)
         else None
       }
-      pprint.log(uselessPhis)
 
       val program2 = program.transform(
         onValue = { case phi: SSA.Phi if uselessPhis.contains(phi) => uselessPhis(phi) },

@@ -6,15 +6,17 @@ import scala.collection.mutable
 
 
 object SSA{
-  sealed abstract class Val(size: Int, upstream0: SSA.Node*) extends org.objectweb.asm.tree.analysis.Value with Node{
-    def upstream = upstream0.collect{case s: Val => s}
-    def allUpstream = upstream0
+  sealed abstract class Val(size: Int, val upstream: SSA.Node*) extends org.objectweb.asm.tree.analysis.Value with Node{
     def getSize = size
 
     def internalName = toString
   }
-  trait Node
-  trait Ctrl extends Node
+  trait Node{
+    def upstream: Seq[Node]
+    lazy val upstreamVals = upstream.collect{case s: Val => s}
+    lazy val upstreamCtrls = upstream.collect{case s: Val => s}
+  }
+  sealed abstract class Ctrl(val upstream: SSA.Node*) extends Node
   trait Controlled extends Val{
     def control: Ctrl
   }
@@ -28,9 +30,9 @@ object SSA{
   }
   case class State(base: Option[(State, Val)]) extends Val(0)
   class Phi(typeSize: Int) extends Val(typeSize)
-  class Region() extends Ctrl
-  case class True(node: Ctrl) extends Ctrl
-  case class False(node: Ctrl) extends Ctrl
+  class Region() extends Ctrl()
+  case class True(node: Ctrl) extends Ctrl(node)
+  case class False(node: Ctrl) extends Ctrl(node)
   case class Arg(index: Int, tpe: IType) extends Val(tpe.size)
   case class BinOp(a: Val, b: Val, opcode: BinOp.Code) extends Val(opcode.typeSize, a, b)
   object BinOp extends Codes{
@@ -95,7 +97,7 @@ object SSA{
     val F2D = new Code(Opcodes.F2D, 2)
   }
 
-  case class UnaBranch(control: Ctrl, a: Val, opcode: UnaBranch.Code) extends Ctrl
+  case class UnaBranch(control: Ctrl, a: Val, opcode: UnaBranch.Code) extends Ctrl(control, a)
   object UnaBranch  extends Codes{
     val IFEQ = new Code(Opcodes.IFEQ)
     val IFNE = new Code(Opcodes.IFNE)
@@ -106,7 +108,7 @@ object SSA{
     val IFNULL = new Code(Opcodes.IFNULL)
     val IFNONNULL = new Code(Opcodes.IFNONNULL)
   }
-  case class BinBranch(control: Ctrl, a: Val, b: Val, opcode: BinBranch.Code) extends Ctrl
+  case class BinBranch(control: Ctrl, a: Val, b: Val, opcode: BinBranch.Code) extends Ctrl(control, a, b)
 
   object BinBranch  extends Codes{
     val IF_ICMPEQ = new Code(Opcodes.IF_ICMPEQ)
@@ -118,11 +120,11 @@ object SSA{
     val IF_ACMPEQ = new Code(Opcodes.IF_ACMPEQ)
     val IF_ACMPNE = new Code(Opcodes.IF_ACMPNE)
   }
-  case class ReturnVal(control: Ctrl, a: Val) extends Ctrl
-  case class Return(control: Ctrl) extends Ctrl
-  case class AThrow(src: Val) extends Ctrl
-  case class TableSwitch(src: Val, min: Int, max: Int) extends Ctrl
-  case class LookupSwitch(src: Val, keys: Seq[Int]) extends Ctrl
+  case class ReturnVal(control: Ctrl, a: Val) extends Ctrl(control, a)
+  case class Return(control: Ctrl) extends Ctrl(control)
+  case class AThrow(src: Val) extends Ctrl(src)
+  case class TableSwitch(src: Val, min: Int, max: Int) extends Ctrl(src)
+  case class LookupSwitch(src: Val, keys: Seq[Int]) extends Ctrl(src)
 
   case class CheckCast(src: Val, desc: JType) extends Val(0, src)
   case class ArrayLength(src: Val) extends Val(1, src)
