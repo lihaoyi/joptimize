@@ -35,7 +35,7 @@ class Walker(isInterface: JType.Cls => Boolean,
       println("+" * 20 + sig + "+" * 20)
       println(Renderer.renderInsns(mn.instructions))
 
-      val phiMerges0 = mutable.Set.empty[(SSA.Phi, (Int, Int, SSA))]
+      val phiMerges0 = mutable.Set.empty[(SSA.Phi, (Int, Int, SSA.Value))]
       val frames = joptimize.bytecode.Analyzer.analyze(sig.cls.name, mn, new StepEvaluator(phiMerges0))
 
       val insns = mn.instructions.iterator().asScala.toVector

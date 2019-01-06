@@ -11,8 +11,8 @@ import java.util
   * and [[regionMerges]] to handle the possibly backwards edges caused by jumps
   * and merges.
   */
-case class Program(allTerminals: Seq[SSA],
-                   phiMerges:  Map[SSA.Phi, (SSA.Control, Set[(SSA.Control, SSA)])],
+case class Program(allTerminals: Seq[SSA.Value],
+                   phiMerges:  Map[SSA.Phi, (SSA.Control, Set[(SSA.Control, SSA.Value)])],
                    regionMerges: Map[SSA.Region, Set[SSA.Control]]){
   /**
     * Transforms this program by trying to apply a callback on every node.
@@ -20,14 +20,14 @@ case class Program(allTerminals: Seq[SSA],
     * If the callback is successfully applied, it is applied repeatedly until
     * it no longer matches the node
     */
-  def transform(onValue: PartialFunction[SSA, SSA] = PartialFunction.empty,
+  def transform(onValue: PartialFunction[SSA.Value, SSA.Value] = PartialFunction.empty,
                 onControl: PartialFunction[SSA.Control, SSA.Control] = PartialFunction.empty): Program = {
-    val seenSSA = new util.IdentityHashMap[SSA, SSA]()
+    val seenSSA = new util.IdentityHashMap[SSA.Value, SSA.Value]()
     val seenControl = new util.IdentityHashMap[SSA.Control, SSA.Control]()
-    def recSSA(x: SSA): SSA = {
+    def recSSA(x: SSA.Value): SSA.Value = {
       if (seenSSA.containsKey(x)) seenSSA.get(x)
       else {
-        val res: SSA = x match{
+        val res: SSA.Value = x match{
           case phi: SSA.Phi => phi
           case SSA.Arg(index, typeSize) => SSA.Arg(index, typeSize)
           case SSA.BinOp(a, b, opcode) => SSA.BinOp(recSSA(a), recSSA(b), opcode)

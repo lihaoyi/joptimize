@@ -60,7 +60,7 @@ object Renderer {
         case SSA.True(inner) => Seq(inner)
         case SSA.False(inner) => Seq(inner)
 
-        case ssa: SSA =>
+        case ssa: SSA.Value =>
           ssa.allUpstream ++ (ssa match{
             case phi: SSA.Phi => phiMerges(phi)._2.flatMap(x => Seq(x._1, x._2))
             case _ => Nil
@@ -96,9 +96,9 @@ object Renderer {
 
     val renderRoots = allVertices.filter(i => saveable.getOrElse(i, false))
 
-    val savedLocals = new util.IdentityHashMap[SSA, Int]()
+    val savedLocals = new util.IdentityHashMap[SSA.Value, Int]()
 
-    for((r: SSA, i) <- renderRoots.zipWithIndex) savedLocals.put(r, i)
+    for((r: SSA.Value, i) <- renderRoots.zipWithIndex) savedLocals.put(r, i)
 
     val savedControls = mutable.LinkedHashMap.empty[SSA.Control, Int]
     def getControlId(c: SSA.Control) = savedControls.getOrElseUpdate(c, savedControls.size)
@@ -114,7 +114,7 @@ object Renderer {
       atom(getControlStr(control).toString)
     }
 
-    def treeify0(ssa: SSA): Tree = {
+    def treeify0(ssa: SSA.Value): Tree = {
       ssa match{
         case phi: SSA.Phi => apply("phi", phiMerges(phi)._2.map{case (ctrl, ssa) => infix(renderControl(ctrl), ":", treeify(ssa))}.toSeq:_*)
         case SSA.Arg(index, typeSize) => atom(fansi.Color.Cyan("arg" + index).toString)
@@ -167,7 +167,7 @@ object Renderer {
         case SSA.MonitorExit(indexSrc) => ???
       }
     }
-    def treeify(ssa: SSA): Tree = {
+    def treeify(ssa: SSA.Value): Tree = {
       if (savedLocals.containsKey(ssa)) atom(fansi.Color.Cyan("local" + savedLocals.get(ssa)).toString())
       else treeify0(ssa)
     }
@@ -183,7 +183,7 @@ object Renderer {
           out.append(")")
           out.append("\n")
         case SSA.True(_) | SSA.False(_) => // do nothing
-        case r: SSA =>
+        case r: SSA.Value =>
           val (lhs, sep) =
             r match{
               case r: SSA.BinBranch =>

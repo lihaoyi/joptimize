@@ -6,15 +6,15 @@ import scala.collection.mutable
 
 abstract class Scheduler(dominatorDepth: Map[SSA.Control, Int],
                          immediateDominator: Map[SSA.Control, SSA.Control],
-                         phiMerges:  Map[SSA.Phi, (SSA.Control, Set[(SSA.Control, SSA)])],
+                         phiMerges:  Map[SSA.Phi, (SSA.Control, Set[(SSA.Control, SSA.Value)])],
                          mapping: Map[SSA.Control, String]) {
-  def downstream(ssa: SSA.Token): Seq[SSA]
-  def upstream(ssa: SSA.Token): Seq[SSA]
+  def downstream(ssa: SSA.Token): Seq[SSA.Value]
+  def upstream(ssa: SSA.Token): Seq[SSA.Value]
   def isPinned(ssa: SSA.Token): Boolean
   def loopNest(block: SSA.Token): Int
-  val visited = new java.util.IdentityHashMap[SSA, Unit]()
+  val visited = new java.util.IdentityHashMap[SSA.Value, Unit]()
 
-  val control = mutable.Map.empty[SSA, SSA.Control]
+  val control = mutable.Map.empty[SSA.Value, SSA.Control]
 
   def scheduleEarlyRoot(n: SSA.Token): Unit = {
     for(in <- upstream(n)){
@@ -22,7 +22,7 @@ abstract class Scheduler(dominatorDepth: Map[SSA.Control, Int],
     }
   }
 
-  def scheduleEarly(n: SSA): Unit = {
+  def scheduleEarly(n: SSA.Value): Unit = {
     scheduleEarlyRoot(n)
     if (!control.contains(n)){
       val b = upstream(n).flatMap(control.get).minBy(dominatorDepth)
@@ -36,7 +36,7 @@ abstract class Scheduler(dominatorDepth: Map[SSA.Control, Int],
     }
   }
 
-  def scheduleLate(n: SSA): Unit = {
+  def scheduleLate(n: SSA.Value): Unit = {
     if (!visited.containsKey(n)){
       visited.put(n, ())
       scheduleLateRoot(n)

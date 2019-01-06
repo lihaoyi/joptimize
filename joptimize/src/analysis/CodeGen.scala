@@ -36,7 +36,7 @@ object CodeGen{
     fansi.Str.join(out:_*)
   }
 
-  def findCtrl(ssa: SSA) = ssa match{
+  def findCtrl(ssa: SSA.Value) = ssa match{
     case SSA.Return(ctrl) => ctrl
     case SSA.ReturnVal(ctrl, _) => ctrl
     case SSA.UnaBranch(ctrl, _, _) => ctrl
@@ -120,7 +120,7 @@ object CodeGen{
         case SSA.True(inner) => Seq(inner)
         case SSA.False(inner) => Seq(inner)
 
-        case ssa: SSA =>
+        case ssa: SSA.Value =>
           ssa.allUpstream ++ (ssa match{
             case phi: SSA.Phi => program.phiMerges(phi)._2.flatMap(x => Seq(x._1, x._2))
             case _ => Nil
@@ -136,9 +136,9 @@ object CodeGen{
     val downstreamMap = downstreamEdges.groupBy(_._1).map{case (k, vs) => (k, vs.map(_._2))}
     val upstreamMap = downstreamEdges.groupBy(_._2).map{case (k, vs) => (k, vs.map(_._1))}
     val scheduler = new Scheduler(dominatorDepth, immediateDominator, program.phiMerges, mapping) {
-      override def downstream(ssa: SSA.Token) = downstreamMap.getOrElse(ssa, Nil).collect{case ssa: SSA => ssa}
+      override def downstream(ssa: SSA.Token) = downstreamMap.getOrElse(ssa, Nil).collect{case ssa: SSA.Value => ssa}
 
-      override def upstream(ssa: SSA.Token) = upstreamMap.getOrElse(ssa, Nil).collect{case ssa: SSA => ssa}
+      override def upstream(ssa: SSA.Token) = upstreamMap.getOrElse(ssa, Nil).collect{case ssa: SSA.Value => ssa}
 
       override def isPinned(ssa: SSA.Token) = ssa.isInstanceOf[SSA.Controlled] || ssa.isInstanceOf[SSA.Control]
 
