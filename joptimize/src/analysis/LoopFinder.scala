@@ -4,29 +4,19 @@ import scala.collection.mutable
 
 
 object LoopFinder {
-  case class Loop[T](
-    headers: Set[T],
-    isReducible: Boolean,
-    basicBlocks: Set[T],
-    children: Set[Loop[T]]
-  )
+  case class Loop[T](primaryHeader: T,
+                     isReducible: Boolean,
+                     basicBlocks: Set[T],
+                     children: Set[Loop[T]])
+
   private[this] class LoopBuilder[T](val primaryHeader: T,
                                      val isReducible: Boolean,
                                      val isRoot: Boolean) {
     var basicBlocks  = Set[T](primaryHeader)
-    var allHeaders = Set[T](primaryHeader)
-
     var children = Set[LoopBuilder[T]]()
 
-    var parent: LoopBuilder[T] = null
-
-    def setParent(parent: LoopBuilder[T]) = {
-      this.parent = parent
-      this.parent.children += this
-    }
-
     def build(): Loop[T] = Loop(
-      allHeaders,
+      primaryHeader,
       isReducible,
       basicBlocks,
       children.map(_.build())
@@ -176,6 +166,7 @@ object LoopFinder {
     header(0) = 0
 
     val loopMap = mutable.Map.empty[T, LoopBuilder[T]]
+    val parented = mutable.Set.empty[LoopBuilder[T]]
     for (w <- Range.inclusive(size - 1, 0, -1)) {
       // this is 'P' in Havlak's paper
       var nodePool = List.empty[UnionFindNode[T]]
@@ -222,14 +213,10 @@ object LoopFinder {
         for (x <- nodePool) {
           header(number(x.value)) = w
           x.union(nodes(w))
-          if (loopMap.contains(x.value)) loopMap(x.value).setParent(loop)
-          else {
-            types(number(x.value)) match{
-              case BlockType.Reducible | BlockType.Irreducible =>
-                loop.allHeaders += x.value
-              case _ => // do nothing
-            }
-
+          if (loopMap.contains(x.value)) {
+            loop.children += loopMap(x.value)
+            parented += loopMap(x.value)
+          } else {
             loop.basicBlocks += x.value
           }
         }
@@ -245,7 +232,7 @@ object LoopFinder {
     }
 
     for (liter <- loopMap.values) {
-      if (!liter.isRoot && liter.parent == null) liter.setParent(root)
+      if (!liter.isRoot && !parented(liter)) root.children += liter
     }
 
     root.build()
