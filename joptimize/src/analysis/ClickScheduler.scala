@@ -24,10 +24,7 @@ abstract class ClickScheduler(dominatorDepth: Map[SSA.Ctrl, Int],
 
   def scheduleEarly(n: SSA.Val): Unit = {
     scheduleEarlyRoot(n)
-    if (!control.contains(n)){
-      val b = upstream(n).flatMap(control.get).minBy(dominatorDepth)
-      control(n) = b
-    }
+    control(n) = upstream(n).map(control).minBy(dominatorDepth)
   }
 
   def scheduleLateRoot(n: SSA.Node): Unit = {
@@ -50,12 +47,8 @@ abstract class ClickScheduler(dominatorDepth: Map[SSA.Ctrl, Int],
               for((ctrl, value) <- phiMerges(phi)._2){
                 if (value eq n) lca = findLca(lca, ctrl)
               }
-            case c: SSA.Ctrl =>
-              lca = findLca(lca, c)
-
-            case v: SSA.Val =>
-              val outb = control(v)
-              lca = findLca(lca, outb)
+            case c: SSA.Ctrl => lca = findLca(lca, c)
+            case v: SSA.Val => lca = findLca(lca, control(v))
           }
         }
 
