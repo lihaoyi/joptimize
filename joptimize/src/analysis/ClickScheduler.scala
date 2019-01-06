@@ -4,10 +4,10 @@ import joptimize.model.SSA
 
 import scala.collection.mutable
 
-abstract class Scheduler(dominatorDepth: Map[SSA.Ctrl, Int],
-                         immediateDominator: Map[SSA.Ctrl, SSA.Ctrl],
-                         phiMerges:  Map[SSA.Phi, (SSA.Ctrl, Set[(SSA.Ctrl, SSA.Val)])],
-                         mapping: Map[SSA.Ctrl, String]) {
+abstract class ClickScheduler(dominatorDepth: Map[SSA.Ctrl, Int],
+                              immediateDominator: Map[SSA.Ctrl, SSA.Ctrl],
+                              phiMerges:  Map[SSA.Phi, (SSA.Ctrl, Set[(SSA.Ctrl, SSA.Val)])],
+                              mapping: Map[SSA.Ctrl, String]) {
   def downstream(ssa: SSA.Node): Seq[SSA.Val]
   def upstream(ssa: SSA.Node): Seq[SSA.Val]
   def isPinned(ssa: SSA.Node): Boolean

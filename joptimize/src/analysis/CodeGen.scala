@@ -135,7 +135,7 @@ object CodeGen{
 
     val downstreamMap = downstreamEdges.groupBy(_._1).map{case (k, vs) => (k, vs.map(_._2))}
     val upstreamMap = downstreamEdges.groupBy(_._2).map{case (k, vs) => (k, vs.map(_._1))}
-    val scheduler = new Scheduler(dominatorDepth, immediateDominator, program.phiMerges, mapping) {
+    val scheduler = new ClickScheduler(dominatorDepth, immediateDominator, program.phiMerges, mapping) {
       override def downstream(ssa: SSA.Node) = downstreamMap.getOrElse(ssa, Nil).collect{case ssa: SSA.Val => ssa}
 
       override def upstream(ssa: SSA.Node) = upstreamMap.getOrElse(ssa, Nil).collect{case ssa: SSA.Val => ssa}
