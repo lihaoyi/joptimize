@@ -1,6 +1,6 @@
-package joptimize.analysis
+package joptimize.graph
 
-abstract class LengauerTarjan {
+abstract class LengauerTarjanDominatorTree {
   // Implement these three yourself
   def successors(v: Int): Iterable[Int]
   def predecessors(v: Int): Iterable[Int]

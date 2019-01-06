@@ -1,6 +1,7 @@
 package joptimize
-import joptimize.analysis.{CodeGen, LoopFinder}
-import joptimize.analysis.LoopFinder.Loop
+import joptimize.analysis.{CodeGen}
+import joptimize.graph.HavlakLoopTree.Loop
+import joptimize.graph.HavlakLoopTree
 import utest._
 
 object LoopFinderTests extends TestSuite{
@@ -9,7 +10,7 @@ object LoopFinderTests extends TestSuite{
                  expectedLoopTree: Loop[T],
                  expectedImmediateDominators: Map[T, T] = null,
                  expectedDominatorDepths: Map[T, Int] = null) = {
-      val analyzed = LoopFinder.analyzeLoops(args)
+      val analyzed = HavlakLoopTree.analyzeLoops(args)
       assert(analyzed == expectedLoopTree)
       if (expectedImmediateDominators!= null){
         val (immediateDominators, dominatorDepths) = CodeGen.findDominators(args)

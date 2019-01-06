@@ -3,6 +3,7 @@ package joptimize.analysis
 import java.util
 
 import joptimize.Util
+import joptimize.graph.{LengauerTarjanDominatorTree, HavlakLoopTree, TarjansStronglyConnectedComponents}
 import joptimize.model.{Program, SSA}
 import org.objectweb.asm.Opcodes._
 import org.objectweb.asm.tree._
@@ -22,7 +23,7 @@ object CodeGen{
     val stringToIndex = allStrings.zipWithIndex.toMap
     val indexToString = stringToIndex.map(_.swap)
     val edgeGroups = edges.groupBy(_._2).map{case (k, v) => (k, v.map(_._1))}
-    val sorted = Tarjans(allStrings.map(edgeGroups.getOrElse(_, Nil).map(stringToIndex))).flatten
+    val sorted = TarjansStronglyConnectedComponents(allStrings.map(edgeGroups.getOrElse(_, Nil).map(stringToIndex))).flatten
     val out = mutable.Buffer.empty[fansi.Str]
 
     for(i <- sorted){
@@ -79,9 +80,9 @@ object CodeGen{
       )
     )
 
-    val loopTree = LoopFinder.analyzeLoops(graph)
+    val loopTree = HavlakLoopTree.analyzeLoops(graph)
 
-    def rec(l: LoopFinder.Loop[SSA.Token], depth: Int, label0: List[Int]): Unit = {
+    def rec(l: HavlakLoopTree.Loop[SSA.Token], depth: Int, label0: List[Int]): Unit = {
       val indent = "    " * depth
       val id = label0.reverseIterator.map("-" + _).mkString
       val reducible = if (l.isReducible) "" else " (Irreducible)"
@@ -104,7 +105,7 @@ object CodeGen{
   }
 
   def schedule(program: Program,
-               loopTree: LoopFinder.Loop[SSA.Token],
+               loopTree: HavlakLoopTree.Loop[SSA.Token],
                dominatorDepth: Map[SSA.Token, Int],
                immediateDominator: Map[SSA.Token, SSA.Token],
                graph: Seq[(SSA.Token, SSA.Token)],
@@ -122,7 +123,7 @@ object CodeGen{
           })
       }
     val loopNestMap = mutable.Map.empty[SSA.Token, Int]
-    def recLoop(loop: LoopFinder.Loop[SSA.Token], depth: Int): Unit = {
+    def recLoop(loop: HavlakLoopTree.Loop[SSA.Token], depth: Int): Unit = {
       loop.basicBlocks.foreach(loopNestMap(_) = depth)
       loop.children.foreach(recLoop(_, depth + 1))
     }
@@ -180,7 +181,7 @@ object CodeGen{
     val successorMap = edges.groupBy(_._1).map{case (k, v) => (indices(k), v.map(_._2).map(indices))}
     val predecessorMap = edges.groupBy(_._2).map{case (k, v) => (indices(k), v.map(_._1).map(indices))}
 
-    val immediateDominators = new LengauerTarjan {
+    val immediateDominators = new LengauerTarjanDominatorTree {
       def successors(v: Int) = successorMap.getOrElse(v, Nil)
       def predecessors(v: Int) = predecessorMap.getOrElse(v, Nil)
       def numNodes = indices.size

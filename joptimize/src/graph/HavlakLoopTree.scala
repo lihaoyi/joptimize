@@ -1,9 +1,9 @@
-package joptimize.analysis
+package joptimize.graph
 
 import scala.collection.mutable
 
 
-object LoopFinder {
+object HavlakLoopTree {
   case class Loop[T](primaryHeader: T,
                      isReducible: Boolean,
                      basicBlocks: Set[T],

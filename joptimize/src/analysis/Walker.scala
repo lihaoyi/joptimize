@@ -1,18 +1,12 @@
 package joptimize.analysis
 
 
-import java.util
-import java.util.IdentityHashMap
 
 import joptimize.model._
-import org.objectweb.asm.{Handle, Opcodes}
 
 import collection.JavaConverters._
 import org.objectweb.asm.Opcodes._
 import org.objectweb.asm.tree._
-import org.objectweb.asm.tree.analysis.{Analyzer, Interpreter}
-
-import scala.annotation.tailrec
 import scala.collection.mutable
 
 class Walker(isInterface: JType.Cls => Boolean,

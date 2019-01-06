@@ -4,6 +4,7 @@ import java.util
 
 import fansi.Str
 import joptimize.Util
+import joptimize.graph.TarjansStronglyConnectedComponents
 import joptimize.model.{Program, SSA}
 import org.objectweb.asm.tree.{AbstractInsnNode, InsnList}
 import org.objectweb.asm.util.{Textifier, TraceMethodVisitor}
@@ -240,13 +241,13 @@ object Renderer {
       downstreamEdges.filter(x => !x._2.isInstanceOf[SSA.Phi] && !x._2.isInstanceOf[SSA.Region])
     )
 
-    val brokenOrderingList = Tarjans(mapToAdjacencyLists(brokenEdgeLists)).map { case Seq(x) => x }
+    val brokenOrderingList = TarjansStronglyConnectedComponents(mapToAdjacencyLists(brokenEdgeLists)).map { case Seq(x) => x }
 
     val brokenOrdering = brokenOrderingList.zipWithIndex.toMap
 
     val groupedEdgeLists = edgeListToIndexMap(downstreamEdges)
 
-    val groupedOrdering = Tarjans(mapToAdjacencyLists(groupedEdgeLists))
+    val groupedOrdering = TarjansStronglyConnectedComponents(mapToAdjacencyLists(groupedEdgeLists))
 
     val orderingList = groupedOrdering.flatMap(_.sortBy(brokenOrdering)).map(indexToVertex)
 
