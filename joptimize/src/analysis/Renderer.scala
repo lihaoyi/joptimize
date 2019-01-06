@@ -59,55 +59,57 @@ object Renderer {
 
     val finalOrderingMap = sortVerticesForPrinting(allVertices, downstreamEdges)
 
-    val saveable = downstreamEdges
-      .groupBy(_._1)
-      .map{
-        case (k: SSA.Arg, _) => (k, false)
-        case (k: SSA.PushI, _) => (k, false)
-        case (k: SSA.PushJ, _) => (k, false)
-        case (k: SSA.PushF, _) => (k, false)
-        case (k: SSA.PushD, _) => (k, false)
-        case (k: SSA.PushS, _) => (k, false)
-        case (k: SSA.PushNull, _) => (k, false)
-        case (k: SSA.PushCls, _) => (k, false)
-        case (k: SSA.Phi, _) => (k, true)
-        case (k, x) =>
-          val n = x.distinct.size
-          (k, n > 1 || n == 1 && allTerminals.contains(k))
-      } ++ allVertices.collect{
-        case b: SSA.Ctrl => (b, true)
-      }
+    val saveable =
+      downstreamEdges.groupBy(_._1)
+        .filter{ case (k, x) => k.upstream.nonEmpty && x.distinct.size > 1 || x.distinct.size == 1 && allTerminals.contains(k) }
+        .keySet ++
+        allVertices.collect{ case k: SSA.Phi => k case b: SSA.Ctrl => b}
 
     val out = mutable.Buffer.empty[Str]
 
-    val renderRoots = allVertices.filter(i => saveable.getOrElse(i, false))
+    val renderRoots = allVertices.filter(i => saveable.contains(i))
 
     val savedLocals = new util.IdentityHashMap[SSA.Val, Int]()
 
     for((r: SSA.Val, i) <- renderRoots.zipWithIndex) savedLocals.put(r, i)
 
-    val savedControls = mutable.LinkedHashMap.empty[SSA.Ctrl, Int]
-    def getControlId(c: SSA.Ctrl) = savedControls.getOrElseUpdate(c, savedControls.size)
+    val savedControls = mutable.LinkedHashMap.empty[SSA.Ctrl, String]
+    def getControlId(c: SSA.Ctrl) = fansi.Color.Magenta(
+      savedControls.getOrElseUpdate(
+        c,
+        c match{
+          case _: SSA.Return => "return" + savedControls.size
+          case _: SSA.ReturnVal => "return" + savedControls.size
+          case _: SSA.AThrow => "return" + savedControls.size
+          case _: SSA.True => "true" + savedControls.size
+          case _: SSA.False => "false" + savedControls.size
+          case _ => "ctrl" + savedControls.size
+        }
+      )
+    )
     def apply(lhs: String, operands: Tree*) = pprint.Tree.Apply(lhs, operands.toIterator)
     def atom(lhs: String) = pprint.Tree.Lazy(ctx => Iterator(lhs))
     def literal(lhs: String) = pprint.Tree.Literal(lhs)
     def infix(lhs: Tree, op: String, rhs: Tree) = pprint.Tree.Infix(lhs, op, rhs)
 
-    def getControlStr(control: SSA.Ctrl) = {
-      fansi.Color.Cyan("ctrl" + getControlId(control))
-    }
     def renderControl(control: SSA.Ctrl) = {
-      atom(getControlStr(control).toString)
+      atom(getControlId(control).toString)
+    }
+    def rec(ssa: SSA.Node): pprint.Tree = ssa match{
+      case x: SSA.Ctrl => atom(getControlId(x).toString)
+      case x: SSA.Val =>
+        if (savedLocals.containsKey(ssa)) atom(fansi.Color.Cyan("local" + savedLocals.get(ssa)).toString())
+        else recVal(x)
     }
 
     def recVal(ssa: SSA.Val): Tree = ssa match{
-      case phi: SSA.Phi => apply("phi", phiMerges(phi)._2.map{case (ctrl, ssa) => infix(renderControl(ctrl), ":", treeify(ssa))}.toSeq:_*)
+      case phi: SSA.Phi => apply("phi", phiMerges(phi)._2.map{case (ctrl, ssa) => infix(renderControl(ctrl), ":", rec(ssa))}.toSeq:_*)
       case SSA.Arg(index, typeSize) => atom(fansi.Color.Cyan("arg" + index).toString)
-      case SSA.BinOp(a, b, opcode) => infix(treeify(a), binOpString(opcode), treeify(b))
-      case SSA.UnaOp(a, opcode) => apply(unaryOpString(opcode), treeify(a))
-      case SSA.CheckCast(src, desc) => apply("cast", treeify(src), atom(desc.name))
-      case SSA.ArrayLength(src) => apply("arraylength", treeify(src))
-      case SSA.InstanceOf(src, desc) => apply("instanceof", treeify(src), atom(desc.name))
+      case SSA.BinOp(a, b, opcode) => infix(rec(a), binOpString(opcode), rec(b))
+      case SSA.UnaOp(a, opcode) => apply(unaryOpString(opcode), rec(a))
+      case SSA.CheckCast(src, desc) => apply("cast", rec(src), atom(desc.name))
+      case SSA.ArrayLength(src) => apply("arraylength", rec(src))
+      case SSA.InstanceOf(src, desc) => apply("instanceof", rec(src), atom(desc.name))
       case SSA.PushI(value) => literal(value + "")
       case SSA.PushJ(value) => literal(value + "L")
       case SSA.PushF(value) => literal(value + "F")
@@ -115,85 +117,67 @@ object Renderer {
       case SSA.PushS(value) => literal(pprint.Util.literalize(value))
       case SSA.PushNull() => literal("null")
       case SSA.PushCls(value) => literal(value.name)
-      case SSA.InvokeStatic(srcs, cls, name, desc) => apply(cls.javaName + "." + name + desc.unparse, srcs.map(treeify):_*)
-      case SSA.InvokeSpecial(srcs, cls, name, desc) => apply(cls.javaName + "##" + name + desc.unparse, srcs.map(treeify):_*)
-      case SSA.InvokeVirtual(srcs, cls, name, desc) => apply(cls.javaName + "#" + name + desc.unparse, srcs.map(treeify):_*)
+      case SSA.InvokeStatic(srcs, cls, name, desc) => apply(cls.javaName + "." + name + desc.unparse, srcs.map(rec):_*)
+      case SSA.InvokeSpecial(srcs, cls, name, desc) => apply(cls.javaName + "##" + name + desc.unparse, srcs.map(rec):_*)
+      case SSA.InvokeVirtual(srcs, cls, name, desc) => apply(cls.javaName + "#" + name + desc.unparse, srcs.map(rec):_*)
       case SSA.InvokeDynamic(name, desc, bsTag, bsOwner, bsName, bsDesc, bsArgs) => ???
       case SSA.New(cls) => apply("new", atom(cls.name))
-      case SSA.NewArray(src, typeRef) => apply("newarray", treeify(src), atom(typeRef.name))
+      case SSA.NewArray(src, typeRef) => apply("newarray", rec(src), atom(typeRef.name))
       case SSA.MultiANewArray(desc, dims) => apply("multianewarray", atom(desc.name))
-      case SSA.PutStatic(src, cls, name, desc) => apply("putstatic", treeify(src), atom(cls.name), atom(name), atom(desc.name))
+      case SSA.PutStatic(src, cls, name, desc) => apply("putstatic", rec(src), atom(cls.name), atom(name), atom(desc.name))
       case SSA.GetStatic(cls, name, desc) => apply("getstatic", atom(cls.name), atom(name), atom(desc.name))
-      case SSA.PutField(src, obj, owner, name, desc) => apply("putfield", treeify(src), treeify(obj), atom(owner.name), atom(name), atom(desc.name))
-      case SSA.GetField(obj, owner, name, desc) => apply("getfield", treeify(obj), atom(owner.name), atom(name), atom(desc.name))
-      case SSA.PutArray(src, indexSrc, array) => apply("putarray", treeify(src), treeify(indexSrc), treeify(array))
-      case SSA.GetArray(indexSrc, array, typeSize) => apply("putarray", treeify(indexSrc), treeify(array))
+      case SSA.PutField(src, obj, owner, name, desc) => apply("putfield", rec(src), rec(obj), atom(owner.name), atom(name), atom(desc.name))
+      case SSA.GetField(obj, owner, name, desc) => apply("getfield", rec(obj), atom(owner.name), atom(name), atom(desc.name))
+      case SSA.PutArray(src, indexSrc, array) => apply("putarray", rec(src), rec(indexSrc), rec(array))
+      case SSA.GetArray(indexSrc, array, typeSize) => apply("putarray", rec(indexSrc), rec(array))
       case SSA.MonitorEnter(indexSrc) => ???
       case SSA.MonitorExit(indexSrc) => ???
     }
 
-    def treeify(ssa: SSA.Val): Tree = {
-      if (savedLocals.containsKey(ssa)) atom(fansi.Color.Cyan("local" + savedLocals.get(ssa)).toString())
-      else recVal(ssa)
-    }
 
     def recCtrl(ctrl: SSA.Ctrl): (fansi.Str, Tree) = ctrl match{
-      case SSA.True(src) => (getControlStr(ctrl), apply("true", atom(getControlStr(src).toString)))
-      case SSA.False(src) => (getControlStr(ctrl), apply("false", atom(getControlStr(src).toString)))
+      case SSA.True(src) => (getControlId(ctrl), apply("true", atom(getControlId(src).toString)))
+      case SSA.False(src) => (getControlId(ctrl), apply("false", atom(getControlId(src).toString)))
+
       case reg: SSA.Region =>
-        val rhs = apply("region", regionMerges(reg).iterator.map(x => atom(getControlStr(x).toString)).toSeq:_*)
-        (getControlStr(reg), rhs)
+        val rhs = apply("region", regionMerges(reg).iterator.map(x => atom(getControlId(x).toString)).toSeq:_*)
+        (getControlId(reg), rhs)
 
       case SSA.AThrow(src) => ???
       case SSA.TableSwitch(src, min, max) => ???
       case SSA.LookupSwitch(src, keys) => ???
 
       case SSA.ReturnVal(inner, a) =>
-        val rhs = apply("return", atom(getControlStr(inner).toString()), treeify(a))
-        (getControlStr(ctrl), rhs)
+        (getControlId(ctrl), apply("return", atom(getControlId(inner).toString()), rec(a)))
+
       case SSA.Return(inner) =>
-        val rhs = apply("return", atom(getControlStr(inner).toString()))
-        (getControlStr(ctrl), rhs)
+        (getControlId(ctrl), apply("return", atom(getControlId(inner).toString())))
+
       case n @ SSA.UnaBranch(control, a, opcode) =>
-        val rhs = apply("if", renderControl(control), treeify(a), atom(unaryBranchString(opcode)))
-        (getControlStr(n), rhs)
+        val rhs = apply("if", renderControl(control), rec(a), atom(unaryBranchString(opcode)))
+        (getControlId(n), rhs)
 
       case n @ SSA.BinBranch(control, a, b, opcode) =>
-        val rhs = apply("if", renderControl(control), infix(treeify(a), binBranchString(opcode), treeify(b)))
-        (getControlStr(n), rhs)
+        val rhs = apply("if", renderControl(control), infix(rec(a), binBranchString(opcode), rec(b)))
+        (getControlId(n), rhs)
     }
 
     for(r <- renderRoots.toSeq.sortBy(finalOrderingMap)){
-      r match{
-        case r: SSA.Ctrl =>
-          val (lhs, rhs) = recCtrl(r)
-
-          out.append(lhs, " = ")
-          out.appendAll(
-            new pprint.Renderer(80, fansi.Color.Yellow, fansi.Color.Green, 2)
-              .rec(rhs, lhs.length + " = ".length, 1).iter
-          )
-          out.append("\n")
-        case r: SSA.Val =>
-          val (lhs, sep) =
-            r match{
-              case _ =>
-                if (r.getSize == 0) (fansi.Color.Cyan(""), "")
-                else (fansi.Color.Cyan("local" + savedLocals.get(r)), " = ")
-            }
-          out.append(lhs)
-          out.append(sep)
-
-          out.appendAll(
-            new pprint.Renderer(80, fansi.Color.Yellow, fansi.Color.Green, 2)
-              .rec(recVal(r), lhs.length + sep.length, 1).iter
-          )
-          out.append("\n")
+      val (lhs, rhs) = r match{
+        case r: SSA.Ctrl => recCtrl(r)
+        case r: SSA.Val => (fansi.Color.Cyan("local" + savedLocals.get(r)), recVal(r))
       }
+
+      out.append(lhs, " = ")
+      out.appendAll(
+        new pprint.Renderer(80, fansi.Color.Yellow, fansi.Color.Green, 2)
+          .rec(rhs, lhs.length + " = ".length, 1).iter
+      )
+      out.append("\n")
     }
 
     import collection.JavaConverters._
-    val mapping = (savedLocals.asScala.mapValues("local" + _) ++ savedControls.mapValues("ctrl" + _)).toMap
+    val mapping = (savedLocals.asScala.mapValues("local" + _) ++ savedControls).toMap
     (fansi.Str.join(out:_*), mapping)
   }
 
