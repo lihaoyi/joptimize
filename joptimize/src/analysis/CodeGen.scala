@@ -18,31 +18,6 @@ import scala.collection.mutable
   */
 
 object CodeGen{
-  def renderGraph(edges: Seq[(fansi.Str, fansi.Str)]): fansi.Str = {
-    val allStrings = edges.flatMap(x => Seq(x._1, x._2)).distinct
-    val stringToIndex = allStrings.zipWithIndex.toMap
-    val indexToString = stringToIndex.map(_.swap)
-    val edgeGroups = edges.groupBy(_._2).map{case (k, v) => (k, v.map(_._1))}
-    val sorted = TarjansStronglyConnectedComponents(allStrings.map(edgeGroups.getOrElse(_, Nil).map(stringToIndex))).flatten
-    val out = mutable.Buffer.empty[fansi.Str]
-
-    for(i <- sorted){
-      val dest = allStrings(i)
-      val srcs = edgeGroups.getOrElse(dest, Nil)
-      out.append(dest, " <- ")
-      out.append(srcs.flatMap(src => Seq(fansi.Str(", "), src)).drop(1):_*)
-      out.append("\n")
-    }
-    fansi.Str.join(out:_*)
-  }
-
-  def findCtrl(ssa: SSA.Node) = ssa match{
-    case SSA.Return(ctrl) => ctrl
-    case SSA.ReturnVal(ctrl, _) => ctrl
-    case SSA.UnaBranch(ctrl, _, _) => ctrl
-    case SSA.BinBranch(ctrl, _, _, _) => ctrl
-  }
-
   def findControlFlowGraph(program: Program) = {
     val controlFlowEdges = mutable.Buffer.empty[(SSA.Ctrl, SSA.Ctrl)]
     val visited = mutable.Set.empty[SSA.Ctrl]
@@ -76,11 +51,12 @@ object CodeGen{
 
 
     println(
-      renderGraph(
+      Renderer.renderGraph(
         controlFlowEdges.map{
 //          case (l: SSA.Ctrl, r: SSA.Controlled) => (fansi.Color.Cyan(mapping(l)), fansi.Color.Yellow("return"))
-          case (l: SSA.Ctrl, r: SSA.Ctrl) => (fansi.Color.Magenta(mapping(l)), fansi.Color.Magenta(mapping(r)))
-        }
+          case (l: SSA.Ctrl, r: SSA.Ctrl) => (l, r)
+        },
+        l => fansi.Color.Magenta(mapping(l))
       )
     )
 

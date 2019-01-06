@@ -3,7 +3,7 @@ package joptimize
 import java.io.PrintWriter
 import java.io.StringWriter
 
-import joptimize.model.{CType, Desc, IType, JType}
+import joptimize.model._
 import org.objectweb.asm.{Handle, Opcodes}
 import org.objectweb.asm.Opcodes._
 import org.objectweb.asm.tree._
@@ -164,6 +164,18 @@ object Util{
           case _ => new LdcInsnNode(java.lang.Double.valueOf(v))
         }
     }
+  }
+
+
+  def edgeListToIndexMap[T](edges: Seq[(T, T)], vertexToIndex: Map[T, Int]) = {
+    edges
+      .map { case (k, v) => (vertexToIndex(k), vertexToIndex(v)) }
+      .groupBy(_._1)
+      .map { case (k, vs) => (k, vs.map(_._2)) }
+  }
+
+  def mapToAdjacencyLists(indexMap: Map[Int, Seq[Int]], size: Int) = {
+    Range(0, size).map(indexMap.getOrElse(_, Nil))
   }
 
   val metafactory = new Handle(

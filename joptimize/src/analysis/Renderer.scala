@@ -49,6 +49,28 @@ object Renderer {
     )
   }
 
+  def renderGraph(edges: Seq[(SSA.Ctrl, SSA.Ctrl)], coloring: SSA.Ctrl => fansi.Str): fansi.Str = {
+    val allVertices = edges.flatMap(x => Seq(x._1, x._2)).distinct
+    val vertexToIndex = allVertices.zipWithIndex.toMap
+    val edgeGroups = edges.groupBy(_._2).map{case (k, v) => (k, v.map(_._1))}
+
+    val finalOrderingMap = Renderer.sortVerticesForPrinting(allVertices.toSet, edges)(
+      (src, dest) => dest.isInstanceOf[SSA.Region]
+    )
+    val tarjansInput = allVertices.map(edgeGroups.getOrElse(_, Nil).map(vertexToIndex))
+    val sorted = TarjansStronglyConnectedComponents(tarjansInput).flatten.map(allVertices(_)).sortBy(finalOrderingMap)
+    val out = mutable.Buffer.empty[fansi.Str]
+
+    for(dest <- sorted){
+
+      val srcs = edgeGroups.getOrElse(dest, Nil)
+      out.append(coloring(dest), " <- ")
+      out.appendAll(srcs.flatMap(src => Seq(fansi.Str(", "), coloring(src))).drop(1))
+      out.append("\n")
+    }
+    fansi.Str.join(out:_*)
+  }
+
   def renderSSA(program: Program): (fansi.Str, Map[SSA.Node, String]) = {
 
     val allTerminals = program.allTerminals
@@ -57,7 +79,9 @@ object Renderer {
     val (allVertices, roots, downstreamEdges) =
       Util.breadthFirstAggregation[SSA.Node](allTerminals.toSet)(program.upstream)
 
-    val finalOrderingMap = sortVerticesForPrinting(allVertices, downstreamEdges)
+    val finalOrderingMap = sortVerticesForPrinting(allVertices, downstreamEdges)(
+      (src, dest) => dest.isInstanceOf[SSA.Phi] || dest.isInstanceOf[SSA.Region]
+    )
 
     val saveable =
       downstreamEdges.groupBy(_._1)
@@ -192,32 +216,25 @@ object Renderer {
     * bottom, and within each cycle data/control always flows downwards except for
     * jumps which may return to an earlier phi/region node.
     */
-  def sortVerticesForPrinting(allVertices: Set[SSA.Node], downstreamEdges: Seq[(SSA.Node, SSA.Node)]) = {
+  def sortVerticesForPrinting[T](allVertices: Set[T],
+                                 downstreamEdges: Seq[(T, T)])
+                                (backEdge: (T, T) => Boolean) = {
     val vertexToIndex = allVertices.zipWithIndex.toMap
     val indexToVertex = vertexToIndex.map(_.swap)
 
-    def edgeListToIndexMap(edges: Seq[(SSA.Node, SSA.Node)]) = {
-      edges
-        .map { case (k, v) => (vertexToIndex(k), vertexToIndex(v)) }
-        .groupBy(_._1)
-        .map { case (k, vs) => (k, vs.map(_._2)) }
-    }
 
-    def mapToAdjacencyLists(indexMap: Map[Int, Seq[Int]]) = {
-      Range(0, allVertices.size).map(indexMap.getOrElse(_, Nil))
-    }
-
-    val brokenEdgeLists = edgeListToIndexMap(
-      downstreamEdges.filter(x => !x._2.isInstanceOf[SSA.Phi] && !x._2.isInstanceOf[SSA.Region])
+    val brokenEdgeLists = Util.edgeListToIndexMap(
+      downstreamEdges.filter(x => !backEdge(x._1, x._2)),
+      vertexToIndex
     )
 
-    val brokenOrderingList = TarjansStronglyConnectedComponents(mapToAdjacencyLists(brokenEdgeLists)).map { case Seq(x) => x }
+    val brokenOrderingList = TarjansStronglyConnectedComponents(Util.mapToAdjacencyLists(brokenEdgeLists, allVertices.size)).map { case Seq(x) => x }
 
     val brokenOrdering = brokenOrderingList.zipWithIndex.toMap
 
-    val groupedEdgeLists = edgeListToIndexMap(downstreamEdges)
+    val groupedEdgeLists = Util.edgeListToIndexMap(downstreamEdges, vertexToIndex)
 
-    val groupedOrdering = TarjansStronglyConnectedComponents(mapToAdjacencyLists(groupedEdgeLists))
+    val groupedOrdering = TarjansStronglyConnectedComponents(Util.mapToAdjacencyLists(groupedEdgeLists, allVertices.size))
 
     val orderingList = groupedOrdering.flatMap(_.sortBy(brokenOrdering)).map(indexToVertex)
 
