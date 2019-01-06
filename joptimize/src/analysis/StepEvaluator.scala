@@ -17,7 +17,7 @@ import scala.collection.mutable
   * generated SSA nodes; we do this to allow immediate constant folding if the
   * node's type is specific enough to be a concrete value.
   */
-class StepEvaluator(merges: mutable.Set[(SSA.Phi, (Int, Int, SSA.Value))]) extends joptimize.bytecode.Interpreter[SSA.Value]{
+class StepEvaluator(merges: mutable.Set[(SSA.Phi, (Int, Int, SSA.Val))]) extends joptimize.bytecode.Interpreter[SSA.Val]{
 
   def newOperation(insn: AbstractInsnNode) = {
     insn.getOpcode match {
@@ -62,9 +62,9 @@ class StepEvaluator(merges: mutable.Set[(SSA.Phi, (Int, Int, SSA.Value))]) exten
   // that we construct during abstract interpretation. Those do not meaningfully
   // affect the shape of the graph, and we will generate our own copy operations
   // as-necessary when serializing the graph back out to bytecode
-  def copyOperation(insn: AbstractInsnNode, value: SSA.Value) = value
+  def copyOperation(insn: AbstractInsnNode, value: SSA.Val) = value
 
-  def unaryOperation(insn: AbstractInsnNode, value: SSA.Value) = {
+  def unaryOperation(insn: AbstractInsnNode, value: SSA.Val) = {
     insn.getOpcode match {
       case IINC =>
         val n = insn.asInstanceOf[IincInsnNode].incr
@@ -124,7 +124,7 @@ class StepEvaluator(merges: mutable.Set[(SSA.Phi, (Int, Int, SSA.Value))]) exten
     }
   }
 
-  def binaryOperation(insn: AbstractInsnNode, v1: SSA.Value, v2: SSA.Value) = {
+  def binaryOperation(insn: AbstractInsnNode, v1: SSA.Val, v2: SSA.Val) = {
     insn.getOpcode match {
       case IALOAD | BALOAD | CALOAD | SALOAD | FALOAD | AALOAD =>
         SSA.GetArray(v1, v2, 1)
@@ -145,7 +145,7 @@ class StepEvaluator(merges: mutable.Set[(SSA.Phi, (Int, Int, SSA.Value))]) exten
     }
   }
 
-  def naryOperation(insn: AbstractInsnNode, vs: Seq[SSA.Value]) = {
+  def naryOperation(insn: AbstractInsnNode, vs: Seq[SSA.Val]) = {
     insn.getOpcode match{
       case MULTIANEWARRAY =>
         val insn2 = insn.asInstanceOf[MultiANewArrayInsnNode]
@@ -173,15 +173,15 @@ class StepEvaluator(merges: mutable.Set[(SSA.Phi, (Int, Int, SSA.Value))]) exten
     }
   }
 
-  def returnOperation(insn: AbstractInsnNode, value: SSA.Value, expected: SSA.Value) = ()
+  def returnOperation(insn: AbstractInsnNode, value: SSA.Val, expected: SSA.Val) = ()
 
-  def merge(v1: SSA.Value, v2: SSA.Value, insnIndex: Int, targetInsnIndex: Int) = {
+  def merge(v1: SSA.Val, v2: SSA.Val, insnIndex: Int, targetInsnIndex: Int) = {
     val phi = v1.asInstanceOf[SSA.Phi]
     merges.add((phi, (insnIndex, targetInsnIndex, v2)))
     phi
   }
 
-  def merge0(value1: SSA.Value, insnIndex: Int, targetInsnIndex: Int) = {
+  def merge0(value1: SSA.Val, insnIndex: Int, targetInsnIndex: Int) = {
     val phi = new SSA.Phi(value1.getSize)
     merges.add(phi -> (insnIndex, targetInsnIndex, value1))
     phi

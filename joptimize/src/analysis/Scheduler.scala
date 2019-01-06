@@ -4,25 +4,25 @@ import joptimize.model.SSA
 
 import scala.collection.mutable
 
-abstract class Scheduler(dominatorDepth: Map[SSA.Control, Int],
-                         immediateDominator: Map[SSA.Control, SSA.Control],
-                         phiMerges:  Map[SSA.Phi, (SSA.Control, Set[(SSA.Control, SSA.Value)])],
-                         mapping: Map[SSA.Control, String]) {
-  def downstream(ssa: SSA.Token): Seq[SSA.Value]
-  def upstream(ssa: SSA.Token): Seq[SSA.Value]
-  def isPinned(ssa: SSA.Token): Boolean
-  def loopNest(block: SSA.Token): Int
-  val visited = new java.util.IdentityHashMap[SSA.Value, Unit]()
+abstract class Scheduler(dominatorDepth: Map[SSA.Ctrl, Int],
+                         immediateDominator: Map[SSA.Ctrl, SSA.Ctrl],
+                         phiMerges:  Map[SSA.Phi, (SSA.Ctrl, Set[(SSA.Ctrl, SSA.Val)])],
+                         mapping: Map[SSA.Ctrl, String]) {
+  def downstream(ssa: SSA.Node): Seq[SSA.Val]
+  def upstream(ssa: SSA.Node): Seq[SSA.Val]
+  def isPinned(ssa: SSA.Node): Boolean
+  def loopNest(block: SSA.Node): Int
+  val visited = new java.util.IdentityHashMap[SSA.Val, Unit]()
 
-  val control = mutable.Map.empty[SSA.Value, SSA.Control]
+  val control = mutable.Map.empty[SSA.Val, SSA.Ctrl]
 
-  def scheduleEarlyRoot(n: SSA.Token): Unit = {
+  def scheduleEarlyRoot(n: SSA.Node): Unit = {
     for(in <- upstream(n)){
       if (!control.contains(in)) scheduleEarly(in)
     }
   }
 
-  def scheduleEarly(n: SSA.Value): Unit = {
+  def scheduleEarly(n: SSA.Val): Unit = {
     scheduleEarlyRoot(n)
     if (!control.contains(n)){
       val b = upstream(n).flatMap(control.get).minBy(dominatorDepth)
@@ -30,18 +30,18 @@ abstract class Scheduler(dominatorDepth: Map[SSA.Control, Int],
     }
   }
 
-  def scheduleLateRoot(n: SSA.Token): Unit = {
+  def scheduleLateRoot(n: SSA.Node): Unit = {
     for(out <- downstream(n)){
       if (!isPinned(out)) scheduleLate(out)
     }
   }
 
-  def scheduleLate(n: SSA.Value): Unit = {
+  def scheduleLate(n: SSA.Val): Unit = {
     if (!visited.containsKey(n)){
       visited.put(n, ())
       scheduleLateRoot(n)
       if (!isPinned(n)){
-        var lca: SSA.Control = null
+        var lca: SSA.Ctrl = null
         for(out <- downstream(n)){
 
           out match{
@@ -64,7 +64,7 @@ abstract class Scheduler(dominatorDepth: Map[SSA.Control, Int],
       }
     }
   }
-  def findLca(a0: SSA.Control, b0: SSA.Control): SSA.Control = {
+  def findLca(a0: SSA.Ctrl, b0: SSA.Ctrl): SSA.Ctrl = {
     if (a0 == null) b0
     else{
       var a = a0

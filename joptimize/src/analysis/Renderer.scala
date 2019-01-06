@@ -49,18 +49,18 @@ object Renderer {
     )
   }
 
-  def renderSSA(program: Program): (fansi.Str, Map[SSA.Token, String]) = {
+  def renderSSA(program: Program): (fansi.Str, Map[SSA.Node, String]) = {
 
     val allTerminals = program.allTerminals
     val regionMerges = program.regionMerges
     val phiMerges = program.phiMerges
     val (allVertices, roots, downstreamEdges) =
-      Util.breadthFirstAggregation[SSA.Token](allTerminals.toSet){
+      Util.breadthFirstAggregation[SSA.Node](allTerminals.toSet){
         case ctrl: SSA.Region => regionMerges(ctrl).toSeq
         case SSA.True(inner) => Seq(inner)
         case SSA.False(inner) => Seq(inner)
 
-        case ssa: SSA.Value =>
+        case ssa: SSA.Val =>
           ssa.allUpstream ++ (ssa match{
             case phi: SSA.Phi => phiMerges(phi)._2.flatMap(x => Seq(x._1, x._2))
             case _ => Nil
@@ -96,25 +96,25 @@ object Renderer {
 
     val renderRoots = allVertices.filter(i => saveable.getOrElse(i, false))
 
-    val savedLocals = new util.IdentityHashMap[SSA.Value, Int]()
+    val savedLocals = new util.IdentityHashMap[SSA.Val, Int]()
 
-    for((r: SSA.Value, i) <- renderRoots.zipWithIndex) savedLocals.put(r, i)
+    for((r: SSA.Val, i) <- renderRoots.zipWithIndex) savedLocals.put(r, i)
 
-    val savedControls = mutable.LinkedHashMap.empty[SSA.Control, Int]
-    def getControlId(c: SSA.Control) = savedControls.getOrElseUpdate(c, savedControls.size)
+    val savedControls = mutable.LinkedHashMap.empty[SSA.Ctrl, Int]
+    def getControlId(c: SSA.Ctrl) = savedControls.getOrElseUpdate(c, savedControls.size)
     def apply(lhs: String, operands: Tree*) = pprint.Tree.Apply(lhs, operands.toIterator)
     def atom(lhs: String) = pprint.Tree.Lazy(ctx => Iterator(lhs))
     def literal(lhs: String) = pprint.Tree.Literal(lhs)
     def infix(lhs: Tree, op: String, rhs: Tree) = pprint.Tree.Infix(lhs, op, rhs)
 
-    def getControlStr(control: SSA.Control) = {
+    def getControlStr(control: SSA.Ctrl) = {
       fansi.Color.Cyan("ctrl" + getControlId(control))
     }
-    def renderControl(control: SSA.Control) = {
+    def renderControl(control: SSA.Ctrl) = {
       atom(getControlStr(control).toString)
     }
 
-    def treeify0(ssa: SSA.Value): Tree = {
+    def treeify0(ssa: SSA.Val): Tree = {
       ssa match{
         case phi: SSA.Phi => apply("phi", phiMerges(phi)._2.map{case (ctrl, ssa) => infix(renderControl(ctrl), ":", treeify(ssa))}.toSeq:_*)
         case SSA.Arg(index, typeSize) => atom(fansi.Color.Cyan("arg" + index).toString)
@@ -167,7 +167,7 @@ object Renderer {
         case SSA.MonitorExit(indexSrc) => ???
       }
     }
-    def treeify(ssa: SSA.Value): Tree = {
+    def treeify(ssa: SSA.Val): Tree = {
       if (savedLocals.containsKey(ssa)) atom(fansi.Color.Cyan("local" + savedLocals.get(ssa)).toString())
       else treeify0(ssa)
     }
@@ -183,7 +183,7 @@ object Renderer {
           out.append(")")
           out.append("\n")
         case SSA.True(_) | SSA.False(_) => // do nothing
-        case r: SSA.Value =>
+        case r: SSA.Val =>
           val (lhs, sep) =
             r match{
               case r: SSA.BinBranch =>
@@ -222,11 +222,11 @@ object Renderer {
     * bottom, and within each cycle data/control always flows downwards except for
     * jumps which may return to an earlier phi/region node.
     */
-  def sortVerticesForPrinting(allVertices: Set[SSA.Token], downstreamEdges: Seq[(SSA.Token, SSA.Token)]) = {
+  def sortVerticesForPrinting(allVertices: Set[SSA.Node], downstreamEdges: Seq[(SSA.Node, SSA.Node)]) = {
     val vertexToIndex = allVertices.zipWithIndex.toMap
     val indexToVertex = vertexToIndex.map(_.swap)
 
-    def edgeListToIndexMap(edges: Seq[(SSA.Token, SSA.Token)]) = {
+    def edgeListToIndexMap(edges: Seq[(SSA.Node, SSA.Node)]) = {
       edges
         .map { case (k, v) => (vertexToIndex(k), vertexToIndex(v)) }
         .groupBy(_._1)

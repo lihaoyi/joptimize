@@ -6,17 +6,17 @@ import scala.collection.mutable
 
 
 object SSA{
-  sealed abstract class Value(size: Int, upstream0: SSA.Token*) extends org.objectweb.asm.tree.analysis.Value with Token{
-    def upstream = upstream0.collect{case s: Value => s}
+  sealed abstract class Val(size: Int, upstream0: SSA.Node*) extends org.objectweb.asm.tree.analysis.Value with Node{
+    def upstream = upstream0.collect{case s: Val => s}
     def allUpstream = upstream0
     def getSize = size
 
     def internalName = toString
   }
-  trait Token
-  trait Control extends Token
-  trait Controlled extends Value{
-    def control: Control
+  trait Node
+  trait Ctrl extends Node
+  trait Controlled extends Val{
+    def control: Ctrl
   }
   trait Codes{
     private[this] val lookup0 = mutable.Map.empty[Int, Code]
@@ -26,13 +26,13 @@ object SSA{
     }
     def lookup(i: Int) = lookup0(i)
   }
-  case class State(base: Option[(State, Value)]) extends Value(0)
-  class Phi(typeSize: Int) extends Value(typeSize)
-  class Region() extends Control
-  case class True(node: SSA.Controlled) extends Control
-  case class False(node: SSA.Controlled) extends Control
-  case class Arg(index: Int, tpe: IType) extends Value(tpe.size)
-  case class BinOp(a: Value, b: Value, opcode: BinOp.Code) extends Value(opcode.typeSize, a, b)
+  case class State(base: Option[(State, Val)]) extends Val(0)
+  class Phi(typeSize: Int) extends Val(typeSize)
+  class Region() extends Ctrl
+  case class True(node: SSA.Controlled) extends Ctrl
+  case class False(node: SSA.Controlled) extends Ctrl
+  case class Arg(index: Int, tpe: IType) extends Val(tpe.size)
+  case class BinOp(a: Val, b: Val, opcode: BinOp.Code) extends Val(opcode.typeSize, a, b)
   object BinOp extends Codes{
     val IADD = new Code(Opcodes.IADD, 1)
     val ISUB = new Code(Opcodes.ISUB, 1)
@@ -72,7 +72,7 @@ object SSA{
     val DDIV = new Code(Opcodes.DDIV, 2)
     val DREM = new Code(Opcodes.DREM, 2)
   }
-  case class UnaOp(a: Value, opcode: UnaOp.Code) extends Value(opcode.typeSize, a)
+  case class UnaOp(a: Val, opcode: UnaOp.Code) extends Val(opcode.typeSize, a)
   object UnaOp extends Codes{
     val INEG = new Code(Opcodes.INEG, 1)
     val L2I = new Code(Opcodes.L2I, 1)
@@ -95,7 +95,7 @@ object SSA{
     val F2D = new Code(Opcodes.F2D, 2)
   }
 
-  case class UnaBranch(control: Control, a: Value, opcode: UnaBranch.Code) extends Value(0, control, a) with Controlled
+  case class UnaBranch(control: Ctrl, a: Val, opcode: UnaBranch.Code) extends Val(0, control, a) with Controlled
   object UnaBranch  extends Codes{
     val IFEQ = new Code(Opcodes.IFEQ)
     val IFNE = new Code(Opcodes.IFNE)
@@ -106,7 +106,7 @@ object SSA{
     val IFNULL = new Code(Opcodes.IFNULL)
     val IFNONNULL = new Code(Opcodes.IFNONNULL)
   }
-  case class BinBranch(control: Control, a: Value, b: Value, opcode: BinBranch.Code) extends Value(0, control, a, b) with Controlled
+  case class BinBranch(control: Ctrl, a: Val, b: Val, opcode: BinBranch.Code) extends Val(0, control, a, b) with Controlled
 
   object BinBranch  extends Codes{
     val IF_ICMPEQ = new Code(Opcodes.IF_ICMPEQ)
@@ -118,37 +118,37 @@ object SSA{
     val IF_ACMPEQ = new Code(Opcodes.IF_ACMPEQ)
     val IF_ACMPNE = new Code(Opcodes.IF_ACMPNE)
   }
-  case class ReturnVal(control: Control, a: Value) extends Value(0, control, a) with Controlled
-  case class Return(control: Control) extends Value(0, control) with Controlled
-  case class AThrow(src: Value) extends Value(0, src)
-  case class TableSwitch(src: Value, min: Int, max: Int) extends Value(0, src)
-  case class LookupSwitch(src: Value, keys: Seq[Int]) extends Value(0, src)
+  case class ReturnVal(control: Ctrl, a: Val) extends Val(0, control, a) with Controlled
+  case class Return(control: Ctrl) extends Val(0, control) with Controlled
+  case class AThrow(src: Val) extends Val(0, src)
+  case class TableSwitch(src: Val, min: Int, max: Int) extends Val(0, src)
+  case class LookupSwitch(src: Val, keys: Seq[Int]) extends Val(0, src)
 
-  case class CheckCast(src: Value, desc: JType) extends Value(0, src)
-  case class ArrayLength(src: Value) extends Value(1, src)
-  case class InstanceOf(src: Value, desc: JType) extends Value(1, src)
-  case class PushI(value: Int) extends Value(1)
-  case class PushJ(value: Long) extends Value(2)
-  case class PushF(value: Float) extends Value(1)
-  case class PushD(value: Double) extends Value(2)
-  case class PushS(value: String) extends Value(1)
-  case class PushNull() extends Value(1)
-  case class PushCls(value: JType.Cls) extends Value(1)
+  case class CheckCast(src: Val, desc: JType) extends Val(0, src)
+  case class ArrayLength(src: Val) extends Val(1, src)
+  case class InstanceOf(src: Val, desc: JType) extends Val(1, src)
+  case class PushI(value: Int) extends Val(1)
+  case class PushJ(value: Long) extends Val(2)
+  case class PushF(value: Float) extends Val(1)
+  case class PushD(value: Double) extends Val(2)
+  case class PushS(value: String) extends Val(1)
+  case class PushNull() extends Val(1)
+  case class PushCls(value: JType.Cls) extends Val(1)
 
-  case class InvokeStatic(srcs: Seq[Value],
+  case class InvokeStatic(srcs: Seq[Val],
                           cls: JType.Cls,
                           name: String,
-                          desc: Desc) extends Value(desc.ret.size, srcs:_*)
+                          desc: Desc) extends Val(desc.ret.size, srcs:_*)
 
-  case class InvokeSpecial(srcs: Seq[Value],
+  case class InvokeSpecial(srcs: Seq[Val],
                            cls: JType.Cls,
                            name: String,
-                           desc: Desc) extends Value(desc.ret.size, srcs:_*)
+                           desc: Desc) extends Val(desc.ret.size, srcs:_*)
 
-  case class InvokeVirtual(srcs: Seq[Value],
+  case class InvokeVirtual(srcs: Seq[Val],
                            cls: JType.Cls,
                            name: String,
-                           desc:Desc) extends Value(desc.ret.size, srcs:_*)
+                           desc:Desc) extends Val(desc.ret.size, srcs:_*)
 
   case class InvokeDynamic(name: String,
                            desc: String,
@@ -156,18 +156,18 @@ object SSA{
                            bsOwner: String,
                            bsName: String,
                            bsDesc: String,
-                           bsArgs: Seq[AnyRef]) extends Value(???)
+                           bsArgs: Seq[AnyRef]) extends Val(???)
 
-  case class New(cls: JType.Cls) extends Value(1)
-  case class NewArray(src: Value, typeRef: JType) extends Value(1, src)
-  case class MultiANewArray(desc: JType, dims: Seq[Value]) extends Value(1)
-  case class PutStatic(src: Value, cls: JType.Cls, name: String, desc: JType) extends Value(0, src)
-  case class GetStatic(cls: JType.Cls, name: String, desc: JType) extends Value(desc.size)
-  case class PutField(src: Value, obj: Value, owner: JType.Cls, name: String, desc: JType) extends Value(0, src, obj)
-  case class GetField(obj: Value, owner: JType.Cls, name: String, desc: JType) extends Value(desc.size, obj)
-  case class PutArray(src: Value, indexSrcValue: Value, arrayValue: Value) extends Value(0, src)
-  case class GetArray(indexSrc: Value, array: Value, typeSize: Int) extends Value(typeSize, indexSrc, array)
+  case class New(cls: JType.Cls) extends Val(1)
+  case class NewArray(src: Val, typeRef: JType) extends Val(1, src)
+  case class MultiANewArray(desc: JType, dims: Seq[Val]) extends Val(1)
+  case class PutStatic(src: Val, cls: JType.Cls, name: String, desc: JType) extends Val(0, src)
+  case class GetStatic(cls: JType.Cls, name: String, desc: JType) extends Val(desc.size)
+  case class PutField(src: Val, obj: Val, owner: JType.Cls, name: String, desc: JType) extends Val(0, src, obj)
+  case class GetField(obj: Val, owner: JType.Cls, name: String, desc: JType) extends Val(desc.size, obj)
+  case class PutArray(src: Val, indexSrcValue: Val, arrayValue: Val) extends Val(0, src)
+  case class GetArray(indexSrc: Val, array: Val, typeSize: Int) extends Val(typeSize, indexSrc, array)
 
-  case class MonitorEnter(indexSrc: Value) extends Value(0, indexSrc)
-  case class MonitorExit(indexSrc: Value) extends Value(0, indexSrc)
+  case class MonitorEnter(indexSrc: Val) extends Val(0, indexSrc)
+  case class MonitorExit(indexSrc: Val) extends Val(0, indexSrc)
 }

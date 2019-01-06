@@ -8,7 +8,7 @@ import joptimize.model.{CType, IType, JType, SSA}
   * dependencies.
   */
 class Typer(merge0: Seq[IType] => IType){
-  def visitSSA(ssa: SSA.Value, inferred: util.IdentityHashMap[SSA.Value, IType]): IType = ssa match{
+  def visitSSA(ssa: SSA.Val, inferred: util.IdentityHashMap[SSA.Val, IType]): IType = ssa match{
     case SSA.Arg(index, typeSize) => inferred.get(ssa)
     case SSA.BinOp(a, b, opcode) =>
       val v1 = inferred.get(a)

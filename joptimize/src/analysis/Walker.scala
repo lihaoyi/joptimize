@@ -35,7 +35,7 @@ class Walker(isInterface: JType.Cls => Boolean,
       println("+" * 20 + sig + "+" * 20)
       println(Renderer.renderInsns(mn.instructions))
 
-      val phiMerges0 = mutable.Set.empty[(SSA.Phi, (Int, Int, SSA.Value))]
+      val phiMerges0 = mutable.Set.empty[(SSA.Phi, (Int, Int, SSA.Val))]
       val frames = joptimize.bytecode.Analyzer.analyze(sig.cls.name, mn, new StepEvaluator(phiMerges0))
 
       val insns = mn.instructions.iterator().asScala.toVector
@@ -73,7 +73,7 @@ class Walker(isInterface: JType.Cls => Boolean,
         region
       }
 
-      val regionMerges = mutable.LinkedHashMap.empty[SSA.Region, Set[SSA.Control]]
+      val regionMerges = mutable.LinkedHashMap.empty[SSA.Region, Set[SSA.Ctrl]]
       regionMerges(regionStarts(insns.head)) = Set.empty
 
       val terminals = insns.map(i => (i.getOpcode, i)).zipWithIndex.collect{
@@ -122,7 +122,7 @@ class Walker(isInterface: JType.Cls => Boolean,
       val program = Program(
         terminals.map(_._2),
         phiMerges.map{case (k, (c, vs)) =>
-          (k, (findStartRegion(insns(c)): SSA.Control, vs.map{case (idx, ssa) => (findStartRegion(insns(idx)): SSA.Control, ssa)}))
+          (k, (findStartRegion(insns(c)): SSA.Ctrl, vs.map{case (idx, ssa) => (findStartRegion(insns(idx)): SSA.Ctrl, ssa)}))
         },
         regionMerges2.toMap
       )
