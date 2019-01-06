@@ -43,8 +43,6 @@ abstract class ClickScheduler(dominatorDepth: Map[SSA.Ctrl, Int],
       scheduleLateRoot(n)
       if (!isPinned(n)){
         var lca: SSA.Ctrl = null
-        pprint.log(n)
-        pprint.log(downstream(n))
         for(out <- downstream(n)){
 
           out match{

@@ -48,29 +48,25 @@ object CodeGen{
     val visited = mutable.Set.empty[SSA.Ctrl]
 
     def rec(current: SSA.Ctrl): Unit = if (!visited(current)){
-      pprint.log(current)
       visited.add(current)
 
       val upstreams = current match{
-        case SSA.True(x) => Seq(findCtrl(x))
+        case SSA.True(x) => Seq(x)
+        case SSA.False(x) => Seq(x)
         case SSA.UnaBranch(ctrl, a, opcode) => Seq(ctrl)
         case SSA.BinBranch(ctrl, a, b, opcode) => Seq(ctrl)
         case SSA.Return(ctrl) => Seq(ctrl)
         case SSA.ReturnVal(ctrl, a) => Seq(ctrl)
-        case SSA.False(x) => Seq(findCtrl(x))
         case r: SSA.Region => program.regionMerges(r)
       }
 
-      pprint.log(upstreams)
       for(control <- upstreams){
         rec(control)
         controlFlowEdges.append(control -> current)
       }
     }
 
-    pprint.log(program.allTerminals)
     program.allTerminals.foreach(rec)
-    pprint.log(controlFlowEdges, height = 9999)
     controlFlowEdges
   }
 
@@ -88,7 +84,6 @@ object CodeGen{
       )
     )
 
-    pprint.log(controlFlowEdges)
     val loopTree = HavlakLoopTree.analyzeLoops(controlFlowEdges)
 
     def rec(l: HavlakLoopTree.Loop[SSA.Ctrl], depth: Int, label0: List[Int]): Unit = {
@@ -111,7 +106,7 @@ object CodeGen{
       dominatorDepth, immediateDominators,
       controlFlowEdges, mapping.collect{case (k: SSA.Ctrl, v) => (k, v)}
     )
-//    pprint.log(nodesToBlocks, height=99999)
+    pprint.log(nodesToBlocks, height=99999)
 //    val pinnedNodes = program
 //    for(controlFlow)
     ???
@@ -145,10 +140,8 @@ object CodeGen{
       loop.children.foreach(recLoop(_, depth + 1))
     }
 
-    pprint.log(loopTree)
     recLoop(loopTree, 0)
 
-    pprint.log(loopNestMap)
     val downstreamMap = downstreamEdges.groupBy(_._1).map{case (k, vs) => (k, vs.map(_._2))}
     val upstreamMap = downstreamEdges.groupBy(_._2).map{case (k, vs) => (k, vs.map(_._1))}
     val scheduler = new ClickScheduler(dominatorDepth, immediateDominator, program.phiMerges, mapping) {
@@ -197,6 +190,7 @@ object CodeGen{
   def findDominators[T](edges: Seq[(T, T)]): (Map[T, T], Map[T, Int]) = {
     val indices = edges.flatMap{case (x, y) => Seq(x, y)}.distinct.zipWithIndex.toMap
     val nodes = indices.map(_.swap)
+
     val successorMap = edges.groupBy(_._1).map{case (k, v) => (indices(k), v.map(_._2).map(indices))}
     val predecessorMap = edges.groupBy(_._2).map{case (k, v) => (indices(k), v.map(_._1).map(indices))}
 
@@ -217,6 +211,7 @@ object CodeGen{
         n
       }
     }
+
     (
       immediateDominators.zipWithIndex.collect{case (v, i) if v != -1 => (nodes(i), nodes(v))}.toMap,
       dominatorDepth.zipWithIndex.map{case (v, i) => (nodes(i), v)}.toMap

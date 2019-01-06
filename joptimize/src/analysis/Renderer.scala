@@ -89,11 +89,7 @@ object Renderer {
           val n = x.distinct.size
           (k, n > 1 || n == 1 && allTerminals.contains(k))
       } ++ allVertices.collect{
-        case b: SSA.Region => (b, true)
-        case b: SSA.BinBranch => (b, true)
-        case b: SSA.UnaBranch => (b, true)
-        case b: SSA.Return => (b, true)
-        case b: SSA.ReturnVal => (b, true)
+        case b: SSA.Ctrl => (b, true)
       }
 
     val out = mutable.Buffer.empty[Str]
@@ -155,42 +151,41 @@ object Renderer {
       else recVal(ssa)
     }
 
-    def recCtrl(ctrl: SSA.Ctrl): (Option[fansi.Str], Tree) = ctrl match{
+    def recCtrl(ctrl: SSA.Ctrl): (fansi.Str, Tree) = ctrl match{
+      case SSA.True(src) => (getControlStr(ctrl), apply("true", atom(getControlStr(src).toString)))
+      case SSA.False(src) => (getControlStr(ctrl), apply("false", atom(getControlStr(src).toString)))
       case reg: SSA.Region =>
         val rhs = apply("region", regionMerges(reg).iterator.map(x => atom(getControlStr(x).toString)).toSeq:_*)
-        (Some(getControlStr(reg)), rhs)
+        (getControlStr(reg), rhs)
 
       case SSA.AThrow(src) => ???
       case SSA.TableSwitch(src, min, max) => ???
       case SSA.LookupSwitch(src, keys) => ???
 
-      case SSA.ReturnVal(ctrl, a) =>
-        val rhs = apply("return", atom(getControlStr(ctrl).toString()), treeify(a))
-        (None, rhs)
-      case SSA.Return(ctrl) =>
-        val rhs = apply("return", atom(getControlStr(ctrl).toString()))
-        (None, rhs)
+      case SSA.ReturnVal(inner, a) =>
+        val rhs = apply("return", atom(getControlStr(inner).toString()), treeify(a))
+        (getControlStr(ctrl), rhs)
+      case SSA.Return(inner) =>
+        val rhs = apply("return", atom(getControlStr(inner).toString()))
+        (getControlStr(ctrl), rhs)
       case n @ SSA.UnaBranch(control, a, opcode) =>
         val rhs = apply("if", renderControl(control), treeify(a), atom(unaryBranchString(opcode)))
-        (Some(getControlStr(SSA.True(n)) ++ ", " ++ getControlStr(SSA.False(n))), rhs)
+        (getControlStr(n), rhs)
 
       case n @ SSA.BinBranch(control, a, b, opcode) =>
         val rhs = apply("if", renderControl(control), infix(treeify(a), binBranchString(opcode), treeify(b)))
-        (Some(getControlStr(SSA.True(n)) ++ ", " ++ getControlStr(SSA.False(n))), rhs)
+        (getControlStr(n), rhs)
     }
-
 
     for(r <- renderRoots.toSeq.sortBy(finalOrderingMap)){
       r match{
-        case SSA.True(_) | SSA.False(_) => // do nothing
         case r: SSA.Ctrl =>
           val (lhs, rhs) = recCtrl(r)
-          lhs.foreach{x =>
-            out.append(x, " = ")
-          }
+
+          out.append(lhs, " = ")
           out.appendAll(
             new pprint.Renderer(80, fansi.Color.Yellow, fansi.Color.Green, 2)
-              .rec(rhs, lhs.fold(0)(_.length) + " = ".length, 1).iter
+              .rec(rhs, lhs.length + " = ".length, 1).iter
           )
           out.append("\n")
         case r: SSA.Val =>
@@ -212,8 +207,6 @@ object Renderer {
     }
 
     import collection.JavaConverters._
-    pprint.log(savedLocals.asScala.keys)
-    pprint.log(savedControls.keys)
     val mapping = (savedLocals.asScala.mapValues("local" + _) ++ savedControls.mapValues("ctrl" + _)).toMap
     (fansi.Str.join(out:_*), mapping)
   }
