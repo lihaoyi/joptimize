@@ -71,27 +71,41 @@ object Renderer {
     fansi.Str.join(out:_*)
   }
 
-  def renderSSA(program: Program): (fansi.Str, Map[SSA.Node, String]) = {
+  def renderSSA(program: Program, additionalControls: Map[SSA.Val, SSA.Ctrl] = Map.empty): (fansi.Str, Map[SSA.Node, String]) = {
 
     val allTerminals = program.allTerminals
     val regionMerges = program.regionMerges
     val phiMerges = program.phiMerges
     val (allVertices, roots, downstreamEdges) =
-      Util.breadthFirstAggregation[SSA.Node](allTerminals.toSet)(program.upstream)
+      Util.breadthFirstAggregation[SSA.Node](allTerminals.toSet) { x =>
+        val addedControl = x match{
+          case v: SSA.Val => additionalControls.get(v).toSeq
+          case _ => Nil
+        }
+        program.upstream(x) ++ addedControl
+      }
 
-    val finalOrderingMap = sortVerticesForPrinting(allVertices, downstreamEdges)(
-      (src, dest) => dest.isInstanceOf[SSA.Phi] || dest.isInstanceOf[SSA.Region]
-    )
+    val finalOrderingMap = sortVerticesForPrinting(allVertices, downstreamEdges){
+      case (_, _: SSA.Phi | _: SSA.Region) => true
+      case (v: SSA.Val, c: SSA.Ctrl) => true
+      case _ => false
+    }
 
     val saveable =
       downstreamEdges.groupBy(_._1)
-        .filter{ case (k, x) => k.upstream.nonEmpty && x.distinct.size > 1 || x.distinct.size == 1 && allTerminals.contains(k) }
+        .filter{ case (k, x) =>
+          val scheduled = k match{
+            case v: SSA.Val => additionalControls.contains(v)
+            case _ => false
+          }
+          k.upstream.nonEmpty && (x.distinct.size > 1 || allTerminals.contains(k) || scheduled)
+        }
         .keySet ++
         allVertices.collect{ case k: SSA.Phi => k case b: SSA.Ctrl => b}
 
     val out = mutable.Buffer.empty[Str]
 
-    val renderRoots = allVertices.filter(i => saveable.contains(i))
+    val renderRoots = allVertices.filter(saveable.contains)
 
     val savedLocals = new util.IdentityHashMap[SSA.Val, Int]()
 

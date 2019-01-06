@@ -82,7 +82,9 @@ object CodeGen{
       dominatorDepth, immediateDominators,
       controlFlowEdges, mapping.collect{case (k: SSA.Ctrl, v) => (k, v)}
     )
-    pprint.log(nodesToBlocks, height=99999)
+    val prettyNodesToBlocks = nodesToBlocks.collect{case (k, v) if mapping.contains(k) => (mapping(k), mapping(v))}
+    pprint.log(prettyNodesToBlocks, height=99999)
+    println(Renderer.renderSSA(program, nodesToBlocks)._1)
 //    val pinnedNodes = program
 //    for(controlFlow)
     ???
@@ -93,7 +95,7 @@ object CodeGen{
                dominatorDepth: Map[SSA.Ctrl, Int],
                immediateDominator: Map[SSA.Ctrl, SSA.Ctrl],
                graph: Seq[(SSA.Ctrl, SSA.Ctrl)],
-               mapping: Map[SSA.Ctrl, String]): Map[SSA.Node, SSA.Node] = {
+               mapping: Map[SSA.Ctrl, String]): Map[SSA.Val, SSA.Ctrl] = {
     val (allVertices, roots, downstreamEdges) =
       Util.breadthFirstAggregation[SSA.Node](program.allTerminals.toSet)(program.upstream)
     val loopNestMap = mutable.Map.empty[SSA.Node, Int]

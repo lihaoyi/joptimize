@@ -23,6 +23,7 @@ object MainTests extends TestSuite{
         'basicFor - annotatedTest
         'liftableFor - annotatedTest
         'unliftableFor - annotatedTest
+        'mixedLiftableFor - annotatedTest
         'nestedFor - annotatedTest
         'nestedFor2 - annotatedTest
         'basicWhile - annotatedTest

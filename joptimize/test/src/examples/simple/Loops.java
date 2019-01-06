@@ -68,6 +68,23 @@ public class Loops {
         return c + 7;
     }
 
+
+    @joptimize.Test(inputs = {0, 1, 2, 3, 4, 5, 6, 7, 9})
+    public static int mixedLiftableFor(int a) {
+        int c0 = 0;
+        int c = c0 + 3;
+
+        for (int i = 0; i < a; i++) {
+            int liftable = a * 5;
+            int unliftable = i * 7;
+            int liftable2 = liftable + 9;
+            int unliftable2 = unliftable + 11;
+            c = c + liftable2 + unliftable2;
+        }
+        return c + 2;
+    }
+
+
     public static int nullWhile(int a) {
         int c = 1;
         while (c > a) c++;
