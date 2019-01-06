@@ -56,6 +56,18 @@ public class Loops {
         return c + 7;
     }
 
+    @joptimize.Test(inputs = {0, 1, 2, 3, 4, 5, 6, 7, 9})
+    public static int unliftableFor(int a) {
+        int c0 = 0;
+        int c = c0 + 3;
+
+        for (int i = 0; i < a; i++) {
+            int delta = i * 2;
+            c = c + delta;
+        }
+        return c + 7;
+    }
+
     public static int nullWhile(int a) {
         int c = 1;
         while (c > a) c++;
