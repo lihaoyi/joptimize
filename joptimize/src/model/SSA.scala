@@ -14,7 +14,7 @@ object SSA{
   trait Node{
     def upstream: Seq[Node]
     lazy val upstreamVals = upstream.collect{case s: Val => s}
-    lazy val upstreamCtrls = upstream.collect{case s: Val => s}
+    lazy val upstreamCtrls = upstream.collect{case s: Ctrl => s}
   }
   sealed abstract class Ctrl(val upstream: SSA.Node*) extends Node
   trait Codes{
