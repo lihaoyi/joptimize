@@ -6,11 +6,11 @@ import utest._
 object LoopFinderTests extends TestSuite{
   val tests = Tests{
     def check[T](args: Seq[(T, T)],
-                 expected: Loop[T],
+                 expectedLoopTree: Loop[T],
                  expectedImmediateDominators: Map[T, T] = null,
                  expectedDominatorDepths: Map[T, Int] = null) = {
       val analyzed = LoopFinder.analyzeLoops(args)
-      assert(analyzed == expected)
+      assert(analyzed == expectedLoopTree)
       if (expectedImmediateDominators!= null){
         val (immediateDominators, dominatorDepths) = CodeGen.findDominators(args)
         assert(immediateDominators == expectedImmediateDominators)
@@ -22,14 +22,14 @@ object LoopFinderTests extends TestSuite{
       // 0 -> 1
       'twoNode - check[Int](
         args = Seq(0 -> 1),
-        expected = Loop(Set(0), true, Set(0, 1), Set()),
+        expectedLoopTree = Loop(Set(0), true, Set(0, 1), Set()),
         expectedImmediateDominators = Map(1 -> 0),
         expectedDominatorDepths = Map(0 -> 0, 1 -> 1)
       )
       // 0 -> 1 -> 2
       'threeNode - check[Int](
         args = Seq(0 -> 1, 1 -> 2),
-        expected = Loop(Set(0), true, Set(0, 1, 2), Set()),
+        expectedLoopTree = Loop(Set(0), true, Set(0, 1, 2), Set()),
         expectedImmediateDominators = Map(1 -> 0, 2 -> 1),
         expectedDominatorDepths = Map(0 -> 0, 1 -> 1, 2 -> 2)
       )
@@ -42,7 +42,7 @@ object LoopFinderTests extends TestSuite{
       //         3
       'diamond - check[Int](
         args = Seq(0 -> 1, 1 -> 2, 1 -> 3, 2 -> 4, 3 -> 4),
-        expected = Loop(Set(0), true, Set(0, 1, 2, 3, 4), Set()),
+        expectedLoopTree = Loop(Set(0), true, Set(0, 1, 2, 3, 4), Set()),
         expectedImmediateDominators = Map(1 -> 0, 2 -> 1, 3 -> 1, 4 -> 1),
         expectedDominatorDepths = Map(0 -> 0, 1 -> 1, 2 -> 2, 3 -> 2, 4 -> 2)
       )
@@ -50,7 +50,7 @@ object LoopFinderTests extends TestSuite{
       // 0 -> 1 <-> 2
       'loop - check[Int](
         args = Seq(0 -> 1, 1 -> 2, 2 -> 1),
-        expected = Loop(Set(0), true, Set(0), Set(
+        expectedLoopTree = Loop(Set(0), true, Set(0), Set(
           Loop(Set(1), true, Set(1, 2), Set())
         )),
         expectedImmediateDominators = Map(1 -> 0, 2 -> 1),
@@ -59,7 +59,7 @@ object LoopFinderTests extends TestSuite{
       // 0 -> 1 <-> 2 -> 3
       'loopEnd - check[Int](
         args = Seq(0 -> 1, 1 -> 2, 2 -> 1, 2 -> 3),
-        expected = Loop(Set(0), true, Set(0, 3), Set(
+        expectedLoopTree = Loop(Set(0), true, Set(0, 3), Set(
           Loop(Set(1), true, Set(1, 2), Set())
         )),
         expectedImmediateDominators = Map(1 -> 0, 2 -> 1, 3 -> 2),
@@ -69,7 +69,7 @@ object LoopFinderTests extends TestSuite{
       // 0 -> 1 <-> 2 <-> 3
       'nestedLoop - check[Int](
         args = Seq(0 -> 1, 1 -> 2, 2 -> 1, 2 -> 3, 3 -> 2),
-        expected = Loop(Set(0), true, Set(0), Set(
+        expectedLoopTree = Loop(Set(0), true, Set(0), Set(
           Loop(Set(1), true, Set(1), Set(
             Loop(Set(2), true, Set(2, 3), Set())
           ))
@@ -97,7 +97,7 @@ object LoopFinderTests extends TestSuite{
           3 -> 5,
           5 -> 3
         ),
-        expected = Loop(Set(0), true, Set(0), Set(
+        expectedLoopTree = Loop(Set(0), true, Set(0), Set(
           Loop(Set(1), true, Set(1), Set(
             Loop(Set(2), true, Set(2, 4), Set()),
             Loop(Set(3), true, Set(3, 5), Set())
@@ -131,7 +131,7 @@ object LoopFinderTests extends TestSuite{
           8 -> 7,
           8 -> 9
         ),
-        expected = Loop(Set(0), true, Set(0, 9, 6), Set(
+        expectedLoopTree = Loop(Set(0), true, Set(0, 9, 6), Set(
           Loop(Set(7), true, Set(7, 8), Set()),
           Loop(Set(1), true, Set(1), Set(
             Loop(Set(2), true, Set(2, 4), Set()),
@@ -169,7 +169,7 @@ object LoopFinderTests extends TestSuite{
           7 -> 8,
           8 -> 5
         ),
-        expected = Loop(Set(0), true, Set(0), Set(
+        expectedLoopTree = Loop(Set(0), true, Set(0), Set(
           Loop(Set(1), true, Set(1), Set(
             Loop(Set(2), true, Set(2, 4), Set()),
             Loop(Set(3), true, Set(3), Set(
@@ -199,7 +199,7 @@ object LoopFinderTests extends TestSuite{
           2 -> 3,
           3 -> 2
         ),
-        expected = Loop(Set(0), true, Set(0, 1), Set(
+        expectedLoopTree = Loop(Set(0), true, Set(0, 1), Set(
           Loop(Set(2), false, Set(2, 3), Set())
         )),
         expectedImmediateDominators = Map(
@@ -235,7 +235,7 @@ object LoopFinderTests extends TestSuite{
           5 -> 4
 
         ),
-        expected = Loop(Set(0), true, Set(0, 1), Set(
+        expectedLoopTree = Loop(Set(0), true, Set(0, 1), Set(
           Loop(Set(2), false, Set(2), Set(
             Loop(Set(4), false, Set(4, 3, 5), Set())
           ))
@@ -274,7 +274,7 @@ object LoopFinderTests extends TestSuite{
           "l" -> "a",
           "l" -> "END"
         ),
-        expected = Loop(Set("START"), true, Set("START", "END"), Set(
+        expectedLoopTree = Loop(Set("START"), true, Set("START", "END"), Set(
           Loop(Set("a"), true, Set("a", "l"), Set(
             Loop(Set("b"), false, Set("b"), Set(
               Loop(Set("y"), false, Set("y"), Set(
@@ -304,7 +304,7 @@ object LoopFinderTests extends TestSuite{
           4 -> 5,
           5 -> 4
         ),
-        expected = Loop(Set(0), true, Set(0, 1), Set(
+        expectedLoopTree = Loop(Set(0), true, Set(0, 1), Set(
           Loop(Set(2), false, Set(2, 3), Set()),
           Loop(Set(4), true, Set(4, 5), Set())
         )),
@@ -340,7 +340,7 @@ object LoopFinderTests extends TestSuite{
           2 -> 4,
           4 -> 2
         ),
-        expected = Loop(Set(0), true, Set(0, 1), Set(
+        expectedLoopTree = Loop(Set(0), true, Set(0, 1), Set(
           Loop(Set(2), false, Set(2, 4, 3), Set())
         )),
         expectedImmediateDominators = Map(
@@ -378,7 +378,7 @@ object LoopFinderTests extends TestSuite{
           5 -> 6,
           6 -> 5
         ),
-        expected = Loop(Set(0), true, Set(0, 1), Set(
+        expectedLoopTree = Loop(Set(0), true, Set(0, 1), Set(
           Loop(Set(2), false, Set(2), Set(
             Loop(Set(3), false, Set(3, 4), Set())
           )),
@@ -421,7 +421,7 @@ object LoopFinderTests extends TestSuite{
           3 -> 5,
           5 -> 3
         ),
-        expected = Loop(Set(0), true, Set(0, 1), Set(
+        expectedLoopTree = Loop(Set(0), true, Set(0, 1), Set(
           Loop(Set(2), false, Set(2), Set(
             Loop(Set(3), false, Set(3, 5, 4), Set())
           ))
@@ -458,7 +458,7 @@ object LoopFinderTests extends TestSuite{
           3 -> 4,
           4 -> 3
         ),
-        expected = Loop(Set(0), true, Set(0), Set(
+        expectedLoopTree = Loop(Set(0), true, Set(0), Set(
           Loop(Set(1), true, Set(1, 2), Set()),
           Loop(Set(3), false, Set(3, 4), Set())
         )),
@@ -492,7 +492,7 @@ object LoopFinderTests extends TestSuite{
           3 -> 4,
           4 -> 3
         ),
-        expected = Loop(Set(0), true, Set(0), Set(
+        expectedLoopTree = Loop(Set(0), true, Set(0), Set(
           Loop(Set(1), true, Set(1), Set(
             Loop(Set(2), true, Set(2), Set(
               Loop(Set(4),true,Set(4, 3),Set())
