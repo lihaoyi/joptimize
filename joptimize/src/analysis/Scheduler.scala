@@ -8,30 +8,38 @@ abstract class Scheduler(dominatorDepth: Map[SSA.Control, Int],
                          immediateDominator: Map[SSA.Control, SSA.Control],
                          phiMerges:  Map[SSA.Phi, (SSA.Control, Set[(SSA.Control, SSA)])],
                          mapping: Map[SSA.Control, String]) {
-  def downstream(ssa: SSA.Token): Seq[SSA.Token]
-  def upstream(ssa: SSA.Token): Seq[SSA.Token]
+  def downstream(ssa: SSA.Token): Seq[SSA]
+  def upstream(ssa: SSA.Token): Seq[SSA]
   def isPinned(ssa: SSA.Token): Boolean
   def loopNest(block: SSA.Token): Int
-  val visited = new java.util.IdentityHashMap[SSA.Token, Unit]()
+  val visited = new java.util.IdentityHashMap[SSA, Unit]()
 
-  val control = mutable.Map.empty[SSA.Token, SSA.Control]
+  val control = mutable.Map.empty[SSA, SSA.Control]
 
-  def scheduleEarly(n: SSA.Token): Unit = {
+  def scheduleEarlyRoot(n: SSA.Token): Unit = {
     for(in <- upstream(n)){
       if (!control.contains(in)) scheduleEarly(in)
     }
+  }
 
+  def scheduleEarly(n: SSA): Unit = {
+    scheduleEarlyRoot(n)
     if (!control.contains(n)){
       val b = upstream(n).flatMap(control.get).minBy(dominatorDepth)
       control(n) = b
     }
   }
-  def scheduleLate(n: SSA.Token): Unit = {
+
+  def scheduleLateRoot(n: SSA.Token): Unit = {
+    for(out <- downstream(n)){
+      if (!isPinned(out)) scheduleLate(out)
+    }
+  }
+
+  def scheduleLate(n: SSA): Unit = {
     if (!visited.containsKey(n)){
       visited.put(n, ())
-      for(out <- downstream(n)){
-        if (!isPinned(out)) scheduleLate(out)
-      }
+      scheduleLateRoot(n)
       if (!isPinned(n)){
         var lca: SSA.Control = null
         for(out <- downstream(n)){

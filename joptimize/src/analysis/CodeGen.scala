@@ -136,9 +136,9 @@ object CodeGen{
     val downstreamMap = downstreamEdges.groupBy(_._1).map{case (k, vs) => (k, vs.map(_._2))}
     val upstreamMap = downstreamEdges.groupBy(_._2).map{case (k, vs) => (k, vs.map(_._1))}
     val scheduler = new Scheduler(dominatorDepth, immediateDominator, program.phiMerges, mapping) {
-      override def downstream(ssa: SSA.Token) = downstreamMap.getOrElse(ssa, Nil)
+      override def downstream(ssa: SSA.Token) = downstreamMap.getOrElse(ssa, Nil).collect{case ssa: SSA => ssa}
 
-      override def upstream(ssa: SSA.Token) = upstreamMap.getOrElse(ssa, Nil).filter(!_.isInstanceOf[SSA.Control])
+      override def upstream(ssa: SSA.Token) = upstreamMap.getOrElse(ssa, Nil).collect{case ssa: SSA => ssa}
 
       override def isPinned(ssa: SSA.Token) = ssa.isInstanceOf[SSA.Controlled] || ssa.isInstanceOf[SSA.Control]
 
@@ -150,7 +150,6 @@ object CodeGen{
 
     val startControl = (graph.map(_._1).toSet -- graph.map(_._2)).head
     allVertices.collect{
-      case c: SSA.Control => scheduler.control(c) = c
       case c: SSA.Controlled => scheduler.control(c) = c.control
       case c: SSA.Phi => scheduler.control(c) = program.phiMerges(c)._1
       case c: SSA.Arg => scheduler.control(c) = startControl
@@ -164,16 +163,16 @@ object CodeGen{
     }
 
     allVertices.collect{
-      case scheduleRoot: SSA.Phi => scheduler.scheduleEarly(scheduleRoot)
-      case scheduleRoot: SSA.Control => scheduler.scheduleEarly(scheduleRoot)
-      case scheduleRoot: SSA.Controlled => scheduler.scheduleEarly(scheduleRoot)
+      case scheduleRoot: SSA.Phi => scheduler.scheduleEarlyRoot(scheduleRoot)
+      case scheduleRoot: SSA.Control => scheduler.scheduleEarlyRoot(scheduleRoot)
+      case scheduleRoot: SSA.Controlled => scheduler.scheduleEarlyRoot(scheduleRoot)
     }
 
 //    pprint.log(scheduler.control, height=9999)
 
     allVertices.collect{
-      case scheduleRoot: SSA.Control => scheduler.scheduleLate(scheduleRoot)
-      case scheduleRoot: SSA.Controlled => scheduler.scheduleLate(scheduleRoot)
+      case scheduleRoot: SSA.Control => scheduler.scheduleLateRoot(scheduleRoot)
+      case scheduleRoot: SSA.Controlled => scheduler.scheduleLateRoot(scheduleRoot)
     }
 
     scheduler.control.filter{case (k, v) => v != null}.toMap
