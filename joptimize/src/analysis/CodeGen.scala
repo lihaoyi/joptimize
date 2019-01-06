@@ -79,7 +79,7 @@ object CodeGen{
       renderGraph(
         controlFlowEdges.map{
 //          case (l: SSA.Ctrl, r: SSA.Controlled) => (fansi.Color.Cyan(mapping(l)), fansi.Color.Yellow("return"))
-          case (l: SSA.Ctrl, r: SSA.Ctrl) => (fansi.Color.Cyan(mapping(l)), fansi.Color.Cyan(mapping(r)))
+          case (l: SSA.Ctrl, r: SSA.Ctrl) => (fansi.Color.Magenta(mapping(l)), fansi.Color.Magenta(mapping(r)))
         }
       )
     )
