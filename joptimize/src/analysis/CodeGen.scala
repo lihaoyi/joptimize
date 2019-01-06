@@ -122,14 +122,7 @@ object CodeGen{
     val startControl = (graph.map(_._1).toSet -- graph.map(_._2)).head
     allVertices.collect{
       case c: SSA.Phi => scheduler.control(c) = program.phiMerges(c)._1
-      case c: SSA.Arg => scheduler.control(c) = startControl
-      case c: SSA.PushCls => scheduler.control(c) = startControl
-      case c: SSA.PushD => scheduler.control(c) = startControl
-      case c: SSA.PushF => scheduler.control(c) = startControl
-      case c: SSA.PushI => scheduler.control(c) = startControl
-      case c: SSA.PushJ => scheduler.control(c) = startControl
-      case c: SSA.PushNull => scheduler.control(c) = startControl
-      case c: SSA.PushS => scheduler.control(c) = startControl
+      case c: SSA.Val if c.upstream.isEmpty => scheduler.control(c) = startControl
     }
 
     allVertices.collect{
