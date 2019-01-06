@@ -73,20 +73,21 @@ object Renderer {
 
     for((r: SSA.Val, i) <- renderRoots.zipWithIndex) savedLocals.put(r, i)
 
-    val savedControls = mutable.LinkedHashMap.empty[SSA.Ctrl, String]
-    def getControlId(c: SSA.Ctrl) = fansi.Color.Magenta(
+    val savedControls = mutable.LinkedHashMap.empty[SSA.Ctrl, (Int, String)]
+    def getControlId(c: SSA.Ctrl) = fansi.Color.Magenta(getControlId0(c)._2)
+    def getControlId0(c: SSA.Ctrl): (Int, String) =
       savedControls.getOrElseUpdate(
         c,
-        c match{
+        (savedControls.size, c match{
           case _: SSA.Return => "return" + savedControls.size
           case _: SSA.ReturnVal => "return" + savedControls.size
           case _: SSA.AThrow => "return" + savedControls.size
-          case _: SSA.True => "true" + savedControls.size
-          case _: SSA.False => "false" + savedControls.size
+          case SSA.True(branch) => "true" + getControlId0(branch)._1
+          case SSA.False(branch) => "false" + getControlId0(branch)._1
           case _ => "ctrl" + savedControls.size
-        }
+        })
       )
-    )
+
     def apply(lhs: String, operands: Tree*) = pprint.Tree.Apply(lhs, operands.toIterator)
     def atom(lhs: String) = pprint.Tree.Lazy(ctx => Iterator(lhs))
     def literal(lhs: String) = pprint.Tree.Literal(lhs)
@@ -177,7 +178,7 @@ object Renderer {
     }
 
     import collection.JavaConverters._
-    val mapping = (savedLocals.asScala.mapValues("local" + _) ++ savedControls).toMap
+    val mapping = (savedLocals.asScala.mapValues("local" + _) ++ savedControls.mapValues(_._2)).toMap
     (fansi.Str.join(out:_*), mapping)
   }
 

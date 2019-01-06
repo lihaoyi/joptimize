@@ -135,7 +135,7 @@ object CodeGen{
 
       override def upstream(ssa: SSA.Node) = upstreamMap.getOrElse(ssa, Nil).collect{case ssa: SSA.Val => ssa}
 
-      override def isPinned(ssa: SSA.Node) = ssa.isInstanceOf[SSA.Controlled] || ssa.isInstanceOf[SSA.Ctrl]
+      override def isPinned(ssa: SSA.Node) = ssa.isInstanceOf[SSA.Ctrl]
 
       override def loopNest(block: SSA.Node) = {
         assert(block != null)
@@ -145,7 +145,6 @@ object CodeGen{
 
     val startControl = (graph.map(_._1).toSet -- graph.map(_._2)).head
     allVertices.collect{
-      case c: SSA.Controlled => scheduler.control(c) = c.control
       case c: SSA.Phi => scheduler.control(c) = program.phiMerges(c)._1
       case c: SSA.Arg => scheduler.control(c) = startControl
       case c: SSA.PushCls => scheduler.control(c) = startControl
@@ -160,14 +159,12 @@ object CodeGen{
     allVertices.collect{
       case scheduleRoot: SSA.Phi => scheduler.scheduleEarlyRoot(scheduleRoot)
       case scheduleRoot: SSA.Ctrl => scheduler.scheduleEarlyRoot(scheduleRoot)
-      case scheduleRoot: SSA.Controlled => scheduler.scheduleEarlyRoot(scheduleRoot)
     }
 
 //    pprint.log(scheduler.control, height=9999)
 
     allVertices.collect{
       case scheduleRoot: SSA.Ctrl => scheduler.scheduleLateRoot(scheduleRoot)
-      case scheduleRoot: SSA.Controlled => scheduler.scheduleLateRoot(scheduleRoot)
     }
 
     scheduler.control.filter{case (k, v) => v != null}.toMap

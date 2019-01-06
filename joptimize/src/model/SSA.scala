@@ -17,9 +17,6 @@ object SSA{
     lazy val upstreamCtrls = upstream.collect{case s: Val => s}
   }
   sealed abstract class Ctrl(val upstream: SSA.Node*) extends Node
-  trait Controlled extends Val{
-    def control: Ctrl
-  }
   trait Codes{
     private[this] val lookup0 = mutable.Map.empty[Int, Code]
     class Code private[SSA] (val i: Int, val typeSize: Int = 0)(implicit name: sourcecode.Name){
