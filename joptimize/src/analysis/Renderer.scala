@@ -71,7 +71,7 @@ object Renderer {
     fansi.Str.join(out:_*)
   }
 
-  def renderSSA(program: Program, additionalControls: Map[SSA.Val, SSA.Ctrl] = Map.empty): (fansi.Str, Map[SSA.Node, String]) = {
+  def renderSSA(program: Program, scheduledVals: Map[SSA.Val, SSA.Ctrl] = Map.empty): (fansi.Str, Map[SSA.Node, String]) = {
 
     val allTerminals = program.allTerminals
     val regionMerges = program.regionMerges
@@ -79,7 +79,7 @@ object Renderer {
     val (allVertices, roots, downstreamEdges) =
       Util.breadthFirstAggregation[SSA.Node](allTerminals.toSet) { x =>
         val addedControl = x match{
-          case v: SSA.Val => additionalControls.get(v).toSeq
+          case v: SSA.Val => scheduledVals.get(v).toSeq
           case _ => Nil
         }
         program.upstream(x) ++ addedControl
@@ -95,7 +95,9 @@ object Renderer {
       downstreamEdges.groupBy(_._1)
         .filter{ case (k, x) =>
           val scheduled = k match{
-            case v: SSA.Val => additionalControls.contains(v)
+            case v: SSA.Val =>
+              val downstreamControls = x.collect{case (_, t: SSA.Val) => scheduledVals.get(t)}.flatten
+              scheduledVals.get(v).exists(c => downstreamControls.exists(_ != c))
             case _ => false
           }
           k.upstream.nonEmpty && (x.distinct.size > 1 || allTerminals.contains(k) || scheduled)
