@@ -112,8 +112,6 @@ class StepEvaluator(merges: mutable.Set[(SSA.Phi, (Int, Int, SSA.Val))]) extends
 
       case ARRAYLENGTH => SSA.ArrayLength(value)
 
-      case ATHROW => SSA.AThrow(value)
-
       case CHECKCAST => SSA.CheckCast(value, insn.asInstanceOf[TypeInsnNode].desc)
 
       case INSTANCEOF => SSA.InstanceOf(value, insn.asInstanceOf[TypeInsnNode].desc)

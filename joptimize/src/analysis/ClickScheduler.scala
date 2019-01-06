@@ -8,7 +8,7 @@ abstract class ClickScheduler(dominatorDepth: Map[SSA.Ctrl, Int],
                               immediateDominator: Map[SSA.Ctrl, SSA.Ctrl],
                               phiMerges:  Map[SSA.Phi, (SSA.Ctrl, Set[(SSA.Ctrl, SSA.Val)])],
                               mapping: Map[SSA.Ctrl, String]) {
-  def downstream(ssa: SSA.Node): Seq[SSA.Val]
+  def downstream(ssa: SSA.Node): Seq[SSA.Node]
   def upstream(ssa: SSA.Node): Seq[SSA.Val]
   def isPinned(ssa: SSA.Node): Boolean
   def loopNest(block: SSA.Node): Int
@@ -31,8 +31,9 @@ abstract class ClickScheduler(dominatorDepth: Map[SSA.Ctrl, Int],
   }
 
   def scheduleLateRoot(n: SSA.Node): Unit = {
-    for(out <- downstream(n)){
-      if (!isPinned(out)) scheduleLate(out)
+    downstream(n).foreach{
+      case v: SSA.Val => if (!isPinned(v)) scheduleLate(v)
+      case _ => //do nothing
     }
   }
 
@@ -42,6 +43,8 @@ abstract class ClickScheduler(dominatorDepth: Map[SSA.Ctrl, Int],
       scheduleLateRoot(n)
       if (!isPinned(n)){
         var lca: SSA.Ctrl = null
+        pprint.log(n)
+        pprint.log(downstream(n))
         for(out <- downstream(n)){
 
           out match{
@@ -49,11 +52,16 @@ abstract class ClickScheduler(dominatorDepth: Map[SSA.Ctrl, Int],
               for((ctrl, value) <- phiMerges(phi)._2){
                 if (value eq n) lca = findLca(lca, ctrl)
               }
-            case _ =>
-              val outb = control(out)
+            case c: SSA.Ctrl =>
+              lca = findLca(lca, c)
+
+            case v: SSA.Val =>
+              val outb = control(v)
               lca = findLca(lca, outb)
           }
         }
+
+
         var best = lca
         while(lca != control(n)){
           if (loopNest(lca) < loopNest(best)) best = lca

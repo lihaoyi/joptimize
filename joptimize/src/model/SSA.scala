@@ -118,11 +118,11 @@ object SSA{
     val IF_ACMPEQ = new Code(Opcodes.IF_ACMPEQ)
     val IF_ACMPNE = new Code(Opcodes.IF_ACMPNE)
   }
-  case class ReturnVal(control: Ctrl, a: Val) extends Val(0, control, a) with Controlled
-  case class Return(control: Ctrl) extends Val(0, control) with Controlled
-  case class AThrow(src: Val) extends Val(0, src)
-  case class TableSwitch(src: Val, min: Int, max: Int) extends Val(0, src)
-  case class LookupSwitch(src: Val, keys: Seq[Int]) extends Val(0, src)
+  case class ReturnVal(control: Ctrl, a: Val) extends Ctrl
+  case class Return(control: Ctrl) extends Ctrl
+  case class AThrow(src: Val) extends Ctrl
+  case class TableSwitch(src: Val, min: Int, max: Int) extends Ctrl
+  case class LookupSwitch(src: Val, keys: Seq[Int]) extends Ctrl
 
   case class CheckCast(src: Val, desc: JType) extends Val(0, src)
   case class ArrayLength(src: Val) extends Val(1, src)

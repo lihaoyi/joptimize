@@ -11,7 +11,7 @@ import java.util
   * and [[regionMerges]] to handle the possibly backwards edges caused by jumps
   * and merges.
   */
-case class Program(allTerminals: Seq[SSA.Val],
+case class Program(allTerminals: Seq[SSA.Ctrl],
                    phiMerges:  Map[SSA.Phi, (SSA.Ctrl, Set[(SSA.Ctrl, SSA.Val)])],
                    regionMerges: Map[SSA.Region, Set[SSA.Ctrl]]){
   /**
@@ -32,11 +32,6 @@ case class Program(allTerminals: Seq[SSA.Val],
           case SSA.Arg(index, typeSize) => SSA.Arg(index, typeSize)
           case SSA.BinOp(a, b, opcode) => SSA.BinOp(recSSA(a), recSSA(b), opcode)
           case SSA.UnaOp(a, opcode) => SSA.UnaOp(recSSA(a), opcode)
-          case SSA.ReturnVal(ctrl, a) => SSA.ReturnVal(recControl(ctrl), recSSA(a))
-          case SSA.Return(ctrl) => SSA.Return(recControl(ctrl))
-          case SSA.AThrow(src) => SSA.AThrow(recSSA(src))
-          case SSA.TableSwitch(src, min, max) => SSA.TableSwitch(recSSA(src), min, max)
-          case SSA.LookupSwitch(src, keys) => SSA.LookupSwitch(recSSA(src), keys)
           case SSA.CheckCast(src, desc) => SSA.CheckCast(recSSA(src), desc)
           case SSA.ArrayLength(src) => SSA.ArrayLength(recSSA(src))
           case SSA.InstanceOf(src, desc) => SSA.InstanceOf(recSSA(src), desc)
@@ -73,8 +68,12 @@ case class Program(allTerminals: Seq[SSA.Val],
         case SSA.True(inner) => SSA.True(recControl(inner))
         case SSA.False(inner) => SSA.False(recControl(inner))
         case SSA.UnaBranch(ctrl, a, opcode) => SSA.UnaBranch(recControl(ctrl), recSSA(a), opcode)
-        case SSA.BinBranch(ctrl, a, b, opcode) =>
-          SSA.BinBranch(recControl(ctrl), recSSA(a), recSSA(b), opcode)
+        case SSA.BinBranch(ctrl, a, b, opcode) => SSA.BinBranch(recControl(ctrl), recSSA(a), recSSA(b), opcode)
+        case SSA.ReturnVal(ctrl, a) => SSA.ReturnVal(recControl(ctrl), recSSA(a))
+        case SSA.Return(ctrl) => SSA.Return(recControl(ctrl))
+        case SSA.AThrow(src) => SSA.AThrow(recSSA(src))
+        case SSA.TableSwitch(src, min, max) => SSA.TableSwitch(recSSA(src), min, max)
+        case SSA.LookupSwitch(src, keys) => SSA.LookupSwitch(recSSA(src), keys)
       }
 
       val res2 = if (onControl.isDefinedAt(res)) recControl(onControl(res)) else res
@@ -82,7 +81,7 @@ case class Program(allTerminals: Seq[SSA.Val],
       res2
     }
     Program(
-      allTerminals.map(recSSA),
+      allTerminals.map(recControl),
       phiMerges.map{case (k, (c, v)) => (k, (c, v.map(x => (recControl(x._1), recSSA(x._2)))))},
       regionMerges.map{case (k, v) => (k, v.map(recControl))}
     )
