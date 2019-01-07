@@ -35,7 +35,7 @@ class Walker(isInterface: JType.Cls => Boolean,
       println("+" * 20 + sig + "+" * 20)
       println(Renderer.renderInsns(mn.instructions))
 
-      val phiMerges0 = mutable.Set.empty[(Int, Int, SSA.Val)]
+      val phiMerges0 = mutable.Set.empty[SSA.Phi]
 
       val insns = mn.instructions.iterator().asScala.toVector
 
@@ -44,19 +44,11 @@ class Walker(isInterface: JType.Cls => Boolean,
           case n: TableSwitchInsnNode => Seq(n.dflt) ++ n.labels.asScala
           case n: LookupSwitchInsnNode => Seq(n.dflt) ++ n.labels.asScala
           case n: JumpInsnNode => Seq(n.label) ++ Option(n.getNext)
-          case n: LabelNode => Seq(n)
-          case n if n.getOpcode == ATHROW => Option(n.getNext).toSeq
-          case n if n.getOpcode == RETURN => Option(n.getNext).toSeq
-          case n if n.getOpcode == IRETURN => Option(n.getNext).toSeq
-          case n if n.getOpcode == LRETURN => Option(n.getNext).toSeq
-          case n if n.getOpcode == FRETURN => Option(n.getNext).toSeq
-          case n if n.getOpcode == DRETURN => Option(n.getNext).toSeq
-          case n if n.getOpcode == ARETURN => Option(n.getNext).toSeq
           case n if n == insns.head => Seq(n)
         }
         .flatten
         .sortBy(insns.indexOf)
-      val regionStarts = mutable.LinkedHashMap(blockStarts.map(_ -> (new SSA.Region(Set()): SSA.Ctrl)):_*)
+      val regionStarts = mutable.LinkedHashMap(blockStarts.map(i => i -> (new SSA.Region(insns.indexOf(i), Set()): SSA.Ctrl)):_*)
 
       //      regionStarts.keys.map("RSK " + Renderer.render(mn.instructions, _)).foreach(println)
       def findStartRegion(insn: AbstractInsnNode): SSA.Ctrl = {
@@ -76,45 +68,24 @@ class Walker(isInterface: JType.Cls => Boolean,
 
         region
       }
-      val frames = joptimize.bytecode.Analyzer.analyze(sig.cls.name, mn, new StepEvaluator(phiMerges0))
+      val frames = joptimize.bytecode.Analyzer.analyze(
+        sig.cls.name, mn,
+        new StepEvaluator(
+          phiMerges0,
+          x => regionStarts.contains(insns(x)),
+          i => findStartRegion(insns(i)),
+          i => regionStarts(insns(i))
+        )
+      )
       def frameTop(i: Int, n: Int) = frames(i).getStack(frames(i).getStackSize - 1 - n)
 
       def mergeControls(lhs0: AbstractInsnNode, rhs: SSA.Ctrl, rhsInsn: Option[AbstractInsnNode] = None): Unit = {
+        println(Renderer.renderInsns(mn.instructions, lhs0))
         val lhs = regionStarts(lhs0)
         (lhs, rhs) match{
-          case (l: SSA.Region, r) if l.incoming.isEmpty =>
-            regionStarts(lhs0) = r
-            l.replaceWith(r)
-
-          case (l, r: SSA.Region) if r.incoming.isEmpty =>
-            regionStarts(rhsInsn.get) = l
-            r.replaceWith(l)
-
-          case (l: SSA.Region, r: SSA.Region) =>
-            r.replaceWith(l)
-            l.incoming ++= r.incoming
-            l.update()
-            regionStarts(lhs0) = r
-
-          case (l: SSA.Region, r: SSA.Ctrl) =>
-            r.replaceWith(l)
+          case (l: SSA.Region, r) =>
             l.incoming += r
-            l.update()
-
-          case (l: SSA.Ctrl, r: SSA.Region) =>
-            l.replaceWith(r)
-            r.incoming += l
-            r.update()
-            regionStarts(lhs0) = r
-
-          case (l: SSA.Ctrl, r: SSA.Ctrl) =>
-            val reg = new SSA.Region(Set())
-            l.replaceWith(reg)
-            r.replaceWith(reg)
-            reg.incoming += l
-            reg.incoming += r
-            reg.update()
-            regionStarts(lhs0) = reg
+            r.downstream += l
         }
       }
 
@@ -141,9 +112,7 @@ class Walker(isInterface: JType.Cls => Boolean,
         case ((IF_ICMPEQ | IF_ICMPNE | IF_ICMPLT | IF_ICMPGE | IF_ICMPGT | IF_ICMPLE | IF_ACMPEQ | IF_ACMPNE, insn: JumpInsnNode), i) =>
           val startReg = findStartRegion(insn)
           val n = SSA.BinBranch(startReg, frameTop(i, 0), frameTop(i, 1), SSA.BinBranch.lookup(insn.getOpcode))
-
           mergeControls(insn.label, new SSA.True(n))
-
           mergeControls(insn.getNext, new SSA.False(n))
           Nil
 
@@ -152,28 +121,43 @@ class Walker(isInterface: JType.Cls => Boolean,
           Nil
       }.flatten
 
-      val phiMerges = phiMerges0.groupBy(_._2).collect{
-        case (targetInsnIndex, args) if args.size > 1 =>
-          (findStartRegion(insns(targetInsnIndex)), args.map(x => (findStartRegion(insns(x._1)), x._3)))
-      }
+      val (printed0, mapping0) = Renderer.renderSSA(Program(terminals.map(_._2)))
+      val queue = (phiMerges0 ++ regionStarts.values).to[mutable.Queue]
+      while(queue.nonEmpty){
+        val current = queue.dequeue()
+        val replacement = current match{
+          case phi: SSA.Phi =>
+            val filteredValues = phi.incoming.filter(_._2 != phi)
+            if(filteredValues.map(_._2).size == 1) Some(filteredValues.head._2)
+            else None
 
-      for((targetRegion, args) <- phiMerges){
-        val (srcCtrls, values) = args.unzip
-        val phi = new SSA.Phi(targetRegion, args.toSet, args.head._2.getSize)
-        for(value <- values){
-          for(up <- value.upstream){
-            up.downstream.remove(value)
-            up.downstream.add(phi)
+          case reg: SSA.Region =>
+            if (reg.incoming.size == 1) Some(reg.incoming.head)
+            else None
+
+          case _ => None
+        }
+        for(replacement <- replacement){
+          for(up <- replacement.upstream){
+            up.downstream.remove(current)
+            up.downstream.add(replacement)
           }
-          for(down <- value.downstream){
-            SSA.update(down, value, phi)
+
+          replacement.downstream.clear()
+          replacement.downstream ++= current.downstream
+          for(down <- replacement.downstream){
+            SSA.update(down, current, replacement)
           }
+
+          queue.enqueue(replacement.downstream.toSeq:_*)
         }
       }
+
       val program = Program(terminals.map(_._2))
 
       val (printed, mapping) = Renderer.renderSSA(program)
       println(printed)
+      pprint.log(mapping)
       CodeGen(program, mapping)
       ???
     })

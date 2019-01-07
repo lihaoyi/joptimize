@@ -177,13 +177,12 @@ object Renderer {
       case SSA.MonitorExit(indexSrc) => ???
     }
 
-
     def recCtrl(ctrl: SSA.Ctrl): (fansi.Str, Tree) = ctrl match{
       case n: SSA.True => (getControlId(ctrl), apply("true", atom(getControlId(n.node).toString)))
       case n: SSA.False => (getControlId(ctrl), apply("false", atom(getControlId(n.node).toString)))
 
       case reg: SSA.Region =>
-        val rhs = apply("region", reg.upstream.iterator.map(x => atom(getControlId(x).toString)).toSeq:_*)
+        val rhs = apply("region" + reg.insnIndex, reg.upstream.iterator.map(x => atom(getControlId(x).toString)).toSeq:_*)
         (getControlId(reg), rhs)
 
       case SSA.AThrow(src) => ???

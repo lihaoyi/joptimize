@@ -83,8 +83,9 @@ object SSA{
 
       for(down <- downstream) SSA.update(down, this, other)
     }
-    def update() = {
+    def update(): Node = {
       upstream.foreach(_.downstream.add(this))
+      this
     }
     update()
   }
@@ -92,8 +93,17 @@ object SSA{
   sealed abstract class Val(size: Int) extends org.objectweb.asm.tree.analysis.Value with Node{
     def getSize = size
     def internalName = toString
+    override def update(): Val = {
+      super.update()
+      this
+    }
   }
-  sealed abstract class Ctrl() extends Node
+  sealed abstract class Ctrl() extends Node{
+    override def update(): Ctrl = {
+      super.update()
+      this
+    }
+  }
   trait Codes{
     private[this] val lookup0 = mutable.Map.empty[Int, Code]
     class Code private[SSA] (val i: Int, val typeSize: Int = 0)(implicit name: sourcecode.Name){
@@ -108,7 +118,7 @@ object SSA{
     override def toString = s"Phi@${Integer.toHexString(System.identityHashCode(this))}(${incoming.size})"
   }
 
-  class Region(var incoming: Set[Ctrl]) extends Ctrl(){
+  class Region(var insnIndex: Int, var incoming: Set[Ctrl]) extends Ctrl(){
     def upstream = incoming.toSeq
 
     override def toString = s"Region@${Integer.toHexString(System.identityHashCode(this))}(${incoming.size})"

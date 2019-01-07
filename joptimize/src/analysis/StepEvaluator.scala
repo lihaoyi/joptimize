@@ -19,7 +19,10 @@ import scala.collection.mutable
   * generated SSA nodes; we do this to allow immediate constant folding if the
   * node's type is specific enough to be a concrete value.
   */
-class StepEvaluator(merges: mutable.Set[(Int, Int, SSA.Val)]) extends joptimize.bytecode.Interpreter[SSA.Val]{
+class StepEvaluator(merges: mutable.Set[SSA.Phi],
+                    blockStartIndex: Int => Boolean,
+                    findBlockStart: Int => SSA.Ctrl,
+                    findBlockDest: Int => SSA.Ctrl) extends joptimize.bytecode.Interpreter[SSA.Val]{
 
   def newOperation(insn: AbstractInsnNode) = {
     insn.getOpcode match {
@@ -176,14 +179,24 @@ class StepEvaluator(merges: mutable.Set[(Int, Int, SSA.Val)]) extends joptimize.
   def returnOperation(insn: AbstractInsnNode, value: SSA.Val, expected: SSA.Val) = ()
 
   def merge(v1: SSA.Val, v2: SSA.Val, insnIndex: Int, targetInsnIndex: Int) = {
-    merges.add((insnIndex, targetInsnIndex, v2))
-    merges.add((insnIndex, targetInsnIndex, v1))
-    v1
+    if (v1 == v2) v1
+    else{
+      if (blockStartIndex(targetInsnIndex) && insnIndex != targetInsnIndex) {
+        v1.asInstanceOf[SSA.Phi].incoming += (findBlockStart(insnIndex) -> v2)
+        findBlockStart(insnIndex).downstream += v1
+      }
+      v1
+    }
   }
 
   def merge0(value1: SSA.Val, insnIndex: Int, targetInsnIndex: Int) = {
-    merges.add((insnIndex, targetInsnIndex, value1))
-    value1
+    if (blockStartIndex(targetInsnIndex) && insnIndex != targetInsnIndex) {
+      val phiStub = new SSA.Phi(findBlockDest(targetInsnIndex), Set(findBlockStart(insnIndex) -> value1), value1.getSize)
+      merges.add(phiStub)
+      phiStub
+    }else{
+      value1
+    }
   }
 
   def newParameterValue(local: Int, tpe: Type) = {
