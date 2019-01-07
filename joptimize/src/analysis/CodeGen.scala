@@ -28,10 +28,10 @@ object CodeGen{
       val upstreams = current match{
         case n: SSA.True => Seq(n.node)
         case n: SSA.False => Seq(n.node)
-        case SSA.UnaBranch(ctrl, a, opcode) => Seq(ctrl)
-        case SSA.BinBranch(ctrl, a, b, opcode) => Seq(ctrl)
-        case SSA.Return(ctrl) => Seq(ctrl)
-        case SSA.ReturnVal(ctrl, a) => Seq(ctrl)
+        case n: SSA.UnaBranch => Seq(n.control)
+        case n: SSA.BinBranch => Seq(n.control)
+        case n: SSA.Return => Seq(n.control)
+        case n: SSA.ReturnVal => Seq(n.control)
         case r: SSA.Region => r.incoming
       }
 

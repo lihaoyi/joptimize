@@ -147,34 +147,34 @@ object Renderer {
         val ctrl = Seq(renderControl(phi.control))
         val children = phi.incoming.map{case (ctrl, ssa) => infix(renderControl(ctrl), ":", rec(ssa))}.toSeq
         apply("phi", ctrl ++ children:_*)
-      case SSA.Arg(index, typeSize) => atom(fansi.Color.Cyan("arg" + index).toString)
-      case SSA.BinOp(a, b, opcode) => infix(rec(a), binOpString(opcode), rec(b))
-      case SSA.UnaOp(a, opcode) => apply(unaryOpString(opcode), rec(a))
-      case SSA.CheckCast(src, desc) => apply("cast", rec(src), atom(desc.name))
-      case SSA.ArrayLength(src) => apply("arraylength", rec(src))
-      case SSA.InstanceOf(src, desc) => apply("instanceof", rec(src), atom(desc.name))
-      case SSA.PushI(value) => literal(value + "")
-      case SSA.PushJ(value) => literal(value + "L")
-      case SSA.PushF(value) => literal(value + "F")
-      case SSA.PushD(value) => literal(value + "D")
-      case SSA.PushS(value) => literal(pprint.Util.literalize(value))
-      case SSA.PushNull() => literal("null")
-      case SSA.PushCls(value) => literal(value.name)
-      case SSA.InvokeStatic(srcs, cls, name, desc) => apply(cls.javaName + "." + name + desc.unparse, srcs.map(rec):_*)
-      case SSA.InvokeSpecial(srcs, cls, name, desc) => apply(cls.javaName + "##" + name + desc.unparse, srcs.map(rec):_*)
-      case SSA.InvokeVirtual(srcs, cls, name, desc) => apply(cls.javaName + "#" + name + desc.unparse, srcs.map(rec):_*)
-      case SSA.InvokeDynamic(name, desc, bsTag, bsOwner, bsName, bsDesc, bsArgs) => ???
-      case SSA.New(cls) => apply("new", atom(cls.name))
-      case SSA.NewArray(src, typeRef) => apply("newarray", rec(src), atom(typeRef.name))
-      case SSA.MultiANewArray(desc, dims) => apply("multianewarray", atom(desc.name))
-      case SSA.PutStatic(src, cls, name, desc) => apply("putstatic", rec(src), atom(cls.name), atom(name), atom(desc.name))
-      case SSA.GetStatic(cls, name, desc) => apply("getstatic", atom(cls.name), atom(name), atom(desc.name))
-      case SSA.PutField(src, obj, owner, name, desc) => apply("putfield", rec(src), rec(obj), atom(owner.name), atom(name), atom(desc.name))
-      case SSA.GetField(obj, owner, name, desc) => apply("getfield", rec(obj), atom(owner.name), atom(name), atom(desc.name))
-      case SSA.PutArray(src, indexSrc, array) => apply("putarray", rec(src), rec(indexSrc), rec(array))
-      case SSA.GetArray(indexSrc, array, typeSize) => apply("putarray", rec(indexSrc), rec(array))
-      case SSA.MonitorEnter(indexSrc) => ???
-      case SSA.MonitorExit(indexSrc) => ???
+      case n: SSA.Arg => atom(fansi.Color.Cyan("arg" + n.index).toString)
+      case n: SSA.BinOp => infix(rec(n.a), binOpString(n.opcode), rec(n.b))
+      case n: SSA.UnaOp => apply(unaryOpString(n.opcode), rec(n.a))
+      case n: SSA.CheckCast => apply("cast", rec(n.src), atom(n.desc.name))
+      case n: SSA.ArrayLength => apply("arraylength", rec(n.src))
+      case n: SSA.InstanceOf => apply("instanceof", rec(n.src), atom(n.desc.name))
+      case n: SSA.PushI => literal(n.value + "")
+      case n: SSA.PushJ => literal(n.value + "L")
+      case n: SSA.PushF => literal(n.value + "F")
+      case n: SSA.PushD => literal(n.value + "D")
+      case n: SSA.PushS => literal(pprint.Util.literalize(n.value))
+      case n: SSA.PushNull => literal("null")
+      case n: SSA.PushCls => literal(n.value.name)
+      case n: SSA.InvokeStatic => apply(n.cls.javaName + "." + n.name + n.desc.unparse, n.srcs.map(rec):_*)
+      case n: SSA.InvokeSpecial => apply(n.cls.javaName + "##" + n.name + n.desc.unparse, n.srcs.map(rec):_*)
+      case n: SSA.InvokeVirtual => apply(n.cls.javaName + "#" + n.name + n.desc.unparse, n.srcs.map(rec):_*)
+      case n: SSA.InvokeDynamic => ???
+      case n: SSA.New => apply("new", atom(n.cls.name))
+      case n: SSA.NewArray => apply("newarray", rec(n.src), atom(n.typeRef.name))
+      case n: SSA.MultiANewArray => apply("multianewarray", atom(n.desc.name))
+      case n: SSA.PutStatic => apply("putstatic", rec(n.src), atom(n.cls.name), atom(n.name), atom(n.desc.name))
+      case n: SSA.GetStatic => apply("getstatic", atom(n.cls.name), atom(n.name), atom(n.desc.name))
+      case n: SSA.PutField => apply("putfield", rec(n.src), rec(n.obj), atom(n.owner.name), atom(n.name), atom(n.desc.name))
+      case n: SSA.GetField => apply("getfield", rec(n.obj), atom(n.owner.name), atom(n.name), atom(n.desc.name))
+      case n: SSA.PutArray => apply("putarray", rec(n.src), rec(n.indexSrc), rec(n.arrayValue))
+      case n: SSA.GetArray => apply("putarray", rec(n.indexSrc), rec(n.array))
+      case n: SSA.MonitorEnter => ???
+      case n: SSA.MonitorExit => ???
     }
 
     def recCtrl(ctrl: SSA.Ctrl): (fansi.Str, Tree) = ctrl match{
@@ -185,22 +185,22 @@ object Renderer {
         val rhs = apply("region" + reg.insnIndex, reg.upstream.iterator.map(x => atom(getControlId(x).toString)).toSeq:_*)
         (getControlId(reg), rhs)
 
-      case SSA.AThrow(src) => ???
-      case SSA.TableSwitch(src, min, max) => ???
-      case SSA.LookupSwitch(src, keys) => ???
+      case n: SSA.AThrow => ???
+      case n: SSA.TableSwitch => ???
+      case n: SSA.LookupSwitch => ???
 
-      case SSA.ReturnVal(inner, a) =>
-        (getControlId(ctrl), apply("return", atom(getControlId(inner).toString()), rec(a)))
+      case n: SSA.ReturnVal =>
+        (getControlId(ctrl), apply("return", atom(getControlId(n.control).toString()), rec(n.a)))
 
-      case SSA.Return(inner) =>
-        (getControlId(ctrl), apply("return", atom(getControlId(inner).toString())))
+      case n: SSA.Return =>
+        (getControlId(ctrl), apply("return", atom(getControlId(n.control).toString())))
 
-      case n @ SSA.UnaBranch(control, a, opcode) =>
-        val rhs = apply("if", renderControl(control), rec(a), atom(unaryBranchString(opcode)))
+      case n: SSA.UnaBranch =>
+        val rhs = apply("if", renderControl(n.control), rec(n.a), atom(unaryBranchString(n.opcode)))
         (getControlId(n), rhs)
 
-      case n @ SSA.BinBranch(control, a, b, opcode) =>
-        val rhs = apply("if", renderControl(control), infix(rec(a), binBranchString(opcode), rec(b)))
+      case n: SSA.BinBranch =>
+        val rhs = apply("if", renderControl(n.control), infix(rec(n.a), binBranchString(n.opcode), rec(n.b)))
         (getControlId(n), rhs)
     }
 

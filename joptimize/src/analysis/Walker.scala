@@ -18,7 +18,7 @@ class Walker(isInterface: JType.Cls => Boolean,
              isConcrete: MethodSig => Boolean,
              exists: MethodSig => Boolean,
              merge: Seq[IType] => IType,
-             typer: Typer,
+//             typer: Typer,
              ignore: String => Boolean) {
 
   def walkMethod(sig: MethodSig,
@@ -91,19 +91,19 @@ class Walker(isInterface: JType.Cls => Boolean,
 
 
       val terminals = insns.map(i => (i.getOpcode, i)).zipWithIndex.collect{
-        case ((RETURN, insn), i) => (insn, SSA.Return(findStartRegion(insn)), i) :: Nil
+        case ((RETURN, insn), i) => (insn, new SSA.Return(findStartRegion(insn)), i) :: Nil
 
         case ((IRETURN | LRETURN | FRETURN | DRETURN | ARETURN, insn), i) =>
-          (insn, SSA.ReturnVal(findStartRegion(insn), frameTop(i, 0)), i) :: Nil
+          (insn, new SSA.ReturnVal(findStartRegion(insn), frameTop(i, 0)), i) :: Nil
 
-        case ((ATHROW, insn), i) => (insn, SSA.AThrow(frameTop(i, 0)), i) :: Nil
+        case ((ATHROW, insn), i) => (insn, new SSA.AThrow(frameTop(i, 0)), i) :: Nil
 
         case ((GOTO, insn: JumpInsnNode), i) =>
           mergeControls(insn.label, findStartRegion(insn), Some(insn))
           Nil
 
         case ((IFEQ | IFNE | IFLT | IFGE | IFGT | IFLE, insn: JumpInsnNode), i) =>
-          val n = SSA.UnaBranch(findStartRegion(insn), frameTop(i, 0), SSA.UnaBranch.lookup(insn.getOpcode))
+          val n = new SSA.UnaBranch(findStartRegion(insn), frameTop(i, 0), SSA.UnaBranch.lookup(insn.getOpcode))
           mergeControls(insn.label, new SSA.True(n))
           mergeControls(insn.getNext, new SSA.False(n))
 
@@ -111,7 +111,7 @@ class Walker(isInterface: JType.Cls => Boolean,
 
         case ((IF_ICMPEQ | IF_ICMPNE | IF_ICMPLT | IF_ICMPGE | IF_ICMPGT | IF_ICMPLE | IF_ACMPEQ | IF_ACMPNE, insn: JumpInsnNode), i) =>
           val startReg = findStartRegion(insn)
-          val n = SSA.BinBranch(startReg, frameTop(i, 0), frameTop(i, 1), SSA.BinBranch.lookup(insn.getOpcode))
+          val n = new SSA.BinBranch(startReg, frameTop(i, 0), frameTop(i, 1), SSA.BinBranch.lookup(insn.getOpcode))
           mergeControls(insn.label, new SSA.True(n))
           mergeControls(insn.getNext, new SSA.False(n))
           Nil
@@ -121,35 +121,54 @@ class Walker(isInterface: JType.Cls => Boolean,
           Nil
       }.flatten
 
-      val (printed0, mapping0) = Renderer.renderSSA(Program(terminals.map(_._2)))
-      val queue = (phiMerges0 ++ regionStarts.values).to[mutable.Queue]
+      val queue = (phiMerges0 ++ regionStarts.values).to[mutable.Set]
+      queue.foreach(_.checkLinks())
+
       while(queue.nonEmpty){
-        val current = queue.dequeue()
+        pprint.log(queue.size)
+        val (printed, mapping) = Renderer.renderSSA(Program(terminals.map(_._2)))
+        println(printed)
+        pprint.log(mapping)
+        val current = queue.head
+        queue.remove(current)
+        current.checkLinks()
         val replacement = current match{
           case phi: SSA.Phi =>
+            println("AAAAA")
             val filteredValues = phi.incoming.filter(_._2 != phi)
+            pprint.log(phi)
+            pprint.log(phi.downstream)
+            pprint.log(phi.upstream)
+            phi.checkLinks()
+            pprint.log(filteredValues.head._2)
             if(filteredValues.map(_._2).size == 1) Some(filteredValues.head._2)
             else None
 
           case reg: SSA.Region =>
+            println("BBBBB")
             if (reg.incoming.size == 1) Some(reg.incoming.head)
             else None
 
           case _ => None
         }
         for(replacement <- replacement){
-          for(up <- replacement.upstream){
-            up.downstream.remove(current)
-            up.downstream.add(replacement)
-          }
+          replacement.upstream.foreach(_.checkLinks())
 
-          replacement.downstream.clear()
-          replacement.downstream ++= current.downstream
-          for(down <- replacement.downstream){
+          replacement.downstream.remove(current)
+          val deltaDownstream = current.downstream
+          replacement.downstream ++= deltaDownstream
+
+//          replacement.upstream.foreach(_.checkLinks())
+          for(down <- deltaDownstream){
             SSA.update(down, current, replacement)
           }
 
-          queue.enqueue(replacement.downstream.toSeq:_*)
+          pprint.log(deltaDownstream)
+          pprint.log(replacement.upstream)
+          replacement.upstream.foreach(_.checkLinks())
+          replacement.downstream.foreach(_.checkLinks())
+
+          replacement.downstream.foreach(queue.add)
         }
       }
 

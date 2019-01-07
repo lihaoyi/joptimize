@@ -1,6 +1,6 @@
 package joptimize
 
-import joptimize.analysis.{PostLivenessDCE, Typer, Walker}
+import joptimize.analysis.{PostLivenessDCE, Walker}
 import joptimize.model._
 import org.objectweb.asm.{ClassReader, ClassWriter, Opcodes}
 import org.objectweb.asm.tree._
@@ -89,7 +89,7 @@ object JOptimize{
       exists = sig => originalMethods.contains(sig),
       isConcrete = sig => originalMethods(sig).instructions.size != 0,
       merge = merge,
-      typer = new Typer(merge),
+//      typer = new Typer(merge),
       ignore = ignore
     )
 
