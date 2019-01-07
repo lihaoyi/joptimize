@@ -40,9 +40,13 @@ abstract class ClickScheduler(dominatorDepth: Map[SSA.Ctrl, Int],
       if (!isPinned(n)){
         var lca: SSA.Ctrl = null
         for(out <- downstream(n)){
-
+          pprint.log(mapping(out) -> out.getClass.getName)
           out match{
             case phi: SSA.Phi =>
+
+//              lca = findLca(lca, control(phi))
+              pprint.log(phi.control)
+              pprint.log(phi.incoming)
               for((ctrl, value) <- phi.incoming){
                 if (value eq n) lca = findLca(lca, ctrl)
               }
@@ -51,9 +55,12 @@ abstract class ClickScheduler(dominatorDepth: Map[SSA.Ctrl, Int],
           }
         }
 
+        pprint.log(mapping(lca))
+
 
         var best = lca
         while(lca != control(n)){
+          pprint.log(mapping(lca) -> mapping(control(n)))
           if (loopNest(lca) < loopNest(best)) best = lca
           lca = immediateDominator(lca)
         }

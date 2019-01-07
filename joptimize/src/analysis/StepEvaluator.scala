@@ -186,21 +186,29 @@ class StepEvaluator(regionStarts: mutable.LinkedHashMap[Int, SSA.Region]) extend
         phi1
 
       case (phi1: SSA.Phi, v2) =>
-        v2.replaceWith(phi1)
-        phi1.incoming += (regionStarts.getOrElseUpdate(insnIndex, new SSA.Region(Set())) -> v2)
-        phi1.update()
-        regionStarts(insnIndex).downstream += phi1
-        phi1
+        val reg = regionStarts.getOrElseUpdate(insnIndex, new SSA.Region(Set()))
+        if (phi1.incoming.contains(reg -> v2)) phi1
+        else {
+          v2.replaceWith(phi1)
+          phi1.incoming += (reg -> v2)
+          phi1.update()
+          regionStarts(insnIndex).downstream += phi1
+          phi1
+        }
 
       case (v1, phi2: SSA.Phi) =>
         val (insnIndex1, targetInsnIndex1) = possibleRegions.get(v1)
-        v1.replaceWith(phi2)
-        phi2.incoming += (regionStarts.getOrElseUpdate(insnIndex1, new SSA.Region(Set())) -> v1)
-        regionStarts(insnIndex1).downstream += phi2
-        phi2.update()
-        phi2
+        val reg = regionStarts.getOrElseUpdate(insnIndex1, new SSA.Region(Set()))
+        if (phi2.incoming.contains(reg -> v1)) phi2
+        else {
+          v1.replaceWith(phi2)
+          phi2.incoming += (reg -> v1)
+          regionStarts(insnIndex1).downstream += phi2
+          phi2.update()
+          phi2
+        }
 
-      case _ =>
+      case (v1, v2) =>
         val (insnIndex1, targetInsnIndex1) = possibleRegions.get(v1)
         val phi = new SSA.Phi(
           regionStarts.getOrElseUpdate(targetInsnIndex, new SSA.Region(Set())),
@@ -217,11 +225,6 @@ class StepEvaluator(regionStarts: mutable.LinkedHashMap[Int, SSA.Region]) extend
         regionStarts(targetInsnIndex).downstream += phi
         regionStarts(insnIndex).downstream += phi
         regionStarts(insnIndex1).downstream += phi
-        pprint.log(phi.upstream)
-        pprint.log(regionStarts(targetInsnIndex).downstream)
-        pprint.log(regionStarts(insnIndex).downstream)
-        pprint.log(regionStarts(insnIndex1).downstream)
-
         phi.update()
         phi
     }

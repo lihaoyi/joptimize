@@ -74,8 +74,6 @@ class Walker(isInterface: JType.Cls => Boolean,
 
       def mergeControls(lhs0: AbstractInsnNode, rhs: SSA.Ctrl, rhsInsn: Option[AbstractInsnNode] = None): Unit = {
         val lhs = regionStarts.getOrElseUpdate(lhs0, new SSA.Region(Set()))
-        pprint.log((lhs, rhs))
-
         (lhs, rhs) match{
           case (l: SSA.Region, r) if l.incoming.isEmpty =>
             regionStarts(lhs0) = r
@@ -135,7 +133,6 @@ class Walker(isInterface: JType.Cls => Boolean,
 
         case ((IF_ICMPEQ | IF_ICMPNE | IF_ICMPLT | IF_ICMPGE | IF_ICMPGT | IF_ICMPLE | IF_ACMPEQ | IF_ACMPNE, insn: JumpInsnNode), i) =>
           val startReg = findStartRegion(insn)
-          pprint.log(startReg)
           val n = SSA.BinBranch(startReg, frameTop(i, 0), frameTop(i, 1), SSA.BinBranch.lookup(insn.getOpcode))
 
           mergeControls(insn.label, new SSA.True(n))
@@ -147,8 +144,6 @@ class Walker(isInterface: JType.Cls => Boolean,
           mergeControls(insn.getNext, findStartRegion(insn), Some(insn))
           Nil
       }.flatten
-
-      pprint.log(regionStarts)
 
       val program = Program(terminals.map(_._2))
 
@@ -163,9 +158,7 @@ class Walker(isInterface: JType.Cls => Boolean,
 
 
       val (printed, mapping) = Renderer.renderSSA(program2)
-      pprint.log(mapping.filterKeys(_.isInstanceOf[SSA.Region]))
       println(printed)
-
       CodeGen(program2, mapping)
       ???
     })
