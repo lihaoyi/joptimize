@@ -125,48 +125,27 @@ class Walker(isInterface: JType.Cls => Boolean,
       queue.foreach(_.checkLinks())
 
       while(queue.nonEmpty){
-        pprint.log(queue.size)
-        val (printed, mapping) = Renderer.renderSSA(Program(terminals.map(_._2)))
-        println(printed)
-        pprint.log(mapping)
         val current = queue.head
         queue.remove(current)
-        current.checkLinks()
         val replacement = current match{
           case phi: SSA.Phi =>
-            println("AAAAA")
             val filteredValues = phi.incoming.filter(_._2 != phi)
-            pprint.log(phi)
-            pprint.log(phi.downstream)
-            pprint.log(phi.upstream)
-            phi.checkLinks()
-            pprint.log(filteredValues.head._2)
             if(filteredValues.map(_._2).size == 1) Some(filteredValues.head._2)
             else None
 
           case reg: SSA.Region =>
-            println("BBBBB")
             if (reg.incoming.size == 1) Some(reg.incoming.head)
             else None
 
           case _ => None
         }
         for(replacement <- replacement){
-          replacement.upstream.foreach(_.checkLinks())
-
           replacement.downstream.remove(current)
-          val deltaDownstream = current.downstream
+          val deltaDownstream = current.downstream.filter(_ != current)
           replacement.downstream ++= deltaDownstream
-
-//          replacement.upstream.foreach(_.checkLinks())
           for(down <- deltaDownstream){
             SSA.update(down, current, replacement)
           }
-
-          pprint.log(deltaDownstream)
-          pprint.log(replacement.upstream)
-          replacement.upstream.foreach(_.checkLinks())
-          replacement.downstream.foreach(_.checkLinks())
 
           replacement.downstream.foreach(queue.add)
         }
@@ -181,7 +160,6 @@ class Walker(isInterface: JType.Cls => Boolean,
       ???
     })
   }
-
 }
 
 object Walker{
