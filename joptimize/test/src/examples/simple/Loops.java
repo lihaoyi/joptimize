@@ -84,7 +84,7 @@ public class Loops {
     }
 
     @joptimize.Test(inputs = {0, 1, 2, 3, 4, 5, 6, 7, 9})
-    public static int nestedLiftableFor(int a) {
+    public static int nestedMixedLiftableFor(int a) {
         int c0 = 0;
         int c = c0 + 3;
 
@@ -114,6 +114,18 @@ public class Loops {
         for (int i = 0; i < a; i++) {
             for(int j = 0; j < a; j++){
                 c = c * a;
+            }
+        }
+        return c;
+    }
+
+    @joptimize.Test(inputs = {0, 1, 2, 3, 4, 5, 6, 7, 9})
+    public static int nestedLiftableFor(int a) {
+        int c = 1;
+        for (int i = 0; i < a; i++) {
+            for(int j = 0; j < a; j++){
+                int e = a + 7;
+                c += e;
             }
         }
         return c;

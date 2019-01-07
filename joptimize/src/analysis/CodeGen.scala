@@ -140,6 +140,8 @@ object CodeGen{
       case scheduleRoot: SSA.Ctrl => scheduler.scheduleLateRoot(scheduleRoot)
     }
 
+    pprint.log(scheduler.control.map{case (k, v) => (k, mapping(v))}, height=9999)
+
     scheduler.control.filter{case (k, v) => v != null}.toMap
   }
 
