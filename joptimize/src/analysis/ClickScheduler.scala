@@ -6,7 +6,6 @@ import scala.collection.mutable
 
 abstract class ClickScheduler(dominatorDepth: Map[SSA.Ctrl, Int],
                               immediateDominator: Map[SSA.Ctrl, SSA.Ctrl],
-                              phiMerges:  Map[SSA.Phi, (SSA.Ctrl, Set[(SSA.Ctrl, SSA.Val)])],
                               mapping: Map[SSA.Node, String]) {
   def downstream(ssa: SSA.Node): Seq[SSA.Node]
   def upstream(ssa: SSA.Node): Seq[SSA.Val]
@@ -44,7 +43,7 @@ abstract class ClickScheduler(dominatorDepth: Map[SSA.Ctrl, Int],
 
           out match{
             case phi: SSA.Phi =>
-              for((ctrl, value) <- phiMerges(phi)._2){
+              for((ctrl, value) <- phi.incoming){
                 if (value eq n) lca = findLca(lca, ctrl)
               }
             case c: SSA.Ctrl => lca = findLca(lca, c)

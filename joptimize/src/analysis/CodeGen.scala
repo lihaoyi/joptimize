@@ -32,7 +32,7 @@ object CodeGen{
         case SSA.BinBranch(ctrl, a, b, opcode) => Seq(ctrl)
         case SSA.Return(ctrl) => Seq(ctrl)
         case SSA.ReturnVal(ctrl, a) => Seq(ctrl)
-        case r: SSA.Region => program.regionMerges(r)
+        case r: SSA.Region => r.incoming
       }
 
       for(control <- upstreams){
@@ -79,6 +79,7 @@ object CodeGen{
 
     pprint.log(dominatorDepth.map{case (k, v) => (mapping(k), v)})
     pprint.log(immediateDominators.map{case (k, v) => (mapping(k), mapping(v))})
+    pprint.log(immediateDominators)
     val nodesToBlocks = schedule(
       program, loopTree,
       dominatorDepth, immediateDominators,
@@ -99,7 +100,7 @@ object CodeGen{
                graph: Seq[(SSA.Ctrl, SSA.Ctrl)],
                mapping: Map[SSA.Node, String]): Map[SSA.Val, SSA.Ctrl] = {
     val (allVertices, roots, downstreamEdges) =
-      Util.breadthFirstAggregation[SSA.Node](program.allTerminals.toSet)(program.upstream)
+      Util.breadthFirstAggregation[SSA.Node](program.allTerminals.toSet)(_.upstream)
     val loopNestMap = mutable.Map.empty[SSA.Node, Int]
     def recLoop(loop: HavlakLoopTree.Loop[SSA.Ctrl], depth: Int): Unit = {
       loop.basicBlocks.foreach(loopNestMap(_) = depth)
@@ -110,7 +111,7 @@ object CodeGen{
 
     val downstreamMap = downstreamEdges.groupBy(_._1).map{case (k, vs) => (k, vs.map(_._2))}
     val upstreamMap = downstreamEdges.groupBy(_._2).map{case (k, vs) => (k, vs.map(_._1))}
-    val scheduler = new ClickScheduler(dominatorDepth, immediateDominator, program.phiMerges, mapping) {
+    val scheduler = new ClickScheduler(dominatorDepth, immediateDominator, mapping) {
       override def downstream(ssa: SSA.Node) = downstreamMap.getOrElse(ssa, Nil)
 
       override def upstream(ssa: SSA.Node) = upstreamMap.getOrElse(ssa, Nil).collect{case ssa: SSA.Val => ssa}
@@ -125,7 +126,7 @@ object CodeGen{
 
     val startControl = (graph.map(_._1).toSet -- graph.map(_._2)).head
     allVertices.collect{
-      case c: SSA.Phi => scheduler.control(c) = program.phiMerges(c)._1
+      case c: SSA.Phi => scheduler.control(c) = c.control
       case c: SSA.Val if c.upstream.isEmpty => scheduler.control(c) = startControl
     }
 

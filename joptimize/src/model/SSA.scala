@@ -6,17 +6,88 @@ import scala.collection.mutable
 
 
 object SSA{
-  sealed abstract class Val(size: Int, val upstream: SSA.Node*) extends org.objectweb.asm.tree.analysis.Value with Node{
-    def getSize = size
 
-    def internalName = toString
-  }
   trait Node{
     def upstream: Seq[Node]
+    val downstream = mutable.Set.empty[Node]
     lazy val upstreamVals = upstream.collect{case s: Val => s}
     lazy val upstreamCtrls = upstream.collect{case s: Ctrl => s}
+
+    def replaceWith(other: Node) = {
+      for(up <- upstream){
+        up.downstream.remove(this)
+        up.downstream.add(other)
+      }
+      def swap[T <: Node](x: T): T = if (x == this) other.asInstanceOf[T] else x
+      for(down <- downstream){
+        down match{
+          case phi: SSA.Phi => phi
+          case n @ SSA.Arg(index, typeSize) =>
+          case n @ SSA.BinOp(a, b, opcode) =>
+            n.a = swap(a)
+            n.b = swap(b)
+          case n @ SSA.UnaOp(a, opcode) => n.a = swap(a)
+          case n @ SSA.CheckCast(src, desc) => n.src = swap(src)
+          case n @ SSA.ArrayLength(src) => n.src = swap(src)
+          case n @ SSA.InstanceOf(src, desc) => n.src = swap(src)
+          case n @ SSA.PushI(value) =>
+          case n @ SSA.PushJ(value) =>
+          case n @ SSA.PushF(value) =>
+          case n @ SSA.PushD(value) =>
+          case n @ SSA.PushS(value) =>
+          case n @ SSA.PushNull() =>
+          case n @ SSA.PushCls(value) =>
+          case n @ SSA.InvokeStatic(srcs, cls, name, desc) => n.srcs = srcs.map(swap)
+          case n @ SSA.InvokeSpecial(srcs, cls, name, desc) => n.srcs = srcs.map(swap)
+          case n @ SSA.InvokeVirtual(srcs, cls, name, desc) => n.srcs = srcs.map(swap)
+          case n @ SSA.InvokeDynamic(name, desc, bsTag, bsOwner, bsName, bsDesc, bsArgs) => ???
+          case n @ SSA.NewArray(src, typeRef) => n.src = swap(src)
+          case n @ SSA.MultiANewArray(desc, dims) =>
+          case n @ SSA.PutStatic(src, cls, name, desc) => n.src = swap(src)
+          case n @ SSA.GetStatic(cls, name, desc) =>
+          case n @ SSA.PutField(src, obj, owner, name, desc) =>
+            n.src = swap(src)
+            n.obj = swap(obj)
+          case n @ SSA.GetField(obj, owner, name, desc) => n.obj = swap(obj)
+          case n @ SSA.PutArray(src, indexSrc, array) =>
+            n.src = swap(src)
+            n.indexSrc = swap(indexSrc)
+          case n @ SSA.GetArray(indexSrc, array, typeSize) =>
+            n.indexSrc = swap(indexSrc)
+            n.array = swap(array)
+          case n @ SSA.MonitorEnter(indexSrc) => n.indexSrc = swap(indexSrc)
+          case n @ SSA.MonitorExit(indexSrc) => n.indexSrc = swap(indexSrc)
+          case r: SSA.Region => r
+          case n @ SSA.True(node) => n.node = swap(node)
+          case n @ SSA.False(node) => n.node = swap(node)
+          case n @ SSA.UnaBranch(control, a, opcode) =>
+            n.control = swap(control)
+            n.a = swap(a)
+          case n @ SSA.BinBranch(control, a, b, opcode) =>
+            n.control = swap(control)
+            n.a = swap(a)
+            n.b = swap(b)
+          case n @ SSA.ReturnVal(control, a) =>
+            n.control = swap(control)
+            n.a = swap(a)
+          case n @ SSA.Return(control) => n.control = swap(control)
+          case n @ SSA.AThrow(src) => n.src = swap(src)
+          case n @ SSA.TableSwitch(src, min, max) => n.src = swap(src)
+          case n @ SSA.LookupSwitch(src, keys) => n.src = swap(src)
+        }
+      }
+    }
+    def update() = {
+      upstream.foreach(_.downstream.add(this))
+    }
+    update()
   }
-  sealed abstract class Ctrl(val upstream: SSA.Node*) extends Node
+
+  sealed abstract class Val(size: Int) extends org.objectweb.asm.tree.analysis.Value with Node{
+    def getSize = size
+    def internalName = toString
+  }
+  sealed abstract class Ctrl() extends Node
   trait Codes{
     private[this] val lookup0 = mutable.Map.empty[Int, Code]
     class Code private[SSA] (val i: Int, val typeSize: Int = 0)(implicit name: sourcecode.Name){
@@ -25,13 +96,26 @@ object SSA{
     }
     def lookup(i: Int) = lookup0(i)
   }
-  case class State(base: Option[(State, Val)]) extends Val(0)
-  class Phi(typeSize: Int) extends Val(typeSize)
-  class Region() extends Ctrl()
-  case class True(node: Ctrl) extends Ctrl(node)
-  case class False(node: Ctrl) extends Ctrl(node)
-  case class Arg(index: Int, tpe: IType) extends Val(tpe.size)
-  case class BinOp(a: Val, b: Val, opcode: BinOp.Code) extends Val(opcode.typeSize, a, b)
+
+  class Phi(var control: Ctrl, var incoming: Set[(SSA.Ctrl, SSA.Val)], var typeSize: Int) extends Val(typeSize){
+    override def upstream: Seq[SSA.Node] = Seq(control) ++ incoming.flatMap(x => Seq(x._1, x._2)).toArray[SSA.Node]
+  }
+
+  class Region(var incoming: Set[Ctrl]) extends Ctrl(){
+    def upstream = incoming.toSeq
+  }
+  case class True(var node: Ctrl) extends Ctrl(){
+    def upstream = Seq(node)
+  }
+  case class False(var node: Ctrl) extends Ctrl(){
+    def upstream = Seq(node)
+  }
+  case class Arg(var index: Int, var tpe: IType) extends Val(tpe.size){
+    def upstream = Nil
+  }
+  case class BinOp(var a: Val, var b: Val, var opcode: BinOp.Code) extends Val(opcode.typeSize){
+    def upstream = Seq(a, b)
+  }
   object BinOp extends Codes{
     val IADD = new Code(Opcodes.IADD, 1)
     val ISUB = new Code(Opcodes.ISUB, 1)
@@ -71,7 +155,9 @@ object SSA{
     val DDIV = new Code(Opcodes.DDIV, 2)
     val DREM = new Code(Opcodes.DREM, 2)
   }
-  case class UnaOp(a: Val, opcode: UnaOp.Code) extends Val(opcode.typeSize, a)
+  case class UnaOp(var a: Val, var opcode: UnaOp.Code) extends Val(opcode.typeSize){
+    def upstream = Seq(a)
+  }
   object UnaOp extends Codes{
     val INEG = new Code(Opcodes.INEG, 1)
     val L2I = new Code(Opcodes.L2I, 1)
@@ -94,7 +180,9 @@ object SSA{
     val F2D = new Code(Opcodes.F2D, 2)
   }
 
-  case class UnaBranch(control: Ctrl, a: Val, opcode: UnaBranch.Code) extends Ctrl(control, a)
+  case class UnaBranch(var control: Ctrl, var a: Val, var opcode: UnaBranch.Code) extends Ctrl(){
+    def upstream = Seq(control, a)
+  }
   object UnaBranch  extends Codes{
     val IFEQ = new Code(Opcodes.IFEQ)
     val IFNE = new Code(Opcodes.IFNE)
@@ -105,7 +193,9 @@ object SSA{
     val IFNULL = new Code(Opcodes.IFNULL)
     val IFNONNULL = new Code(Opcodes.IFNONNULL)
   }
-  case class BinBranch(control: Ctrl, a: Val, b: Val, opcode: BinBranch.Code) extends Ctrl(control, a, b)
+  case class BinBranch(var control: Ctrl, var a: Val, var b: Val, var opcode: BinBranch.Code) extends Ctrl(){
+    def upstream = Seq(control, a, b)
+  }
 
   object BinBranch  extends Codes{
     val IF_ICMPEQ = new Code(Opcodes.IF_ICMPEQ)
@@ -117,56 +207,116 @@ object SSA{
     val IF_ACMPEQ = new Code(Opcodes.IF_ACMPEQ)
     val IF_ACMPNE = new Code(Opcodes.IF_ACMPNE)
   }
-  case class ReturnVal(control: Ctrl, a: Val) extends Ctrl(control, a)
-  case class Return(control: Ctrl) extends Ctrl(control)
-  case class AThrow(src: Val) extends Ctrl(src)
-  case class TableSwitch(src: Val, min: Int, max: Int) extends Ctrl(src)
-  case class LookupSwitch(src: Val, keys: Seq[Int]) extends Ctrl(src)
+  case class ReturnVal(var control: Ctrl, var a: Val) extends Ctrl(){
+    def upstream = Seq(control, a)
+  }
+  case class Return(var control: Ctrl) extends Ctrl(){
+    def upstream = Seq(control)
+  }
+  case class AThrow(var src: Val) extends Ctrl(){
+    def upstream = Seq(src)
+  }
+  case class TableSwitch(var src: Val, min: Int, max: Int) extends Ctrl(){
+    def upstream = Seq(src)
+  }
+  case class LookupSwitch(var src: Val, var keys: Seq[Int]) extends Ctrl(){
+    def upstream = Seq(src)
+  }
 
-  case class CheckCast(src: Val, desc: JType) extends Val(0, src)
-  case class ArrayLength(src: Val) extends Val(1, src)
-  case class InstanceOf(src: Val, desc: JType) extends Val(1, src)
-  case class PushI(value: Int) extends Val(1)
-  case class PushJ(value: Long) extends Val(2)
-  case class PushF(value: Float) extends Val(1)
-  case class PushD(value: Double) extends Val(2)
-  case class PushS(value: String) extends Val(1)
-  case class PushNull() extends Val(1)
-  case class PushCls(value: JType.Cls) extends Val(1)
+  case class CheckCast(var src: Val, var desc: JType) extends Val(0){
+    def upstream = Seq(src)
+  }
+  case class ArrayLength(var src: Val) extends Val(1){
+    def upstream = Seq(src)
+  }
+  case class InstanceOf(var src: Val, var desc: JType) extends Val(1){
+    def upstream = Seq(src)
+  }
+  case class PushI(var value: Int) extends Val(1){
+    def upstream = Nil
+  }
+  case class PushJ(var value: Long) extends Val(2){
+    def upstream = Nil
+  }
+  case class PushF(var value: Float) extends Val(1){
+    def upstream = Nil
+  }
+  case class PushD(var value: Double) extends Val(2){
+    def upstream = Nil
+  }
+  case class PushS(var value: String) extends Val(1){
+    def upstream = Nil
+  }
+  case class PushNull() extends Val(1){
+    def upstream = Nil
+  }
+  case class PushCls(var value: JType.Cls) extends Val(1){
+    def upstream = Nil
+  }
 
-  case class InvokeStatic(srcs: Seq[Val],
-                          cls: JType.Cls,
-                          name: String,
-                          desc: Desc) extends Val(desc.ret.size, srcs:_*)
+  case class InvokeStatic(var srcs: Seq[Val],
+                          var cls: JType.Cls,
+                          var name: String,
+                          var desc: Desc) extends Val(desc.ret.size){
+    def upstream = srcs
+  }
 
-  case class InvokeSpecial(srcs: Seq[Val],
-                           cls: JType.Cls,
-                           name: String,
-                           desc: Desc) extends Val(desc.ret.size, srcs:_*)
+  case class InvokeSpecial(var srcs: Seq[Val],
+                           var cls: JType.Cls,
+                           var name: String,
+                           var desc: Desc) extends Val(desc.ret.size){
+    def upstream = srcs
+  }
 
-  case class InvokeVirtual(srcs: Seq[Val],
-                           cls: JType.Cls,
-                           name: String,
-                           desc:Desc) extends Val(desc.ret.size, srcs:_*)
+  case class InvokeVirtual(var srcs: Seq[Val],
+                           var cls: JType.Cls,
+                           var name: String,
+                           var desc: Desc) extends Val(desc.ret.size){
+    def upstream = srcs
+  }
 
-  case class InvokeDynamic(name: String,
-                           desc: String,
-                           bsTag: Int,
-                           bsOwner: String,
-                           bsName: String,
-                           bsDesc: String,
-                           bsArgs: Seq[AnyRef]) extends Val(???)
+  case class InvokeDynamic(var name: String,
+                           var desc: String,
+                           var bsTag: Int,
+                           var bsOwner: String,
+                           var bsName: String,
+                           var bsDesc: String,
+                           var bsArgs: Seq[AnyRef]) extends Val(???){
+    def upstream = Nil
+  }
 
-  case class New(cls: JType.Cls) extends Val(1)
-  case class NewArray(src: Val, typeRef: JType) extends Val(1, src)
-  case class MultiANewArray(desc: JType, dims: Seq[Val]) extends Val(1)
-  case class PutStatic(src: Val, cls: JType.Cls, name: String, desc: JType) extends Val(0, src)
-  case class GetStatic(cls: JType.Cls, name: String, desc: JType) extends Val(desc.size)
-  case class PutField(src: Val, obj: Val, owner: JType.Cls, name: String, desc: JType) extends Val(0, src, obj)
-  case class GetField(obj: Val, owner: JType.Cls, name: String, desc: JType) extends Val(desc.size, obj)
-  case class PutArray(src: Val, indexSrcValue: Val, arrayValue: Val) extends Val(0, src)
-  case class GetArray(indexSrc: Val, array: Val, typeSize: Int) extends Val(typeSize, indexSrc, array)
+  case class New(var cls: JType.Cls) extends Val(1){
+    def upstream = Nil
+  }
+  case class NewArray(var src: Val, var typeRef: JType) extends Val(1){
+    def upstream = Seq(src)
+  }
+  case class MultiANewArray(var desc: JType, var dims: Seq[Val]) extends Val(1){
+    def upstream = Nil
+  }
+  case class PutStatic(var src: Val, var cls: JType.Cls, var name: String, var desc: JType) extends Val(0){
+    def upstream = Seq(src)
+  }
+  case class GetStatic(var cls: JType.Cls, var name: String, var desc: JType) extends Val(desc.size){
+    def upstream = Nil
+  }
+  case class PutField(var src: Val, var obj: Val, var owner: JType.Cls, var name: String, var desc: JType) extends Val(0){
+    def upstream = Seq(src, obj)
+  }
+  case class GetField(var obj: Val, var owner: JType.Cls, var name: String, var desc: JType) extends Val(desc.size){
+    def upstream = Seq(obj)
+  }
+  case class PutArray(var src: Val, var indexSrc: Val, var arrayValue: Val) extends Val(0){
+    def upstream = Seq(src)
+  }
+  case class GetArray(var indexSrc: Val, var array: Val, var typeSize: Int) extends Val(typeSize){
+    def upstream = Seq(indexSrc, array)
+  }
 
-  case class MonitorEnter(indexSrc: Val) extends Val(0, indexSrc)
-  case class MonitorExit(indexSrc: Val) extends Val(0, indexSrc)
+  case class MonitorEnter(var indexSrc: Val) extends Val(0){
+    def upstream = Seq(indexSrc)
+  }
+  case class MonitorExit(var indexSrc: Val) extends Val(0){
+    def upstream = Seq(indexSrc)
+  }
 }

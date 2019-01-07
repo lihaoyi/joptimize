@@ -74,15 +74,13 @@ object Renderer {
   def renderSSA(program: Program, scheduledVals: Map[SSA.Val, SSA.Ctrl] = Map.empty): (fansi.Str, Map[SSA.Node, String]) = {
 
     val allTerminals = program.allTerminals
-    val regionMerges = program.regionMerges
-    val phiMerges = program.phiMerges
     val (allVertices, roots, downstreamEdges) =
       Util.breadthFirstAggregation[SSA.Node](allTerminals.toSet) { x =>
         val addedControl = x match{
           case v: SSA.Val => scheduledVals.get(v).toSeq
           case _ => Nil
         }
-        program.upstream(x) ++ addedControl
+        x.upstream ++ addedControl
       }
 
     val finalOrderingMap = sortVerticesForPrinting(allVertices, downstreamEdges){
@@ -107,11 +105,9 @@ object Renderer {
 
     val out = mutable.Buffer.empty[Str]
 
-    val renderRoots = allVertices.filter(saveable.contains)
-
     val savedLocals = new util.IdentityHashMap[SSA.Val, Int]()
 
-    for((r: SSA.Val, i) <- renderRoots.zipWithIndex) savedLocals.put(r, i)
+    for((r: SSA.Val, i) <- saveable.zipWithIndex) savedLocals.put(r, i)
 
     val savedControls = mutable.LinkedHashMap.empty[SSA.Ctrl, (Int, String)]
     def getControlId(c: SSA.Ctrl) = fansi.Color.Magenta(getControlId0(c)._2)
@@ -124,7 +120,7 @@ object Renderer {
           case _: SSA.AThrow => "return" + savedControls.size
           case SSA.True(branch) => "true" + getControlId0(branch)._1
           case SSA.False(branch) => "false" + getControlId0(branch)._1
-          case _: SSA.Region => "region" + savedControls.size
+          case r: SSA.Region => "region" + savedControls.size
           case _: SSA.UnaBranch => "branch" + savedControls.size
           case _: SSA.BinBranch => "branch" + savedControls.size
           case _ => "ctrl" + savedControls.size
@@ -142,14 +138,15 @@ object Renderer {
     def rec(ssa: SSA.Node): pprint.Tree = ssa match{
       case x: SSA.Ctrl => atom(getControlId(x).toString)
       case x: SSA.Val =>
-        if (savedLocals.containsKey(ssa)) atom(fansi.Color.Cyan("local" + savedLocals.get(ssa)).toString())
+        if (savedLocals.containsKey(x)) atom(fansi.Color.Cyan("local" + savedLocals.get(ssa)).toString())
         else recVal(x)
     }
 
     def recVal(ssa: SSA.Val): Tree = ssa match{
       case phi: SSA.Phi =>
-        val children = Seq(renderControl(phiMerges(phi)._1)) ++ phiMerges(phi)._2.map{case (ctrl, ssa) => infix(renderControl(ctrl), ":", rec(ssa))}.toSeq
-        apply("phi", children:_*)
+        val ctrl = Seq(renderControl(phi.control))
+        val children = phi.incoming.map{case (ctrl, ssa) => infix(renderControl(ctrl), ":", rec(ssa))}.toSeq
+        apply("phi", ctrl ++ children:_*)
       case SSA.Arg(index, typeSize) => atom(fansi.Color.Cyan("arg" + index).toString)
       case SSA.BinOp(a, b, opcode) => infix(rec(a), binOpString(opcode), rec(b))
       case SSA.UnaOp(a, opcode) => apply(unaryOpString(opcode), rec(a))
@@ -186,7 +183,7 @@ object Renderer {
       case SSA.False(src) => (getControlId(ctrl), apply("false", atom(getControlId(src).toString)))
 
       case reg: SSA.Region =>
-        val rhs = apply("region", regionMerges(reg).iterator.map(x => atom(getControlId(x).toString)).toSeq:_*)
+        val rhs = apply("region", reg.upstream.iterator.map(x => atom(getControlId(x).toString)).toSeq:_*)
         (getControlId(reg), rhs)
 
       case SSA.AThrow(src) => ???
@@ -208,7 +205,11 @@ object Renderer {
         (getControlId(n), rhs)
     }
 
-    for(r <- renderRoots.toSeq.sortBy(finalOrderingMap)){
+    for(r <- saveable.toSeq.sortBy(finalOrderingMap)){
+      r match{
+        case reg: SSA.Region => pprint.log(reg.incoming)
+        case _ =>
+      }
       val (lhs, rhs) = r match{
         case r: SSA.Ctrl => recCtrl(r)
         case r: SSA.Val => (fansi.Color.Cyan("local" + savedLocals.get(r)), recVal(r))

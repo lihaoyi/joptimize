@@ -35,8 +35,8 @@ class Walker(isInterface: JType.Cls => Boolean,
       println("+" * 20 + sig + "+" * 20)
       println(Renderer.renderInsns(mn.instructions))
 
-      val phiMerges0 = mutable.Set.empty[(SSA.Phi, (Int, Int, SSA.Val))]
-      val frames = joptimize.bytecode.Analyzer.analyze(sig.cls.name, mn, new StepEvaluator(phiMerges0))
+      val regionStarts0 = mutable.LinkedHashMap.empty[Int, SSA.Region]
+      val frames = joptimize.bytecode.Analyzer.analyze(sig.cls.name, mn, new StepEvaluator(regionStarts0))
 
       val insns = mn.instructions.iterator().asScala.toVector
 
@@ -49,15 +49,14 @@ class Walker(isInterface: JType.Cls => Boolean,
         .flatten
         .sortBy(insns.indexOf)
 
-      val regionStarts = mutable.LinkedHashMap(blockStarts.map(_ -> new SSA.Region()):_*)
-
+      val regionStarts = regionStarts0.map{case (k, v) => (insns(k), v: SSA.Ctrl)}
 
       def frameTop(i: Int, n: Int) = frames(i).getStack(frames(i).getStackSize - 1 - n)
 
 //      regionStarts.keys.map("RSK " + Renderer.render(mn.instructions, _)).foreach(println)
-      def findStartRegion(insn: AbstractInsnNode): SSA.Region = {
+      def findStartRegion(insn: AbstractInsnNode): SSA.Ctrl = {
         var current = insn
-        var region: SSA.Region = null
+        var region: SSA.Ctrl = null
         while({
 //          println("XXX " + Renderer.render(mn.instructions, current))
           regionStarts.get(current) match{
@@ -73,8 +72,47 @@ class Walker(isInterface: JType.Cls => Boolean,
         region
       }
 
-      val regionMerges = mutable.LinkedHashMap.empty[SSA.Region, Set[SSA.Ctrl]]
-      regionMerges(regionStarts(insns.head)) = Set.empty
+      def mergeControls(lhs0: AbstractInsnNode, rhs: SSA.Ctrl, rhsInsn: Option[AbstractInsnNode] = None): Unit = {
+        val lhs = regionStarts.getOrElseUpdate(lhs0, new SSA.Region(Set()))
+        pprint.log((lhs, rhs))
+
+        (lhs, rhs) match{
+          case (l: SSA.Region, r) if l.incoming.isEmpty =>
+            regionStarts(lhs0) = r
+            l.replaceWith(r)
+
+          case (l, r: SSA.Region) if r.incoming.isEmpty =>
+            regionStarts(rhsInsn.get) = l
+            r.replaceWith(l)
+
+          case (l: SSA.Region, r: SSA.Region) =>
+            r.replaceWith(l)
+            l.incoming ++= r.incoming
+            l.update()
+            regionStarts(lhs0) = r
+
+          case (l: SSA.Region, r: SSA.Ctrl) =>
+            r.replaceWith(l)
+            l.incoming += r
+            l.update()
+
+          case (l: SSA.Ctrl, r: SSA.Region) =>
+            l.replaceWith(r)
+            r.incoming += l
+            r.update()
+            regionStarts(lhs0) = r
+
+          case (l: SSA.Ctrl, r: SSA.Ctrl) =>
+            val reg = new SSA.Region(Set())
+            l.replaceWith(reg)
+            r.replaceWith(reg)
+            reg.incoming += l
+            reg.incoming += r
+            reg.update()
+            regionStarts(lhs0) = reg
+        }
+      }
+      regionStarts.update(insns.head, new SSA.Region(Set()))
 
       val terminals = insns.map(i => (i.getOpcode, i)).zipWithIndex.collect{
         case ((RETURN, insn), i) => (insn, SSA.Return(findStartRegion(insn)), i) :: Nil
@@ -85,83 +123,49 @@ class Walker(isInterface: JType.Cls => Boolean,
         case ((ATHROW, insn), i) => (insn, SSA.AThrow(frameTop(i, 0)), i) :: Nil
 
         case ((GOTO, insn: JumpInsnNode), i) =>
-          regionMerges(regionStarts(insn.label)) =
-            regionMerges.getOrElse(regionStarts(insn.label), Set.empty) + findStartRegion(insn)
+          mergeControls(insn.label, findStartRegion(insn), Some(insn))
           Nil
 
         case ((IFEQ | IFNE | IFLT | IFGE | IFGT | IFLE, insn: JumpInsnNode), i) =>
           val n = SSA.UnaBranch(findStartRegion(insn), frameTop(i, 0), SSA.UnaBranch.lookup(insn.getOpcode))
-          regionMerges(regionStarts(insn.label)) =
-            regionMerges.getOrElse(regionStarts(insn.label), Set.empty) + SSA.True(n)
-          regionMerges(regionStarts(insn.getNext)) =
-            regionMerges.getOrElse(regionStarts(insn.getNext), Set.empty) + SSA.False(n)
+          mergeControls(insn.label, SSA.True(n))
+          mergeControls(insn.getNext, SSA.False(n))
 
           Nil
 
         case ((IF_ICMPEQ | IF_ICMPNE | IF_ICMPLT | IF_ICMPGE | IF_ICMPGT | IF_ICMPLE | IF_ACMPEQ | IF_ACMPNE, insn: JumpInsnNode), i) =>
-          val n = SSA.BinBranch(findStartRegion(insn), frameTop(i, 0), frameTop(i, 1), SSA.BinBranch.lookup(insn.getOpcode))
-          regionMerges(regionStarts(insn.label)) =
-            regionMerges.getOrElse(regionStarts(insn.label), Set.empty) + SSA.True(n)
+          val startReg = findStartRegion(insn)
+          pprint.log(startReg)
+          val n = SSA.BinBranch(startReg, frameTop(i, 0), frameTop(i, 1), SSA.BinBranch.lookup(insn.getOpcode))
 
-          regionMerges(regionStarts(insn.getNext)) =
-            regionMerges.getOrElse(regionStarts(insn.getNext), Set.empty) + SSA.False(n)
+          mergeControls(insn.label, SSA.True(n))
+
+          mergeControls(insn.getNext, SSA.False(n))
           Nil
 
         case ((_, insn), i) if Option(insn.getNext).exists(regionStarts.contains) =>
-          regionMerges(regionStarts(insn.getNext)) =
-            regionMerges.getOrElse(regionStarts(insn.getNext), Set.empty) + findStartRegion(insn)
+          mergeControls(insn.getNext, findStartRegion(insn), Some(insn))
           Nil
       }.flatten
 
-      val regionMerges2 = regionStarts.map{case (k, v) => (v, regionMerges(v))}
 
-      val phiMerges = phiMerges0.groupBy(_._1).mapValues(vs => (vs.head._2._2, vs.map(x => (x._2._1, x._2._3)).toSet)).toMap
+      val program = Program(terminals.map(_._2))
 
-
-
-      val program = Program(
-        terminals.map(_._2),
-        phiMerges.map{case (k, (c, vs)) =>
-          (k, (findStartRegion(insns(c)): SSA.Ctrl, vs.map{case (idx, ssa) => (findStartRegion(insns(idx)): SSA.Ctrl, ssa)}))
+      val program2 = program/*.transform(
+        onValue = {
+          case phi: SSA.Phi if phi.incoming.count(_._2 != phi) == 1 => phi.incoming.filter(_._2 != phi).head._2
         },
-        regionMerges2.toMap
-      )
-
-      val uselessPhis = program.phiMerges.flatMap{ case (phi, incoming) =>
-        val unique = incoming._2.filter(_._2 != phi)
-        if (unique.size == 1) Some(phi -> unique.head._2)
-        else None
-      }
-
-      val program2 = program.transform(
-        onValue = { case phi: SSA.Phi if uselessPhis.contains(phi) => uselessPhis(phi) },
         onControl = {
-          case r: SSA.Region if program.regionMerges(r).size == 1 =>
-            program.regionMerges(r).head
+          case r: SSA.Region if r.incoming.size == 1 => r.incoming.head
         }
-      )
+      )*/
 
-      val uselessPhis2 = program2.phiMerges.flatMap{ case (phi, incoming) =>
-        val unique = incoming._2.filter(_._2 != phi)
-        if (unique.size == 1) Some(phi -> unique.head._2)
-        else None
-      }
-      val program3 = program2.transform(
-        onValue = { case phi: SSA.Phi if uselessPhis2.contains(phi) => uselessPhis2(phi) },
-      )
-      val uselessPhis3 = program3.phiMerges.flatMap{ case (phi, incoming) =>
-        val unique = incoming._2.filter(_._2 != phi)
-        if (unique.size == 1) Some(phi -> unique.head._2)
-        else None
-      }
-      val program4 = program3.transform(
-        onValue = { case phi: SSA.Phi if uselessPhis3.contains(phi) => uselessPhis3(phi) },
-      )
 
-      val (printed, mapping) = Renderer.renderSSA(program4)
+      val (printed, mapping) = Renderer.renderSSA(program2)
+      pprint.log(mapping.filterKeys(_.isInstanceOf[SSA.Region]))
       println(printed)
 
-      CodeGen(program4, mapping)
+      CodeGen(program2, mapping)
       ???
     })
   }
