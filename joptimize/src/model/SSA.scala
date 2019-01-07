@@ -21,7 +21,9 @@ object SSA{
       def swap[T <: Node](x: T): T = if (x == this) other.asInstanceOf[T] else x
       for(down <- downstream){
         down match{
-          case phi: SSA.Phi => phi
+          case phi: SSA.Phi =>
+            phi.control = swap(phi.control)
+            phi.incoming = phi.incoming.map{case (k, v) => (swap(k), swap(v))}
           case n @ SSA.Arg(index, typeSize) =>
           case n @ SSA.BinOp(a, b, opcode) =>
             n.a = swap(a)
@@ -57,9 +59,10 @@ object SSA{
             n.array = swap(array)
           case n @ SSA.MonitorEnter(indexSrc) => n.indexSrc = swap(indexSrc)
           case n @ SSA.MonitorExit(indexSrc) => n.indexSrc = swap(indexSrc)
-          case r: SSA.Region => r
-          case n @ SSA.True(node) => n.node = swap(node)
-          case n @ SSA.False(node) => n.node = swap(node)
+          case r: SSA.Region =>
+            r.incoming = r.incoming.map(swap)
+          case n: SSA.True => n.node = swap(n.node)
+          case n: SSA.False => n.node = swap(n.node)
           case n @ SSA.UnaBranch(control, a, opcode) =>
             n.control = swap(control)
             n.a = swap(a)
@@ -99,15 +102,18 @@ object SSA{
 
   class Phi(var control: Ctrl, var incoming: Set[(SSA.Ctrl, SSA.Val)], var typeSize: Int) extends Val(typeSize){
     override def upstream: Seq[SSA.Node] = Seq(control) ++ incoming.flatMap(x => Seq(x._1, x._2)).toArray[SSA.Node]
+    override def toString = s"Phi@${Integer.toHexString(System.identityHashCode(this))}(${incoming.size})"
   }
 
   class Region(var incoming: Set[Ctrl]) extends Ctrl(){
     def upstream = incoming.toSeq
+
+    override def toString = s"Region@${Integer.toHexString(System.identityHashCode(this))}(${incoming.size})"
   }
-  case class True(var node: Ctrl) extends Ctrl(){
+  class True(var node: Ctrl) extends Ctrl(){
     def upstream = Seq(node)
   }
-  case class False(var node: Ctrl) extends Ctrl(){
+  class False(var node: Ctrl) extends Ctrl(){
     def upstream = Seq(node)
   }
   case class Arg(var index: Int, var tpe: IType) extends Val(tpe.size){

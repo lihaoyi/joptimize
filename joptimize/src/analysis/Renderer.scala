@@ -118,8 +118,8 @@ object Renderer {
           case _: SSA.Return => "return" + savedControls.size
           case _: SSA.ReturnVal => "return" + savedControls.size
           case _: SSA.AThrow => "return" + savedControls.size
-          case SSA.True(branch) => "true" + getControlId0(branch)._1
-          case SSA.False(branch) => "false" + getControlId0(branch)._1
+          case n: SSA.True => "true" + getControlId0(n.node)._1
+          case n: SSA.False => "false" + getControlId0(n.node)._1
           case r: SSA.Region => "region" + savedControls.size
           case _: SSA.UnaBranch => "branch" + savedControls.size
           case _: SSA.BinBranch => "branch" + savedControls.size
@@ -179,8 +179,8 @@ object Renderer {
 
 
     def recCtrl(ctrl: SSA.Ctrl): (fansi.Str, Tree) = ctrl match{
-      case SSA.True(src) => (getControlId(ctrl), apply("true", atom(getControlId(src).toString)))
-      case SSA.False(src) => (getControlId(ctrl), apply("false", atom(getControlId(src).toString)))
+      case n: SSA.True => (getControlId(ctrl), apply("true", atom(getControlId(n.node).toString)))
+      case n: SSA.False => (getControlId(ctrl), apply("false", atom(getControlId(n.node).toString)))
 
       case reg: SSA.Region =>
         val rhs = apply("region", reg.upstream.iterator.map(x => atom(getControlId(x).toString)).toSeq:_*)
@@ -250,15 +250,15 @@ object Renderer {
       vertexToIndex
     )
 
-    val brokenOrderingList = TarjansStronglyConnectedComponents(Util.mapToAdjacencyLists(brokenEdgeLists, allVertices.size)).map { case Seq(x) => x }
+//    val brokenOrderingList = TarjansStronglyConnectedComponents(Util.mapToAdjacencyLists(brokenEdgeLists, allVertices.size)).map { case Seq(x) => x }
 
-    val brokenOrdering = brokenOrderingList.zipWithIndex.toMap
+//    val brokenOrdering = brokenOrderingList.zipWithIndex.toMap
 
     val groupedEdgeLists = Util.edgeListToIndexMap(downstreamEdges, vertexToIndex)
 
     val groupedOrdering = TarjansStronglyConnectedComponents(Util.mapToAdjacencyLists(groupedEdgeLists, allVertices.size))
 
-    val orderingList = groupedOrdering.flatMap(_.sortBy(brokenOrdering)).map(indexToVertex)
+    val orderingList = groupedOrdering.flatten.map(indexToVertex)
 
     val finalOrderingMap = orderingList.reverse.zipWithIndex.toMap
     finalOrderingMap

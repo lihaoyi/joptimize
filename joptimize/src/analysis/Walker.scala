@@ -128,8 +128,8 @@ class Walker(isInterface: JType.Cls => Boolean,
 
         case ((IFEQ | IFNE | IFLT | IFGE | IFGT | IFLE, insn: JumpInsnNode), i) =>
           val n = SSA.UnaBranch(findStartRegion(insn), frameTop(i, 0), SSA.UnaBranch.lookup(insn.getOpcode))
-          mergeControls(insn.label, SSA.True(n))
-          mergeControls(insn.getNext, SSA.False(n))
+          mergeControls(insn.label, new SSA.True(n))
+          mergeControls(insn.getNext, new SSA.False(n))
 
           Nil
 
@@ -138,9 +138,9 @@ class Walker(isInterface: JType.Cls => Boolean,
           pprint.log(startReg)
           val n = SSA.BinBranch(startReg, frameTop(i, 0), frameTop(i, 1), SSA.BinBranch.lookup(insn.getOpcode))
 
-          mergeControls(insn.label, SSA.True(n))
+          mergeControls(insn.label, new SSA.True(n))
 
-          mergeControls(insn.getNext, SSA.False(n))
+          mergeControls(insn.getNext, new SSA.False(n))
           Nil
 
         case ((_, insn), i) if Option(insn.getNext).exists(regionStarts.contains) =>
@@ -148,6 +148,7 @@ class Walker(isInterface: JType.Cls => Boolean,
           Nil
       }.flatten
 
+      pprint.log(regionStarts)
 
       val program = Program(terminals.map(_._2))
 

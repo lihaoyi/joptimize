@@ -213,9 +213,15 @@ class StepEvaluator(regionStarts: mutable.LinkedHashMap[Int, SSA.Region]) extend
           regionStarts.getOrElseUpdate(insnIndex1, new SSA.Region(Set())) -> v1,
           regionStarts.getOrElseUpdate(insnIndex, new SSA.Region(Set())) -> v2
         )
+
         regionStarts(targetInsnIndex).downstream += phi
         regionStarts(insnIndex).downstream += phi
         regionStarts(insnIndex1).downstream += phi
+        pprint.log(phi.upstream)
+        pprint.log(regionStarts(targetInsnIndex).downstream)
+        pprint.log(regionStarts(insnIndex).downstream)
+        pprint.log(regionStarts(insnIndex1).downstream)
+
         phi.update()
         phi
     }

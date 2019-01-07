@@ -26,8 +26,8 @@ object CodeGen{
       visited.add(current)
 
       val upstreams = current match{
-        case SSA.True(x) => Seq(x)
-        case SSA.False(x) => Seq(x)
+        case n: SSA.True => Seq(n.node)
+        case n: SSA.False => Seq(n.node)
         case SSA.UnaBranch(ctrl, a, opcode) => Seq(ctrl)
         case SSA.BinBranch(ctrl, a, b, opcode) => Seq(ctrl)
         case SSA.Return(ctrl) => Seq(ctrl)
