@@ -124,6 +124,9 @@ object Renderer {
           case _: SSA.AThrow => "return" + savedControls.size
           case SSA.True(branch) => "true" + getControlId0(branch)._1
           case SSA.False(branch) => "false" + getControlId0(branch)._1
+          case _: SSA.Region => "region" + savedControls.size
+          case _: SSA.UnaBranch => "branch" + savedControls.size
+          case _: SSA.BinBranch => "branch" + savedControls.size
           case _ => "ctrl" + savedControls.size
         })
       )
@@ -144,7 +147,9 @@ object Renderer {
     }
 
     def recVal(ssa: SSA.Val): Tree = ssa match{
-      case phi: SSA.Phi => apply("phi", phiMerges(phi)._2.map{case (ctrl, ssa) => infix(renderControl(ctrl), ":", rec(ssa))}.toSeq:_*)
+      case phi: SSA.Phi =>
+        val children = Seq(renderControl(phiMerges(phi)._1)) ++ phiMerges(phi)._2.map{case (ctrl, ssa) => infix(renderControl(ctrl), ":", rec(ssa))}.toSeq
+        apply("phi", children:_*)
       case SSA.Arg(index, typeSize) => atom(fansi.Color.Cyan("arg" + index).toString)
       case SSA.BinOp(a, b, opcode) => infix(rec(a), binOpString(opcode), rec(b))
       case SSA.UnaOp(a, opcode) => apply(unaryOpString(opcode), rec(a))

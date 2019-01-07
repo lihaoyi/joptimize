@@ -77,10 +77,12 @@ object CodeGen{
 
     val (immediateDominators, dominatorDepth) = findDominators(controlFlowEdges)
 
+    pprint.log(dominatorDepth.map{case (k, v) => (mapping(k), v)})
+    pprint.log(immediateDominators.map{case (k, v) => (mapping(k), mapping(v))})
     val nodesToBlocks = schedule(
       program, loopTree,
       dominatorDepth, immediateDominators,
-      controlFlowEdges, mapping.collect{case (k: SSA.Ctrl, v) => (k, v)}
+      controlFlowEdges, mapping
     )
     val prettyNodesToBlocks = nodesToBlocks.collect{case (k, v) if mapping.contains(k) => (mapping(k), mapping(v))}
     pprint.log(prettyNodesToBlocks, height=99999)
@@ -95,7 +97,7 @@ object CodeGen{
                dominatorDepth: Map[SSA.Ctrl, Int],
                immediateDominator: Map[SSA.Ctrl, SSA.Ctrl],
                graph: Seq[(SSA.Ctrl, SSA.Ctrl)],
-               mapping: Map[SSA.Ctrl, String]): Map[SSA.Val, SSA.Ctrl] = {
+               mapping: Map[SSA.Node, String]): Map[SSA.Val, SSA.Ctrl] = {
     val (allVertices, roots, downstreamEdges) =
       Util.breadthFirstAggregation[SSA.Node](program.allTerminals.toSet)(program.upstream)
     val loopNestMap = mutable.Map.empty[SSA.Node, Int]
@@ -132,7 +134,7 @@ object CodeGen{
       case scheduleRoot: SSA.Ctrl => scheduler.scheduleEarlyRoot(scheduleRoot)
     }
 
-//    pprint.log(scheduler.control, height=9999)
+    pprint.log(scheduler.control.map{case (k, v) => (k, mapping(v))}, height=9999)
 
     allVertices.collect{
       case scheduleRoot: SSA.Ctrl => scheduler.scheduleLateRoot(scheduleRoot)

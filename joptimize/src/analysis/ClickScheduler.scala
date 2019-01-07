@@ -7,7 +7,7 @@ import scala.collection.mutable
 abstract class ClickScheduler(dominatorDepth: Map[SSA.Ctrl, Int],
                               immediateDominator: Map[SSA.Ctrl, SSA.Ctrl],
                               phiMerges:  Map[SSA.Phi, (SSA.Ctrl, Set[(SSA.Ctrl, SSA.Val)])],
-                              mapping: Map[SSA.Ctrl, String]) {
+                              mapping: Map[SSA.Node, String]) {
   def downstream(ssa: SSA.Node): Seq[SSA.Node]
   def upstream(ssa: SSA.Node): Seq[SSA.Val]
   def isPinned(ssa: SSA.Node): Boolean
@@ -24,7 +24,7 @@ abstract class ClickScheduler(dominatorDepth: Map[SSA.Ctrl, Int],
 
   def scheduleEarly(n: SSA.Val): Unit = {
     scheduleEarlyRoot(n)
-    control(n) = upstream(n).map(control).minBy(dominatorDepth)
+    control(n) = upstream(n).map(control).maxBy(dominatorDepth)
   }
 
   def scheduleLateRoot(n: SSA.Node): Unit = {

@@ -16,7 +16,7 @@ case class Program(allTerminals: Seq[SSA.Ctrl],
                    regionMerges: Map[SSA.Region, Set[SSA.Ctrl]]){
 
   def upstream(n: SSA.Node): Seq[SSA.Node] = n match{
-    case phi: SSA.Phi => phiMerges(phi)._2.iterator.flatMap{case (k, v) => Seq(k, v)}.toSeq
+    case phi: SSA.Phi => phiMerges(phi)._1 +: phiMerges(phi)._2.iterator.flatMap{case (k, v) => Seq(k, v)}.toSeq
     case reg: SSA.Region => regionMerges(reg).toSeq
     case _ => n.upstream
   }
