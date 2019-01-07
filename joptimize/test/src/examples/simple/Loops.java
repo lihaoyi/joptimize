@@ -68,7 +68,6 @@ public class Loops {
         return c + 7;
     }
 
-
     @joptimize.Test(inputs = {0, 1, 2, 3, 4, 5, 6, 7, 9})
     public static int mixedLiftableFor(int a) {
         int c0 = 0;
@@ -80,6 +79,29 @@ public class Loops {
             int liftable2 = liftable + 9;
             int unliftable2 = unliftable + 11;
             c = c + liftable2 + unliftable2;
+        }
+        return c + 2;
+    }
+
+    @joptimize.Test(inputs = {0, 1, 2, 3, 4, 5, 6, 7, 9})
+    public static int nestedLiftableFor(int a) {
+        int c0 = 0;
+        int c = c0 + 3;
+
+        for (int i = 0; i < a; i++) {
+            int liftable = a * 5;
+            int unliftable = i * 7;
+            int liftable2 = liftable + 9;
+            int unliftable2 = unliftable + 11;
+
+            for(int j = 0; j < a; j++){
+                int innerLiftable = a * 13;
+                int innerUnliftable = i * 15;
+                int innerLiftable2 = innerLiftable + 17;
+                int innerUnliftable2 = innerUnliftable + 19;
+                int innerHalfLiftable = liftable2 + unliftable2;
+                c = c + innerLiftable2 + innerUnliftable2 + innerHalfLiftable;
+            }
         }
         return c + 2;
     }
