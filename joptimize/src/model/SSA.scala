@@ -7,6 +7,68 @@ import scala.collection.mutable
 
 object SSA{
 
+  def update(down: SSA.Node, self: SSA.Node, other: SSA.Node) = {
+    def swap[T <: Node](x: T): T = if (x == self) other.asInstanceOf[T] else x
+    down match{
+      case phi: SSA.Phi =>
+        phi.control = swap(phi.control)
+        phi.incoming = phi.incoming.map{case (k, v) => (swap(k), swap(v))}
+      case n @ SSA.Arg(index, typeSize) =>
+      case n @ SSA.BinOp(a, b, opcode) =>
+        n.a = swap(a)
+        n.b = swap(b)
+      case n @ SSA.UnaOp(a, opcode) => n.a = swap(a)
+      case n @ SSA.CheckCast(src, desc) => n.src = swap(src)
+      case n @ SSA.ArrayLength(src) => n.src = swap(src)
+      case n @ SSA.InstanceOf(src, desc) => n.src = swap(src)
+      case n @ SSA.PushI(value) =>
+      case n @ SSA.PushJ(value) =>
+      case n @ SSA.PushF(value) =>
+      case n @ SSA.PushD(value) =>
+      case n @ SSA.PushS(value) =>
+      case n @ SSA.PushNull() =>
+      case n @ SSA.PushCls(value) =>
+      case n @ SSA.InvokeStatic(srcs, cls, name, desc) => n.srcs = srcs.map(swap)
+      case n @ SSA.InvokeSpecial(srcs, cls, name, desc) => n.srcs = srcs.map(swap)
+      case n @ SSA.InvokeVirtual(srcs, cls, name, desc) => n.srcs = srcs.map(swap)
+      case n @ SSA.InvokeDynamic(name, desc, bsTag, bsOwner, bsName, bsDesc, bsArgs) => ???
+      case n @ SSA.NewArray(src, typeRef) => n.src = swap(src)
+      case n @ SSA.MultiANewArray(desc, dims) =>
+      case n @ SSA.PutStatic(src, cls, name, desc) => n.src = swap(src)
+      case n @ SSA.GetStatic(cls, name, desc) =>
+      case n @ SSA.PutField(src, obj, owner, name, desc) =>
+        n.src = swap(src)
+        n.obj = swap(obj)
+      case n @ SSA.GetField(obj, owner, name, desc) => n.obj = swap(obj)
+      case n @ SSA.PutArray(src, indexSrc, array) =>
+        n.src = swap(src)
+        n.indexSrc = swap(indexSrc)
+      case n @ SSA.GetArray(indexSrc, array, typeSize) =>
+        n.indexSrc = swap(indexSrc)
+        n.array = swap(array)
+      case n @ SSA.MonitorEnter(indexSrc) => n.indexSrc = swap(indexSrc)
+      case n @ SSA.MonitorExit(indexSrc) => n.indexSrc = swap(indexSrc)
+      case r: SSA.Region =>
+        r.incoming = r.incoming.map(swap)
+      case n: SSA.True => n.node = swap(n.node)
+      case n: SSA.False => n.node = swap(n.node)
+      case n @ SSA.UnaBranch(control, a, opcode) =>
+        n.control = swap(control)
+        n.a = swap(a)
+      case n @ SSA.BinBranch(control, a, b, opcode) =>
+        n.control = swap(control)
+        n.a = swap(a)
+        n.b = swap(b)
+      case n @ SSA.ReturnVal(control, a) =>
+        n.control = swap(control)
+        n.a = swap(a)
+      case n @ SSA.Return(control) => n.control = swap(control)
+      case n @ SSA.AThrow(src) => n.src = swap(src)
+      case n @ SSA.TableSwitch(src, min, max) => n.src = swap(src)
+      case n @ SSA.LookupSwitch(src, keys) => n.src = swap(src)
+    }
+
+  }
   trait Node{
     def upstream: Seq[Node]
     val downstream = mutable.Set.empty[Node]
@@ -18,67 +80,8 @@ object SSA{
         up.downstream.remove(this)
         up.downstream.add(other)
       }
-      def swap[T <: Node](x: T): T = if (x == this) other.asInstanceOf[T] else x
-      for(down <- downstream){
-        down match{
-          case phi: SSA.Phi =>
-            phi.control = swap(phi.control)
-            phi.incoming = phi.incoming.map{case (k, v) => (swap(k), swap(v))}
-          case n @ SSA.Arg(index, typeSize) =>
-          case n @ SSA.BinOp(a, b, opcode) =>
-            n.a = swap(a)
-            n.b = swap(b)
-          case n @ SSA.UnaOp(a, opcode) => n.a = swap(a)
-          case n @ SSA.CheckCast(src, desc) => n.src = swap(src)
-          case n @ SSA.ArrayLength(src) => n.src = swap(src)
-          case n @ SSA.InstanceOf(src, desc) => n.src = swap(src)
-          case n @ SSA.PushI(value) =>
-          case n @ SSA.PushJ(value) =>
-          case n @ SSA.PushF(value) =>
-          case n @ SSA.PushD(value) =>
-          case n @ SSA.PushS(value) =>
-          case n @ SSA.PushNull() =>
-          case n @ SSA.PushCls(value) =>
-          case n @ SSA.InvokeStatic(srcs, cls, name, desc) => n.srcs = srcs.map(swap)
-          case n @ SSA.InvokeSpecial(srcs, cls, name, desc) => n.srcs = srcs.map(swap)
-          case n @ SSA.InvokeVirtual(srcs, cls, name, desc) => n.srcs = srcs.map(swap)
-          case n @ SSA.InvokeDynamic(name, desc, bsTag, bsOwner, bsName, bsDesc, bsArgs) => ???
-          case n @ SSA.NewArray(src, typeRef) => n.src = swap(src)
-          case n @ SSA.MultiANewArray(desc, dims) =>
-          case n @ SSA.PutStatic(src, cls, name, desc) => n.src = swap(src)
-          case n @ SSA.GetStatic(cls, name, desc) =>
-          case n @ SSA.PutField(src, obj, owner, name, desc) =>
-            n.src = swap(src)
-            n.obj = swap(obj)
-          case n @ SSA.GetField(obj, owner, name, desc) => n.obj = swap(obj)
-          case n @ SSA.PutArray(src, indexSrc, array) =>
-            n.src = swap(src)
-            n.indexSrc = swap(indexSrc)
-          case n @ SSA.GetArray(indexSrc, array, typeSize) =>
-            n.indexSrc = swap(indexSrc)
-            n.array = swap(array)
-          case n @ SSA.MonitorEnter(indexSrc) => n.indexSrc = swap(indexSrc)
-          case n @ SSA.MonitorExit(indexSrc) => n.indexSrc = swap(indexSrc)
-          case r: SSA.Region =>
-            r.incoming = r.incoming.map(swap)
-          case n: SSA.True => n.node = swap(n.node)
-          case n: SSA.False => n.node = swap(n.node)
-          case n @ SSA.UnaBranch(control, a, opcode) =>
-            n.control = swap(control)
-            n.a = swap(a)
-          case n @ SSA.BinBranch(control, a, b, opcode) =>
-            n.control = swap(control)
-            n.a = swap(a)
-            n.b = swap(b)
-          case n @ SSA.ReturnVal(control, a) =>
-            n.control = swap(control)
-            n.a = swap(a)
-          case n @ SSA.Return(control) => n.control = swap(control)
-          case n @ SSA.AThrow(src) => n.src = swap(src)
-          case n @ SSA.TableSwitch(src, min, max) => n.src = swap(src)
-          case n @ SSA.LookupSwitch(src, keys) => n.src = swap(src)
-        }
-      }
+
+      for(down <- downstream) SSA.update(down, this, other)
     }
     def update() = {
       upstream.foreach(_.downstream.add(this))

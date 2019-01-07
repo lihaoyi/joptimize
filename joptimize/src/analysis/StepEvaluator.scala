@@ -19,7 +19,7 @@ import scala.collection.mutable
   * generated SSA nodes; we do this to allow immediate constant folding if the
   * node's type is specific enough to be a concrete value.
   */
-class StepEvaluator(regionStarts: mutable.LinkedHashMap[Int, SSA.Region]) extends joptimize.bytecode.Interpreter[SSA.Val]{
+class StepEvaluator(merges: mutable.Set[(Int, Int, SSA.Val)]) extends joptimize.bytecode.Interpreter[SSA.Val]{
 
   def newOperation(insn: AbstractInsnNode) = {
     insn.getOpcode match {
@@ -175,63 +175,14 @@ class StepEvaluator(regionStarts: mutable.LinkedHashMap[Int, SSA.Region]) extend
 
   def returnOperation(insn: AbstractInsnNode, value: SSA.Val, expected: SSA.Val) = ()
 
-  val possibleRegions = new util.IdentityHashMap[SSA.Val, (Int, Int)]()
   def merge(v1: SSA.Val, v2: SSA.Val, insnIndex: Int, targetInsnIndex: Int) = {
-    if (v1 == v2) v1
-    else (v1, v2) match{
-      case (phi1: SSA.Phi, phi2: SSA.Phi) =>
-        phi2.replaceWith(phi1)
-        phi1.incoming ++= phi2.incoming
-        phi1.update()
-        phi1
-
-      case (phi1: SSA.Phi, v2) =>
-        val reg = regionStarts.getOrElseUpdate(insnIndex, new SSA.Region(Set()))
-        if (phi1.incoming.contains(reg -> v2)) phi1
-        else {
-          v2.replaceWith(phi1)
-          phi1.incoming += (reg -> v2)
-          phi1.update()
-          regionStarts(insnIndex).downstream += phi1
-          phi1
-        }
-
-      case (v1, phi2: SSA.Phi) =>
-        val (insnIndex1, targetInsnIndex1) = possibleRegions.get(v1)
-        val reg = regionStarts.getOrElseUpdate(insnIndex1, new SSA.Region(Set()))
-        if (phi2.incoming.contains(reg -> v1)) phi2
-        else {
-          v1.replaceWith(phi2)
-          phi2.incoming += (reg -> v1)
-          regionStarts(insnIndex1).downstream += phi2
-          phi2.update()
-          phi2
-        }
-
-      case (v1, v2) =>
-        val (insnIndex1, targetInsnIndex1) = possibleRegions.get(v1)
-        val phi = new SSA.Phi(
-          regionStarts.getOrElseUpdate(targetInsnIndex, new SSA.Region(Set())),
-          Set(),
-          v1.getSize
-        )
-        v1.replaceWith(phi)
-        v2.replaceWith(phi)
-        phi.incoming ++= Set(
-          regionStarts.getOrElseUpdate(insnIndex1, new SSA.Region(Set())) -> v1,
-          regionStarts.getOrElseUpdate(insnIndex, new SSA.Region(Set())) -> v2
-        )
-
-        regionStarts(targetInsnIndex).downstream += phi
-        regionStarts(insnIndex).downstream += phi
-        regionStarts(insnIndex1).downstream += phi
-        phi.update()
-        phi
-    }
+    merges.add((insnIndex, targetInsnIndex, v2))
+    merges.add((insnIndex, targetInsnIndex, v1))
+    v1
   }
 
   def merge0(value1: SSA.Val, insnIndex: Int, targetInsnIndex: Int) = {
-    possibleRegions.put(value1, (insnIndex, targetInsnIndex))
+    merges.add((insnIndex, targetInsnIndex, value1))
     value1
   }
 

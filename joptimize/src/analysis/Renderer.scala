@@ -206,10 +206,6 @@ object Renderer {
     }
 
     for(r <- saveable.toSeq.sortBy(finalOrderingMap)){
-      r match{
-        case reg: SSA.Region => pprint.log(reg.incoming)
-        case _ =>
-      }
       val (lhs, rhs) = r match{
         case r: SSA.Ctrl => recCtrl(r)
         case r: SSA.Val => (fansi.Color.Cyan("local" + savedLocals.get(r)), recVal(r))

@@ -35,8 +35,7 @@ class Walker(isInterface: JType.Cls => Boolean,
       println("+" * 20 + sig + "+" * 20)
       println(Renderer.renderInsns(mn.instructions))
 
-      val regionStarts0 = mutable.LinkedHashMap.empty[Int, SSA.Region]
-      val frames = joptimize.bytecode.Analyzer.analyze(sig.cls.name, mn, new StepEvaluator(regionStarts0))
+      val phiMerges0 = mutable.Set.empty[(Int, Int, SSA.Val)]
 
       val insns = mn.instructions.iterator().asScala.toVector
 
@@ -45,20 +44,26 @@ class Walker(isInterface: JType.Cls => Boolean,
           case n: TableSwitchInsnNode => Seq(n.dflt) ++ n.labels.asScala
           case n: LookupSwitchInsnNode => Seq(n.dflt) ++ n.labels.asScala
           case n: JumpInsnNode => Seq(n.label) ++ Option(n.getNext)
+          case n: LabelNode => Seq(n)
+          case n if n.getOpcode == ATHROW => Option(n.getNext).toSeq
+          case n if n.getOpcode == RETURN => Option(n.getNext).toSeq
+          case n if n.getOpcode == IRETURN => Option(n.getNext).toSeq
+          case n if n.getOpcode == LRETURN => Option(n.getNext).toSeq
+          case n if n.getOpcode == FRETURN => Option(n.getNext).toSeq
+          case n if n.getOpcode == DRETURN => Option(n.getNext).toSeq
+          case n if n.getOpcode == ARETURN => Option(n.getNext).toSeq
+          case n if n == insns.head => Seq(n)
         }
         .flatten
         .sortBy(insns.indexOf)
+      val regionStarts = mutable.LinkedHashMap(blockStarts.map(_ -> (new SSA.Region(Set()): SSA.Ctrl)):_*)
 
-      val regionStarts = regionStarts0.map{case (k, v) => (insns(k), v: SSA.Ctrl)}
-
-      def frameTop(i: Int, n: Int) = frames(i).getStack(frames(i).getStackSize - 1 - n)
-
-//      regionStarts.keys.map("RSK " + Renderer.render(mn.instructions, _)).foreach(println)
+      //      regionStarts.keys.map("RSK " + Renderer.render(mn.instructions, _)).foreach(println)
       def findStartRegion(insn: AbstractInsnNode): SSA.Ctrl = {
         var current = insn
         var region: SSA.Ctrl = null
         while({
-//          println("XXX " + Renderer.render(mn.instructions, current))
+          //          println("XXX " + Renderer.render(mn.instructions, current))
           regionStarts.get(current) match{
             case None =>
               current = current.getPrevious
@@ -71,9 +76,11 @@ class Walker(isInterface: JType.Cls => Boolean,
 
         region
       }
+      val frames = joptimize.bytecode.Analyzer.analyze(sig.cls.name, mn, new StepEvaluator(phiMerges0))
+      def frameTop(i: Int, n: Int) = frames(i).getStack(frames(i).getStackSize - 1 - n)
 
       def mergeControls(lhs0: AbstractInsnNode, rhs: SSA.Ctrl, rhsInsn: Option[AbstractInsnNode] = None): Unit = {
-        val lhs = regionStarts.getOrElseUpdate(lhs0, new SSA.Region(Set()))
+        val lhs = regionStarts(lhs0)
         (lhs, rhs) match{
           case (l: SSA.Region, r) if l.incoming.isEmpty =>
             regionStarts(lhs0) = r
@@ -110,7 +117,7 @@ class Walker(isInterface: JType.Cls => Boolean,
             regionStarts(lhs0) = reg
         }
       }
-      regionStarts.update(insns.head, new SSA.Region(Set()))
+
 
       val terminals = insns.map(i => (i.getOpcode, i)).zipWithIndex.collect{
         case ((RETURN, insn), i) => (insn, SSA.Return(findStartRegion(insn)), i) :: Nil
@@ -145,21 +152,29 @@ class Walker(isInterface: JType.Cls => Boolean,
           Nil
       }.flatten
 
+      val phiMerges = phiMerges0.groupBy(_._2).collect{
+        case (targetInsnIndex, args) if args.size > 1 =>
+          (findStartRegion(insns(targetInsnIndex)), args.map(x => (findStartRegion(insns(x._1)), x._3)))
+      }
+
+      for((targetRegion, args) <- phiMerges){
+        val (srcCtrls, values) = args.unzip
+        val phi = new SSA.Phi(targetRegion, args.toSet, args.head._2.getSize)
+        for(value <- values){
+          for(up <- value.upstream){
+            up.downstream.remove(value)
+            up.downstream.add(phi)
+          }
+          for(down <- value.downstream){
+            SSA.update(down, value, phi)
+          }
+        }
+      }
       val program = Program(terminals.map(_._2))
 
-      val program2 = program/*.transform(
-        onValue = {
-          case phi: SSA.Phi if phi.incoming.count(_._2 != phi) == 1 => phi.incoming.filter(_._2 != phi).head._2
-        },
-        onControl = {
-          case r: SSA.Region if r.incoming.size == 1 => r.incoming.head
-        }
-      )*/
-
-
-      val (printed, mapping) = Renderer.renderSSA(program2)
+      val (printed, mapping) = Renderer.renderSSA(program)
       println(printed)
-      CodeGen(program2, mapping)
+      CodeGen(program, mapping)
       ???
     })
   }
