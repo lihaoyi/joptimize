@@ -125,12 +125,12 @@ class Walker(isInterface: JType.Cls => Boolean,
       queue.foreach(_.checkLinks())
 
       while(queue.nonEmpty){
-
         val current = queue.head
         queue.remove(current)
         val replacement = current match{
           case phi: SSA.Phi =>
             val filteredValues = phi.incoming.filter(_._2 != phi)
+
             if(filteredValues.map(_._2).size == 1) Some(filteredValues.head._2)
             else None
 
@@ -141,13 +141,11 @@ class Walker(isInterface: JType.Cls => Boolean,
           case _ => None
         }
         for(replacement <- replacement){
+          for(v <- current.upstream) v.downstream.remove(current)
           replacement.downstream.remove(current)
           val deltaDownstream = current.downstream.filter(_ != current)
           replacement.downstream ++= deltaDownstream
-          for(down <- deltaDownstream){
-            SSA.update(down, current, replacement)
-          }
-
+          for(down <- deltaDownstream) SSA.update(down, current, replacement)
           replacement.downstream.foreach(queue.add)
         }
       }
