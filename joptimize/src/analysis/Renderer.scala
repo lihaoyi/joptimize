@@ -4,7 +4,7 @@ import java.util
 
 import fansi.Str
 import joptimize.Util
-import joptimize.graph.TarjansStronglyConnectedComponents
+import joptimize.graph.{HavlakLoopTree, TarjansStronglyConnectedComponents}
 import joptimize.model.{Program, SSA}
 import org.objectweb.asm.tree.{AbstractInsnNode, InsnList}
 import org.objectweb.asm.util.{Textifier, TraceMethodVisitor}
@@ -50,24 +50,34 @@ object Renderer {
   }
 
   def renderGraph(edges: Seq[(SSA.Block, SSA.Block)], coloring: SSA.Block => fansi.Str): fansi.Str = {
-    val allVertices = edges.flatMap(x => Seq(x._1, x._2)).distinct
-    val vertexToIndex = allVertices.zipWithIndex.toMap
-    val edgeGroups = edges.groupBy(_._2).map{case (k, v) => (k, v.map(_._1))}
+    val loopTree = HavlakLoopTree.analyzeLoops(edges)
+    val loopNestMap = mutable.LinkedHashMap.empty[SSA.Node, Int]
 
-    val finalOrderingMap = Renderer.sortVerticesForPrinting(allVertices.toSet, edges)(
-      (src, dest) => dest.isInstanceOf[SSA.Region]
-    )
-    val tarjansInput = allVertices.map(edgeGroups.getOrElse(_, Nil).map(vertexToIndex))
-    val sorted = TarjansStronglyConnectedComponents(tarjansInput).flatten.map(allVertices(_)).sortBy(finalOrderingMap)
-    val out = mutable.Buffer.empty[fansi.Str]
-
-    for(dest <- sorted){
-
-      val srcs = edgeGroups.getOrElse(dest, Nil)
-      out.append(coloring(dest), " <- ")
-      out.appendAll(srcs.flatMap(src => Seq(fansi.Str(", "), coloring(src))).drop(1))
-      out.append("\n")
+    def recLoop(loop: HavlakLoopTree.Loop[SSA.Block], depth: Int): Unit = {
+      loop.basicBlocks.foreach(loopNestMap(_) = depth)
+      loop.children.foreach(recLoop(_, depth + 1))
     }
+
+    recLoop(loopTree, 0)
+
+    val allDownstreams = edges.flatMap{case (a, b) => Seq(b)}.toSet
+    val successor = edges.groupBy(_._1).map{case (k, v) => (k, v.map(_._2))}
+    val predecessor = edges.groupBy(_._2).map{case (k, v) => (k, v.map(_._1))}
+    val allVertices = edges.flatMap{case (a, b) => Seq(a, b)}
+    val startNode = allVertices.find(!allDownstreams(_)).get
+
+    val out = mutable.Buffer.empty[fansi.Str]
+    val seen = mutable.LinkedHashSet.empty[SSA.Block]
+    def recPrint(block: SSA.Block): Unit = if (!seen(block)){
+      seen.add(block)
+      out.append("  " * loopNestMap(block))
+      out.append(coloring(block), " <- ")
+      out.appendAll(predecessor.getOrElse(block, Nil).flatMap(src => Seq(fansi.Str(", "), coloring(src))).drop(1))
+      out.append("\n")
+      for(s <- successor.getOrElse(block, Nil)) recPrint(s)
+    }
+
+    recPrint(startNode)
     fansi.Str.join(out:_*)
   }
 

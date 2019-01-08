@@ -90,7 +90,7 @@ object HavlakLoopTree {
   // for depth-first spanning trees. This is why DFS is the first
   // thing we run below.
   //
-  def isAncestor(w: Int, v: Int, last: Array[Int])= (w <= v) && (v <= last(w))
+  def isAncestor(w: Int, v: Int, last: Array[Int]) = (w <= v) && (v <= last(w))
 
   //
   // DFS - Depth-First-Search

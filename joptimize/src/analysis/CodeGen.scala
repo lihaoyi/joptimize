@@ -74,16 +74,16 @@ object CodeGen{
 
     val (immediateDominators, dominatorDepth) = findDominators(controlFlowEdges)
 
-    pprint.log(dominatorDepth.map{case (k, v) => (mapping(k), v)})
-    pprint.log(immediateDominators.map{case (k, v) => (mapping(k), mapping(v))})
-    pprint.log(immediateDominators)
+//    pprint.log(dominatorDepth.map{case (k, v) => (mapping(k), v)})
+//    pprint.log(immediateDominators.map{case (k, v) => (mapping(k), mapping(v))})
+//    pprint.log(immediateDominators)
     val nodesToBlocks = schedule(
       program, loopTree,
       dominatorDepth, immediateDominators,
       controlFlowEdges, mapping
     )
     val prettyNodesToBlocks = nodesToBlocks.collect{case (k, v) if mapping.contains(k) => (mapping(k), mapping(v))}
-    pprint.log(prettyNodesToBlocks, height=99999)
+//    pprint.log(prettyNodesToBlocks, height=99999)
     println(Renderer.renderSSA(program, nodesToBlocks)._1)
 //    val pinnedNodes = program
 //    for(controlFlow)
@@ -132,13 +132,13 @@ object CodeGen{
       case scheduleRoot: SSA.Block => scheduler.scheduleEarlyRoot(scheduleRoot)
     }
 
-    pprint.log(scheduler.block.map{case (k, v) => (k, mapping(v))}, height=9999)
+//    pprint.log(scheduler.block.map{case (k, v) => (k, mapping(v))}, height=9999)
 
     allVertices.collect{
       case scheduleRoot: SSA.Block => scheduler.scheduleLateRoot(scheduleRoot)
     }
 
-    pprint.log(scheduler.block.map{case (k, v) => (k, mapping(v))}, height=9999)
+//    pprint.log(scheduler.block.map{case (k, v) => (k, mapping(v))}, height=9999)
 
     scheduler.block.filter{case (k, v) => v != null}.toMap
   }
