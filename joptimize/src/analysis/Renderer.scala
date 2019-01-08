@@ -4,6 +4,7 @@ import java.util
 
 import fansi.Str
 import joptimize.Util
+import joptimize.analysis.CodeGen.findControlFlowGraph
 import joptimize.graph.{HavlakLoopTree, TarjansStronglyConnectedComponents}
 import joptimize.model.{Program, SSA}
 import org.objectweb.asm.tree.{AbstractInsnNode, InsnList}
@@ -49,7 +50,9 @@ object Renderer {
     )
   }
 
-  def renderGraph(edges: Seq[(SSA.Block, SSA.Block)], coloring: SSA.Block => fansi.Str): fansi.Str = {
+  def renderGraph(edges: Seq[(SSA.Block, SSA.Block)],
+                  coloring: SSA.Block => fansi.Str,
+                  annotation: (SSA.Block, String) => fansi.Str = (_, _) => ""): fansi.Str = {
     val loopTree = HavlakLoopTree.analyzeLoops(edges)
     val loopNestMap = mutable.LinkedHashMap.empty[SSA.Node, Int]
 
@@ -70,10 +73,12 @@ object Renderer {
     val seen = mutable.LinkedHashSet.empty[SSA.Block]
     def recPrint(block: SSA.Block): Unit = if (!seen(block)){
       seen.add(block)
-      out.append("  " * loopNestMap(block))
+      val indent = "  " * loopNestMap(block)
+      out.append(indent)
       out.append(coloring(block), " <- ")
       out.appendAll(predecessor.getOrElse(block, Nil).flatMap(src => Seq(fansi.Str(", "), coloring(src))).drop(1))
       out.append("\n")
+      out.append(annotation(block, indent))
       for(s <- successor.getOrElse(block, Nil)) recPrint(s)
     }
 
@@ -113,7 +118,7 @@ object Renderer {
         .keySet ++
         allVertices.collect{ case k: SSA.Phi => k case b: SSA.Block => b}
 
-    val out = mutable.Buffer.empty[Str]
+
 
     val savedLocals = new util.IdentityHashMap[SSA.Val, Int]()
 
@@ -213,8 +218,9 @@ object Renderer {
         (getBlockId(n), rhs)
     }
 
-    pprint.log(finalOrderingMap)
-    def renderStmt(r: SSA.Node) = {
+
+    def renderStmt(r: SSA.Node, leftOffset: Int) = {
+      val out = mutable.Buffer.empty[Str]
       val (lhs, rhs) = r match{
         case r: SSA.Block =>
           out.append("\n")
@@ -225,25 +231,34 @@ object Renderer {
       out.append(lhs, " = ")
       out.appendAll(
         new pprint.Renderer(80, fansi.Color.Yellow, fansi.Color.Green, 2)
-          .rec(rhs, lhs.length + " = ".length, 1).iter
+          .rec(rhs, lhs.length + " = ".length, leftOffset).iter
       )
       out.append("\n")
+      out
     }
 
-    if (scheduledVals.nonEmpty){
-      for(r0 <- saveable.toSeq.sortBy(finalOrderingMap)){
-        if (r0.isInstanceOf[SSA.Block]){
-          val blockValues = scheduledVals.collect{case (a, b) if b == r0 && saveable(a) => a }
-          for(r <- Seq(r0) ++ blockValues) renderStmt(r)
-        }
+    val out =
+      if (scheduledVals.nonEmpty){
+        pprint.log(savedBlocks)
+        renderGraph(
+          findControlFlowGraph(program),
+          l => fansi.Color.Magenta(getBlockId(l)),
+          (l, indent) => {
+            fansi.Str.join(
+              scheduledVals
+                .collect{case (a, b) if b == l && saveable(a) => fansi.Str(indent) +: renderStmt(a, indent.length / 2) }
+                .flatten
+                .toSeq:_*
+            )
+          }
+        )
+      }else{
+        fansi.Str.join(saveable.toSeq.sortBy(finalOrderingMap).flatMap(renderStmt(_, 0)):_*)
       }
-    }else{
-      saveable.toSeq.sortBy(finalOrderingMap).foreach(renderStmt)
-    }
 
     import collection.JavaConverters._
     val mapping = (savedLocals.asScala.mapValues("local" + _) ++ savedBlocks.mapValues(_._2)).toMap
-    (fansi.Str.join(out:_*), mapping)
+    (out, mapping)
   }
 
   /**
