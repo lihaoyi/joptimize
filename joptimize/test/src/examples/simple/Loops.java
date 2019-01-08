@@ -96,11 +96,12 @@ public class Loops {
 
             for(int j = 0; j < a; j++){
                 int innerLiftable = a * 13;
-                int innerUnliftable = i * 15;
+                int innerHalfLiftable = i * 15;
                 int innerLiftable2 = innerLiftable + 17;
-                int innerUnliftable2 = innerUnliftable + 19;
-                int innerHalfLiftable = liftable2 + unliftable2;
-                c = c + innerLiftable2 + innerUnliftable2 + innerHalfLiftable;
+                int innerHalfLiftable2 = liftable2 + unliftable2 + 19;
+                int innerUnliftable = j + 21;
+
+                c = c + innerLiftable2 + innerHalfLiftable2 + innerHalfLiftable + innerUnliftable;
             }
         }
         return c + 2;
