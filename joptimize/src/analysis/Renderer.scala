@@ -204,9 +204,12 @@ object Renderer {
         (getControlId(n), rhs)
     }
 
-    for(r <- saveable.toSeq.sortBy(finalOrderingMap)){
+    pprint.log(finalOrderingMap)
+    def renderStmt(r: SSA.Node) = {
       val (lhs, rhs) = r match{
-        case r: SSA.Ctrl => recCtrl(r)
+        case r: SSA.Ctrl =>
+          out.append("\n")
+          recCtrl(r)
         case r: SSA.Val => (fansi.Color.Cyan("local" + savedLocals.get(r)), recVal(r))
       }
 
@@ -216,6 +219,17 @@ object Renderer {
           .rec(rhs, lhs.length + " = ".length, 1).iter
       )
       out.append("\n")
+    }
+
+    if (scheduledVals.nonEmpty){
+      for(r0 <- saveable.toSeq.sortBy(finalOrderingMap)){
+        if (r0.isInstanceOf[SSA.Ctrl]){
+          val blockValues = scheduledVals.collect{case (a, b) if b == r0 && saveable(a) => a }
+          for(r <- Seq(r0) ++ blockValues) renderStmt(r)
+        }
+      }
+    }else{
+      saveable.toSeq.sortBy(finalOrderingMap).foreach(renderStmt)
     }
 
     import collection.JavaConverters._
@@ -245,15 +259,15 @@ object Renderer {
       vertexToIndex
     )
 
-//    val brokenOrderingList = TarjansStronglyConnectedComponents(Util.mapToAdjacencyLists(brokenEdgeLists, allVertices.size)).map { case Seq(x) => x }
+    val brokenOrderingList = TarjansStronglyConnectedComponents(Util.mapToAdjacencyLists(brokenEdgeLists, allVertices.size)).map { case Seq(x) => x }
 
-//    val brokenOrdering = brokenOrderingList.zipWithIndex.toMap
+    val brokenOrdering = brokenOrderingList.zipWithIndex.toMap
 
     val groupedEdgeLists = Util.edgeListToIndexMap(downstreamEdges, vertexToIndex)
 
     val groupedOrdering = TarjansStronglyConnectedComponents(Util.mapToAdjacencyLists(groupedEdgeLists, allVertices.size))
 
-    val orderingList = groupedOrdering.flatten.map(indexToVertex)
+    val orderingList = groupedOrdering.flatMap(_.sortBy(brokenOrdering)).map(indexToVertex)
 
     val finalOrderingMap = orderingList.reverse.zipWithIndex.toMap
     finalOrderingMap
