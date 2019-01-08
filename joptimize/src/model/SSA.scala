@@ -97,6 +97,9 @@ object SSA{
       upstream.foreach(_.downstream.add(this))
       this
     }
+
+    override def hashCode = System.identityHashCode(this)
+    override def equals(other: Any) = this eq other.asInstanceOf[AnyRef]
     update()
   }
 
@@ -107,6 +110,7 @@ object SSA{
       super.update()
       this
     }
+
   }
   sealed abstract class Ctrl() extends Node{
     override def update(): Ctrl = {
@@ -133,16 +137,16 @@ object SSA{
 
     override def toString = s"Region@${Integer.toHexString(System.identityHashCode(this))}(${incoming.size})"
   }
-  class True(var node: Ctrl) extends Ctrl(){
+  case class True(var node: Ctrl) extends Ctrl(){
     def upstream = Seq(node)
   }
-  class False(var node: Ctrl) extends Ctrl(){
+  case class False(var node: Ctrl) extends Ctrl(){
     def upstream = Seq(node)
   }
-  class Arg(var index: Int, var tpe: IType) extends Val(tpe.size){
+  case class Arg(var index: Int, var tpe: IType) extends Val(tpe.size){
     def upstream = Nil
   }
-  class BinOp(var a: Val, var b: Val, var opcode: BinOp.Code) extends Val(opcode.typeSize){
+  case class BinOp(var a: Val, var b: Val, var opcode: BinOp.Code) extends Val(opcode.typeSize){
     def upstream = Seq(a, b)
   }
   object BinOp extends Codes{
@@ -184,7 +188,7 @@ object SSA{
     val DDIV = new Code(Opcodes.DDIV, 2)
     val DREM = new Code(Opcodes.DREM, 2)
   }
-  class UnaOp(var a: Val, var opcode: UnaOp.Code) extends Val(opcode.typeSize){
+  case class UnaOp(var a: Val, var opcode: UnaOp.Code) extends Val(opcode.typeSize){
     def upstream = Seq(a)
   }
   object UnaOp extends Codes{
@@ -209,7 +213,7 @@ object SSA{
     val F2D = new Code(Opcodes.F2D, 2)
   }
 
-  class UnaBranch(var control: Ctrl, var a: Val, var opcode: UnaBranch.Code) extends Ctrl(){
+  case class UnaBranch(var control: Ctrl, var a: Val, var opcode: UnaBranch.Code) extends Ctrl(){
     def upstream = Seq(control, a)
   }
   object UnaBranch  extends Codes{
@@ -222,7 +226,7 @@ object SSA{
     val IFNULL = new Code(Opcodes.IFNULL)
     val IFNONNULL = new Code(Opcodes.IFNONNULL)
   }
-  class BinBranch(var control: Ctrl, var a: Val, var b: Val, var opcode: BinBranch.Code) extends Ctrl(){
+  case class BinBranch(var control: Ctrl, var a: Val, var b: Val, var opcode: BinBranch.Code) extends Ctrl(){
     def upstream = Seq(control, a, b)
   }
 
@@ -236,75 +240,75 @@ object SSA{
     val IF_ACMPEQ = new Code(Opcodes.IF_ACMPEQ)
     val IF_ACMPNE = new Code(Opcodes.IF_ACMPNE)
   }
-  class ReturnVal(var control: Ctrl, var a: Val) extends Ctrl(){
+  case class ReturnVal(var control: Ctrl, var a: Val) extends Ctrl(){
     def upstream = Seq(control, a)
   }
-  class Return(var control: Ctrl) extends Ctrl(){
+  case class Return(var control: Ctrl) extends Ctrl(){
     def upstream = Seq(control)
   }
-  class AThrow(var src: Val) extends Ctrl(){
+  case class AThrow(var src: Val) extends Ctrl(){
     def upstream = Seq(src)
   }
-  class TableSwitch(var src: Val, min: Int, max: Int) extends Ctrl(){
+  case class TableSwitch(var src: Val, min: Int, max: Int) extends Ctrl(){
     def upstream = Seq(src)
   }
-  class LookupSwitch(var src: Val, var keys: Seq[Int]) extends Ctrl(){
+  case class LookupSwitch(var src: Val, var keys: Seq[Int]) extends Ctrl(){
     def upstream = Seq(src)
   }
 
-  class CheckCast(var src: Val, var desc: JType) extends Val(0){
+  case class CheckCast(var src: Val, var desc: JType) extends Val(0){
     def upstream = Seq(src)
   }
-  class ArrayLength(var src: Val) extends Val(1){
+  case class ArrayLength(var src: Val) extends Val(1){
     def upstream = Seq(src)
   }
-  class InstanceOf(var src: Val, var desc: JType) extends Val(1){
+  case class InstanceOf(var src: Val, var desc: JType) extends Val(1){
     def upstream = Seq(src)
   }
-  class PushI(var value: Int) extends Val(1){
+  case class PushI(var value: Int) extends Val(1){
     def upstream = Nil
   }
-  class PushJ(var value: Long) extends Val(2){
+  case class PushJ(var value: Long) extends Val(2){
     def upstream = Nil
   }
-  class PushF(var value: Float) extends Val(1){
+  case class PushF(var value: Float) extends Val(1){
     def upstream = Nil
   }
-  class PushD(var value: Double) extends Val(2){
+  case class PushD(var value: Double) extends Val(2){
     def upstream = Nil
   }
-  class PushS(var value: String) extends Val(1){
+  case class PushS(var value: String) extends Val(1){
     def upstream = Nil
   }
-  class PushNull() extends Val(1){
+  case class PushNull() extends Val(1){
     def upstream = Nil
   }
-  class PushCls(var value: JType.Cls) extends Val(1){
+  case class PushCls(var value: JType.Cls) extends Val(1){
     def upstream = Nil
   }
 
-  class InvokeStatic(var srcs: Seq[Val],
+  case class InvokeStatic(var srcs: Seq[Val],
                           var cls: JType.Cls,
                           var name: String,
                           var desc: Desc) extends Val(desc.ret.size){
     def upstream = srcs
   }
 
-  class InvokeSpecial(var srcs: Seq[Val],
+  case class InvokeSpecial(var srcs: Seq[Val],
                            var cls: JType.Cls,
                            var name: String,
                            var desc: Desc) extends Val(desc.ret.size){
     def upstream = srcs
   }
 
-  class InvokeVirtual(var srcs: Seq[Val],
+  case class InvokeVirtual(var srcs: Seq[Val],
                            var cls: JType.Cls,
                            var name: String,
                            var desc: Desc) extends Val(desc.ret.size){
     def upstream = srcs
   }
 
-  class InvokeDynamic(var name: String,
+  case class InvokeDynamic(var name: String,
                            var desc: String,
                            var bsTag: Int,
                            var bsOwner: String,
@@ -314,38 +318,38 @@ object SSA{
     def upstream = Nil
   }
 
-  class New(var cls: JType.Cls) extends Val(1){
+  case class New(var cls: JType.Cls) extends Val(1){
     def upstream = Nil
   }
-  class NewArray(var src: Val, var typeRef: JType) extends Val(1){
+  case class NewArray(var src: Val, var typeRef: JType) extends Val(1){
     def upstream = Seq(src)
   }
-  class MultiANewArray(var desc: JType, var dims: Seq[Val]) extends Val(1){
+  case class MultiANewArray(var desc: JType, var dims: Seq[Val]) extends Val(1){
     def upstream = Nil
   }
-  class PutStatic(var src: Val, var cls: JType.Cls, var name: String, var desc: JType) extends Val(0){
+  case class PutStatic(var src: Val, var cls: JType.Cls, var name: String, var desc: JType) extends Val(0){
     def upstream = Seq(src)
   }
-  class GetStatic(var cls: JType.Cls, var name: String, var desc: JType) extends Val(desc.size){
+  case class GetStatic(var cls: JType.Cls, var name: String, var desc: JType) extends Val(desc.size){
     def upstream = Nil
   }
-  class PutField(var src: Val, var obj: Val, var owner: JType.Cls, var name: String, var desc: JType) extends Val(0){
+  case class PutField(var src: Val, var obj: Val, var owner: JType.Cls, var name: String, var desc: JType) extends Val(0){
     def upstream = Seq(src, obj)
   }
-  class GetField(var obj: Val, var owner: JType.Cls, var name: String, var desc: JType) extends Val(desc.size){
+  case class GetField(var obj: Val, var owner: JType.Cls, var name: String, var desc: JType) extends Val(desc.size){
     def upstream = Seq(obj)
   }
-  class PutArray(var src: Val, var indexSrc: Val, var arrayValue: Val) extends Val(0){
+  case class PutArray(var src: Val, var indexSrc: Val, var arrayValue: Val) extends Val(0){
     def upstream = Seq(src)
   }
-  class GetArray(var indexSrc: Val, var array: Val, var typeSize: Int) extends Val(typeSize){
+  case class GetArray(var indexSrc: Val, var array: Val, var typeSize: Int) extends Val(typeSize){
     def upstream = Seq(indexSrc, array)
   }
 
-  class MonitorEnter(var indexSrc: Val) extends Val(0){
+  case class MonitorEnter(var indexSrc: Val) extends Val(0){
     def upstream = Seq(indexSrc)
   }
-  class MonitorExit(var indexSrc: Val) extends Val(0){
+  case class MonitorExit(var indexSrc: Val) extends Val(0){
     def upstream = Seq(indexSrc)
   }
 }
