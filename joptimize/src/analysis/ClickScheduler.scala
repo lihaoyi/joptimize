@@ -4,8 +4,8 @@ import joptimize.model.SSA
 
 import scala.collection.mutable
 
-abstract class ClickScheduler(dominatorDepth: Map[SSA.Ctrl, Int],
-                              immediateDominator: Map[SSA.Ctrl, SSA.Ctrl],
+abstract class ClickScheduler(dominatorDepth: Map[SSA.Block, Int],
+                              immediateDominator: Map[SSA.Block, SSA.Block],
                               mapping: Map[SSA.Node, String]) {
   def downstream(ssa: SSA.Node): Seq[SSA.Node]
   def upstream(ssa: SSA.Node): Seq[SSA.Val]
@@ -13,17 +13,17 @@ abstract class ClickScheduler(dominatorDepth: Map[SSA.Ctrl, Int],
   def loopNest(block: SSA.Node): Int
   val visited = new java.util.IdentityHashMap[SSA.Val, Unit]()
 
-  val control = mutable.LinkedHashMap.empty[SSA.Val, SSA.Ctrl]
+  val block = mutable.LinkedHashMap.empty[SSA.Val, SSA.Block]
 
   def scheduleEarlyRoot(n: SSA.Node): Unit = {
     for(in <- upstream(n)){
-      if (!control.contains(in)) scheduleEarly(in)
+      if (!block.contains(in)) scheduleEarly(in)
     }
   }
 
   def scheduleEarly(n: SSA.Val): Unit = {
     scheduleEarlyRoot(n)
-    control(n) = upstream(n).map(control).maxBy(dominatorDepth)
+    block(n) = upstream(n).map(block).maxBy(dominatorDepth)
   }
 
   def scheduleLateRoot(n: SSA.Node): Unit = {
@@ -38,15 +38,15 @@ abstract class ClickScheduler(dominatorDepth: Map[SSA.Ctrl, Int],
       visited.put(n, ())
       scheduleLateRoot(n)
       if (!isPinned(n)){
-        var lca: SSA.Ctrl = null
+        var lca: SSA.Block = null
         for(out <- downstream(n)){
           out match{
             case phi: SSA.Phi =>
-              for((ctrl, value) <- phi.incoming){
-                if (value eq n) lca = findLca(lca, ctrl)
+              for((block, value) <- phi.incoming){
+                if (value eq n) lca = findLca(lca, block)
               }
-            case c: SSA.Ctrl => lca = findLca(lca, c)
-            case v: SSA.Val => lca = findLca(lca, control(v))
+            case c: SSA.Block => lca = findLca(lca, c)
+            case v: SSA.Val => lca = findLca(lca, block(v))
           }
         }
 
@@ -54,16 +54,16 @@ abstract class ClickScheduler(dominatorDepth: Map[SSA.Ctrl, Int],
 
 
         var best = lca
-        while(lca != control(n)){
+        while(lca != block(n)){
           if (loopNest(lca) < loopNest(best)) best = lca
           lca = immediateDominator(lca)
         }
-        control(n) = best
+        block(n) = best
 
       }
     }
   }
-  def findLca(a0: SSA.Ctrl, b0: SSA.Ctrl): SSA.Ctrl = {
+  def findLca(a0: SSA.Block, b0: SSA.Block): SSA.Block = {
     if (a0 == null) b0
     else{
       var a = a0

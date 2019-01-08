@@ -19,25 +19,25 @@ import scala.collection.mutable
 
 object CodeGen{
   def findControlFlowGraph(program: Program) = {
-    val controlFlowEdges = mutable.Buffer.empty[(SSA.Ctrl, SSA.Ctrl)]
-    val visited = mutable.LinkedHashSet.empty[SSA.Ctrl]
+    val controlFlowEdges = mutable.Buffer.empty[(SSA.Block, SSA.Block)]
+    val visited = mutable.LinkedHashSet.empty[SSA.Block]
 
-    def rec(current: SSA.Ctrl): Unit = if (!visited(current)){
+    def rec(current: SSA.Block): Unit = if (!visited(current)){
       visited.add(current)
 
       val upstreams = current match{
         case n: SSA.True => Seq(n.node)
         case n: SSA.False => Seq(n.node)
-        case n: SSA.UnaBranch => Seq(n.control)
-        case n: SSA.BinBranch => Seq(n.control)
-        case n: SSA.Return => Seq(n.control)
-        case n: SSA.ReturnVal => Seq(n.control)
+        case n: SSA.UnaBranch => Seq(n.block)
+        case n: SSA.BinBranch => Seq(n.block)
+        case n: SSA.Return => Seq(n.block)
+        case n: SSA.ReturnVal => Seq(n.block)
         case r: SSA.Region => r.incoming
       }
 
-      for(control <- upstreams){
-        rec(control)
-        controlFlowEdges.append(control -> current)
+      for(block <- upstreams){
+        rec(block)
+        controlFlowEdges.append(block -> current)
       }
     }
 
@@ -52,17 +52,14 @@ object CodeGen{
 
     println(
       Renderer.renderGraph(
-        controlFlowEdges.map{
-//          case (l: SSA.Ctrl, r: SSA.Controlled) => (fansi.Color.Cyan(mapping(l)), fansi.Color.Yellow("return"))
-          case (l: SSA.Ctrl, r: SSA.Ctrl) => (l, r)
-        },
+        controlFlowEdges,
         l => fansi.Color.Magenta(mapping(l))
       )
     )
 
     val loopTree = HavlakLoopTree.analyzeLoops(controlFlowEdges)
 
-    def rec(l: HavlakLoopTree.Loop[SSA.Ctrl], depth: Int, label0: List[Int]): Unit = {
+    def rec(l: HavlakLoopTree.Loop[SSA.Block], depth: Int, label0: List[Int]): Unit = {
       val indent = "    " * depth
       val id = label0.reverseIterator.map("-" + _).mkString
       val reducible = if (l.isReducible) "" else " (Irreducible)"
@@ -94,15 +91,15 @@ object CodeGen{
   }
 
   def schedule(program: Program,
-               loopTree: HavlakLoopTree.Loop[SSA.Ctrl],
-               dominatorDepth: Map[SSA.Ctrl, Int],
-               immediateDominator: Map[SSA.Ctrl, SSA.Ctrl],
-               graph: Seq[(SSA.Ctrl, SSA.Ctrl)],
-               mapping: Map[SSA.Node, String]): Map[SSA.Val, SSA.Ctrl] = {
+               loopTree: HavlakLoopTree.Loop[SSA.Block],
+               dominatorDepth: Map[SSA.Block, Int],
+               immediateDominator: Map[SSA.Block, SSA.Block],
+               graph: Seq[(SSA.Block, SSA.Block)],
+               mapping: Map[SSA.Node, String]): Map[SSA.Val, SSA.Block] = {
     val (allVertices, roots, downstreamEdges) =
       Util.breadthFirstAggregation[SSA.Node](program.allTerminals.toSet)(_.upstream)
     val loopNestMap = mutable.LinkedHashMap.empty[SSA.Node, Int]
-    def recLoop(loop: HavlakLoopTree.Loop[SSA.Ctrl], depth: Int): Unit = {
+    def recLoop(loop: HavlakLoopTree.Loop[SSA.Block], depth: Int): Unit = {
       loop.basicBlocks.foreach(loopNestMap(_) = depth)
       loop.children.foreach(recLoop(_, depth + 1))
     }
@@ -116,7 +113,7 @@ object CodeGen{
 
       override def upstream(ssa: SSA.Node) = upstreamMap.getOrElse(ssa, Nil).collect{case ssa: SSA.Val => ssa}
 
-      override def isPinned(ssa: SSA.Node) = ssa.isInstanceOf[SSA.Ctrl]
+      override def isPinned(ssa: SSA.Node) = ssa.isInstanceOf[SSA.Block]
 
       override def loopNest(block: SSA.Node) = {
         assert(block != null)
@@ -124,26 +121,26 @@ object CodeGen{
       }
     }
 
-    val startControl = (graph.map(_._1).toSet -- graph.map(_._2)).head
+    val startBlock = (graph.map(_._1).toSet -- graph.map(_._2)).head
     allVertices.collect{
-      case c: SSA.Phi => scheduler.control(c) = c.control
-      case c: SSA.Val if c.upstream.isEmpty => scheduler.control(c) = startControl
+      case c: SSA.Phi => scheduler.block(c) = c.block
+      case c: SSA.Val if c.upstream.isEmpty => scheduler.block(c) = startBlock
     }
 
     allVertices.collect{
       case scheduleRoot: SSA.Phi => scheduler.scheduleEarlyRoot(scheduleRoot)
-      case scheduleRoot: SSA.Ctrl => scheduler.scheduleEarlyRoot(scheduleRoot)
+      case scheduleRoot: SSA.Block => scheduler.scheduleEarlyRoot(scheduleRoot)
     }
 
-    pprint.log(scheduler.control.map{case (k, v) => (k, mapping(v))}, height=9999)
+    pprint.log(scheduler.block.map{case (k, v) => (k, mapping(v))}, height=9999)
 
     allVertices.collect{
-      case scheduleRoot: SSA.Ctrl => scheduler.scheduleLateRoot(scheduleRoot)
+      case scheduleRoot: SSA.Block => scheduler.scheduleLateRoot(scheduleRoot)
     }
 
-    pprint.log(scheduler.control.map{case (k, v) => (k, mapping(v))}, height=9999)
+    pprint.log(scheduler.block.map{case (k, v) => (k, mapping(v))}, height=9999)
 
-    scheduler.control.filter{case (k, v) => v != null}.toMap
+    scheduler.block.filter{case (k, v) => v != null}.toMap
   }
 
   def findDominators[T](edges: Seq[(T, T)]): (Map[T, T], Map[T, Int]) = {

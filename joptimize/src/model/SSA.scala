@@ -15,7 +15,7 @@ object SSA{
     }
     down match{
       case phi: SSA.Phi =>
-        phi.control = swap(phi.control)
+        phi.block = swap(phi.block)
         phi.incoming = phi.incoming.map{case (k, v) => (swap(k), swap(v))}
       case n: SSA.Arg =>
       case n: SSA.BinOp =>
@@ -57,16 +57,16 @@ object SSA{
       case n: SSA.True => n.node = swap(n.node)
       case n: SSA.False => n.node = swap(n.node)
       case n: SSA.UnaBranch =>
-        n.control = swap(n.control)
+        n.block = swap(n.block)
         n.a = swap(n.a)
       case n: SSA.BinBranch =>
-        n.control = swap(n.control)
+        n.block = swap(n.block)
         n.a = swap(n.a)
         n.b = swap(n.b)
       case n: SSA.ReturnVal =>
-        n.control = swap(n.control)
+        n.block = swap(n.block)
         n.a = swap(n.a)
-      case n: SSA.Return => n.control = swap(n.control)
+      case n: SSA.Return => n.block = swap(n.block)
       case n: SSA.AThrow => n.src = swap(n.src)
       case n: SSA.TableSwitch => n.src = swap(n.src)
       case n: SSA.LookupSwitch => n.src = swap(n.src)
@@ -82,8 +82,6 @@ object SSA{
     }
     def upstream: Seq[Node]
     val downstream = mutable.LinkedHashSet.empty[Node]
-    lazy val upstreamVals = upstream.collect{case s: Val => s}
-    lazy val upstreamCtrls = upstream.collect{case s: Ctrl => s}
 
     def replaceWith(other: Node) = {
       for(up <- upstream){
@@ -112,8 +110,8 @@ object SSA{
     }
 
   }
-  sealed abstract class Ctrl() extends Node{
-    override def update(): Ctrl = {
+  sealed abstract class Block() extends Node{
+    override def update(): Block = {
       super.update()
       this
     }
@@ -127,20 +125,20 @@ object SSA{
     def lookup(i: Int) = lookup0(i)
   }
 
-  class Phi(var control: Ctrl, var incoming: Set[(SSA.Ctrl, SSA.Val)], var typeSize: Int) extends Val(typeSize){
-    override def upstream: Seq[SSA.Node] = Seq(control) ++ incoming.flatMap(x => Seq(x._1, x._2)).toArray[SSA.Node]
+  class Phi(var block: Block, var incoming: Set[(SSA.Block, SSA.Val)], var typeSize: Int) extends Val(typeSize){
+    override def upstream: Seq[SSA.Node] = Seq(block) ++ incoming.flatMap(x => Seq(x._1, x._2)).toArray[SSA.Node]
     override def toString = s"Phi@${Integer.toHexString(System.identityHashCode(this))}(${incoming.size})"
   }
 
-  class Region(var insnIndex: Int, var incoming: Set[Ctrl]) extends Ctrl(){
+  class Region(var insnIndex: Int, var incoming: Set[Block]) extends Block(){
     def upstream = incoming.toSeq
 
     override def toString = s"Region@${Integer.toHexString(System.identityHashCode(this))}(${incoming.size})"
   }
-  case class True(var node: Ctrl) extends Ctrl(){
+  case class True(var node: Block) extends Block(){
     def upstream = Seq(node)
   }
-  case class False(var node: Ctrl) extends Ctrl(){
+  case class False(var node: Block) extends Block(){
     def upstream = Seq(node)
   }
   case class Arg(var index: Int, var tpe: IType) extends Val(tpe.size){
@@ -213,8 +211,8 @@ object SSA{
     val F2D = new Code(Opcodes.F2D, 2)
   }
 
-  case class UnaBranch(var control: Ctrl, var a: Val, var opcode: UnaBranch.Code) extends Ctrl(){
-    def upstream = Seq(control, a)
+  case class UnaBranch(var block: Block, var a: Val, var opcode: UnaBranch.Code) extends Block(){
+    def upstream = Seq(block, a)
   }
   object UnaBranch  extends Codes{
     val IFEQ = new Code(Opcodes.IFEQ)
@@ -226,8 +224,8 @@ object SSA{
     val IFNULL = new Code(Opcodes.IFNULL)
     val IFNONNULL = new Code(Opcodes.IFNONNULL)
   }
-  case class BinBranch(var control: Ctrl, var a: Val, var b: Val, var opcode: BinBranch.Code) extends Ctrl(){
-    def upstream = Seq(control, a, b)
+  case class BinBranch(var block: Block, var a: Val, var b: Val, var opcode: BinBranch.Code) extends Block(){
+    def upstream = Seq(block, a, b)
   }
 
   object BinBranch  extends Codes{
@@ -240,19 +238,19 @@ object SSA{
     val IF_ACMPEQ = new Code(Opcodes.IF_ACMPEQ)
     val IF_ACMPNE = new Code(Opcodes.IF_ACMPNE)
   }
-  case class ReturnVal(var control: Ctrl, var a: Val) extends Ctrl(){
-    def upstream = Seq(control, a)
+  case class ReturnVal(var block: Block, var a: Val) extends Block(){
+    def upstream = Seq(block, a)
   }
-  case class Return(var control: Ctrl) extends Ctrl(){
-    def upstream = Seq(control)
+  case class Return(var block: Block) extends Block(){
+    def upstream = Seq(block)
   }
-  case class AThrow(var src: Val) extends Ctrl(){
+  case class AThrow(var src: Val) extends Block(){
     def upstream = Seq(src)
   }
-  case class TableSwitch(var src: Val, min: Int, max: Int) extends Ctrl(){
+  case class TableSwitch(var src: Val, min: Int, max: Int) extends Block(){
     def upstream = Seq(src)
   }
-  case class LookupSwitch(var src: Val, var keys: Seq[Int]) extends Ctrl(){
+  case class LookupSwitch(var src: Val, var keys: Seq[Int]) extends Block(){
     def upstream = Seq(src)
   }
 

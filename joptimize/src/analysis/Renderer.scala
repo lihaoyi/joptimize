@@ -49,7 +49,7 @@ object Renderer {
     )
   }
 
-  def renderGraph(edges: Seq[(SSA.Ctrl, SSA.Ctrl)], coloring: SSA.Ctrl => fansi.Str): fansi.Str = {
+  def renderGraph(edges: Seq[(SSA.Block, SSA.Block)], coloring: SSA.Block => fansi.Str): fansi.Str = {
     val allVertices = edges.flatMap(x => Seq(x._1, x._2)).distinct
     val vertexToIndex = allVertices.zipWithIndex.toMap
     val edgeGroups = edges.groupBy(_._2).map{case (k, v) => (k, v.map(_._1))}
@@ -71,7 +71,7 @@ object Renderer {
     fansi.Str.join(out:_*)
   }
 
-  def renderSSA(program: Program, scheduledVals: Map[SSA.Val, SSA.Ctrl] = Map.empty): (fansi.Str, Map[SSA.Node, String]) = {
+  def renderSSA(program: Program, scheduledVals: Map[SSA.Val, SSA.Block] = Map.empty): (fansi.Str, Map[SSA.Node, String]) = {
 
     val allTerminals = program.allTerminals
     val (allVertices, roots, downstreamEdges) =
@@ -85,7 +85,7 @@ object Renderer {
 
     val finalOrderingMap = sortVerticesForPrinting(allVertices, downstreamEdges){
       case (_, _: SSA.Phi | _: SSA.Region) => true
-      case (v: SSA.Val, c: SSA.Ctrl) => true
+      case (v: SSA.Val, c: SSA.Block) => true
       case _ => false
     }
 
@@ -101,7 +101,7 @@ object Renderer {
           k.upstream.nonEmpty && (x.distinct.size > 1 || allTerminals.contains(k) || scheduled)
         }
         .keySet ++
-        allVertices.collect{ case k: SSA.Phi => k case b: SSA.Ctrl => b}
+        allVertices.collect{ case k: SSA.Phi => k case b: SSA.Block => b}
 
     val out = mutable.Buffer.empty[Str]
 
@@ -109,21 +109,20 @@ object Renderer {
 
     for((r: SSA.Val, i) <- saveable.zipWithIndex) savedLocals.put(r, i)
 
-    val savedControls = mutable.LinkedHashMap.empty[SSA.Ctrl, (Int, String)]
-    def getControlId(c: SSA.Ctrl) = fansi.Color.Magenta(getControlId0(c)._2)
-    def getControlId0(c: SSA.Ctrl): (Int, String) =
-      savedControls.getOrElseUpdate(
+    val savedBlocks = mutable.LinkedHashMap.empty[SSA.Block, (Int, String)]
+    def getBlockId(c: SSA.Block) = fansi.Color.Magenta(getBlockId0(c)._2)
+    def getBlockId0(c: SSA.Block): (Int, String) =
+      savedBlocks.getOrElseUpdate(
         c,
-        (savedControls.size, c match{
-          case _: SSA.Return => "return" + savedControls.size
-          case _: SSA.ReturnVal => "return" + savedControls.size
-          case _: SSA.AThrow => "return" + savedControls.size
-          case n: SSA.True => "true" + getControlId0(n.node)._1
-          case n: SSA.False => "false" + getControlId0(n.node)._1
-          case r: SSA.Region => "region" + savedControls.size
-          case _: SSA.UnaBranch => "branch" + savedControls.size
-          case _: SSA.BinBranch => "branch" + savedControls.size
-          case _ => "ctrl" + savedControls.size
+        (savedBlocks.size, c match{
+          case _: SSA.Return => "return" + savedBlocks.size
+          case _: SSA.ReturnVal => "return" + savedBlocks.size
+          case _: SSA.AThrow => "return" + savedBlocks.size
+          case n: SSA.True => "true" + getBlockId0(n.node)._1
+          case n: SSA.False => "false" + getBlockId0(n.node)._1
+          case r: SSA.Region => "region" + savedBlocks.size
+          case _: SSA.UnaBranch => "branch" + savedBlocks.size
+          case _: SSA.BinBranch => "branch" + savedBlocks.size
         })
       )
 
@@ -132,11 +131,11 @@ object Renderer {
     def literal(lhs: String) = pprint.Tree.Literal(lhs)
     def infix(lhs: Tree, op: String, rhs: Tree) = pprint.Tree.Infix(lhs, op, rhs)
 
-    def renderControl(control: SSA.Ctrl) = {
-      atom(getControlId(control).toString)
+    def renderBlock(block: SSA.Block) = {
+      atom(getBlockId(block).toString)
     }
     def rec(ssa: SSA.Node): pprint.Tree = ssa match{
-      case x: SSA.Ctrl => atom(getControlId(x).toString)
+      case x: SSA.Block => atom(getBlockId(x).toString)
       case x: SSA.Val =>
         if (savedLocals.containsKey(x)) atom(fansi.Color.Cyan("local" + savedLocals.get(ssa)).toString())
         else recVal(x)
@@ -144,9 +143,9 @@ object Renderer {
 
     def recVal(ssa: SSA.Val): Tree = ssa match{
       case phi: SSA.Phi =>
-        val ctrl = Seq(renderControl(phi.control))
-        val children = phi.incoming.map{case (ctrl, ssa) => infix(renderControl(ctrl), ":", rec(ssa))}.toSeq
-        apply("phi", ctrl ++ children:_*)
+        val block = Seq(renderBlock(phi.block))
+        val children = phi.incoming.map{case (block, ssa) => infix(renderBlock(block), ":", rec(ssa))}.toSeq
+        apply("phi", block ++ children:_*)
       case n: SSA.Arg => atom(fansi.Color.Cyan("arg" + n.index).toString)
       case n: SSA.BinOp => infix(rec(n.a), binOpString(n.opcode), rec(n.b))
       case n: SSA.UnaOp => apply(unaryOpString(n.opcode), rec(n.a))
@@ -177,39 +176,39 @@ object Renderer {
       case n: SSA.MonitorExit => ???
     }
 
-    def recCtrl(ctrl: SSA.Ctrl): (fansi.Str, Tree) = ctrl match{
-      case n: SSA.True => (getControlId(ctrl), apply("true", atom(getControlId(n.node).toString)))
-      case n: SSA.False => (getControlId(ctrl), apply("false", atom(getControlId(n.node).toString)))
+    def recBlock(block: SSA.Block): (fansi.Str, Tree) = block match{
+      case n: SSA.True => (getBlockId(block), apply("true", atom(getBlockId(n.node).toString)))
+      case n: SSA.False => (getBlockId(block), apply("false", atom(getBlockId(n.node).toString)))
 
       case reg: SSA.Region =>
-        val rhs = apply("region" + reg.insnIndex, reg.upstream.iterator.map(x => atom(getControlId(x).toString)).toSeq:_*)
-        (getControlId(reg), rhs)
+        val rhs = apply("region" + reg.insnIndex, reg.upstream.iterator.map(x => atom(getBlockId(x).toString)).toSeq:_*)
+        (getBlockId(reg), rhs)
 
       case n: SSA.AThrow => ???
       case n: SSA.TableSwitch => ???
       case n: SSA.LookupSwitch => ???
 
       case n: SSA.ReturnVal =>
-        (getControlId(ctrl), apply("return", atom(getControlId(n.control).toString()), rec(n.a)))
+        (getBlockId(block), apply("return", atom(getBlockId(n.block).toString()), rec(n.a)))
 
       case n: SSA.Return =>
-        (getControlId(ctrl), apply("return", atom(getControlId(n.control).toString())))
+        (getBlockId(block), apply("return", atom(getBlockId(n.block).toString())))
 
       case n: SSA.UnaBranch =>
-        val rhs = apply("if", renderControl(n.control), rec(n.a), atom(unaryBranchString(n.opcode)))
-        (getControlId(n), rhs)
+        val rhs = apply("if", renderBlock(n.block), rec(n.a), atom(unaryBranchString(n.opcode)))
+        (getBlockId(n), rhs)
 
       case n: SSA.BinBranch =>
-        val rhs = apply("if", renderControl(n.control), infix(rec(n.a), binBranchString(n.opcode), rec(n.b)))
-        (getControlId(n), rhs)
+        val rhs = apply("if", renderBlock(n.block), infix(rec(n.a), binBranchString(n.opcode), rec(n.b)))
+        (getBlockId(n), rhs)
     }
 
     pprint.log(finalOrderingMap)
     def renderStmt(r: SSA.Node) = {
       val (lhs, rhs) = r match{
-        case r: SSA.Ctrl =>
+        case r: SSA.Block =>
           out.append("\n")
-          recCtrl(r)
+          recBlock(r)
         case r: SSA.Val => (fansi.Color.Cyan("local" + savedLocals.get(r)), recVal(r))
       }
 
@@ -223,7 +222,7 @@ object Renderer {
 
     if (scheduledVals.nonEmpty){
       for(r0 <- saveable.toSeq.sortBy(finalOrderingMap)){
-        if (r0.isInstanceOf[SSA.Ctrl]){
+        if (r0.isInstanceOf[SSA.Block]){
           val blockValues = scheduledVals.collect{case (a, b) if b == r0 && saveable(a) => a }
           for(r <- Seq(r0) ++ blockValues) renderStmt(r)
         }
@@ -233,7 +232,7 @@ object Renderer {
     }
 
     import collection.JavaConverters._
-    val mapping = (savedLocals.asScala.mapValues("local" + _) ++ savedControls.mapValues(_._2)).toMap
+    val mapping = (savedLocals.asScala.mapValues("local" + _) ++ savedBlocks.mapValues(_._2)).toMap
     (fansi.Str.join(out:_*), mapping)
   }
 

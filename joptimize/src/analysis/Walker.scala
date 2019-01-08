@@ -48,12 +48,12 @@ class Walker(isInterface: JType.Cls => Boolean,
         }
         .flatten
         .sortBy(insns.indexOf)
-      val regionStarts = mutable.LinkedHashMap(blockStarts.map(i => i -> (new SSA.Region(insns.indexOf(i), Set()): SSA.Ctrl)):_*)
+      val regionStarts = mutable.LinkedHashMap(blockStarts.map(i => i -> (new SSA.Region(insns.indexOf(i), Set()): SSA.Block)):_*)
 
       //      regionStarts.keys.map("RSK " + Renderer.render(mn.instructions, _)).foreach(println)
-      def findStartRegion(insn: AbstractInsnNode): SSA.Ctrl = {
+      def findStartRegion(insn: AbstractInsnNode): SSA.Block = {
         var current = insn
-        var region: SSA.Ctrl = null
+        var region: SSA.Block = null
         while({
           //          println("XXX " + Renderer.render(mn.instructions, current))
           regionStarts.get(current) match{
@@ -79,7 +79,7 @@ class Walker(isInterface: JType.Cls => Boolean,
       )
       def frameTop(i: Int, n: Int) = frames(i).getStack(frames(i).getStackSize - 1 - n)
 
-      def mergeControls(lhs0: AbstractInsnNode, rhs: SSA.Ctrl, rhsInsn: Option[AbstractInsnNode] = None): Unit = {
+      def mergeBlocks(lhs0: AbstractInsnNode, rhs: SSA.Block, rhsInsn: Option[AbstractInsnNode] = None): Unit = {
         println(Renderer.renderInsns(mn.instructions, lhs0))
         val lhs = regionStarts(lhs0)
         (lhs, rhs) match{
@@ -99,25 +99,25 @@ class Walker(isInterface: JType.Cls => Boolean,
         case ((ATHROW, insn), i) => (insn, new SSA.AThrow(frameTop(i, 0)), i) :: Nil
 
         case ((GOTO, insn: JumpInsnNode), i) =>
-          mergeControls(insn.label, findStartRegion(insn), Some(insn))
+          mergeBlocks(insn.label, findStartRegion(insn), Some(insn))
           Nil
 
         case ((IFEQ | IFNE | IFLT | IFGE | IFGT | IFLE, insn: JumpInsnNode), i) =>
           val n = new SSA.UnaBranch(findStartRegion(insn), frameTop(i, 0), SSA.UnaBranch.lookup(insn.getOpcode))
-          mergeControls(insn.label, new SSA.True(n))
-          mergeControls(insn.getNext, new SSA.False(n))
+          mergeBlocks(insn.label, new SSA.True(n))
+          mergeBlocks(insn.getNext, new SSA.False(n))
 
           Nil
 
         case ((IF_ICMPEQ | IF_ICMPNE | IF_ICMPLT | IF_ICMPGE | IF_ICMPGT | IF_ICMPLE | IF_ACMPEQ | IF_ACMPNE, insn: JumpInsnNode), i) =>
           val startReg = findStartRegion(insn)
           val n = new SSA.BinBranch(startReg, frameTop(i, 0), frameTop(i, 1), SSA.BinBranch.lookup(insn.getOpcode))
-          mergeControls(insn.label, new SSA.True(n))
-          mergeControls(insn.getNext, new SSA.False(n))
+          mergeBlocks(insn.label, new SSA.True(n))
+          mergeBlocks(insn.getNext, new SSA.False(n))
           Nil
 
         case ((_, insn), i) if Option(insn.getNext).exists(regionStarts.contains) =>
-          mergeControls(insn.getNext, findStartRegion(insn), Some(insn))
+          mergeBlocks(insn.getNext, findStartRegion(insn), Some(insn))
           Nil
       }.flatten
 
