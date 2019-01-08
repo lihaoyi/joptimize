@@ -20,7 +20,7 @@ import scala.collection.mutable
 object CodeGen{
   def findControlFlowGraph(program: Program) = {
     val controlFlowEdges = mutable.Buffer.empty[(SSA.Ctrl, SSA.Ctrl)]
-    val visited = mutable.Set.empty[SSA.Ctrl]
+    val visited = mutable.LinkedHashSet.empty[SSA.Ctrl]
 
     def rec(current: SSA.Ctrl): Unit = if (!visited(current)){
       visited.add(current)
@@ -101,7 +101,7 @@ object CodeGen{
                mapping: Map[SSA.Node, String]): Map[SSA.Val, SSA.Ctrl] = {
     val (allVertices, roots, downstreamEdges) =
       Util.breadthFirstAggregation[SSA.Node](program.allTerminals.toSet)(_.upstream)
-    val loopNestMap = mutable.Map.empty[SSA.Node, Int]
+    val loopNestMap = mutable.LinkedHashMap.empty[SSA.Node, Int]
     def recLoop(loop: HavlakLoopTree.Loop[SSA.Ctrl], depth: Int): Unit = {
       loop.basicBlocks.foreach(loopNestMap(_) = depth)
       loop.children.foreach(recLoop(_, depth + 1))
@@ -185,7 +185,7 @@ object CodeGen{
 //            inferredTypes: util.IdentityHashMap[SSA, IType]): (InsnList, Set[Int]) = {
 //    val allTerminals = allVisitedBlocks.flatMap(_.terminalInsns)
 //    val subCallArgLiveness = allVisitedBlocks.flatMap(_.subCallArgLiveness).toMap
-//    val mergeLookup = mutable.Map.empty[SSA, mutable.Buffer[SSA]]
+//    val mergeLookup = mutable.LinkedHashMap.empty[SSA, mutable.Buffer[SSA]]
 //
 //    for((lhs, rhs) <- merges){
 //      lhs.zipForeach(rhs){(l, r) =>

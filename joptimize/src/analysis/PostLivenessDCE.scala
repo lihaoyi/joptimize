@@ -30,8 +30,8 @@ object PostLivenessDCE {
     val methodSigMap = allMethodSigs.toMap
 
     val queue = entrypoints.to[mutable.Queue]
-    val seenMethods = mutable.Set.empty[MethodSig]
-    val seenClasses = mutable.Set.empty[JType.Cls]
+    val seenMethods = mutable.LinkedHashSet.empty[MethodSig]
+    val seenClasses = mutable.LinkedHashSet.empty[JType.Cls]
 
     while(queue.nonEmpty){
       val current = queue.dequeue()

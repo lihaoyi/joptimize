@@ -131,6 +131,18 @@ public class Loops {
         return c;
     }
 
+    @joptimize.Test(inputs = {0, 1, 2, 3, 4, 5, 6, 7, 9})
+    public static int nestedLiftableFor2(int a) {
+        int c = 1;
+        for (int i = 0; i < a; i++) {
+            int e = a + 7;
+            for(int j = 0; j < a; j++){
+                c += e;
+            }
+        }
+        return c;
+    }
+
 
     public static int nullWhile(int a) {
         int c = 1;

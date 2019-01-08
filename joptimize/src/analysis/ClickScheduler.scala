@@ -13,7 +13,7 @@ abstract class ClickScheduler(dominatorDepth: Map[SSA.Ctrl, Int],
   def loopNest(block: SSA.Node): Int
   val visited = new java.util.IdentityHashMap[SSA.Val, Unit]()
 
-  val control = mutable.Map.empty[SSA.Val, SSA.Ctrl]
+  val control = mutable.LinkedHashMap.empty[SSA.Val, SSA.Ctrl]
 
   def scheduleEarlyRoot(n: SSA.Node): Unit = {
     for(in <- upstream(n)){

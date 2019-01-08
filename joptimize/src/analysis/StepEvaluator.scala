@@ -19,7 +19,7 @@ import scala.collection.mutable
   * generated SSA nodes; we do this to allow immediate constant folding if the
   * node's type is specific enough to be a concrete value.
   */
-class StepEvaluator(merges: mutable.Set[SSA.Phi],
+class StepEvaluator(merges: mutable.LinkedHashSet[SSA.Phi],
                     blockStartIndex: Int => Boolean,
                     findBlockStart: Int => SSA.Ctrl,
                     findBlockDest: Int => SSA.Ctrl) extends joptimize.bytecode.Interpreter[SSA.Val]{

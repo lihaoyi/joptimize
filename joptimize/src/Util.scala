@@ -45,7 +45,7 @@ object Util{
 
     // Walk the graph backwards, from the terminal nodes, to find the
     // reverse-terminal nodes which are part of the overlap
-    val backMap = mutable.Map.empty[T, List[T]]
+    val backMap = mutable.LinkedHashMap.empty[T, List[T]]
     for{
       backEdges <- backEdgess
       (src, dest) <- backEdges
@@ -60,8 +60,8 @@ object Util{
 
   def breadthFirstAggregation[T](start: Set[T])(edges: T => Seq[T]): (Set[T], Set[T], Seq[(T, T)]) = {
     val queue = start.to[mutable.Queue]
-    val seen = mutable.Set.empty[T]
-    val terminals = mutable.Set.empty[T]
+    val seen = mutable.LinkedHashSet.empty[T]
+    val terminals = mutable.LinkedHashSet.empty[T]
     val backEdges = mutable.Buffer.empty[(T, T)]
     while(queue.nonEmpty){
       val current = queue.dequeue()
@@ -89,7 +89,7 @@ object Util{
       case (CType.Intersect(classes), orig: JType) => ???
     }
   }
-  def clone(input: AbstractInsnNode, labelMapping: mutable.Map[AbstractInsnNode, AbstractInsnNode]) = {
+  def clone(input: AbstractInsnNode, labelMapping: mutable.LinkedHashMap[AbstractInsnNode, AbstractInsnNode]) = {
     labelMapping.getOrElseUpdate(input,
       input match{
         case i: FieldInsnNode => new FieldInsnNode(i.getOpcode, i.owner, i.name, i.desc)
@@ -118,7 +118,7 @@ object Util{
     // do not have an <init> method and if unused won't be picked up by the
     // abstract interpreter, but still need to be present since they're
     // implemented by the classes we do use
-    val visitedInterfaces = mutable.Set.empty[String]
+    val visitedInterfaces = mutable.LinkedHashSet.empty[String]
     val queue = classNodes.flatMap(_.interfaces.asScala).distinct.to[mutable.Queue]
     while (queue.nonEmpty) {
       val current = queue.dequeue()

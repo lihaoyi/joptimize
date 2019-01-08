@@ -21,7 +21,7 @@ object JOptimize{
 
     val classNodeMap = classFileMap.map{case (k, v) => (JType.Cls(v.name), v)}
     val subtypeMap = {
-      val map = mutable.Map.empty[JType.Cls, List[JType.Cls]]
+      val map = mutable.LinkedHashMap.empty[JType.Cls, List[JType.Cls]]
       for{
         (k, v) <- classNodeMap
         sup <- v.interfaces.asScala ++ Option(v.superName)
@@ -34,7 +34,7 @@ object JOptimize{
       m <- cls.methods.iterator().asScala
     } yield (MethodSig(cls.name, m.name, Desc.read(m.desc), (m.access & Opcodes.ACC_STATIC) != 0), m)
 
-    val visitedMethods = collection.mutable.Map.empty[(MethodSig, Seq[IType]), Walker.MethodResult]
+    val visitedMethods = collection.mutable.LinkedHashMap.empty[(MethodSig, Seq[IType]), Walker.MethodResult]
 
     def leastUpperBound(classes: Seq[JType.Cls]) = {
       Util.leastUpperBound(classes.toSet) { cls =>
@@ -78,7 +78,7 @@ object JOptimize{
       }
       output
     }
-    val visitedClasses = mutable.Set.empty[JType.Cls]
+    val visitedClasses = mutable.LinkedHashSet.empty[JType.Cls]
     val interp = new Walker(
       isInterface = s => (classNodeMap(s).access & Opcodes.ACC_INTERFACE) != 0,
       lookupMethod = sig => originalMethods.get(sig),

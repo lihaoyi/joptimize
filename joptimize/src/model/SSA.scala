@@ -81,7 +81,7 @@ object SSA{
       assert(brokenDowns.isEmpty, (this, brokenDowns))
     }
     def upstream: Seq[Node]
-    val downstream = mutable.Set.empty[Node]
+    val downstream = mutable.LinkedHashSet.empty[Node]
     lazy val upstreamVals = upstream.collect{case s: Val => s}
     lazy val upstreamCtrls = upstream.collect{case s: Ctrl => s}
 
@@ -115,7 +115,7 @@ object SSA{
     }
   }
   trait Codes{
-    private[this] val lookup0 = mutable.Map.empty[Int, Code]
+    private[this] val lookup0 = mutable.LinkedHashMap.empty[Int, Code]
     class Code private[SSA] (val i: Int, val typeSize: Int = 0)(implicit name: sourcecode.Name){
       lookup0(i) = this
       override def toString = name.value

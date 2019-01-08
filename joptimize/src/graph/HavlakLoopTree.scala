@@ -99,7 +99,7 @@ object HavlakLoopTree {
   // Simple depth first traversal along out edges with node numbering.
   //
   def DFS[T](currentNode: T,
-             number: scala.collection.mutable.Map[T, Int],
+             number: scala.collection.mutable.LinkedHashMap[T, Int],
              last: Array[Int],
              current: Int,
              outEdges: Map[T, Seq[T]]): Int = {
@@ -137,7 +137,7 @@ object HavlakLoopTree {
     val nonBackPreds    = new Array[Set[Int]](size)
     val backPreds       = new Array[Set[Int]](size)
 
-    val number          = scala.collection.mutable.Map[T, Int]()
+    val number          = scala.collection.mutable.LinkedHashMap[T, Int]()
 
     val header          = new Array[Int](size)
     val types           = new Array[BlockType](size)
@@ -165,8 +165,8 @@ object HavlakLoopTree {
 
     header(0) = 0
 
-    val loopMap = mutable.Map.empty[T, LoopBuilder[T]]
-    val parented = mutable.Set.empty[LoopBuilder[T]]
+    val loopMap = mutable.LinkedHashMap.empty[T, LoopBuilder[T]]
+    val parented = mutable.LinkedHashSet.empty[LoopBuilder[T]]
     for (w <- Range.inclusive(size - 1, 0, -1)) {
       // this is 'P' in Havlak's paper
       var nodePool = List.empty[UnionFindNode[T]]

@@ -11,8 +11,8 @@ import scala.collection.mutable
 
 class Walker(isInterface: JType.Cls => Boolean,
              lookupMethod: MethodSig => Option[MethodNode],
-             visitedMethods: mutable.Map[(MethodSig, Seq[IType]), Walker.MethodResult],
-             visitedClasses: mutable.Set[JType.Cls],
+             visitedMethods: mutable.LinkedHashMap[(MethodSig, Seq[IType]), Walker.MethodResult],
+             visitedClasses: mutable.LinkedHashSet[JType.Cls],
              findSubtypes: JType.Cls => List[JType.Cls],
              findSupertypes: JType.Cls => Seq[JType.Cls],
              isConcrete: MethodSig => Boolean,
@@ -35,7 +35,7 @@ class Walker(isInterface: JType.Cls => Boolean,
       println("+" * 20 + sig + "+" * 20)
       println(Renderer.renderInsns(mn.instructions))
 
-      val phiMerges0 = mutable.Set.empty[SSA.Phi]
+      val phiMerges0 = mutable.LinkedHashSet.empty[SSA.Phi]
 
       val insns = mn.instructions.iterator().asScala.toVector
 
@@ -121,10 +121,11 @@ class Walker(isInterface: JType.Cls => Boolean,
           Nil
       }.flatten
 
-      val queue = (phiMerges0 ++ regionStarts.values).to[mutable.Set]
+      val queue = (phiMerges0 ++ regionStarts.values).to[mutable.LinkedHashSet]
       queue.foreach(_.checkLinks())
 
       while(queue.nonEmpty){
+
         val current = queue.head
         queue.remove(current)
         val replacement = current match{
