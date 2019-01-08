@@ -22,6 +22,7 @@ abstract class ClickScheduler(dominatorDepth: Map[SSA.Block, Int],
   }
 
   def scheduleEarly(n: SSA.Val): Unit = {
+    assert(!n.isInstanceOf[SSA.Phi])
     scheduleEarlyRoot(n)
     block(n) = upstream(n).map(block).maxBy(dominatorDepth)
   }
@@ -34,7 +35,7 @@ abstract class ClickScheduler(dominatorDepth: Map[SSA.Block, Int],
   }
 
   def scheduleLate(n: SSA.Val): Unit = {
-    if (!visited.containsKey(n)){
+    if (!visited.containsKey(n) && !n.isInstanceOf[SSA.Phi]){
       visited.put(n, ())
       scheduleLateRoot(n)
       if (!isPinned(n)){
