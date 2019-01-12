@@ -1,11 +1,10 @@
 package joptimize.analysis
 import java.io.{PrintWriter, StringWriter}
-import java.util
 
 import fansi.Str
 import joptimize.Util
-import joptimize.analysis.CodeGen.findControlFlowGraph
-import joptimize.graph.{HavlakLoopTree, TarjansStronglyConnectedComponents}
+
+import joptimize.graph.HavlakLoopTree
 import joptimize.model.{Program, SSA}
 import org.objectweb.asm.tree.{AbstractInsnNode, InsnList}
 import org.objectweb.asm.util.{Textifier, TraceMethodVisitor}
@@ -63,11 +62,10 @@ object Renderer {
 
     recLoop(loopTree, 0)
 
-    val allDownstreams = edges.flatMap{case (a, b) => Seq(b)}.toSet
     val successor = edges.groupBy(_._1).map{case (k, v) => (k, v.map(_._2))}
     val predecessor = edges.groupBy(_._2).map{case (k, v) => (k, v.map(_._1))}
     val allVertices = edges.flatMap{case (a, b) => Seq(a, b)}
-    val startNode = allVertices.find(!allDownstreams(_)).get
+    val startNode = allVertices.find(!predecessor.contains(_)).get
 
     val out = mutable.Buffer.empty[fansi.Str]
     val seen = mutable.LinkedHashSet.empty[SSA.Block]
@@ -88,49 +86,7 @@ object Renderer {
 
   def renderSSA(program: Program, scheduledVals: Map[SSA.Val, SSA.Block] = Map.empty): (fansi.Str, Map[SSA.Node, String]) = {
 
-    val allTerminals = program.allTerminals
-    val (allVertices, roots, downstreamEdges) =
-      Util.breadthFirstAggregation[SSA.Node](allTerminals.toSet) { x =>
-        val addedControl = x match{
-          case v: SSA.Val => scheduledVals.get(v).toSeq
-          case _ => Nil
-        }
-        x.upstream ++ addedControl
-      }
-
-    val finalOrderingMap = sortVerticesForPrinting(allVertices, downstreamEdges){
-      case (_, _: SSA.Phi | _: SSA.Region) => true
-      case (v: SSA.Val, c: SSA.Block) => true
-      case _ => false
-    }
-
-    val downstreamLookup = downstreamEdges.groupBy(_._1)
-    val saveable =
-      downstreamLookup.filter{ case (k, x) =>
-        val scheduled = k match{
-          case v: SSA.Val =>
-            val downstreamControls = x.collect{case (_, t: SSA.Val) => scheduledVals.get(t)}.flatten
-            scheduledVals.get(v).exists(c => downstreamControls.exists(_ != c))
-          case _ => false
-        }
-        k.upstream.nonEmpty && (x.distinct.size > 1 || allTerminals.contains(k) || scheduled)
-      }
-      .keySet ++
-      allVertices.collect{ case k: SSA.Phi => k case b: SSA.Block => b}
-
-
-
-    val savedLocals = mutable.Map[SSA.Val, (Int, String)]()
-
-    for((r: SSA.Val, i) <- saveable.zipWithIndex) {
-      savedLocals.put(
-        r,
-        (
-          i,
-          if (downstreamLookup.getOrElse(r, Nil).size > 1) "local" + i else "stack" + i
-        )
-      )
-    }
+    val (finalOrderingMap, saveable, savedLocals) = Util.findSaveable(program, scheduledVals)
 
     val savedBlocks = mutable.LinkedHashMap.empty[SSA.Block, (Int, String)]
     def getBlockId(c: SSA.Block) = fansi.Color.Magenta(getBlockId0(c)._2)
@@ -157,7 +113,7 @@ object Renderer {
     def renderBlock(block: SSA.Block) = {
       atom(getBlockId(block).toString)
     }
-    def rec(ssa: SSA.Node): pprint.Tree = ssa match{
+    def rec(ssa: SSA.Node): Tree = ssa match{
       case x: SSA.Block => atom(getBlockId(x).toString)
       case x: SSA.Val =>
         if (savedLocals.contains(x)) atom(fansi.Color.Cyan(savedLocals(x)._2).toString())
@@ -169,7 +125,6 @@ object Renderer {
         val block = Seq(renderBlock(phi.block))
         val children = phi.incoming.map{case (block, ssa) => infix(renderBlock(block), ":", rec(ssa))}.toSeq
         apply("phi", block ++ children:_*)
-      case n: SSA.Arg => atom(fansi.Color.Cyan("arg" + n.index).toString)
       case n: SSA.BinOp => infix(rec(n.a), binOpString(n.opcode), rec(n.b))
       case n: SSA.UnaOp => apply(unaryOpString(n.opcode), rec(n.a))
       case n: SSA.CheckCast => apply("cast", rec(n.src), atom(n.desc.name))
@@ -199,7 +154,7 @@ object Renderer {
       case n: SSA.MonitorExit => ???
     }
 
-    def recBlock(block: SSA.Block): (fansi.Str, Tree) = block match{
+    def recBlock(block: SSA.Block): (Str, Tree) = block match{
       case n: SSA.True => (getBlockId(block), apply("true", atom(getBlockId(n.node).toString)))
       case n: SSA.False => (getBlockId(block), apply("false", atom(getBlockId(n.node).toString)))
 
@@ -228,28 +183,32 @@ object Renderer {
 
 
     def renderStmt(r: SSA.Node, leftOffset: Int) = {
-      val out = mutable.Buffer.empty[Str]
-      val (lhs, rhs) = r match{
-        case r: SSA.Block =>
-          out.append("\n")
-          recBlock(r)
-        case r: SSA.Val => (fansi.Color.Cyan(savedLocals(r)._2), recVal(r))
-      }
+      pprint.log(r)
+      if (r.isInstanceOf[SSA.Arg]) Nil
+      else {
+        val out = mutable.Buffer.empty[Str]
+        val (lhs, rhs) = r match {
+          case r: SSA.Block =>
+            out.append("\n")
+            recBlock(r)
+          case r: SSA.Val => (fansi.Color.Cyan(savedLocals(r)._2), recVal(r))
+        }
 
-      out.append(lhs, " = ")
-      out.appendAll(
-        new pprint.Renderer(80, fansi.Color.Yellow, fansi.Color.Green, 2)
-          .rec(rhs, lhs.length + " = ".length, leftOffset).iter
-      )
-      out.append("\n")
-      out
+        out.append(lhs, " = ")
+        out.appendAll(
+          new pprint.Renderer(80, fansi.Color.Yellow, fansi.Color.Green, 2)
+            .rec(rhs, lhs.length + " = ".length, leftOffset).iter
+        )
+        out.append("\n")
+        out
+      }
     }
 
     val out =
       if (scheduledVals.nonEmpty){
         pprint.log(savedBlocks)
         renderGraph(
-          findControlFlowGraph(program),
+          Util.findControlFlowGraph(program),
           l => fansi.Color.Magenta(getBlockId(l)),
           (l, indent) => {
             fansi.Str.join(
@@ -268,41 +227,6 @@ object Renderer {
     (out, mapping)
   }
 
-  /**
-    * We order vertices in two ways:
-    *
-    * 1) Between cycles, in topological data/control-flow order
-    * 2) Within cycles, in dataflow order *ignoring phis/regions* to break the cycle
-    *
-    * That gives us roughly a sequence of instructions that start from top to
-    * bottom, and within each cycle data/control always flows downwards except for
-    * jumps which may return to an earlier phi/region node.
-    */
-  def sortVerticesForPrinting[T](allVertices: Set[T],
-                                 downstreamEdges: Seq[(T, T)])
-                                (backEdge: (T, T) => Boolean) = {
-    val vertexToIndex = allVertices.zipWithIndex.toMap
-    val indexToVertex = vertexToIndex.map(_.swap)
-
-
-    val brokenEdgeLists = Util.edgeListToIndexMap(
-      downstreamEdges.filter(x => !backEdge(x._1, x._2)),
-      vertexToIndex
-    )
-
-    val brokenOrderingList = TarjansStronglyConnectedComponents(Util.mapToAdjacencyLists(brokenEdgeLists, allVertices.size)).map { case Seq(x) => x }
-
-    val brokenOrdering = brokenOrderingList.zipWithIndex.toMap
-
-    val groupedEdgeLists = Util.edgeListToIndexMap(downstreamEdges, vertexToIndex)
-
-    val groupedOrdering = TarjansStronglyConnectedComponents(Util.mapToAdjacencyLists(groupedEdgeLists, allVertices.size))
-
-    val orderingList = groupedOrdering.flatMap(_.sortBy(brokenOrdering)).map(indexToVertex)
-
-    val finalOrderingMap = orderingList.reverse.zipWithIndex.toMap
-    finalOrderingMap
-  }
 
   def binOpString(op: SSA.BinOp.Code): String = {
     import SSA.BinOp._

@@ -3,6 +3,7 @@ package joptimize
 import java.io.PrintWriter
 import java.io.StringWriter
 
+import joptimize.graph.TarjansStronglyConnectedComponents
 import joptimize.model._
 import org.objectweb.asm.{Handle, Opcodes}
 import org.objectweb.asm.Opcodes._
@@ -197,4 +198,123 @@ object Util{
     "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/invoke/CallSite;"
   )
 
+
+  /**
+    * We order vertices in two ways:
+    *
+    * 1) Between cycles, in topological data/control-flow order
+    * 2) Within cycles, in dataflow order *ignoring phis/regions* to break the cycle
+    *
+    * That gives us roughly a sequence of instructions that start from top to
+    * bottom, and within each cycle data/control always flows downwards except for
+    * jumps which may return to an earlier phi/region node.
+    */
+  def sortVerticesForPrinting[T](allVertices: Set[T],
+                                 downstreamEdges: Seq[(T, T)])
+                                (backEdge: (T, T) => Boolean) = {
+    val vertexToIndex = allVertices.zipWithIndex.toMap
+    val indexToVertex = vertexToIndex.map(_.swap)
+
+
+    val brokenEdgeLists = Util.edgeListToIndexMap(
+      downstreamEdges.filter(x => !backEdge(x._1, x._2)),
+      vertexToIndex
+    )
+
+    val brokenOrderingList = TarjansStronglyConnectedComponents(Util.mapToAdjacencyLists(brokenEdgeLists, allVertices.size)).map { case Seq(x) => x }
+
+    val brokenOrdering = brokenOrderingList.zipWithIndex.toMap
+
+    val groupedEdgeLists = Util.edgeListToIndexMap(downstreamEdges, vertexToIndex)
+
+    val groupedOrdering = TarjansStronglyConnectedComponents(Util.mapToAdjacencyLists(groupedEdgeLists, allVertices.size))
+
+    val orderingList = groupedOrdering.flatMap(_.sortBy(brokenOrdering)).map(indexToVertex)
+
+    val finalOrderingMap = orderingList.reverse.zipWithIndex.toMap
+    finalOrderingMap
+  }
+
+  def findSaveable(program: Program, scheduledVals: Map[SSA.Val, SSA.Block]) = {
+    val allTerminals = program.allTerminals
+    val (allVertices, roots, downstreamEdges) =
+      Util.breadthFirstAggregation[SSA.Node](allTerminals.toSet) { x =>
+        val addedControl = x match {
+          case v: SSA.Val => scheduledVals.get(v).toSeq
+          case _ => Nil
+        }
+        x.upstream ++ addedControl
+      }
+
+    val finalOrderingMap = sortVerticesForPrinting(allVertices, downstreamEdges) {
+      case (_, _: SSA.Phi | _: SSA.Region) => true
+      case (v: SSA.Val, c: SSA.Block) => true
+      case _ => false
+    }
+
+    val downstreamLookup = downstreamEdges.groupBy(_._1)
+    val saveable =
+      downstreamLookup.filter { case (k, x) =>
+        val scheduled = k match {
+          case v: SSA.Val =>
+            val downstreamControls = x.collect { case (_, t: SSA.Val) => scheduledVals.get(t) }.flatten
+            scheduledVals.get(v).exists(c => downstreamControls.exists(_ != c))
+          case _ => false
+        }
+        k.upstream.nonEmpty && (x.distinct.size > 1 || allTerminals.contains(k) || scheduled)
+      }
+        .keySet ++
+        allVertices.collect {
+          case k: SSA.Phi => k
+          case a: SSA.Arg => a
+          case b: SSA.Block => b
+        }
+
+
+    val savedLocals = mutable.Map[SSA.Val, (Int, String)]()
+
+    for ((r: SSA.Val, i) <- saveable.zipWithIndex) {
+      savedLocals.put(
+        r,
+        r match{
+          case a: SSA.Arg => (a.index, "arg" + a.index)
+          case _ =>
+            (
+              i,
+              if (downstreamLookup.getOrElse(r, Nil).size > 1) "local" + i
+              else "stack" + i
+            )
+        }
+      )
+    }
+    (finalOrderingMap, saveable, savedLocals)
+  }
+
+
+  def findControlFlowGraph(program: Program) = {
+    val controlFlowEdges = mutable.Buffer.empty[(SSA.Block, SSA.Block)]
+    val visited = mutable.LinkedHashSet.empty[SSA.Block]
+
+    def rec(current: SSA.Block): Unit = if (!visited(current)){
+      visited.add(current)
+
+      val upstreams = current match{
+        case n: SSA.True => Seq(n.node)
+        case n: SSA.False => Seq(n.node)
+        case n: SSA.UnaBranch => Seq(n.block)
+        case n: SSA.BinBranch => Seq(n.block)
+        case n: SSA.Return => Seq(n.block)
+        case n: SSA.ReturnVal => Seq(n.block)
+        case r: SSA.Region => r.incoming
+      }
+
+      for(block <- upstreams){
+        rec(block)
+        controlFlowEdges.append(block -> current)
+      }
+    }
+
+    program.allTerminals.foreach(rec)
+    controlFlowEdges
+  }
 }
