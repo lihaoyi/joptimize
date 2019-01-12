@@ -31,7 +31,10 @@ object CodeGen{
     println(
       Renderer.renderGraph(
         controlFlowEdges,
-        l => fansi.Color.Magenta(mapping(l))
+        (lhs, rhs, indent) =>
+          fansi.Color.Magenta(mapping(lhs)) ++
+          " <- " ++
+          fansi.Str.join(rhs.flatMap(r => Seq[fansi.Str](", ", fansi.Color.Magenta(mapping(r)))).drop(1):_*)
       )
     )
 
@@ -63,6 +66,7 @@ object CodeGen{
     pprint.log(nodesToBlocks)
     val (stringified, mapping2) = Renderer.renderSSA(program, nodesToBlocks)
     println(stringified)
+
     val cfg = Util.findControlFlowGraph(program)
     val allVertices = cfg.flatMap{case (a, b) => Seq(a, b)}
     val predecessor = cfg.groupBy(_._2).map{case (k, v) => (k, v.map(_._1))}
@@ -206,7 +210,7 @@ object CodeGen{
     def compute(ssa: SSA.Node) = {
       val upstreams = ssa.upstream.collect{case n: SSA.Val => n}.flatMap(rec)
       val current: Seq[AbstractInsnNode] = ssa match{
-        case r: SSA.Region => Nil
+        case r: SSA.Merge => Nil
 //        case SSA.UnaBranch(block, a, opcode) =>
 //          Seq(new JumpInsnNode(opcode.i, startLabels(target)))
 //        case SSA.BinBranch(block, a, b, opcode) =>

@@ -247,7 +247,7 @@ object Util{
       }
 
     val finalOrderingMap = sortVerticesForPrinting(allVertices, downstreamEdges) {
-      case (_, _: SSA.Phi | _: SSA.Region) => true
+      case (_, _: SSA.Phi | _: SSA.Merge) => true
       case (v: SSA.Val, c: SSA.Block) => true
       case _ => false
     }
@@ -305,7 +305,7 @@ object Util{
         case n: SSA.BinBranch => Seq(n.block)
         case n: SSA.Return => Seq(n.block)
         case n: SSA.ReturnVal => Seq(n.block)
-        case r: SSA.Region => r.incoming
+        case r: SSA.Merge => r.incoming
       }
 
       for(block <- upstreams){

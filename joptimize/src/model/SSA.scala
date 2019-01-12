@@ -52,7 +52,7 @@ object SSA{
         n.array = swap(n.array)
       case n: SSA.MonitorEnter => n.indexSrc = swap(n.indexSrc)
       case n: SSA.MonitorExit => n.indexSrc = swap(n.indexSrc)
-      case r: SSA.Region =>
+      case r: SSA.Merge =>
         r.incoming = r.incoming.map(swap)
       case n: SSA.True => n.node = swap(n.node)
       case n: SSA.False => n.node = swap(n.node)
@@ -130,7 +130,7 @@ object SSA{
     override def toString = s"Phi@${Integer.toHexString(System.identityHashCode(this))}(${incoming.size})"
   }
 
-  class Region(var insnIndex: Int, var incoming: Set[Block]) extends Block(){
+  class Merge(var insnIndex: Int, var incoming: Set[Block]) extends Block(){
     def upstream = incoming.toSeq
 
     override def toString = s"Region@${Integer.toHexString(System.identityHashCode(this))}(${incoming.size})"

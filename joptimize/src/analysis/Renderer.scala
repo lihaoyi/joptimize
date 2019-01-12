@@ -50,8 +50,8 @@ object Renderer {
   }
 
   def renderGraph(edges: Seq[(SSA.Block, SSA.Block)],
-                  coloring: SSA.Block => fansi.Str,
-                  annotation: (SSA.Block, String) => fansi.Str = (_, _) => ""): fansi.Str = {
+                  coloring: (SSA.Block, Seq[SSA.Block], String) => fansi.Str,
+                  annotation: (SSA.Block, String) => Seq[fansi.Str] = (_, _) => Nil): fansi.Str = {
     val loopTree = HavlakLoopTree.analyzeLoops(edges)
     val loopNestMap = mutable.LinkedHashMap.empty[SSA.Node, Int]
 
@@ -71,12 +71,14 @@ object Renderer {
     val seen = mutable.LinkedHashSet.empty[SSA.Block]
     def recPrint(block: SSA.Block): Unit = if (!seen(block)){
       seen.add(block)
+      if (out.nonEmpty) out.append("\n")
       val indent = "  " * loopNestMap(block)
       out.append(indent)
-      out.append(coloring(block), " <- ")
-      out.appendAll(predecessor.getOrElse(block, Nil).flatMap(src => Seq(fansi.Str(", "), coloring(src))).drop(1))
-      out.append("\n")
-      out.append(annotation(block, indent))
+      out.append(coloring(block, predecessor.getOrElse(block, Nil), indent))
+      for(a <- annotation(block, indent)){
+        out.append("\n")
+        out.append(a)
+      }
       for(s <- successor.getOrElse(block, Nil)) recPrint(s)
     }
 
@@ -99,7 +101,9 @@ object Renderer {
           case _: SSA.AThrow => "return" + savedBlocks.size
           case n: SSA.True => "true" + getBlockId0(n.node)._1
           case n: SSA.False => "false" + getBlockId0(n.node)._1
-          case r: SSA.Region => "region" + savedBlocks.size
+          case r: SSA.Merge =>
+            val name = if (c.upstream.isEmpty) "start" else "block"
+            name + savedBlocks.size
           case _: SSA.UnaBranch => "branch" + savedBlocks.size
           case _: SSA.BinBranch => "branch" + savedBlocks.size
         })
@@ -158,8 +162,9 @@ object Renderer {
       case n: SSA.True => (getBlockId(block), apply("true", atom(getBlockId(n.node).toString)))
       case n: SSA.False => (getBlockId(block), apply("false", atom(getBlockId(n.node).toString)))
 
-      case reg: SSA.Region =>
-        val rhs = apply("region" + reg.insnIndex, reg.upstream.iterator.map(x => atom(getBlockId(x).toString)).toSeq:_*)
+      case reg: SSA.Merge =>
+        val name = if (reg.upstream.isEmpty) "start" else "merge"
+        val rhs = apply(name + reg.insnIndex, reg.upstream.iterator.map(x => atom(getBlockId(x).toString)).toSeq:_*)
         (getBlockId(reg), rhs)
 
       case n: SSA.AThrow => ???
@@ -181,15 +186,12 @@ object Renderer {
         (getBlockId(n), rhs)
     }
 
-
     def renderStmt(r: SSA.Node, leftOffset: Int) = {
-      pprint.log(r)
-      if (r.isInstanceOf[SSA.Arg]) Nil
+      if (r.isInstanceOf[SSA.Arg]) None
       else {
         val out = mutable.Buffer.empty[Str]
         val (lhs, rhs) = r match {
           case r: SSA.Block =>
-            out.append("\n")
             recBlock(r)
           case r: SSA.Val => (fansi.Color.Cyan(savedLocals(r)._2), recVal(r))
         }
@@ -199,28 +201,35 @@ object Renderer {
           new pprint.Renderer(80, fansi.Color.Yellow, fansi.Color.Green, 2)
             .rec(rhs, lhs.length + " = ".length, leftOffset).iter
         )
-        out.append("\n")
-        out
+        Some(out)
       }
     }
 
     val out =
       if (scheduledVals.nonEmpty){
-        pprint.log(savedBlocks)
         renderGraph(
           Util.findControlFlowGraph(program),
-          l => fansi.Color.Magenta(getBlockId(l)),
+          (l, rhs, indent) => fansi.Str.join(renderStmt(l, indent.length / 2).get:_*),
           (l, indent) => {
-            fansi.Str.join(
-              scheduledVals
-                .collect{case (a, b) if b == l && saveable(a) => fansi.Str(indent) +: renderStmt(a, indent.length / 2) }
-                .flatten
-                .toSeq:_*
-            )
+            val n = scheduledVals
+              .collect{case (a, b) if b == l && saveable(a) =>
+                renderStmt(a, indent.length / 2).map(x => fansi.Str.join(fansi.Str(indent) +: x:_*))
+              }
+            n.flatten.toSeq
           }
         )
       }else{
-        fansi.Str.join(saveable.toSeq.sortBy(finalOrderingMap).flatMap(renderStmt(_, 0)):_*)
+        fansi.Str.join(
+          saveable
+            .toSeq
+            .sortBy(finalOrderingMap)
+            .flatMap(
+              renderStmt(_, 0) match{
+                case None => Nil
+                case Some(x) => fansi.Str("\n") +: x
+              }
+            ):_*
+        )
       }
 
     val mapping = (savedLocals.mapValues(_._2) ++ savedBlocks.mapValues(_._2)).toMap

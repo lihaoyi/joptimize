@@ -48,7 +48,7 @@ class Walker(isInterface: JType.Cls => Boolean,
         }
         .flatten
         .sortBy(insns.indexOf)
-      val regionStarts = mutable.LinkedHashMap(blockStarts.map(i => i -> (new SSA.Region(insns.indexOf(i), Set()): SSA.Block)):_*)
+      val regionStarts = mutable.LinkedHashMap(blockStarts.map(i => i -> (new SSA.Merge(insns.indexOf(i), Set()): SSA.Block)):_*)
 
       //      regionStarts.keys.map("RSK " + Renderer.render(mn.instructions, _)).foreach(println)
       def findStartRegion(insn: AbstractInsnNode): SSA.Block = {
@@ -83,7 +83,7 @@ class Walker(isInterface: JType.Cls => Boolean,
         println(Renderer.renderInsns(mn.instructions, lhs0))
         val lhs = regionStarts(lhs0)
         (lhs, rhs) match{
-          case (l: SSA.Region, r) =>
+          case (l: SSA.Merge, r) =>
             l.incoming += r
             r.downstream += l
         }
@@ -134,7 +134,7 @@ class Walker(isInterface: JType.Cls => Boolean,
             if(filteredValues.map(_._2).size == 1) Some(filteredValues.head._2)
             else None
 
-          case reg: SSA.Region =>
+          case reg: SSA.Merge =>
             if (reg.incoming.size == 1) Some(reg.incoming.head)
             else None
 
@@ -155,6 +155,7 @@ class Walker(isInterface: JType.Cls => Boolean,
       val (printed, mapping) = Renderer.renderSSA(program)
       println(printed)
       pprint.log(mapping)
+
       CodeGen(program, mapping)
       ???
     })
