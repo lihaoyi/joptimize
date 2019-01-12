@@ -91,12 +91,26 @@ object CodeGen{
       output.add(labels(block))
       val blockNodes = blocksToNodes.getOrElse(block, Nil)
       for(node <- blockNodes if savedLocals.contains(node) && !node.isInstanceOf[SSA.Arg]){
-        pprint.log(node)
-        val code = generateBytecode(node, savedLocalNumbers)
-        pprint.log(code)
-        code.foreach(output.add)
+        generateBytecode(node, savedLocalNumbers, _ => ???, _ => ???).foreach(output.add)
       }
-      val code = generateBytecode(block, savedLocalNumbers)
+      val code = generateBytecode(
+        block,
+        savedLocalNumbers,
+        jumpLabel = { srcBlock =>
+          labels(
+            srcBlock.downstream.collect{case t: SSA.True => t}.head
+                    .downstream.collect{case t: SSA.Block => t}.head
+          )
+        },
+        fallthroughLabel = {srcBlock =>
+          Some(
+            labels(
+              srcBlock.downstream.collect{case t: SSA.False => t}.head
+                      .downstream.collect{case t: SSA.Block => t}.head
+            )
+          )
+        }
+      )
       pprint.log(code)
       code.foreach(output.add)
     }
@@ -188,7 +202,10 @@ object CodeGen{
       dominatorDepth.zipWithIndex.map{case (v, i) => (nodes(i), v)}.toMap
     )
   }
-  def generateBytecode(ssa: SSA.Node, savedLocals: Map[SSA.Val, Int]) = {
+  def generateBytecode(ssa: SSA.Node,
+                       savedLocals: Map[SSA.Val, Int],
+                       jumpLabel: SSA.Block => LabelNode,
+                       fallthroughLabel: SSA.Block => Option[LabelNode]) = {
     def rec(ssa: SSA.Val): Seq[AbstractInsnNode] = {
       if (savedLocals.contains(ssa)){
         Seq(
@@ -211,10 +228,17 @@ object CodeGen{
       val upstreams = ssa.upstream.collect{case n: SSA.Val => n}.flatMap(rec)
       val current: Seq[AbstractInsnNode] = ssa match{
         case r: SSA.Merge => Nil
-//        case SSA.UnaBranch(block, a, opcode) =>
-//          Seq(new JumpInsnNode(opcode.i, startLabels(target)))
-//        case SSA.BinBranch(block, a, b, opcode) =>
-//          Seq(new JumpInsnNode(opcode.i, startLabels(target)))
+        case n @ SSA.UnaBranch(block, a, opcode) =>
+          val goto = fallthroughLabel(n).map(new JumpInsnNode(GOTO, _))
+          val jump = Seq(new JumpInsnNode(opcode.i, jumpLabel(n)))
+          jump ++ goto
+
+        case n @ SSA.BinBranch(block, a, b, opcode) =>
+          val goto = fallthroughLabel(n).map(new JumpInsnNode(GOTO, _))
+          val jump = Seq(new JumpInsnNode(opcode.i, jumpLabel(n)))
+          jump ++ goto
+        case _: SSA.True => Nil
+        case _: SSA.False => Nil
         case SSA.ReturnVal(block, a) =>
           Seq(new InsnNode(
             IRETURN
