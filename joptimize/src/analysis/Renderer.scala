@@ -104,25 +104,33 @@ object Renderer {
       case _ => false
     }
 
+    val downstreamLookup = downstreamEdges.groupBy(_._1)
     val saveable =
-      downstreamEdges.groupBy(_._1)
-        .filter{ case (k, x) =>
-          val scheduled = k match{
-            case v: SSA.Val =>
-              val downstreamControls = x.collect{case (_, t: SSA.Val) => scheduledVals.get(t)}.flatten
-              scheduledVals.get(v).exists(c => downstreamControls.exists(_ != c))
-            case _ => false
-          }
-          k.upstream.nonEmpty && (x.distinct.size > 1 || allTerminals.contains(k) || scheduled)
+      downstreamLookup.filter{ case (k, x) =>
+        val scheduled = k match{
+          case v: SSA.Val =>
+            val downstreamControls = x.collect{case (_, t: SSA.Val) => scheduledVals.get(t)}.flatten
+            scheduledVals.get(v).exists(c => downstreamControls.exists(_ != c))
+          case _ => false
         }
-        .keySet ++
-        allVertices.collect{ case k: SSA.Phi => k case b: SSA.Block => b}
+        k.upstream.nonEmpty && (x.distinct.size > 1 || allTerminals.contains(k) || scheduled)
+      }
+      .keySet ++
+      allVertices.collect{ case k: SSA.Phi => k case b: SSA.Block => b}
 
 
 
-    val savedLocals = new util.IdentityHashMap[SSA.Val, Int]()
+    val savedLocals = mutable.Map[SSA.Val, (Int, String)]()
 
-    for((r: SSA.Val, i) <- saveable.zipWithIndex) savedLocals.put(r, i)
+    for((r: SSA.Val, i) <- saveable.zipWithIndex) {
+      savedLocals.put(
+        r,
+        (
+          i,
+          if (downstreamLookup.getOrElse(r, Nil).size > 1) "local" + i else "stack" + i
+        )
+      )
+    }
 
     val savedBlocks = mutable.LinkedHashMap.empty[SSA.Block, (Int, String)]
     def getBlockId(c: SSA.Block) = fansi.Color.Magenta(getBlockId0(c)._2)
@@ -152,7 +160,7 @@ object Renderer {
     def rec(ssa: SSA.Node): pprint.Tree = ssa match{
       case x: SSA.Block => atom(getBlockId(x).toString)
       case x: SSA.Val =>
-        if (savedLocals.containsKey(x)) atom(fansi.Color.Cyan("local" + savedLocals.get(ssa)).toString())
+        if (savedLocals.contains(x)) atom(fansi.Color.Cyan(savedLocals(x)._2).toString())
         else recVal(x)
     }
 
@@ -225,7 +233,7 @@ object Renderer {
         case r: SSA.Block =>
           out.append("\n")
           recBlock(r)
-        case r: SSA.Val => (fansi.Color.Cyan("local" + savedLocals.get(r)), recVal(r))
+        case r: SSA.Val => (fansi.Color.Cyan(savedLocals(r)._2), recVal(r))
       }
 
       out.append(lhs, " = ")
@@ -256,8 +264,7 @@ object Renderer {
         fansi.Str.join(saveable.toSeq.sortBy(finalOrderingMap).flatMap(renderStmt(_, 0)):_*)
       }
 
-    import collection.JavaConverters._
-    val mapping = (savedLocals.asScala.mapValues("local" + _) ++ savedBlocks.mapValues(_._2)).toMap
+    val mapping = (savedLocals.mapValues(_._2) ++ savedBlocks.mapValues(_._2)).toMap
     (out, mapping)
   }
 

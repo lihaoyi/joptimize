@@ -11,7 +11,7 @@ abstract class ClickScheduler(dominatorDepth: Map[SSA.Block, Int],
   def upstream(ssa: SSA.Node): Seq[SSA.Val]
   def isPinned(ssa: SSA.Node): Boolean
   def loopNest(block: SSA.Node): Int
-  val visited = new java.util.IdentityHashMap[SSA.Val, Unit]()
+  val visited = mutable.Map[SSA.Val, Unit]()
 
   val block = mutable.LinkedHashMap.empty[SSA.Val, SSA.Block]
 
@@ -35,7 +35,7 @@ abstract class ClickScheduler(dominatorDepth: Map[SSA.Block, Int],
   }
 
   def scheduleLate(n: SSA.Val): Unit = {
-    if (!visited.containsKey(n) && !n.isInstanceOf[SSA.Phi]){
+    if (!visited.contains(n) && !n.isInstanceOf[SSA.Phi]){
       visited.put(n, ())
       scheduleLateRoot(n)
       if (!isPinned(n)){
