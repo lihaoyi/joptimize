@@ -65,8 +65,21 @@ object CodeGen{
     val blocksToNodes = nodesToBlocks.groupBy(_._2).map{case (k, v) => (k, v.keys)}
     pprint.log(nodesToBlocks)
     val (stringified, mapping2) = Renderer.renderSSA(program, nodesToBlocks)
+    println()
     println(stringified)
-
+    println()
+    RegisterAllocator.apply(program, immediateDominators)
+    val (stringified3, mapping23) = Renderer.renderSSA(program,
+      schedule(
+        program, loopTree,
+        dominatorDepth, immediateDominators,
+        controlFlowEdges, mapping
+      )
+    )
+    println()
+    println(stringified3)
+    println()
+    ???
     val cfg = Util.findControlFlowGraph(program)
     val allVertices = cfg.flatMap{case (a, b) => Seq(a, b)}
     val predecessor = cfg.groupBy(_._2).map{case (k, v) => (k, v.map(_._1))}
@@ -87,7 +100,6 @@ object CodeGen{
     val savedLocalNumbers = savedLocals.map{case (k, v) => (k, v._1)}.toMap
     pprint.log(savedLocalNumbers)
     for(block <- sortedBlocks){
-      pprint.log(mapping2(block))
       output.add(labels(block))
       val blockNodes = blocksToNodes.getOrElse(block, Nil)
       for(node <- blockNodes if savedLocals.contains(node) && !node.isInstanceOf[SSA.Arg]){
@@ -111,7 +123,6 @@ object CodeGen{
           )
         }
       )
-      pprint.log(code)
       code.foreach(output.add)
     }
     println(Renderer.renderInsns(output))

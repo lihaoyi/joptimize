@@ -125,6 +125,7 @@ object Renderer {
     }
 
     def recVal(ssa: SSA.Val): Tree = ssa match{
+      case n: SSA.Copy => apply("copy", rec(n.src))
       case phi: SSA.Phi =>
         val block = Seq(renderBlock(phi.block))
         val children = phi.incoming.map{case (block, ssa) => infix(renderBlock(block), ":", rec(ssa))}.toSeq

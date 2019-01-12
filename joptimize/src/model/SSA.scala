@@ -253,7 +253,9 @@ object SSA{
   case class LookupSwitch(var src: Val, var keys: Seq[Int]) extends Block(){
     def upstream = Seq(src)
   }
-
+  case class Copy(var src: Val) extends Val(src.getSize){
+    def upstream = Seq(src)
+  }
   case class CheckCast(var src: Val, var desc: JType) extends Val(0){
     def upstream = Seq(src)
   }
