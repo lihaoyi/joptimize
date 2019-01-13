@@ -25,6 +25,13 @@ object RegisterAllocator {
             copies.add(copy)
             (k, copy)
           }
+          val replacement = SSA.Copy(phi)
+          for(down <- phi.downstream if down != replacement) {
+            SSA.update(down, phi, replacement)
+            replacement.downstream.add(down)
+            phi.downstream.remove(down)
+          }
+
           eqClses.add(Set(phi) ++ phi.incoming.map(_._2))
         case _ => //donothing
       }
@@ -39,6 +46,9 @@ object RegisterAllocator {
     for(copy <- copies){
       val copyEqCls = eqClses.find(_.contains(copy)).get
       val srcEqCls = eqClses.find(_.contains(copy.src)).get
+      pprint.log(copy)
+      pprint.log(copyEqCls)
+      pprint.log(srcEqCls)
       if (copyEqCls.intersect(srcEqCls).isEmpty){
         eqClses.remove(copyEqCls)
         eqClses.remove(srcEqCls)

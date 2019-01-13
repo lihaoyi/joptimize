@@ -31,6 +31,7 @@ object MainTests extends TestSuite{
         'nestedFor - annotatedTest
         'nestedFor2 - annotatedTest
         'basicWhile - annotatedTest
+        'alternatingWhile - annotatedTest
         'sqrtFinder - annotatedTest
 
       }

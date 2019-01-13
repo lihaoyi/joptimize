@@ -14,6 +14,7 @@ object SSA{
       else x
     }
     down match{
+      case n: SSA.Copy => n.src = swap(n.src)
       case phi: SSA.Phi =>
         phi.block = swap(phi.block)
         phi.incoming = phi.incoming.map{case (k, v) => (swap(k), swap(v))}

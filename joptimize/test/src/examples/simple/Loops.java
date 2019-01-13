@@ -158,6 +158,17 @@ public class Loops {
         return c;
     }
 
+    @joptimize.Test(inputs = {0, 1, 2, 3, 4, 5, 6, 7, 9})
+    public static int alternatingWhile(int a) {
+        int c = 1;
+        int b = 1;
+        while (c < a) {
+            b = c;
+            c = c * 2;
+        }
+        return b;
+    }
+
     @joptimize.Test(inputs = {121})
     public static double sqrtFinder(int n0) {
         double n = (double)n0;

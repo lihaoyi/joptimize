@@ -70,17 +70,17 @@ object CodeGen{
     println(stringified)
     println()
 
-//    RegisterAllocator.apply(program, immediateDominators)
-//    val (stringified3, mapping23) = Renderer.renderSSA(program,
-//      schedule(
-//        program, loopTree,
-//        dominatorDepth, immediateDominators,
-//        controlFlowEdges, mapping
-//      )
-//    )
-//    println()
-//    println(stringified3)
-//    println()
+    RegisterAllocator.apply(program, immediateDominators)
+    val (stringified3, mapping23) = Renderer.renderSSA(program,
+      schedule(
+        program, loopTree,
+        dominatorDepth, immediateDominators,
+        controlFlowEdges, mapping
+      )
+    )
+    println()
+    println(stringified3)
+    println()
 
     val cfg = Util.findControlFlowGraph(program)
     val allVertices = cfg.flatMap{case (a, b) => Seq(a, b)}
