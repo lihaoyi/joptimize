@@ -65,9 +65,11 @@ object CodeGen{
     val blocksToNodes = nodesToBlocks.groupBy(_._2).map{case (k, v) => (k, v.keys)}
     pprint.log(nodesToBlocks)
     val (stringified, mapping2) = Renderer.renderSSA(program, nodesToBlocks)
+
     println()
     println(stringified)
     println()
+    ???
     RegisterAllocator.apply(program, immediateDominators)
     val (stringified3, mapping23) = Renderer.renderSSA(program,
       schedule(
@@ -175,6 +177,7 @@ object CodeGen{
 //    pprint.log(scheduler.block.map{case (k, v) => (k, mapping(v))}, height=9999)
 
     allVertices.collect{
+      case scheduleRoot: SSA.Phi => scheduler.scheduleLateRoot(scheduleRoot)
       case scheduleRoot: SSA.Block => scheduler.scheduleLateRoot(scheduleRoot)
     }
 

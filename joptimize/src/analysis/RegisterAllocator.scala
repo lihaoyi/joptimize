@@ -48,13 +48,13 @@ object RegisterAllocator {
 
     pprint.log(eqClses)
 
-    for(copy <- copies){
-      if (eqClses.find(_.contains(copy.src)) == eqClses.find(_.contains(copy))){
-        copy.src.downstream.remove(copy)
-        copy.downstream.foreach(copy.src.downstream.add)
-        val phi = copy.downstream.head.asInstanceOf[SSA.Phi]
-        phi.incoming = phi.incoming.map{ case (k, v) => (k, if (v == copy) copy.src else v) }
-      }
-    }
+//    for(copy <- copies){
+//      if (eqClses.find(_.contains(copy.src)) == eqClses.find(_.contains(copy))){
+//        copy.src.downstream.remove(copy)
+//        copy.downstream.foreach(copy.src.downstream.add)
+//        val phi = copy.downstream.head.asInstanceOf[SSA.Phi]
+//        phi.incoming = phi.incoming.map{ case (k, v) => (k, if (v == copy) copy.src else v) }
+//      }
+//    }
   }
 }

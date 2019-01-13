@@ -29,7 +29,7 @@ abstract class ClickScheduler(dominatorDepth: Map[SSA.Block, Int],
 
   def scheduleLateRoot(n: SSA.Node): Unit = {
     downstream(n).foreach{
-      case v: SSA.Val => if (!isPinned(v)) scheduleLate(v)
+      case v: SSA.Val if !isPinned(v) => scheduleLate(v)
       case _ => //do nothing
     }
   }
@@ -50,9 +50,6 @@ abstract class ClickScheduler(dominatorDepth: Map[SSA.Block, Int],
             case v: SSA.Val => lca = findLca(lca, block(v))
           }
         }
-
-        pprint.log(mapping(lca))
-
 
         var best = lca
         while(lca != block(n)){
