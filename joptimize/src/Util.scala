@@ -266,25 +266,24 @@ object Util{
         .keySet ++
         allVertices.collect {
           case k: SSA.Phi => k
-          case a: SSA.Arg => a
           case b: SSA.Block => b
         }
 
 
     val savedLocals = mutable.Map[SSA.Val, (Int, String)]()
 
-    for ((r: SSA.Val, i) <- saveable.zipWithIndex) {
-      savedLocals.put(
+    allVertices.collect{case a: SSA.Arg =>
+      savedLocals.update(a, (a.index, "arg" + a.index))
+    }
+
+    saveable.collect{case r: SSA.Val =>
+      savedLocals.update(
         r,
-        r match{
-          case a: SSA.Arg => (a.index, "arg" + a.index)
-          case _ =>
-            (
-              i,
-              if (downstreamLookup.getOrElse(r, Nil).size > 1) "local" + i
-              else "stack" + i
-            )
-        }
+        (
+          savedLocals.size,
+          if (downstreamLookup.getOrElse(r, Nil).size > 1) "local" + savedLocals.size
+          else "stack" + savedLocals.size
+        )
       )
     }
     (finalOrderingMap, saveable, savedLocals)

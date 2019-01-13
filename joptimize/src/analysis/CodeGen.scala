@@ -85,7 +85,7 @@ object CodeGen{
     pprint.log(sortedBlocks.map(mapping2))
     val output = new InsnList()
     val labels = sortedBlocks.map(_ -> new LabelNode()).toMap
-    val savedLocalNumbers = savedLocals.map{case (k, v) => (k, v._1)}.toMap
+    val savedLocalNumbers = savedLocals.map{case (k, v) => (k, (v._2.startsWith("local"), v._1))}.toMap
     pprint.log(savedLocalNumbers)
     val blockCode = mutable.Buffer.empty[Seq[AbstractInsnNode]]
     for(block <- sortedBlocks){
@@ -94,7 +94,10 @@ object CodeGen{
       insns.append(labels(block))
       val blockNodes = blocksToNodes.getOrElse(block, Nil)
       for(node <- blockNodes if savedLocals.contains(node) && !node.isInstanceOf[SSA.Arg]){
-        insns.appendAll(generateBytecode(node, savedLocalNumbers, _ => ???, _ => ???))
+        pprint.log(node)
+        val nodeInsns = generateBytecode(node, savedLocalNumbers, _ => ???, _ => ???)
+        pprint.log(nodeInsns)
+        insns.appendAll(nodeInsns)
       }
 
       val code = generateBytecode(
@@ -216,7 +219,7 @@ object CodeGen{
     )
   }
   def generateBytecode(ssa: SSA.Node,
-                       savedLocals: Map[SSA.Val, Int],
+                       savedLocals: Map[SSA.Val, (Boolean, Int)],
                        jumpLabel: SSA.Block => LabelNode,
                        fallthroughLabel: SSA.Block => Option[LabelNode]) = {
     def rec(ssa: SSA.Val): Seq[AbstractInsnNode] = {
@@ -231,7 +234,7 @@ object CodeGen{
 //              case JType.Prim.D => DLOAD
 //              case _ => ALOAD
 //            },
-            savedLocals(ssa)
+            savedLocals(ssa)._2
           )
         )
       }else compute(ssa)
@@ -336,8 +339,8 @@ object CodeGen{
       val save = ssa match{
         case n: SSA.Val if savedLocals.contains(n) =>
 //          val n = savedLocals(n)
-          Seq(
-            new InsnNode(DUP),
+          val dup = if (savedLocals(n)._1) Seq(new InsnNode(DUP)) else Nil
+          dup ++ Seq(
             new VarInsnNode(
               ISTORE,
               //                inferredTypes.get(ssa).widen match{
@@ -347,7 +350,7 @@ object CodeGen{
               //                  case JType.Prim.D => DSTORE
               //                  case _ => ASTORE
               //                },
-              savedLocals(n)
+              savedLocals(n)._2
             )
           )
         case _ => Nil
