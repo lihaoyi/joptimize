@@ -20,10 +20,6 @@ import scala.collection.mutable
   */
 
 object CodeGen{
-
-
-
-
   def apply(program: Program, mapping: Map[SSA.Node, String]): InsnList = {
     val controlFlowEdges = Util.findControlFlowGraph(program)
 
@@ -55,6 +51,8 @@ object CodeGen{
 
     val (immediateDominators, dominatorDepth) = findDominators(controlFlowEdges)
 
+    RegisterAllocator.apply(program, immediateDominators)
+
     val nodesToBlocks = schedule(
       program, loopTree,
       dominatorDepth, immediateDominators,
@@ -63,23 +61,11 @@ object CodeGen{
 
     val (finalOrderingMap, saveable, savedLocals) = Util.findSaveable(program, nodesToBlocks)
     val blocksToNodes = nodesToBlocks.groupBy(_._2).map{case (k, v) => (k, v.keys)}
-    pprint.log(nodesToBlocks)
     val (stringified, mapping2) = Renderer.renderSSA(program, nodesToBlocks)
+    pprint.log(nodesToBlocks.mapValues(mapping2))
 
     println()
     println(stringified)
-    println()
-
-    RegisterAllocator.apply(program, immediateDominators)
-    val (stringified3, mapping23) = Renderer.renderSSA(program,
-      schedule(
-        program, loopTree,
-        dominatorDepth, immediateDominators,
-        controlFlowEdges, mapping
-      )
-    )
-    println()
-    println(stringified3)
     println()
 
     val cfg = Util.findControlFlowGraph(program)
@@ -103,12 +89,14 @@ object CodeGen{
     pprint.log(savedLocalNumbers)
     val blockCode = mutable.Buffer.empty[Seq[AbstractInsnNode]]
     for(block <- sortedBlocks){
+      pprint.log(block)
       val insns = mutable.Buffer.empty[AbstractInsnNode]
       insns.append(labels(block))
       val blockNodes = blocksToNodes.getOrElse(block, Nil)
       for(node <- blockNodes if savedLocals.contains(node) && !node.isInstanceOf[SSA.Arg]){
         insns.appendAll(generateBytecode(node, savedLocalNumbers, _ => ???, _ => ???))
       }
+
       val code = generateBytecode(
         block,
         savedLocalNumbers,
@@ -249,10 +237,11 @@ object CodeGen{
       }else compute(ssa)
     }
 
-    def compute(ssa: SSA.Node) = {
+    def compute(ssa: SSA.Node): Seq[AbstractInsnNode] = {
       val upstreams = ssa.upstream.collect{case n: SSA.Val => n}.flatMap(rec)
       val current: Seq[AbstractInsnNode] = ssa match{
         case r: SSA.Merge => Nil
+        case n: SSA.Copy => Nil
         case n @ SSA.UnaBranch(block, a, opcode) =>
           val goto = fallthroughLabel(n).map(new JumpInsnNode(GOTO, _))
           val jump = Seq(new JumpInsnNode(opcode.i, jumpLabel(n)))
