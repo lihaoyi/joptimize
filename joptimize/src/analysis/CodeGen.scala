@@ -69,19 +69,19 @@ object CodeGen{
     println()
     println(stringified)
     println()
-    ???
-    RegisterAllocator.apply(program, immediateDominators)
-    val (stringified3, mapping23) = Renderer.renderSSA(program,
-      schedule(
-        program, loopTree,
-        dominatorDepth, immediateDominators,
-        controlFlowEdges, mapping
-      )
-    )
-    println()
-    println(stringified3)
-    println()
-    ???
+
+//    RegisterAllocator.apply(program, immediateDominators)
+//    val (stringified3, mapping23) = Renderer.renderSSA(program,
+//      schedule(
+//        program, loopTree,
+//        dominatorDepth, immediateDominators,
+//        controlFlowEdges, mapping
+//      )
+//    )
+//    println()
+//    println(stringified3)
+//    println()
+
     val cfg = Util.findControlFlowGraph(program)
     val allVertices = cfg.flatMap{case (a, b) => Seq(a, b)}
     val predecessor = cfg.groupBy(_._2).map{case (k, v) => (k, v.map(_._1))}
@@ -101,11 +101,13 @@ object CodeGen{
     val labels = sortedBlocks.map(_ -> new LabelNode()).toMap
     val savedLocalNumbers = savedLocals.map{case (k, v) => (k, v._1)}.toMap
     pprint.log(savedLocalNumbers)
+    val blockCode = mutable.Buffer.empty[Seq[AbstractInsnNode]]
     for(block <- sortedBlocks){
-      output.add(labels(block))
+      val insns = mutable.Buffer.empty[AbstractInsnNode]
+      insns.append(labels(block))
       val blockNodes = blocksToNodes.getOrElse(block, Nil)
       for(node <- blockNodes if savedLocals.contains(node) && !node.isInstanceOf[SSA.Arg]){
-        generateBytecode(node, savedLocalNumbers, _ => ???, _ => ???).foreach(output.add)
+        insns.appendAll(generateBytecode(node, savedLocalNumbers, _ => ???, _ => ???))
       }
       val code = generateBytecode(
         block,
@@ -113,21 +115,28 @@ object CodeGen{
         jumpLabel = { srcBlock =>
           labels(
             srcBlock.downstream.collect{case t: SSA.True => t}.head
-                    .downstream.collect{case t: SSA.Block => t}.head
           )
         },
         fallthroughLabel = {srcBlock =>
-          Some(
-            labels(
-              srcBlock.downstream.collect{case t: SSA.False => t}.head
-                      .downstream.collect{case t: SSA.Block => t}.head
-            )
-          )
+          val destination = srcBlock.downstream.collect{case t: SSA.False => t}.head
+          if (sortedBlocks.indexOf(destination) == sortedBlocks.indexOf(block) + 1) None
+          else Some(labels(destination))
         }
       )
-      code.foreach(output.add)
+
+      insns.appendAll(code)
+
+      blockCode.append(insns)
+      insns.foreach(output.add)
     }
-    println(Renderer.renderInsns(output))
+//    println(Renderer.renderInsns(output))
+    println()
+    for(block <- blockCode){
+      for(insn <- block){
+        println(Renderer.renderInsns(output, insn))
+      }
+      println()
+    }
 
     ???
   }
