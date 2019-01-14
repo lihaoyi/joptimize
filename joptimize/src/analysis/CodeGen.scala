@@ -92,6 +92,26 @@ object CodeGen{
       pprint.log(block)
       val insns = mutable.Buffer.empty[AbstractInsnNode]
       insns.append(labels(block))
+
+      if (block.isInstanceOf[SSA.BinBranch] || block.isInstanceOf[SSA.UnaBranch]){
+        val code = generateBytecode(
+          block,
+          savedLocalNumbers,
+          jumpLabel = { srcBlock =>
+            labels(
+              srcBlock.downstream.collect{case t: SSA.True => t}.head
+            )
+          },
+          fallthroughLabel = {srcBlock =>
+            val destination = srcBlock.downstream.collect{case t: SSA.False => t}.head
+            if (sortedBlocks.indexOf(destination) == sortedBlocks.indexOf(block) + 1) None
+            else Some(labels(destination))
+          }
+        )
+
+        insns.appendAll(code)
+      }
+
       val blockNodes = blocksToNodes.getOrElse(block, Nil)
       for(node <- blockNodes if savedLocals.contains(node) && !node.isInstanceOf[SSA.Arg]){
         pprint.log(node)
@@ -100,22 +120,15 @@ object CodeGen{
         insns.appendAll(nodeInsns)
       }
 
-      val code = generateBytecode(
-        block,
-        savedLocalNumbers,
-        jumpLabel = { srcBlock =>
-          labels(
-            srcBlock.downstream.collect{case t: SSA.True => t}.head
-          )
-        },
-        fallthroughLabel = {srcBlock =>
-          val destination = srcBlock.downstream.collect{case t: SSA.False => t}.head
-          if (sortedBlocks.indexOf(destination) == sortedBlocks.indexOf(block) + 1) None
-          else Some(labels(destination))
-        }
-      )
 
-      insns.appendAll(code)
+
+      val downstreamBlocks = block.downstream.collect{case b: SSA.Block => b}
+      val (downstreamDirect, downstreamIndirect) = downstreamBlocks.partition(sortedBlocks.indexOf(_) == sortedBlocks.indexOf(block) + 1)
+      if (downstreamDirect.isEmpty){
+        for(d <- downstreamIndirect.headOption){
+          insns.append(new JumpInsnNode(GOTO, labels(d)))
+        }
+      }
 
       blockCode.append(insns)
       insns.foreach(output.add)
