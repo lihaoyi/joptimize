@@ -205,7 +205,7 @@ object CodeGen{
       case scheduleRoot: SSA.Block => scheduler.scheduleEarlyRoot(scheduleRoot)
     }
 
-//    pprint.log(scheduler.block.map{case (k, v) => (k, mapping(v))}, height=9999)
+    pprint.log(scheduler.block.map{case (k, v) => (k, mapping(v))}, height=9999)
 
     allVertices.collect{
       case scheduleRoot: SSA.Phi => scheduler.scheduleLateRoot(scheduleRoot)
@@ -214,8 +214,9 @@ object CodeGen{
         scheduler.scheduleLateRoot(scheduleRoot)
     }
 
-//    pprint.log(scheduler.block.map{case (k, v) => (k, mapping(v))}, height=9999)
+    pprint.log(scheduler.block.map{case (k, v) => (k, mapping(v))}, height=9999)
 
+//    ???
     scheduler.block.filter{case (k, v) => v != null}.toMap
   }
 

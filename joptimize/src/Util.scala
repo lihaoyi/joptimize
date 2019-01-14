@@ -298,8 +298,8 @@ object Util{
       visited.add(current)
 
       val upstreams = current match{
-        case n: SSA.True => Seq(n.node)
-        case n: SSA.False => Seq(n.node)
+        case n: SSA.True => Seq(n.block)
+        case n: SSA.False => Seq(n.block)
         case n: SSA.UnaBranch => Seq(n.block)
         case n: SSA.BinBranch => Seq(n.block)
         case n: SSA.Return => Seq(n.block)

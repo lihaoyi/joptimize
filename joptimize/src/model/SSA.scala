@@ -55,8 +55,8 @@ object SSA{
       case n: SSA.MonitorExit => n.indexSrc = swap(n.indexSrc)
       case r: SSA.Merge =>
         r.incoming = r.incoming.map(swap)
-      case n: SSA.True => n.node = swap(n.node)
-      case n: SSA.False => n.node = swap(n.node)
+      case n: SSA.True => n.block = swap(n.block)
+      case n: SSA.False => n.block = swap(n.block)
       case n: SSA.UnaBranch =>
         n.block = swap(n.block)
         n.a = swap(n.a)
@@ -117,6 +117,9 @@ object SSA{
       this
     }
   }
+  sealed abstract class SimpleBlock() extends Block(){
+    def block: SSA.Block
+  }
   trait Codes{
     private[this] val lookup0 = mutable.LinkedHashMap.empty[Int, Code]
     class Code private[SSA] (val i: Int, val typeSize: Int = 0)(implicit name: sourcecode.Name){
@@ -136,11 +139,11 @@ object SSA{
 
     override def toString = s"Region@${Integer.toHexString(System.identityHashCode(this))}(${incoming.size})"
   }
-  case class True(var node: Block) extends Block(){
-    def upstream = Seq(node)
+  case class True(var block: Block) extends SimpleBlock(){
+    def upstream = Seq(block)
   }
-  case class False(var node: Block) extends Block(){
-    def upstream = Seq(node)
+  case class False(var block: Block) extends SimpleBlock(){
+    def upstream = Seq(block)
   }
   case class Arg(var index: Int, var tpe: IType) extends Val(tpe.size){
     def upstream = Nil
@@ -212,7 +215,7 @@ object SSA{
     val F2D = new Code(Opcodes.F2D, 2)
   }
 
-  case class UnaBranch(var block: Block, var a: Val, var opcode: UnaBranch.Code) extends Block(){
+  case class UnaBranch(var block: Block, var a: Val, var opcode: UnaBranch.Code) extends SimpleBlock(){
     def upstream = Seq(block, a)
   }
   object UnaBranch  extends Codes{
@@ -225,7 +228,7 @@ object SSA{
     val IFNULL = new Code(Opcodes.IFNULL)
     val IFNONNULL = new Code(Opcodes.IFNONNULL)
   }
-  case class BinBranch(var block: Block, var a: Val, var b: Val, var opcode: BinBranch.Code) extends Block(){
+  case class BinBranch(var block: Block, var a: Val, var b: Val, var opcode: BinBranch.Code) extends SimpleBlock(){
     def upstream = Seq(block, a, b)
   }
 
@@ -239,10 +242,10 @@ object SSA{
     val IF_ACMPEQ = new Code(Opcodes.IF_ACMPEQ)
     val IF_ACMPNE = new Code(Opcodes.IF_ACMPNE)
   }
-  case class ReturnVal(var block: Block, var a: Val) extends Block(){
+  case class ReturnVal(var block: Block, var a: Val) extends SimpleBlock(){
     def upstream = Seq(block, a)
   }
-  case class Return(var block: Block) extends Block(){
+  case class Return(var block: Block) extends SimpleBlock(){
     def upstream = Seq(block)
   }
   case class AThrow(var src: Val) extends Block(){

@@ -40,13 +40,14 @@ abstract class ClickScheduler(dominatorDepth: Map[SSA.Block, Int],
       scheduleLateRoot(n)
       if (!isPinned(n)){
         var lca: SSA.Block = null
+
         for(out <- downstream(n)){
           out match{
             case phi: SSA.Phi =>
               for((block, value) <- phi.incoming){
                 if (value eq n) lca = findLca(lca, block)
               }
-            case c: SSA.Block => lca = findLca(lca, c)
+            case c: SSA.SimpleBlock => lca = findLca(lca, c.block)
             case v: SSA.Val => lca = findLca(lca, block(v))
           }
         }
