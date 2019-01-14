@@ -36,27 +36,27 @@ object RegisterAllocator {
         case _ => //donothing
       }
     }
-    val phiEqClses = eqClses.flatten
-    copies.map(_.src)
-      .filter(!phiEqClses.contains(_))
-      .foreach{src => eqClses.add(Set(src))}
-
-    pprint.log(eqClses)
-    // PhiMemCoalesce
-    for(copy <- copies){
-      val copyEqCls = eqClses.find(_.contains(copy)).get
-      val srcEqCls = eqClses.find(_.contains(copy.src)).get
-      pprint.log(copy)
-      pprint.log(copyEqCls)
-      pprint.log(srcEqCls)
-      if (copyEqCls.intersect(srcEqCls).isEmpty){
-        eqClses.remove(copyEqCls)
-        eqClses.remove(srcEqCls)
-        eqClses.add(copyEqCls.union(srcEqCls))
-      }
-    }
-
-    pprint.log(eqClses)
+//    val phiEqClses = eqClses.flatten
+//    copies.map(_.src)
+//      .filter(!phiEqClses.contains(_))
+//      .foreach{src => eqClses.add(Set(src))}
+//
+//    pprint.log(eqClses)
+//    // PhiMemCoalesce
+//    for(copy <- copies){
+//      val copyEqCls = eqClses.find(_.contains(copy)).get
+//      val srcEqCls = eqClses.find(_.contains(copy.src)).get
+//      pprint.log(copy)
+//      pprint.log(copyEqCls)
+//      pprint.log(srcEqCls)
+//      if (copyEqCls.intersect(srcEqCls).isEmpty){
+//        eqClses.remove(copyEqCls)
+//        eqClses.remove(srcEqCls)
+//        eqClses.add(copyEqCls.union(srcEqCls))
+//      }
+//    }
+//
+//    pprint.log(eqClses)
 
 //    for(copy <- copies){
 //      if (eqClses.find(_.contains(copy.src)) == eqClses.find(_.contains(copy))){

@@ -73,23 +73,24 @@ object CodeGen{
     val predecessor = cfg.groupBy(_._2).map{case (k, v) => (k, v.map(_._1))}
     val startNode = allVertices.find(!predecessor.contains(_)).get
     val successor = cfg.groupBy(_._1).map{case (k, v) => (k, v.map(_._2))}
-    val seen = mutable.LinkedHashSet.empty[SSA.Block]
-    def sortBlocks(block: SSA.Block): Unit = if (!seen(block)){
-      seen.add(block)
+    val sortedBlocks = mutable.LinkedHashSet.empty[SSA.Block]
+    def sortBlocks(block: SSA.Block): Unit = if (!sortedBlocks(block)){
+      sortedBlocks.add(block)
       for(s <- successor.getOrElse(block, Nil)) sortBlocks(s)
     }
 
     sortBlocks(startNode)
 
-    val sortedBlocks = seen.toSeq
+    val blockIndices = sortedBlocks.zipWithIndex.toMap
+
     pprint.log(sortedBlocks.map(mapping2))
     val output = new InsnList()
     val labels = sortedBlocks.map(_ -> new LabelNode()).toMap
     val savedLocalNumbers = savedLocals.map{case (k, v) => (k, (v._2.startsWith("local"), v._1))}.toMap
     pprint.log(savedLocalNumbers)
-    val blockCode = mutable.Buffer.empty[Seq[AbstractInsnNode]]
+    val blockCode = mutable.Buffer.empty[(Seq[AbstractInsnNode], Option[AbstractInsnNode])]
     for(block <- sortedBlocks){
-      pprint.log(block)
+
       val insns = mutable.Buffer.empty[AbstractInsnNode]
       insns.append(labels(block))
 
@@ -104,7 +105,7 @@ object CodeGen{
           },
           fallthroughLabel = {srcBlock =>
             val destination = srcBlock.downstream.collect{case t: SSA.False => t}.head
-            if (sortedBlocks.indexOf(destination) == sortedBlocks.indexOf(block) + 1) None
+            if (blockIndices(destination) == blockIndices(block) + 1) None
             else Some(labels(destination))
           }
         )
@@ -114,31 +115,27 @@ object CodeGen{
 
       val blockNodes = blocksToNodes.getOrElse(block, Nil)
       for(node <- blockNodes if savedLocals.contains(node) && !node.isInstanceOf[SSA.Arg]){
-        pprint.log(node)
         val nodeInsns = generateBytecode(node, savedLocalNumbers, _ => ???, _ => ???)
-        pprint.log(nodeInsns)
         insns.appendAll(nodeInsns)
       }
 
-
-
       val downstreamBlocks = block.downstream.collect{case b: SSA.Block => b}
-      val (downstreamDirect, downstreamIndirect) = downstreamBlocks.partition(sortedBlocks.indexOf(_) == sortedBlocks.indexOf(block) + 1)
-      if (downstreamDirect.isEmpty){
-        for(d <- downstreamIndirect.headOption){
-          insns.append(new JumpInsnNode(GOTO, labels(d)))
-        }
+
+      val footer = downstreamBlocks.toSeq match{
+        case Seq(d) if blockIndices(d) != blockIndices(block) + 1 => Some(new JumpInsnNode(GOTO, labels(d)))
+        case _ => None
       }
 
-      blockCode.append(insns)
-      insns.foreach(output.add)
+      blockCode.append(insns -> footer)
     }
-//    println(Renderer.renderInsns(output))
+
+    for((insns, footer) <- blockCode){
+      insns.foreach(output.add)
+      footer.foreach(output.add)
+    }
     println()
-    for(block <- blockCode){
-      for(insn <- block){
-        println(Renderer.renderInsns(output, insn))
-      }
+    for((insns, footer) <- blockCode){
+      for(insn <- insns ++ footer) println(Renderer.renderInsns(output, insn))
       println()
     }
 
