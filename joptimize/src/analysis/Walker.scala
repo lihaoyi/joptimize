@@ -121,34 +121,7 @@ class Walker(isInterface: JType.Cls => Boolean,
           Nil
       }.flatten
 
-      val queue = (phiMerges0 ++ regionStarts.values).to[mutable.LinkedHashSet]
-      queue.foreach(_.checkLinks())
-
-      while(queue.nonEmpty){
-        val current = queue.head
-        queue.remove(current)
-        val replacement = current match{
-          case phi: SSA.Phi =>
-            val filteredValues = phi.incoming.filter(_._2 != phi)
-
-            if(filteredValues.map(_._2).size == 1) Some(filteredValues.head._2)
-            else None
-
-          case reg: SSA.Merge =>
-            if (reg.incoming.size == 1) Some(reg.incoming.head)
-            else None
-
-          case _ => None
-        }
-        for(replacement <- replacement){
-          for(v <- current.upstream) v.downstream.remove(current)
-          replacement.downstream.remove(current)
-          val deltaDownstream = current.downstream.filter(_ != current)
-          replacement.downstream ++= deltaDownstream
-          for(down <- deltaDownstream) SSA.update(down, current, replacement)
-          replacement.downstream.foreach(queue.add)
-        }
-      }
+      simplifyPhiMerges(phiMerges0, regionStarts)
 
       val program = Program(terminals.map(_._2))
 
@@ -159,6 +132,38 @@ class Walker(isInterface: JType.Cls => Boolean,
       CodeGen(program, mapping)
       ???
     })
+  }
+
+  def simplifyPhiMerges(phiMerges0: mutable.LinkedHashSet[SSA.Phi],
+                        regionStarts: mutable.LinkedHashMap[AbstractInsnNode, SSA.Block]) = {
+    val queue = phiMerges0 ++ regionStarts.values
+    queue.foreach(_.checkLinks())
+
+    while (queue.nonEmpty) {
+      val current = queue.head
+      queue.remove(current)
+      val replacement = current match {
+        case phi: SSA.Phi =>
+          val filteredValues = phi.incoming.filter(_._2 != phi)
+
+          if (filteredValues.map(_._2).size == 1) Some(filteredValues.head._2)
+          else None
+
+        case reg: SSA.Merge =>
+          if (reg.incoming.size == 1) Some(reg.incoming.head)
+          else None
+
+        case _ => None
+      }
+      for (replacement <- replacement) {
+        for (v <- current.upstream) v.downstream.remove(current)
+        replacement.downstream.remove(current)
+        val deltaDownstream = current.downstream.filter(_ != current)
+        replacement.downstream ++= deltaDownstream
+        for (down <- deltaDownstream) SSA.update(down, current, replacement)
+        replacement.downstream.foreach(queue.add)
+      }
+    }
   }
 }
 
