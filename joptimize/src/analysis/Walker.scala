@@ -129,8 +129,8 @@ class Walker(isInterface: JType.Cls => Boolean,
       println(printed)
       pprint.log(mapping)
 
-      CodeGen(program, mapping)
-      ???
+      val finalInsns = CodeGen(program, mapping)
+      Walker.MethodResult(Nil, sig.desc.ret, finalInsns, false, Nil)
     })
   }
 

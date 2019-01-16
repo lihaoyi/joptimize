@@ -212,10 +212,12 @@ object Renderer {
           Util.findControlFlowGraph(program),
           (l, rhs, indent) => fansi.Str.join(renderStmt(l, indent.length / 2).get:_*),
           (l, indent) => {
+
             val n = scheduledVals
               .collect{case (a, b) if b == l && saveable(a) =>
                 renderStmt(a, indent.length / 2).map(x => fansi.Str.join(fansi.Str(indent) +: x:_*))
               }
+
             n.flatten.toSeq
           }
         )

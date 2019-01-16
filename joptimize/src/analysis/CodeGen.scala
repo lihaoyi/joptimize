@@ -160,7 +160,7 @@ object CodeGen{
       println()
     }
 
-    ???
+    output
   }
 
   def schedule(program: Program,

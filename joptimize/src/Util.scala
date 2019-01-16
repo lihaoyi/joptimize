@@ -257,7 +257,10 @@ object Util{
       downstreamLookup.filter { case (k, x) =>
         val scheduled = k match {
           case v: SSA.Val =>
-            val downstreamControls = x.collect { case (_, t: SSA.Val) => scheduledVals.get(t) }.flatten
+            val downstreamControls = x.collect {
+              case (_, t: SSA.Val) => scheduledVals.get(t)
+              case (_, t: SSA.SimpleBlock) => Some(t)
+            }.flatten
             scheduledVals.get(v).exists(c => downstreamControls.exists(_ != c))
           case _ => false
         }
@@ -268,7 +271,6 @@ object Util{
           case k: SSA.Phi => k
           case b: SSA.Block => b
         }
-
 
     val savedLocals = mutable.Map[SSA.Val, (Int, String)]()
 
