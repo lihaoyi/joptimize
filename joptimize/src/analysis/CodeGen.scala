@@ -90,11 +90,11 @@ object CodeGen{
     pprint.log(savedLocalNumbers)
     val blockCode = mutable.Buffer.empty[(Seq[AbstractInsnNode], Option[AbstractInsnNode])]
     for(block <- sortedBlocks){
-
+      pprint.log(block)
       val insns = mutable.Buffer.empty[AbstractInsnNode]
       insns.append(labels(block))
 
-      if (block.isInstanceOf[SSA.BinBranch] || block.isInstanceOf[SSA.UnaBranch]){
+      if (block.isInstanceOf[SSA.BinBranch] || block.isInstanceOf[SSA.UnaBranch] || block.isInstanceOf[SSA.Return] || block.isInstanceOf[SSA.ReturnVal]){
         val code = generateBytecode(
           block,
           savedLocalNumbers,
