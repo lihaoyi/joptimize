@@ -236,6 +236,10 @@ object MainTests extends TestSuite{
           else if (p == classOf[Char]) Char.box(a.toChar)
           else if (p == classOf[Byte]) Byte.box(a.toByte)
           else if (p == classOf[Boolean]) Boolean.box(a != 0)
+          else if (p == classOf[Short]) Short.box(a.toShort)
+          else if (p == classOf[Long]) Long.box(a.toLong)
+          else if (p == classOf[Float]) Float.box(a.toFloat)
+          else if (p == classOf[Double]) Double.box(a.toDouble)
           else throw new Exception(p.toString)
         }
 
@@ -278,6 +282,8 @@ object MainTests extends TestSuite{
     case n: java.lang.Integer => ujson.Num(n.toDouble)
     case n: java.lang.Byte => ujson.Num(n.toDouble)
     case n: java.lang.Double => ujson.Num(n.toDouble)
+    case n: java.lang.Short => ujson.Num(n.toShort)
+    case n: java.lang.Long => ujson.Num(n.toLong)
     case n: java.lang.Float => ujson.Num(n.toDouble)
     case n: java.lang.String => ujson.Str(n)
     case n: java.lang.Character => ujson.Str(n.toString)

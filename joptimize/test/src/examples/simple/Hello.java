@@ -30,7 +30,7 @@ public class Hello {
         return n + m;
     }
     @joptimize.Test(inputs = {1, 2, 3, 4, 5, 6})
-    public static short addS(short n, float m) {
+    public static short addS(short n, short m) {
         return (short)(n + m);
     }
     @joptimize.Test(inputs = {1, 2, 3, 4, 5, 6})
