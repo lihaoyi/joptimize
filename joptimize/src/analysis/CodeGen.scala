@@ -209,8 +209,6 @@ object CodeGen{
     allVertices.collect{
       case scheduleRoot: SSA.Phi => scheduler.scheduleLateRoot(scheduleRoot)
       case scheduleRoot: SSA.Block => scheduler.scheduleLateRoot(scheduleRoot)
-      case scheduleRoot: SSA.Val if scheduleRoot.upstream.isEmpty =>
-        scheduler.scheduleLateRoot(scheduleRoot)
     }
 
     pprint.log(scheduler.block.map{case (k, v) => (k, mapping(v))}, height=9999)
