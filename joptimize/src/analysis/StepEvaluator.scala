@@ -21,8 +21,8 @@ import scala.collection.mutable
   */
 class StepEvaluator(merges: mutable.LinkedHashSet[SSA.Phi],
                     blockStartIndex: Int => Boolean,
-                    findBlockStart: Int => SSA.Control,
-                    findBlockDest: Int => SSA.Control) extends joptimize.bytecode.Interpreter[SSA.Val]{
+                    findBlockStart: Int => SSA.Block,
+                    findBlockDest: Int => SSA.Block) extends joptimize.bytecode.Interpreter[SSA.Val]{
 
   def newOperation(insn: AbstractInsnNode) = {
     insn.getOpcode match {

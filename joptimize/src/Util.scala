@@ -299,19 +299,9 @@ object Util{
     def rec(current: SSA.Control): Unit = if (!visited(current)){
       visited.add(current)
 
-      val upstreams = current match{
-        case n: SSA.True => Seq(n.block)
-        case n: SSA.False => Seq(n.block)
-        case n: SSA.UnaBranch => Seq(n.block)
-        case n: SSA.BinBranch => Seq(n.block)
-        case n: SSA.Return => Seq(n.block)
-        case n: SSA.ReturnVal => Seq(n.block)
-        case r: SSA.Merge => r.incoming
-      }
-
-      for(block <- upstreams){
-        rec(block)
-        controlFlowEdges.append(block -> current)
+      for(control <- current.controls){
+        rec(control)
+        controlFlowEdges.append(control -> current)
       }
     }
 

@@ -99,8 +99,8 @@ object Renderer {
           case _: SSA.Return => "return" + savedBlocks.size
           case _: SSA.ReturnVal => "return" + savedBlocks.size
           case _: SSA.AThrow => "return" + savedBlocks.size
-          case n: SSA.True => "true" + getBlockId0(n.block)._1
-          case n: SSA.False => "false" + getBlockId0(n.block)._1
+          case n: SSA.True => "true" + getBlockId0(n.branch)._1
+          case n: SSA.False => "false" + getBlockId0(n.branch)._1
           case r: SSA.Merge =>
             val name = if (c.upstream.isEmpty) "start" else "block"
             name + savedBlocks.size
@@ -125,6 +125,7 @@ object Renderer {
     }
 
     def recVal(ssa: SSA.Val): Tree = ssa match{
+      case n: SSA.Arg => literal("arg" + n.index)
       case n: SSA.Copy => apply("copy", rec(n.src))
       case phi: SSA.Phi =>
         val block = Seq(renderBlock(phi.block))
@@ -160,8 +161,8 @@ object Renderer {
     }
 
     def recBlock(block: SSA.Control): (Str, Tree) = block match{
-      case n: SSA.True => (getBlockId(block), apply("true", atom(getBlockId(n.block).toString)))
-      case n: SSA.False => (getBlockId(block), apply("false", atom(getBlockId(n.block).toString)))
+      case n: SSA.True => (getBlockId(block), apply("true", atom(getBlockId(n.branch).toString)))
+      case n: SSA.False => (getBlockId(block), apply("false", atom(getBlockId(n.branch).toString)))
 
       case reg: SSA.Merge =>
         val name = if (reg.upstream.isEmpty) "start" else "merge"
