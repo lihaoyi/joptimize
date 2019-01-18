@@ -300,9 +300,9 @@ object CodeGen{
             ))
 
           case SSA.Return(block) => Seq(new InsnNode(RETURN))
-          case SSA.AThrow(src) => Seq(new InsnNode(ATHROW))
-          case SSA.TableSwitch(src, min, max) => ???
-          case SSA.LookupSwitch(src, keys) => ???
+          case SSA.AThrow(_, src) => Seq(new InsnNode(ATHROW))
+          case SSA.TableSwitch(_, src, min, max) => ???
+          case SSA.LookupSwitch(_, src, keys) => ???
 
           case _: SSA.Phi => Nil
           case SSA.Arg(index, typeSize) => Nil

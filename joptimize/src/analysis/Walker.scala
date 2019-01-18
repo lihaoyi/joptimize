@@ -96,7 +96,7 @@ class Walker(isInterface: JType.Cls => Boolean,
         case ((IRETURN | LRETURN | FRETURN | DRETURN | ARETURN, insn), i) =>
           (insn, new SSA.ReturnVal(findStartRegion(insn), frameTop(i, 0)), i) :: Nil
 
-        case ((ATHROW, insn), i) => (insn, new SSA.AThrow(frameTop(i, 0)), i) :: Nil
+        case ((ATHROW, insn), i) => (insn, new SSA.AThrow(findStartRegion(insn), frameTop(i, 0)), i) :: Nil
 
         case ((GOTO, insn: JumpInsnNode), i) =>
           mergeBlocks(insn.label, findStartRegion(insn), Some(insn))

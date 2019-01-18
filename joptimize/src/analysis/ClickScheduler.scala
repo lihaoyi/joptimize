@@ -48,6 +48,7 @@ abstract class ClickScheduler(dominatorDepth: Map[SSA.Control, Int],
                 if (value eq n) lca = findLca(lca, block)
               }
             case c: SSA.SimpleBlock => lca = findLca(lca, c.block)
+            case c: SSA.Jump => lca = findLca(lca, c.block)
             case v: SSA.Val => lca = findLca(lca, block(v))
           }
         }

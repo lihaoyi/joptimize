@@ -117,7 +117,13 @@ object SSA{
       this
     }
   }
-  sealed abstract class SimpleBlock() extends Control(){
+  sealed abstract class Block() extends Control(){
+
+  }
+  sealed abstract class Jump() extends Control(){
+    def block: SSA.Control
+  }
+  sealed abstract class SimpleBlock() extends Block(){
     def block: SSA.Control
   }
   trait Codes{
@@ -134,7 +140,7 @@ object SSA{
     override def toString = s"Phi@${Integer.toHexString(System.identityHashCode(this))}(${incoming.size})"
   }
 
-  class Merge(var insnIndex: Int, var incoming: Set[Control]) extends Control(){
+  class Merge(var insnIndex: Int, var incoming: Set[Control]) extends Block(){
     def upstream = incoming.toSeq
 
     override def toString = s"Region@${Integer.toHexString(System.identityHashCode(this))}(${incoming.size})"
@@ -215,7 +221,7 @@ object SSA{
     val F2D = new Code(Opcodes.F2D, 2)
   }
 
-  case class UnaBranch(var block: Control, var a: Val, var opcode: UnaBranch.Code) extends SimpleBlock(){
+  case class UnaBranch(var block: Control, var a: Val, var opcode: UnaBranch.Code) extends Jump(){
     def upstream = Seq(block, a)
   }
   object UnaBranch  extends Codes{
@@ -228,7 +234,7 @@ object SSA{
     val IFNULL = new Code(Opcodes.IFNULL)
     val IFNONNULL = new Code(Opcodes.IFNONNULL)
   }
-  case class BinBranch(var block: Control, var a: Val, var b: Val, var opcode: BinBranch.Code) extends SimpleBlock(){
+  case class BinBranch(var block: Control, var a: Val, var b: Val, var opcode: BinBranch.Code) extends Jump(){
     def upstream = Seq(block, a, b)
   }
 
@@ -242,19 +248,19 @@ object SSA{
     val IF_ACMPEQ = new Code(Opcodes.IF_ACMPEQ)
     val IF_ACMPNE = new Code(Opcodes.IF_ACMPNE)
   }
-  case class ReturnVal(var block: Control, var a: Val) extends SimpleBlock(){
+  case class ReturnVal(var block: Control, var a: Val) extends Jump(){
     def upstream = Seq(block, a)
   }
-  case class Return(var block: Control) extends SimpleBlock(){
+  case class Return(var block: Control) extends Jump(){
     def upstream = Seq(block)
   }
-  case class AThrow(var src: Val) extends Control(){
+  case class AThrow(var block: Control, var src: Val) extends Jump(){
     def upstream = Seq(src)
   }
-  case class TableSwitch(var src: Val, min: Int, max: Int) extends Control(){
+  case class TableSwitch(var block: Control, var src: Val, min: Int, max: Int) extends Jump(){
     def upstream = Seq(src)
   }
-  case class LookupSwitch(var src: Val, var keys: Seq[Int]) extends Control(){
+  case class LookupSwitch(var block: Control, var src: Val, var keys: Seq[Int]) extends Jump(){
     def upstream = Seq(src)
   }
   case class Copy(var src: Val) extends Val(src.getSize){
