@@ -214,7 +214,9 @@ object Renderer {
           (l, indent) => {
 
             val n = scheduledVals
-              .collect{case (a, b) if b == l && saveable(a) =>
+              .collect{case (a, b) if b == l && saveable(a) => a}
+              .toSeq.sortBy(finalOrderingMap(_))
+              .map{ a =>
                 renderStmt(a, indent.length / 2).map(x => fansi.Str.join(fansi.Str(indent) +: x:_*))
               }
 
