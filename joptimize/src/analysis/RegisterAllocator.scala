@@ -7,7 +7,7 @@ import scala.collection.mutable
 
 object RegisterAllocator {
   def apply(program: Program,
-            immediateDominators: Map[SSA.Block, SSA.Block]): Unit /*Map[SSA.Val, Int]*/ = {
+            immediateDominators: Map[SSA.Control, SSA.Control]): Unit /*Map[SSA.Val, Int]*/ = {
     val (allVertices, roots, downstreamEdges) =
       Util.breadthFirstAggregation[SSA.Node](program.allTerminals.toSet)(_.upstream)
 

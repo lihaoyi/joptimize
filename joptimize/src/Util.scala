@@ -235,7 +235,7 @@ object Util{
     finalOrderingMap
   }
 
-  def findSaveable(program: Program, scheduledVals: Map[SSA.Val, SSA.Block]) = {
+  def findSaveable(program: Program, scheduledVals: Map[SSA.Val, SSA.Control]) = {
     val allTerminals = program.allTerminals
     val (allVertices, roots, downstreamEdges) =
       Util.breadthFirstAggregation[SSA.Node](allTerminals.toSet) { x =>
@@ -248,7 +248,7 @@ object Util{
 
     val finalOrderingMap = sortVerticesForPrinting(allVertices, downstreamEdges) {
       case (_, _: SSA.Phi | _: SSA.Merge) => true
-      case (v: SSA.Val, c: SSA.Block) => true
+      case (v: SSA.Val, c: SSA.Control) => true
       case _ => false
     }
 
@@ -269,7 +269,7 @@ object Util{
         .keySet ++
         allVertices.collect {
           case k: SSA.Phi => k
-          case b: SSA.Block => b
+          case b: SSA.Control => b
         }
 
     val savedLocals = mutable.Map[SSA.Val, (Int, String)]()
@@ -293,10 +293,10 @@ object Util{
 
 
   def findControlFlowGraph(program: Program) = {
-    val controlFlowEdges = mutable.Buffer.empty[(SSA.Block, SSA.Block)]
-    val visited = mutable.LinkedHashSet.empty[SSA.Block]
+    val controlFlowEdges = mutable.Buffer.empty[(SSA.Control, SSA.Control)]
+    val visited = mutable.LinkedHashSet.empty[SSA.Control]
 
-    def rec(current: SSA.Block): Unit = if (!visited(current)){
+    def rec(current: SSA.Control): Unit = if (!visited(current)){
       visited.add(current)
 
       val upstreams = current match{

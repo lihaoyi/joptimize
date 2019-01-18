@@ -48,12 +48,12 @@ class Walker(isInterface: JType.Cls => Boolean,
         }
         .flatten
         .sortBy(insns.indexOf)
-      val regionStarts = mutable.LinkedHashMap(blockStarts.map(i => i -> (new SSA.Merge(insns.indexOf(i), Set()): SSA.Block)):_*)
+      val regionStarts = mutable.LinkedHashMap(blockStarts.map(i => i -> (new SSA.Merge(insns.indexOf(i), Set()): SSA.Control)):_*)
 
       //      regionStarts.keys.map("RSK " + Renderer.render(mn.instructions, _)).foreach(println)
-      def findStartRegion(insn: AbstractInsnNode): SSA.Block = {
+      def findStartRegion(insn: AbstractInsnNode): SSA.Control = {
         var current = insn
-        var region: SSA.Block = null
+        var region: SSA.Control = null
         while({
           //          println("XXX " + Renderer.render(mn.instructions, current))
           regionStarts.get(current) match{
@@ -79,7 +79,7 @@ class Walker(isInterface: JType.Cls => Boolean,
       )
       def frameTop(i: Int, n: Int) = frames(i).getStack(frames(i).getStackSize - 1 - n)
 
-      def mergeBlocks(lhs0: AbstractInsnNode, rhs: SSA.Block, rhsInsn: Option[AbstractInsnNode] = None): Unit = {
+      def mergeBlocks(lhs0: AbstractInsnNode, rhs: SSA.Control, rhsInsn: Option[AbstractInsnNode] = None): Unit = {
         println(Renderer.renderInsns(mn.instructions, lhs0))
         val lhs = regionStarts(lhs0)
         (lhs, rhs) match{
@@ -135,7 +135,7 @@ class Walker(isInterface: JType.Cls => Boolean,
   }
 
   def simplifyPhiMerges(phiMerges0: mutable.LinkedHashSet[SSA.Phi],
-                        regionStarts: mutable.LinkedHashMap[AbstractInsnNode, SSA.Block]) = {
+                        regionStarts: mutable.LinkedHashMap[AbstractInsnNode, SSA.Control]) = {
     val queue = phiMerges0 ++ regionStarts.values
     queue.foreach(_.checkLinks())
 

@@ -49,13 +49,13 @@ object Renderer {
     )
   }
 
-  def renderGraph(edges: Seq[(SSA.Block, SSA.Block)],
-                  coloring: (SSA.Block, Seq[SSA.Block], String) => fansi.Str,
-                  annotation: (SSA.Block, String) => Seq[fansi.Str] = (_, _) => Nil): fansi.Str = {
+  def renderGraph(edges: Seq[(SSA.Control, SSA.Control)],
+                  coloring: (SSA.Control, Seq[SSA.Control], String) => fansi.Str,
+                  annotation: (SSA.Control, String) => Seq[fansi.Str] = (_, _) => Nil): fansi.Str = {
     val loopTree = HavlakLoopTree.analyzeLoops(edges)
     val loopNestMap = mutable.LinkedHashMap.empty[SSA.Node, Int]
 
-    def recLoop(loop: HavlakLoopTree.Loop[SSA.Block], depth: Int): Unit = {
+    def recLoop(loop: HavlakLoopTree.Loop[SSA.Control], depth: Int): Unit = {
       loop.basicBlocks.foreach(loopNestMap(_) = depth)
       loop.children.foreach(recLoop(_, depth + 1))
     }
@@ -68,8 +68,8 @@ object Renderer {
     val startNode = allVertices.find(!predecessor.contains(_)).get
 
     val out = mutable.Buffer.empty[fansi.Str]
-    val seen = mutable.LinkedHashSet.empty[SSA.Block]
-    def recPrint(block: SSA.Block): Unit = if (!seen(block)){
+    val seen = mutable.LinkedHashSet.empty[SSA.Control]
+    def recPrint(block: SSA.Control): Unit = if (!seen(block)){
       seen.add(block)
       if (out.nonEmpty) out.append("\n")
       val indent = "  " * loopNestMap(block)
@@ -86,13 +86,13 @@ object Renderer {
     fansi.Str.join(out:_*)
   }
 
-  def renderSSA(program: Program, scheduledVals: Map[SSA.Val, SSA.Block] = Map.empty): (fansi.Str, Map[SSA.Node, String]) = {
+  def renderSSA(program: Program, scheduledVals: Map[SSA.Val, SSA.Control] = Map.empty): (fansi.Str, Map[SSA.Node, String]) = {
 
     val (finalOrderingMap, saveable, savedLocals) = Util.findSaveable(program, scheduledVals)
 
-    val savedBlocks = mutable.LinkedHashMap.empty[SSA.Block, (Int, String)]
-    def getBlockId(c: SSA.Block) = fansi.Color.Magenta(getBlockId0(c)._2)
-    def getBlockId0(c: SSA.Block): (Int, String) =
+    val savedBlocks = mutable.LinkedHashMap.empty[SSA.Control, (Int, String)]
+    def getBlockId(c: SSA.Control) = fansi.Color.Magenta(getBlockId0(c)._2)
+    def getBlockId0(c: SSA.Control): (Int, String) =
       savedBlocks.getOrElseUpdate(
         c,
         (savedBlocks.size, c match{
@@ -114,11 +114,11 @@ object Renderer {
     def literal(lhs: String) = pprint.Tree.Literal(lhs)
     def infix(lhs: Tree, op: String, rhs: Tree) = pprint.Tree.Infix(lhs, op, rhs)
 
-    def renderBlock(block: SSA.Block) = {
+    def renderBlock(block: SSA.Control) = {
       atom(getBlockId(block).toString)
     }
     def rec(ssa: SSA.Node): Tree = ssa match{
-      case x: SSA.Block => atom(getBlockId(x).toString)
+      case x: SSA.Control => atom(getBlockId(x).toString)
       case x: SSA.Val =>
         if (savedLocals.contains(x)) atom(fansi.Color.Cyan(savedLocals(x)._2).toString())
         else recVal(x)
@@ -159,7 +159,7 @@ object Renderer {
       case n: SSA.MonitorExit => ???
     }
 
-    def recBlock(block: SSA.Block): (Str, Tree) = block match{
+    def recBlock(block: SSA.Control): (Str, Tree) = block match{
       case n: SSA.True => (getBlockId(block), apply("true", atom(getBlockId(n.block).toString)))
       case n: SSA.False => (getBlockId(block), apply("false", atom(getBlockId(n.block).toString)))
 
@@ -192,7 +192,7 @@ object Renderer {
       else {
         val out = mutable.Buffer.empty[Str]
         val (lhs, rhs) = r match {
-          case r: SSA.Block =>
+          case r: SSA.Control =>
             recBlock(r)
           case r: SSA.Val => (fansi.Color.Cyan(savedLocals(r)._2), recVal(r))
         }
