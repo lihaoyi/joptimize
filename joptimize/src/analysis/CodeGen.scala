@@ -22,6 +22,10 @@ import scala.collection.mutable
 object CodeGen{
   def apply(program: Program, mapping: Map[SSA.Node, String]): InsnList = {
     val controlFlowEdges = Util.findControlFlowGraph(program)
+    val allBlocks = controlFlowEdges
+      .flatMap{case (k, v) => Seq(k, v)}
+      .collect{case b: SSA.Block => b}
+
     val blockEdges = controlFlowEdges.flatMap{
       case (k: SSA.Block, v: SSA.Jump) => Nil
       case (k: SSA.Jump, v: SSA.Block) => Seq(k.block -> v)
@@ -38,7 +42,7 @@ object CodeGen{
       )
     )
 
-    val loopTree = HavlakLoopTree.analyzeLoops(blockEdges)
+    val loopTree = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)
 
     def rec(l: HavlakLoopTree.Loop[SSA.Block], depth: Int, label0: List[Int]): Unit = {
       val indent = "    " * depth
@@ -53,7 +57,7 @@ object CodeGen{
 
     rec(loopTree, 0, Nil)
 
-    val (immediateDominators, dominatorDepth) = findDominators(blockEdges)
+    val (immediateDominators, dominatorDepth) = findDominators(blockEdges, allBlocks)
 
     RegisterAllocator.apply(program, immediateDominators)
 
@@ -223,8 +227,9 @@ object CodeGen{
     scheduler.block.filter{case (k, v) => v != null}.toMap
   }
 
-  def findDominators[T](edges: Seq[(T, T)]): (Map[T, T], Map[T, Int]) = {
-    val indices = edges.flatMap{case (x, y) => Seq(x, y)}.distinct.zipWithIndex.toMap
+  def findDominators[T](edges: Seq[(T, T)], allNodes0: Seq[T]): (Map[T, T], Map[T, Int]) = {
+    val allNodes = allNodes0.distinct
+    val indices = allNodes.zipWithIndex.toMap
     val nodes = indices.map(_.swap)
 
     val successorMap = edges.groupBy(_._1).map{case (k, v) => (indices(k), v.map(_._2).map(indices))}

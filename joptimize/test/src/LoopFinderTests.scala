@@ -10,10 +10,11 @@ object LoopFinderTests extends TestSuite{
                  expectedLoopTree: Loop[T],
                  expectedImmediateDominators: Map[T, T] = null,
                  expectedDominatorDepths: Map[T, Int] = null) = {
-      val analyzed = HavlakLoopTree.analyzeLoops(args)
+      val allNodes = args.flatMap{case (k, v) => Seq(k, v)}
+      val analyzed = HavlakLoopTree.analyzeLoops(args, allNodes)
       assert(analyzed == expectedLoopTree)
       if (expectedImmediateDominators!= null){
-        val (immediateDominators, dominatorDepths) = CodeGen.findDominators(args)
+        val (immediateDominators, dominatorDepths) = CodeGen.findDominators(args, allNodes)
         assert(immediateDominators == expectedImmediateDominators)
         assert(dominatorDepths == expectedDominatorDepths)
       }

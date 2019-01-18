@@ -11,6 +11,18 @@ import scala.reflect.ClassTag
 object MainTests extends TestSuite{
   def tests = Tests{
     'simple - {
+      'Hello - {
+        'incrI - annotatedTest
+        'incrJ - annotatedTest
+        'incrS - annotatedTest
+        'incrF - annotatedTest
+        'incrD - annotatedTest
+        'addI - annotatedTest
+        'addJ - annotatedTest
+        'addS - annotatedTest
+        'addF - annotatedTest
+        'addD - annotatedTest
+      }
       'IfElse - {
         'basicIf - annotatedTest
         'ifAssign - annotatedTest
@@ -46,7 +58,6 @@ object MainTests extends TestSuite{
       'Statics - {
         'helloWorld - annotatedTest
         'timesTwo - annotatedTest
-        'add - annotatedTest
         'helloWorld2 - annotatedTest
         'timesTwo2 - annotatedTest
         'tailFactorial - annotatedTest

@@ -121,18 +121,13 @@ object HavlakLoopTree {
   // been chosen to be identical to the nomenclature in Havlak's
   // paper (which, in turn, is similar to the one used by Tarjan).
   //
-  def analyzeLoops[T](edgeList: Seq[(T, T)]): Loop[T] = {
+  def analyzeLoops[T](edgeList: Seq[(T, T)], allNodes0: Seq[T]): Loop[T] = {
 
     val outEdges = edgeList.groupBy(_._1).map{case (k, v) => (k, v.map(_._2))}
     val inEdges = edgeList.groupBy(_._2).map{case (k, v) => (k, v.map(_._1))}
-
-    val (size, startNode) = {
-      // Avoid using allNodes throughout the body of this function, because
-      // we should be using `number` and `numberToNode` instead.
-      val allNodes = edgeList.flatMap{case (k, v) => Seq(k, v)}.distinct
-      val startNode = allNodes.find(!inEdges.contains(_)).get
-      (allNodes.size, startNode)
-    }
+    val allNodes = allNodes0.distinct
+    val size = allNodes.size
+    val startNode = allNodes.find(!inEdges.contains(_)).get
 
     val nonBackPreds    = new Array[Set[Int]](size)
     val backPreds       = new Array[Set[Int]](size)

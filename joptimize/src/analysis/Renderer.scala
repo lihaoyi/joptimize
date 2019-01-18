@@ -52,7 +52,7 @@ object Renderer {
   def renderGraph(edges: Seq[(SSA.Control, SSA.Control)],
                   coloring: (SSA.Control, Seq[SSA.Control], String) => fansi.Str,
                   annotation: (SSA.Control, String) => Seq[fansi.Str] = (_, _) => Nil): fansi.Str = {
-    val loopTree = HavlakLoopTree.analyzeLoops(edges)
+    val loopTree = HavlakLoopTree.analyzeLoops(edges, edges.flatMap{case (k, v) => Seq(k, v)})
     val loopNestMap = mutable.LinkedHashMap.empty[SSA.Node, Int]
 
     def recLoop(loop: HavlakLoopTree.Loop[SSA.Control], depth: Int): Unit = {

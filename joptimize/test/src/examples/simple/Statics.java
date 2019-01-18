@@ -11,11 +11,6 @@ public class Statics {
         return n * 2;
     }
 
-    @joptimize.Test(inputs = {1, 1, 1, 2, 2, 1, 2, 2})
-    public static int add(int a, int b) {
-        return a + b;
-    }
-
     @joptimize.Test(inputs = {1, 1, 5, 2})
     public static int helloWorld2(int a, int b) {
         return timesTwo2(a, b);
