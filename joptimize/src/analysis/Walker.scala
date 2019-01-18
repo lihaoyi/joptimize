@@ -111,7 +111,7 @@ class Walker(isInterface: JType.Cls => Boolean,
 
         case ((IF_ICMPEQ | IF_ICMPNE | IF_ICMPLT | IF_ICMPGE | IF_ICMPGT | IF_ICMPLE | IF_ACMPEQ | IF_ACMPNE, insn: JumpInsnNode), i) =>
           val startReg = findStartRegion(insn)
-          val n = new SSA.BinBranch(startReg, frameTop(i, 0), frameTop(i, 1), SSA.BinBranch.lookup(insn.getOpcode))
+          val n = new SSA.BinBranch(startReg, frameTop(i, 1), frameTop(i, 0), SSA.BinBranch.lookup(insn.getOpcode))
           mergeBlocks(insn.label, new SSA.True(n))
           mergeBlocks(insn.getNext, new SSA.False(n))
           Nil

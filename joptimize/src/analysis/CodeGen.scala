@@ -83,14 +83,14 @@ object CodeGen{
 
     val blockIndices = sortedBlocks.zipWithIndex.toMap
 
-    pprint.log(sortedBlocks.map(mapping2))
+//    pprint.log(sortedBlocks.map(mapping2))
     val output = new InsnList()
     val labels = sortedBlocks.map(_ -> new LabelNode()).toMap
     val savedLocalNumbers = savedLocals.map{case (k, v) => (k, (v._2.startsWith("local"), v._1))}.toMap
-    pprint.log(savedLocalNumbers)
+//    pprint.log(savedLocalNumbers)
     val blockCode = mutable.Buffer.empty[(Seq[AbstractInsnNode], Option[AbstractInsnNode])]
     for(block <- sortedBlocks){
-      pprint.log(block)
+//      pprint.log(block)
       val insns = mutable.Buffer.empty[AbstractInsnNode]
       insns.append(labels(block))
 
