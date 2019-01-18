@@ -38,9 +38,9 @@ object CodeGen{
       )
     )
 
-    val loopTree = HavlakLoopTree.analyzeLoops(controlFlowEdges)
+    val loopTree = HavlakLoopTree.analyzeLoops(blockEdges)
 
-    def rec(l: HavlakLoopTree.Loop[SSA.Control], depth: Int, label0: List[Int]): Unit = {
+    def rec(l: HavlakLoopTree.Loop[SSA.Block], depth: Int, label0: List[Int]): Unit = {
       val indent = "    " * depth
       val id = label0.reverseIterator.map("-" + _).mkString
       val reducible = if (l.isReducible) "" else " (Irreducible)"
@@ -77,55 +77,57 @@ object CodeGen{
     val predecessor = cfg.groupBy(_._2).map{case (k, v) => (k, v.map(_._1))}
     val startNode = allVertices.find(!predecessor.contains(_)).get
     val successor = cfg.groupBy(_._1).map{case (k, v) => (k, v.map(_._2))}
-    val sortedBlocks = mutable.LinkedHashSet.empty[SSA.Control]
-    def sortBlocks(block: SSA.Control): Unit = if (!sortedBlocks(block)){
-      sortedBlocks.add(block)
+    val sortedControls = mutable.LinkedHashSet.empty[SSA.Control]
+    def sortBlocks(block: SSA.Control): Unit = if (!sortedControls(block)){
+      sortedControls.add(block)
       for(s <- successor.getOrElse(block, Nil)) sortBlocks(s)
     }
 
     sortBlocks(startNode)
 
-    val blockIndices = sortedBlocks.zipWithIndex.toMap
+    val blockIndices = sortedControls.zipWithIndex.toMap
 
     val output = new InsnList()
-    val labels = sortedBlocks.map(_ -> new LabelNode()).toMap
+    val labels = sortedControls.map(_ -> new LabelNode()).toMap
     val savedLocalNumbers = savedLocals.map{case (k, v) => (k, (v._2.startsWith("local"), v._1))}.toMap
     val blockCode = mutable.Buffer.empty[(Seq[AbstractInsnNode], Option[AbstractInsnNode])]
-    for(block <- sortedBlocks){
+    for(control <- sortedControls){
 //      pprint.log(block)
       val insns = mutable.Buffer.empty[AbstractInsnNode]
-      insns.append(labels(block))
+      insns.append(labels(control))
+      control match{
+        case _: SSA.Jump =>
+          val code = generateBytecode(
+            control,
+            savedLocalNumbers,
+            jumpLabel = { srcBlock =>
+              labels(
+                srcBlock.downstream.collect{case t: SSA.True => t}.head
+              )
+            },
+            fallthroughLabel = {srcBlock =>
+              val destination = srcBlock.downstream.collect{case t: SSA.False => t}.head
+              if (blockIndices(destination) == blockIndices(control) + 1) None
+              else Some(labels(destination))
+            }
+          )
 
-      if (block.isInstanceOf[SSA.BinBranch] || block.isInstanceOf[SSA.UnaBranch] || block.isInstanceOf[SSA.Return] || block.isInstanceOf[SSA.ReturnVal]){
-        val code = generateBytecode(
-          block,
-          savedLocalNumbers,
-          jumpLabel = { srcBlock =>
-            labels(
-              srcBlock.downstream.collect{case t: SSA.True => t}.head
-            )
-          },
-          fallthroughLabel = {srcBlock =>
-            val destination = srcBlock.downstream.collect{case t: SSA.False => t}.head
-            if (blockIndices(destination) == blockIndices(block) + 1) None
-            else Some(labels(destination))
+          insns.appendAll(code)
+        case block: SSA.Block =>
+          val blockNodes = blocksToNodes.getOrElse(block, Nil).toSeq.sortBy(finalOrderingMap)
+          for(node <- blockNodes if savedLocals.contains(node) && !node.isInstanceOf[SSA.Arg]){
+            //        pprint.log(node)
+            val nodeInsns = generateBytecode(node, savedLocalNumbers, _ => ???, _ => ???)
+            insns.appendAll(nodeInsns)
           }
-        )
-
-        insns.appendAll(code)
       }
 
-      val blockNodes = blocksToNodes.getOrElse(block, Nil).toSeq.sortBy(finalOrderingMap)
-      for(node <- blockNodes if savedLocals.contains(node) && !node.isInstanceOf[SSA.Arg]){
-//        pprint.log(node)
-        val nodeInsns = generateBytecode(node, savedLocalNumbers, _ => ???, _ => ???)
-        insns.appendAll(nodeInsns)
-      }
 
-      val downstreamBlocks = block.downstream.collect{case b: SSA.Control => b}
+
+      val downstreamBlocks = control.downstream.collect{case b: SSA.Control => b}
 
       val footer = downstreamBlocks.toSeq match{
-        case Seq(d) if blockIndices(d) != blockIndices(block) + 1 => Some(new JumpInsnNode(GOTO, labels(d)))
+        case Seq(d) if blockIndices(d) != blockIndices(control) + 1 => Some(new JumpInsnNode(GOTO, labels(d)))
         case _ => None
       }
 
@@ -167,15 +169,15 @@ object CodeGen{
   }
 
   def schedule(program: Program,
-               loopTree: HavlakLoopTree.Loop[SSA.Control],
+               loopTree: HavlakLoopTree.Loop[SSA.Block],
                dominatorDepth: Map[SSA.Block, Int],
                immediateDominator: Map[SSA.Block, SSA.Block],
                graph: Seq[(SSA.Control, SSA.Control)],
-               mapping: Map[SSA.Node, String]): Map[SSA.Val, SSA.Control] = {
+               mapping: Map[SSA.Node, String]): Map[SSA.Val, SSA.Block] = {
     val (allVertices, roots, downstreamEdges) =
       Util.breadthFirstAggregation[SSA.Node](program.allTerminals.toSet)(_.upstream)
     val loopNestMap = mutable.LinkedHashMap.empty[SSA.Node, Int]
-    def recLoop(loop: HavlakLoopTree.Loop[SSA.Control], depth: Int): Unit = {
+    def recLoop(loop: HavlakLoopTree.Loop[SSA.Block], depth: Int): Unit = {
       loop.basicBlocks.foreach(loopNestMap(_) = depth)
       loop.children.foreach(recLoop(_, depth + 1))
     }
