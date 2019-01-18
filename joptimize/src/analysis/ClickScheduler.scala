@@ -4,8 +4,8 @@ import joptimize.model.SSA
 
 import scala.collection.mutable
 
-abstract class ClickScheduler(dominatorDepth: Map[SSA.Control, Int],
-                              immediateDominator: Map[SSA.Control, SSA.Control],
+abstract class ClickScheduler(dominatorDepth: Map[SSA.Block, Int],
+                              immediateDominator: Map[SSA.Block, SSA.Block],
                               mapping: Map[SSA.Node, String]) {
   def downstream(ssa: SSA.Node): Seq[SSA.Node]
   def upstream(ssa: SSA.Node): Seq[SSA.Val]
@@ -13,7 +13,7 @@ abstract class ClickScheduler(dominatorDepth: Map[SSA.Control, Int],
   def loopNest(block: SSA.Node): Int
   val visited = mutable.Map[SSA.Val, Unit]()
 
-  val block = mutable.LinkedHashMap.empty[SSA.Val, SSA.Control]
+  val block = mutable.LinkedHashMap.empty[SSA.Val, SSA.Block]
 
   def scheduleEarlyRoot(n: SSA.Node): Unit = {
     for(in <- upstream(n)){
@@ -39,7 +39,7 @@ abstract class ClickScheduler(dominatorDepth: Map[SSA.Control, Int],
       visited.put(n, ())
       scheduleLateRoot(n)
       if (!isPinned(n)){
-        var lca: SSA.Control = null
+        var lca: SSA.Block = null
 
         for(out <- downstream(n)){
           out match{
@@ -63,7 +63,7 @@ abstract class ClickScheduler(dominatorDepth: Map[SSA.Control, Int],
       }
     }
   }
-  def findLca(a0: SSA.Control, b0: SSA.Control): SSA.Control = {
+  def findLca(a0: SSA.Block, b0: SSA.Block): SSA.Block = {
     if (a0 == null) b0
     else{
       var a = a0

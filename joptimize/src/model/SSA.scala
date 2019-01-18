@@ -138,7 +138,7 @@ object SSA{
     def lookup(i: Int) = lookup0(i)
   }
 
-  class Phi(var block: Control, var incoming: Set[(SSA.Block, SSA.Val)], var typeSize: Int) extends Val(typeSize){
+  class Phi(var block: Block, var incoming: Set[(SSA.Block, SSA.Val)], var typeSize: Int) extends Val(typeSize){
     override def upstream: Seq[SSA.Node] = Seq(block) ++ incoming.flatMap(x => Seq(x._1, x._2)).toArray[SSA.Node]
     override def toString = s"Phi@${Integer.toHexString(System.identityHashCode(this))}(${incoming.size})"
   }

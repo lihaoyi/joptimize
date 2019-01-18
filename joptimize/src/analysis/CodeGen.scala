@@ -22,7 +22,11 @@ import scala.collection.mutable
 object CodeGen{
   def apply(program: Program, mapping: Map[SSA.Node, String]): InsnList = {
     val controlFlowEdges = Util.findControlFlowGraph(program)
-
+    val blockEdges = controlFlowEdges.flatMap{
+      case (k: SSA.Block, v: SSA.Jump) => Nil
+      case (k: SSA.Jump, v: SSA.Block) => Seq(k.block -> v)
+      case (k: SSA.Block, v: SSA.Block) => Seq(k -> v)
+    }
 
     println(
       Renderer.renderGraph(
@@ -49,7 +53,7 @@ object CodeGen{
 
     rec(loopTree, 0, Nil)
 
-    val (immediateDominators, dominatorDepth) = findDominators(controlFlowEdges)
+    val (immediateDominators, dominatorDepth) = findDominators(blockEdges)
 
     RegisterAllocator.apply(program, immediateDominators)
 
@@ -164,8 +168,8 @@ object CodeGen{
 
   def schedule(program: Program,
                loopTree: HavlakLoopTree.Loop[SSA.Control],
-               dominatorDepth: Map[SSA.Control, Int],
-               immediateDominator: Map[SSA.Control, SSA.Control],
+               dominatorDepth: Map[SSA.Block, Int],
+               immediateDominator: Map[SSA.Block, SSA.Block],
                graph: Seq[(SSA.Control, SSA.Control)],
                mapping: Map[SSA.Node, String]): Map[SSA.Val, SSA.Control] = {
     val (allVertices, roots, downstreamEdges) =
@@ -193,7 +197,7 @@ object CodeGen{
       }
     }
 
-    val startBlock = (graph.map(_._1).toSet -- graph.map(_._2)).head
+    val startBlock = (graph.map(_._1).toSet -- graph.map(_._2)).head.asInstanceOf[SSA.Block]
     allVertices.collect{
       case c: SSA.Phi => scheduler.block(c) = c.block
       case c: SSA.Val if c.upstream.isEmpty => scheduler.block(c) = startBlock
