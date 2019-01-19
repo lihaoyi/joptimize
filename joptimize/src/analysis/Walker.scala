@@ -70,8 +70,8 @@ class Walker(isInterface: JType.Cls => Boolean,
         Util.breadthFirstAggregation[SSA.Node](program.allTerminals.toSet)(_.upstream)._1
       )
 
-      val printed = Renderer.renderSSA(program, finalOrderingMap, saveable, savedLocals)
-      println(printed)
+      println()
+      println(Renderer.renderSSA(program, finalOrderingMap, saveable, savedLocals))
 
       val controlFlowEdges = Util.findControlFlowGraph(program)
       val allBlocks = controlFlowEdges
@@ -84,11 +84,13 @@ class Walker(isInterface: JType.Cls => Boolean,
         case (k: SSA.Block, v: SSA.Block) => Seq(k -> v)
       }
 
+      println()
       println(Renderer.renderControlFlowGraph(controlFlowEdges, savedLocals))
 
       val loopTree = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)
 
-      Renderer.renderLoopTree(loopTree, savedLocals)
+      println()
+      println(Renderer.renderLoopTree(loopTree, savedLocals))
 
       val (immediateDominators, dominatorDepth) = findDominators(blockEdges, allBlocks)
 
@@ -109,9 +111,8 @@ class Walker(isInterface: JType.Cls => Boolean,
 
       println()
       println(stringified)
-      println()
 
-      val finalInsns = CodeGen(
+      val blockCode = CodeGen(
         program,
         allVertices,
         nodesToBlocks,
@@ -119,7 +120,16 @@ class Walker(isInterface: JType.Cls => Boolean,
         savedLocals2.toMap,
         finalOrderingMap2
       )
-      Walker.MethodResult(Nil, sig.desc.ret, finalInsns, false, Nil)
+
+      val output = new InsnList()
+      for((insns, footer) <- blockCode){
+        insns.foreach(output.add)
+        footer.foreach(output.add)
+      }
+
+      println(Renderer.renderBlockCode(blockCode, output))
+
+      Walker.MethodResult(Nil, sig.desc.ret, output, false, Nil)
     })
   }
 

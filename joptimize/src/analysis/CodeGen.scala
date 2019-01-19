@@ -21,7 +21,7 @@ object CodeGen{
             nodesToBlocks: Map[SSA.Val, SSA.Block],
             cfg: Seq[(SSA.Control, SSA.Control)],
             savedLocals2: Map[SSA.Node, (Int, String)],
-            finalOrderingMap: Map[SSA.Node, Int]): InsnList = {
+            finalOrderingMap: Map[SSA.Node, Int]) = {
     val blocksToNodes = nodesToBlocks.groupBy(_._2).map{case (k, v) => (k, v.keys)}
     val sortedControls = sortControlFlowGraph(cfg)
 
@@ -91,19 +91,7 @@ object CodeGen{
       case _ => //do nothing
     }
 
-
-    for((insns, footer) <- blockCode){
-      insns.foreach(output.add)
-      footer.foreach(output.add)
-    }
-
-    println()
-    for((insns, footer) <- blockCode){
-      for(insn <- insns ++ footer) println(Renderer.renderInsns(output, insn))
-      println()
-    }
-
-    output
+    blockCode
   }
 
   def sortControlFlowGraph(cfg: Seq[(SSA.Control, SSA.Control)]) = {

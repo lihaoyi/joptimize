@@ -49,20 +49,33 @@ object Renderer {
     )
   }
 
+  def renderBlockCode(blockCode: Seq[(Seq[AbstractInsnNode], Option[AbstractInsnNode])],
+                      finalInsns: InsnList) = {
+    val output = mutable.Buffer.empty[fansi.Str]
+    for((insns, footer) <- blockCode){
+      for(insn <- insns ++ footer) output.append(Renderer.renderInsns(finalInsns, insn))
+      output.append("")
+    }
+    output.mkString("\n")
+  }
+
   def renderLoopTree(loopTree: HavlakLoopTree.Loop[SSA.Block],
                      savedLocals: mutable.Map[SSA.Node, (Int, String)]) = {
+    val out = mutable.Buffer.empty[String]
     def rec(l: HavlakLoopTree.Loop[SSA.Block], depth: Int, label0: List[Int]): Unit = {
       val indent = "    " * depth
       val id = label0.reverseIterator.map("-" + _).mkString
       val reducible = if (l.isReducible) "" else " (Irreducible)"
       val header = savedLocals(l.primaryHeader)._2
       val blockStr = l.basicBlocks.filter(_ != l.primaryHeader).map(x => savedLocals(x)._2).mkString("[", ", ", "]")
-      println(s"${indent}loop$id$reducible, header: $header, blocks: $blockStr")
+      out.append(s"${indent}loop$id$reducible, header: $header, blocks: $blockStr")
 
       for ((c, i) <- l.children.zipWithIndex) rec(c, depth + 1, i :: label0)
     }
 
     rec(loopTree, 0, Nil)
+
+    out.mkString("\n")
   }
 
   def renderControlFlowGraph(controlFlowEdges: Seq[(SSA.Control, SSA.Control)],
