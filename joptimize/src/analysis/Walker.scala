@@ -1,10 +1,6 @@
 package joptimize.analysis
 
-
-
-import fansi.Str
 import joptimize.Util
-import joptimize.analysis.CodeGen.schedule
 import joptimize.bytecode.Frame
 import joptimize.graph.HavlakLoopTree
 import joptimize.model._
@@ -93,7 +89,7 @@ class Walker(isInterface: JType.Cls => Boolean,
       val dominators = Dominator.findDominators(blockEdges, allBlocks)
 
       { // Just for debugging
-        val nodesToBlocks = schedule(
+        val nodesToBlocks = Scheduler.schedule(
           program, loopTree, dominators,
           controlFlowEdges, preScheduleIndex.savedLocals.mapValues(_._2),
           allVertices
@@ -110,7 +106,7 @@ class Walker(isInterface: JType.Cls => Boolean,
 
       val (allVertices2, _, _) = Util.breadthFirstAggregation[SSA.Node](program.allTerminals.toSet)(_.upstream)
 
-      val nodesToBlocks = schedule(
+      val nodesToBlocks = Scheduler.schedule(
         program, loopTree, dominators,
         controlFlowEdges, preScheduleIndex.savedLocals.mapValues(_._2),
         allVertices2
