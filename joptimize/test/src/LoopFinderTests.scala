@@ -1,5 +1,5 @@
 package joptimize
-import joptimize.analysis.{CodeGen}
+import joptimize.analysis.{CodeGen, Dominator}
 import joptimize.graph.HavlakLoopTree.Loop
 import joptimize.graph.HavlakLoopTree
 import utest._
@@ -14,7 +14,9 @@ object LoopFinderTests extends TestSuite{
       val analyzed = HavlakLoopTree.analyzeLoops(args, allNodes)
       assert(analyzed == expectedLoopTree)
       if (expectedImmediateDominators!= null){
-        val (immediateDominators, dominatorDepths) = CodeGen.findDominators(args, allNodes)
+        val Dominator.Result(immediateDominators, dominatorDepths) =
+          Dominator.findDominators(args, allNodes)
+
         assert(immediateDominators == expectedImmediateDominators)
         assert(dominatorDepths == expectedDominatorDepths)
       }

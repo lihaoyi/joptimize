@@ -60,7 +60,7 @@ object Renderer {
   }
 
   def renderLoopTree(loopTree: HavlakLoopTree.Loop[SSA.Block],
-                     savedLocals: mutable.Map[SSA.Node, (Int, String)]) = {
+                     savedLocals: Map[SSA.Node, (Int, String)]) = {
     val out = mutable.Buffer.empty[String]
     def rec(l: HavlakLoopTree.Loop[SSA.Block], depth: Int, label0: List[Int]): Unit = {
       val indent = "    " * depth
@@ -79,7 +79,7 @@ object Renderer {
   }
 
   def renderControlFlowGraph(controlFlowEdges: Seq[(SSA.Control, SSA.Control)],
-                             savedLocals: mutable.Map[SSA.Node, (Int, String)]) = {
+                             savedLocals: Map[SSA.Node, (Int, String)]) = {
     Renderer.renderGraph(
       controlFlowEdges,
       (lhs, rhs, indent) =>
@@ -126,9 +126,7 @@ object Renderer {
   }
 
   def renderSSA(program: Program,
-                finalOrderingMap: Map[SSA.Node, Int],
-                saveable: Set[SSA.Node],
-                savedLocals: mutable.Map[SSA.Node, (Int, String)],
+                index: Indexer.Result,
                 scheduledVals: Map[SSA.Val, SSA.Control] = Map.empty): fansi.Str = {
 
     def apply(lhs: String, operands: Tree*) = pprint.Tree.Apply(lhs, operands.toIterator)
@@ -137,12 +135,12 @@ object Renderer {
     def infix(lhs: Tree, op: String, rhs: Tree) = pprint.Tree.Infix(lhs, op, rhs)
 
     def renderBlock(block: SSA.Control) = {
-      atom(savedLocals(block)._2)
+      atom(index.savedLocals(block)._2)
     }
     def rec(ssa: SSA.Node): Tree = ssa match{
-      case x: SSA.Control => atom(savedLocals(x)._2)
+      case x: SSA.Control => atom(index.savedLocals(x)._2)
       case x: SSA.Val =>
-        if (savedLocals.contains(x)) atom(fansi.Color.Cyan(savedLocals(x)._2).toString())
+        if (index.savedLocals.contains(x)) atom(fansi.Color.Cyan(index.savedLocals(x)._2).toString())
         else recVal(x)
     }
 
@@ -183,31 +181,31 @@ object Renderer {
     }
 
     def recBlock(block: SSA.Control): (Str, Tree) = block match{
-      case n: SSA.True => (savedLocals(block)._2, apply("true", atom(savedLocals(n.branch)._2)))
-      case n: SSA.False => (savedLocals(block)._2, apply("false", atom(savedLocals(n.branch)._2)))
+      case n: SSA.True => (index.savedLocals(block)._2, apply("true", atom(index.savedLocals(n.branch)._2)))
+      case n: SSA.False => (index.savedLocals(block)._2, apply("false", atom(index.savedLocals(n.branch)._2)))
 
       case reg: SSA.Merge =>
         val name = if (reg.upstream.isEmpty) "start" else "merge"
-        val rhs = apply(name + reg.insnIndex, reg.upstream.iterator.map(x => atom(savedLocals(x)._2)).toSeq:_*)
-        (savedLocals(reg)_2, rhs)
+        val rhs = apply(name + reg.insnIndex, reg.upstream.iterator.map(x => atom(index.savedLocals(x)._2)).toSeq:_*)
+        (index.savedLocals(reg)_2, rhs)
 
       case n: SSA.AThrow => ???
       case n: SSA.TableSwitch => ???
       case n: SSA.LookupSwitch => ???
 
       case n: SSA.ReturnVal =>
-        (savedLocals(block)._2, apply("return", atom(savedLocals(n.block)._2), rec(n.a)))
+        (index.savedLocals(block)._2, apply("return", atom(index.savedLocals(n.block)._2), rec(n.a)))
 
       case n: SSA.Return =>
-        (savedLocals(block)._2, apply("return", atom(savedLocals(n.block)._2)))
+        (index.savedLocals(block)._2, apply("return", atom(index.savedLocals(n.block)._2)))
 
       case n: SSA.UnaBranch =>
         val rhs = apply("if", renderBlock(n.block), rec(n.a), atom(unaryBranchString(n.opcode)))
-        (savedLocals(n)._2, rhs)
+        (index.savedLocals(n)._2, rhs)
 
       case n: SSA.BinBranch =>
         val rhs = apply("if", renderBlock(n.block), infix(rec(n.a), binBranchString(n.opcode), rec(n.b)))
-        (savedLocals(n)._2, rhs)
+        (index.savedLocals(n)._2, rhs)
     }
 
     def renderStmt(r: SSA.Node, leftOffset: Int) = {
@@ -217,7 +215,7 @@ object Renderer {
         val (lhs, rhs) = r match {
           case r: SSA.Control =>
             recBlock(r)
-          case r: SSA.Val => (fansi.Color.Cyan(savedLocals(r)._2), recVal(r))
+          case r: SSA.Val => (fansi.Color.Cyan(index.savedLocals(r)._2), recVal(r))
         }
 
         out.append(lhs, " = ")
@@ -237,8 +235,8 @@ object Renderer {
           (l, indent) => {
 
             val n = scheduledVals
-              .collect{case (a, b) if b == l && saveable(a) => a}
-              .toSeq.sortBy(finalOrderingMap(_))
+              .collect{case (a, b) if b == l && index.saveable(a) => a}
+              .toSeq.sortBy(index.finalOrderingMap(_))
               .map{ a =>
                 renderStmt(a, indent.length / 2).map(x => fansi.Str.join(fansi.Str(indent) +: x:_*))
               }
@@ -248,9 +246,9 @@ object Renderer {
         )
       }else{
         fansi.Str.join(
-          saveable
+          index.saveable
             .toSeq
-            .sortBy(finalOrderingMap)
+            .sortBy(index.finalOrderingMap)
             .flatMap(
               renderStmt(_, 0) match{
                 case None => Nil

@@ -4,8 +4,7 @@ import joptimize.model.SSA
 
 import scala.collection.mutable
 
-abstract class ClickScheduler(dominatorDepth: Map[SSA.Block, Int],
-                              immediateDominator: Map[SSA.Block, SSA.Block],
+abstract class ClickScheduler(dominators: Dominator.Result[SSA.Block],
                               mapping: Map[SSA.Node, String]) {
   def downstream(ssa: SSA.Node): Seq[SSA.Node]
   def upstream(ssa: SSA.Node): Seq[SSA.Val]
@@ -24,7 +23,7 @@ abstract class ClickScheduler(dominatorDepth: Map[SSA.Block, Int],
   def scheduleEarly(n: SSA.Val): Unit = {
     assert(!n.isInstanceOf[SSA.Phi])
     scheduleEarlyRoot(n)
-    block(n) = upstream(n).map(block).maxBy(dominatorDepth)
+    block(n) = upstream(n).map(block).maxBy(dominators.dominatorDepth)
   }
 
   def scheduleLateRoot(n: SSA.Node): Unit = {
@@ -56,7 +55,7 @@ abstract class ClickScheduler(dominatorDepth: Map[SSA.Block, Int],
         var best = lca
         while(lca != block(n)){
           if (loopNest(lca) < loopNest(best)) best = lca
-          lca = immediateDominator(lca)
+          lca = dominators.immediateDominators(lca)
         }
         block(n) = best
 
@@ -68,11 +67,15 @@ abstract class ClickScheduler(dominatorDepth: Map[SSA.Block, Int],
     else{
       var a = a0
       var b = b0
-      while(dominatorDepth(a) > dominatorDepth(b)) a = immediateDominator(a)
-      while(dominatorDepth(b) > dominatorDepth(a)) b = immediateDominator(b)
+      while(dominators.dominatorDepth(a) > dominators.dominatorDepth(b)) {
+        a = dominators.immediateDominators(a)
+      }
+      while(dominators.dominatorDepth(b) > dominators.dominatorDepth(a)) {
+        b = dominators.immediateDominators(b)
+      }
       while(a != b){
-        a = immediateDominator(a)
-        b = immediateDominator(b)
+        a = dominators.immediateDominators(a)
+        b = dominators.immediateDominators(b)
       }
       a
     }

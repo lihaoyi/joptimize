@@ -116,8 +116,7 @@ object CodeGen{
 
   def schedule(program: Program,
                loopTree: HavlakLoopTree.Loop[SSA.Block],
-               dominatorDepth: Map[SSA.Block, Int],
-               immediateDominator: Map[SSA.Block, SSA.Block],
+               dominators: Dominator.Result[SSA.Block],
                graph: Seq[(SSA.Control, SSA.Control)],
                mapping: Map[SSA.Node, String],
                allVertices: Set[SSA.Node]): Map[SSA.Val, SSA.Block] = {
@@ -130,7 +129,7 @@ object CodeGen{
 
     recLoop(loopTree, 0)
 
-    val scheduler = new ClickScheduler(dominatorDepth, immediateDominator, mapping) {
+    val scheduler = new ClickScheduler(dominators, mapping) {
       override def downstream(ssa: SSA.Node) = ssa.downstreamList.toSeq
 
       override def upstream(ssa: SSA.Node) = ssa.upstream.collect{case ssa: SSA.Val => ssa}
@@ -167,37 +166,6 @@ object CodeGen{
     scheduler.block.filter{case (k, v) => v != null}.toMap
   }
 
-  def findDominators[T](edges: Seq[(T, T)], allNodes0: Seq[T]): (Map[T, T], Map[T, Int]) = {
-    val allNodes = allNodes0.distinct
-    val indices = allNodes.zipWithIndex.toMap
-    val nodes = indices.map(_.swap)
-
-    val successorMap = edges.groupBy(_._1).map{case (k, v) => (indices(k), v.map(_._2).map(indices))}
-    val predecessorMap = edges.groupBy(_._2).map{case (k, v) => (indices(k), v.map(_._1).map(indices))}
-
-    val immediateDominators = new LengauerTarjanDominatorTree {
-      def successors(v: Int) = successorMap.getOrElse(v, Nil)
-      def predecessors(v: Int) = predecessorMap.getOrElse(v, Nil)
-      def numNodes = indices.size
-    }.computeDominatorTree()
-
-    val dominatorDepth = {
-      Array.tabulate(immediateDominators.length) { i =>
-        var current = i
-        var n = 0
-        while (immediateDominators(current) != -1){
-          current = immediateDominators(current)
-          n += 1
-        }
-        n
-      }
-    }
-
-    (
-      immediateDominators.zipWithIndex.collect{case (v, i) if v != -1 => (nodes(i), nodes(v))}.toMap,
-      dominatorDepth.zipWithIndex.map{case (v, i) => (nodes(i), v)}.toMap
-    )
-  }
 
   def rec(ssa: SSA.Val,
           savedLocals: Map[SSA.Val, Int],

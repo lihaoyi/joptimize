@@ -4,7 +4,7 @@ package joptimize.analysis
 
 import fansi.Str
 import joptimize.Util
-import joptimize.analysis.CodeGen.{findDominators, schedule}
+import joptimize.analysis.CodeGen.schedule
 import joptimize.bytecode.Frame
 import joptimize.graph.HavlakLoopTree
 import joptimize.model._
@@ -66,10 +66,10 @@ class Walker(isInterface: JType.Cls => Boolean,
 
       val allVertices = Util.breadthFirstAggregation[SSA.Node](program.allTerminals.toSet)(_.upstream)._1
 
-      val (finalOrderingMap, saveable, savedLocals) = Util.findSaveable(program, Map.empty, allVertices)
+      val preScheduleIndex = Indexer.findSaveable(program, Map.empty, allVertices)
 
       println()
-      println(Renderer.renderSSA(program, finalOrderingMap, saveable, savedLocals))
+      println(Renderer.renderSSA(program, preScheduleIndex))
 
       val controlFlowEdges = Util.findControlFlowGraph(program)
       val allBlocks = controlFlowEdges
@@ -83,53 +83,51 @@ class Walker(isInterface: JType.Cls => Boolean,
       }
 
       println()
-      println(Renderer.renderControlFlowGraph(controlFlowEdges, savedLocals))
+      println(Renderer.renderControlFlowGraph(controlFlowEdges, preScheduleIndex.savedLocals))
 
       val loopTree = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)
 
       println()
-      println(Renderer.renderLoopTree(loopTree, savedLocals))
+      println(Renderer.renderLoopTree(loopTree, preScheduleIndex.savedLocals))
 
-      val (immediateDominators, dominatorDepth) = findDominators(blockEdges, allBlocks)
+      val dominators = Dominator.findDominators(blockEdges, allBlocks)
 
       { // Just for debugging
         val nodesToBlocks = schedule(
-          program, loopTree,
-          dominatorDepth, immediateDominators,
-          controlFlowEdges, savedLocals.mapValues(_._2).toMap,
+          program, loopTree, dominators,
+          controlFlowEdges, preScheduleIndex.savedLocals.mapValues(_._2),
           allVertices
         )
 
-        val (finalOrderingMap2, saveable2, savedLocals2) = Util.findSaveable(program, nodesToBlocks, allVertices)
+        val postScheduleIndex = Indexer.findSaveable(program, nodesToBlocks, allVertices)
 
         println()
-        println(Renderer.renderSSA(program, finalOrderingMap2, saveable2, savedLocals2, nodesToBlocks))
+        println(Renderer.renderSSA(program, postScheduleIndex, nodesToBlocks))
 
       }
 
-      RegisterAllocator.apply(program, immediateDominators)
+      RegisterAllocator.apply(program, dominators.immediateDominators)
 
       val (allVertices2, _, _) = Util.breadthFirstAggregation[SSA.Node](program.allTerminals.toSet)(_.upstream)
 
       val nodesToBlocks = schedule(
-        program, loopTree,
-        dominatorDepth, immediateDominators,
-        controlFlowEdges, savedLocals.mapValues(_._2).toMap,
+        program, loopTree, dominators,
+        controlFlowEdges, preScheduleIndex.savedLocals.mapValues(_._2),
         allVertices2
       )
 
-      val (finalOrderingMap2, saveable2, savedLocals2) = Util.findSaveable(program, nodesToBlocks, allVertices2)
+      val postRegisterAllocIndex = Indexer.findSaveable(program, nodesToBlocks, allVertices2)
 
       println()
-      println(Renderer.renderSSA(program, finalOrderingMap2, saveable2, savedLocals2, nodesToBlocks))
+      println(Renderer.renderSSA(program, postRegisterAllocIndex, nodesToBlocks))
 
       val blockCode = CodeGen(
         program,
         allVertices2,
         nodesToBlocks,
         controlFlowEdges,
-        savedLocals2.toMap,
-        finalOrderingMap2
+        postRegisterAllocIndex.savedLocals,
+        postRegisterAllocIndex.finalOrderingMap
       )
 
       val output = new InsnList()
