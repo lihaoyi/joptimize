@@ -252,20 +252,21 @@ object Util{
       case _ => false
     }
 
+    val downstreamLookup = downstreamEdges.groupBy(_._1)
     val saveable =
-      allVertices.filter { case k =>
-        val x = k.downstreamList
+      downstreamLookup.filter { case (k, x) =>
         val scheduled = k match {
           case v: SSA.Val =>
             val downstreamControls = x.collect {
-              case t: SSA.Val => scheduledVals.get(t)
-              case t: SSA.SimpleBlock => Some(t)
+              case (_, t: SSA.Val) => scheduledVals.get(t)
+              case (_, t: SSA.SimpleBlock) => Some(t)
             }.flatten
             scheduledVals.get(v).exists(c => downstreamControls.exists(_ != c))
           case _ => false
         }
         k.upstream.nonEmpty && (x.size > 1 || allTerminals.contains(k) || scheduled || k.isInstanceOf[SSA.Copy])
-      } ++
+      }
+        .keySet ++
         allVertices.collect {
           case k: SSA.Phi => k
           case b: SSA.Control => b
@@ -282,7 +283,7 @@ object Util{
         r,
         (
           savedLocals.size,
-          if (r.downstreamSize > 1) "local" + savedLocals.size
+          if (downstreamLookup.getOrElse(r, Nil).size > 1) "local" + savedLocals.size
           else "stack" + savedLocals.size
         )
       )
