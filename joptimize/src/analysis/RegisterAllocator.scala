@@ -8,7 +8,7 @@ import scala.collection.mutable
 object RegisterAllocator {
   def apply(program: Program,
             immediateDominators: Map[SSA.Block, SSA.Block]): Unit /*Map[SSA.Val, Int]*/ = {
-    val (allVertices, roots, downstreamEdges) =
+    val (allVertices, _, _) =
       Util.breadthFirstAggregation[SSA.Node](program.allTerminals.toSet)(_.upstream)
 
     val copies = mutable.Set.empty[SSA.Copy]
@@ -19,17 +19,17 @@ object RegisterAllocator {
         case phi: SSA.Phi =>
           phi.incoming = phi.incoming.map{ case (k, v) =>
             val copy = SSA.Copy(v)
-            v.downstream.remove(phi)
-            v.downstream.add(copy)
-            copy.downstream.add(phi)
+            v.downstreamRemove(phi)
+            v.downstreamAdd(copy)
+            copy.downstreamAdd(phi)
             copies.add(copy)
             (k, copy)
           }
           val replacement = SSA.Copy(phi)
-          for(down <- phi.downstream if down != replacement) {
+          for(down <- phi.downstreamList if down != replacement) {
             SSA.update(down, phi, replacement)
-            replacement.downstream.add(down)
-            phi.downstream.remove(down)
+            replacement.downstreamAdd(down)
+            phi.downstreamRemove(down)
           }
 
           eqClses.add(Set(phi) ++ phi.incoming.map(_._2))

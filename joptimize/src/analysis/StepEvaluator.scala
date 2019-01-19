@@ -187,8 +187,8 @@ class StepEvaluator(merges: mutable.LinkedHashSet[SSA.Phi],
     else{
       if (blockStartIndex(targetInsnIndex) && insnIndex != targetInsnIndex) {
         v1.asInstanceOf[SSA.Phi].incoming += (findBlockStart(insnIndex) -> v2)
-        findBlockStart(insnIndex).downstream += v1
-        v2.downstream += v1
+        findBlockStart(insnIndex).downstreamAdd(v1)
+        v2.downstreamAdd(v1)
       }
       v1.checkLinks()
       v1

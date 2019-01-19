@@ -85,7 +85,7 @@ class Walker(isInterface: JType.Cls => Boolean,
         (lhs, rhs) match{
           case (l: SSA.Merge, r) =>
             l.incoming += r
-            r.downstream += l
+            r.downstreamAdd(l)
         }
       }
 
@@ -156,12 +156,13 @@ class Walker(isInterface: JType.Cls => Boolean,
         case _ => None
       }
       for (replacement <- replacement) {
-        for (v <- current.upstream) v.downstream.remove(current)
-        replacement.downstream.remove(current)
-        val deltaDownstream = current.downstream.filter(_ != current)
-        replacement.downstream ++= deltaDownstream
+        for (v <- current.upstream) v.downstreamRemove(current)
+        replacement.downstreamRemove(current)
+        val deltaDownstream = current.downstreamList.filter(_ != current)
+        deltaDownstream.foreach(replacement.downstreamAdd)
+
         for (down <- deltaDownstream) SSA.update(down, current, replacement)
-        replacement.downstream.foreach(queue.add)
+        replacement.downstreamList.foreach(queue.add)
       }
     }
   }

@@ -106,11 +106,11 @@ object CodeGen{
             savedLocalNumbers,
             jumpLabel = { srcBlock =>
               labels(
-                srcBlock.downstream.collect{case t: SSA.True => t}.head
+                srcBlock.downstreamList.collect{case t: SSA.True => t}.head
               )
             },
             fallthroughLabel = {srcBlock =>
-              val destination = srcBlock.downstream.collect{case t: SSA.False => t}.head
+              val destination = srcBlock.downstreamList.collect{case t: SSA.False => t}.head
               if (blockIndices(destination) == blockIndices(control) + 1) None
               else Some(labels(destination))
             }
@@ -128,7 +128,7 @@ object CodeGen{
 
 
 
-      val downstreamBlocks = control.downstream.collect{case b: SSA.Control => b}
+      val downstreamBlocks = control.downstreamList.collect{case b: SSA.Control => b}
 
       val footer = downstreamBlocks.toSeq match{
         case Seq(d) if blockIndices(d) != blockIndices(control) + 1 => Some(new JumpInsnNode(GOTO, labels(d)))
@@ -176,8 +176,9 @@ object CodeGen{
                immediateDominator: Map[SSA.Block, SSA.Block],
                graph: Seq[(SSA.Control, SSA.Control)],
                mapping: Map[SSA.Node, String]): Map[SSA.Val, SSA.Block] = {
-    val (allVertices, roots, downstreamEdges) =
+    val (allVertices, _, _) =
       Util.breadthFirstAggregation[SSA.Node](program.allTerminals.toSet)(_.upstream)
+
     val loopNestMap = mutable.LinkedHashMap.empty[SSA.Node, Int]
     def recLoop(loop: HavlakLoopTree.Loop[SSA.Block], depth: Int): Unit = {
       loop.basicBlocks.foreach(loopNestMap(_) = depth)
@@ -186,12 +187,10 @@ object CodeGen{
 
     recLoop(loopTree, 0)
 
-    val downstreamMap = downstreamEdges.groupBy(_._1).map{case (k, vs) => (k, vs.map(_._2))}
-    val upstreamMap = downstreamEdges.groupBy(_._2).map{case (k, vs) => (k, vs.map(_._1))}
     val scheduler = new ClickScheduler(dominatorDepth, immediateDominator, mapping) {
-      override def downstream(ssa: SSA.Node) = downstreamMap.getOrElse(ssa, Nil)
+      override def downstream(ssa: SSA.Node) = ssa.downstreamList.toSeq
 
-      override def upstream(ssa: SSA.Node) = upstreamMap.getOrElse(ssa, Nil).collect{case ssa: SSA.Val => ssa}
+      override def upstream(ssa: SSA.Node) = ssa.upstream.collect{case ssa: SSA.Val => ssa}
 
       override def isPinned(ssa: SSA.Node) = ssa.isInstanceOf[SSA.Control]
 
