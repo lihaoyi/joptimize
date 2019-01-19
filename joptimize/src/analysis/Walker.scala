@@ -84,15 +84,7 @@ class Walker(isInterface: JType.Cls => Boolean,
         case (k: SSA.Block, v: SSA.Block) => Seq(k -> v)
       }
 
-      println(
-        Renderer.renderGraph(
-          controlFlowEdges,
-          (lhs, rhs, indent) =>
-            fansi.Color.Magenta(savedLocals(lhs)._2) ++
-              " <- " ++
-              fansi.Str.join(rhs.flatMap(r => Seq[Str](", ", fansi.Color.Magenta(savedLocals(r)._2))).drop(1):_*)
-        )
-      )
+      println(Renderer.renderControlFlowGraph(controlFlowEdges, savedLocals))
 
       val loopTree = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)
 

@@ -65,6 +65,16 @@ object Renderer {
     rec(loopTree, 0, Nil)
   }
 
+  def renderControlFlowGraph(controlFlowEdges: Seq[(SSA.Control, SSA.Control)],
+                             savedLocals: mutable.Map[SSA.Node, (Int, String)]) = {
+    Renderer.renderGraph(
+      controlFlowEdges,
+      (lhs, rhs, indent) =>
+        fansi.Color.Magenta(savedLocals(lhs)._2) ++
+          " <- " ++
+          fansi.Str.join(rhs.flatMap(r => Seq[Str](", ", fansi.Color.Magenta(savedLocals(r)._2))).drop(1):_*)
+    )
+  }
   def renderGraph(edges: Seq[(SSA.Control, SSA.Control)],
                   coloring: (SSA.Control, Seq[SSA.Control], String) => fansi.Str,
                   annotation: (SSA.Control, String) => Seq[fansi.Str] = (_, _) => Nil): fansi.Str = {
