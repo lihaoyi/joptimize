@@ -10,7 +10,7 @@ import collection.JavaConverters._
 import org.objectweb.asm.Opcodes._
 import org.objectweb.asm.tree._
 
-import scala.collection.mutable
+import scala.collection.{immutable, mutable}
 
 class Walker(isInterface: JType.Cls => Boolean,
              lookupMethod: MethodSig => Option[MethodNode],
@@ -37,50 +37,27 @@ class Walker(isInterface: JType.Cls => Boolean,
       val phiMerges0 = mutable.LinkedHashSet.empty[SSA.Phi]
 
       val insns = mn.instructions.iterator().asScala.toVector
+      val insnIndices = insns.zipWithIndex.toMap
 
-      val blockStarts = insns.take(1) ++ insns
-        .collect{
-          case n: TableSwitchInsnNode => Seq(n.dflt) ++ n.labels.asScala
-          case n: LookupSwitchInsnNode => Seq(n.dflt) ++ n.labels.asScala
-          case n: JumpInsnNode => Seq(n.label) ++ Option(n.getNext)
-          case n if n == insns.head => Seq(n)
-        }
-        .flatten
-        .sortBy(insns.indexOf)
-      val regionStarts = mutable.LinkedHashMap(blockStarts.map(i => i -> (new SSA.Merge(insns.indexOf(i), Set()): SSA.Block)):_*)
+      val regionStarts = findRegionStarts(insns)
 
-      //      regionStarts.keys.map("RSK " + Renderer.render(mn.instructions, _)).foreach(println)
-      def findStartRegion(insn: AbstractInsnNode): SSA.Block = {
-        var current = insn
-        var region: SSA.Block = null
-        while({
-          //          println("XXX " + Renderer.render(mn.instructions, current))
-          regionStarts.get(current) match{
-            case None =>
-              current = current.getPrevious
-              true
-            case Some(x) =>
-              region = x
-              false
-          }
-        })()
+      val startRegionLookup = findStartRegionLookup(insns, regionStarts)
 
-        region
-      }
       val frames = joptimize.bytecode.Analyzer.analyze(
         sig.cls.name, mn,
-        new StepEvaluator(
-          phiMerges0,
-          x => regionStarts.contains(insns(x)),
-          i => findStartRegion(insns(i)),
-          i => regionStarts(insns(i))
-        )
+        new StepEvaluator(phiMerges0, startRegionLookup, regionStarts)
       )
-      val terminals = extractControlFlow(insns, regionStarts, frames, findStartRegion)
+
+      val terminals = extractControlFlow(
+        insns,
+        i => regionStarts(insnIndices(i)),
+        frames,
+        startRegionLookup
+      )
 
       removeDeadPhis(phiMerges0, terminals.map(_._2: SSA.Node).toSet)
 
-      simplifyPhiMerges(phiMerges0, regionStarts)
+      simplifyPhiMerges(phiMerges0, regionStarts.flatten)
 
       val program = Program(terminals.map(_._2))
 
@@ -92,14 +69,47 @@ class Walker(isInterface: JType.Cls => Boolean,
     })
   }
 
+  def findStartRegionLookup(insns: IndexedSeq[AbstractInsnNode],
+                            regionStarts: IndexedSeq[Option[SSA.Block]]) = {
+    val startRegionLookup = new Array[SSA.Block](insns.size)
+    var currentRegion: SSA.Block = null
+
+    for(i <- insns.indices){
+      for(x <- regionStarts(i)) currentRegion = x
+      startRegionLookup(i) = currentRegion
+    }
+    startRegionLookup
+  }
+
+  def findRegionStarts(insns: Vector[AbstractInsnNode]) = {
+    val jumpTargets = insns
+      .collect {
+        case n: TableSwitchInsnNode => Seq(n.dflt) ++ n.labels.asScala
+        case n: LookupSwitchInsnNode => Seq(n.dflt) ++ n.labels.asScala
+        case n: JumpInsnNode => Seq(n.label) ++ Option(n.getNext)
+        case n if n == insns.head => Seq(n)
+      }
+      .flatten
+
+    val blockStarts = (insns.take(1) ++ jumpTargets).toSet
+
+    val regionStarts =
+      for (i <- insns.indices)
+        yield {
+          if (!blockStarts.contains(insns(i))) None
+          else Some(new SSA.Merge(i, Set()): SSA.Block)
+        }
+    regionStarts
+  }
+
   def extractControlFlow(insns: Vector[AbstractInsnNode],
-                         regionStarts: mutable.LinkedHashMap[AbstractInsnNode, SSA.Block],
+                         regionStarts: AbstractInsnNode => Option[SSA.Block],
                          frames: Array[Frame[SSA.Val]],
-                         findStartRegion: AbstractInsnNode => SSA.Block) = {
+                         findStartRegion: Int => SSA.Block) = {
     def frameTop(i: Int, n: Int) = frames(i).getStack(frames(i).getStackSize - 1 - n)
 
     def mergeBlocks(lhs0: AbstractInsnNode, rhs: SSA.Control, rhsInsn: Option[AbstractInsnNode] = None): Unit = {
-      val lhs = regionStarts(lhs0)
+      val lhs = regionStarts(lhs0).get
       (lhs, rhs) match {
         case (l: SSA.Merge, r) =>
           l.incoming += r
@@ -109,33 +119,33 @@ class Walker(isInterface: JType.Cls => Boolean,
 
 
     val terminals = insns.map(i => (i.getOpcode, i)).zipWithIndex.collect {
-      case ((RETURN, insn), i) => (insn, new SSA.Return(findStartRegion(insn)), i) :: Nil
+      case ((RETURN, insn), i) => (insn, new SSA.Return(findStartRegion(i)), i) :: Nil
 
       case ((IRETURN | LRETURN | FRETURN | DRETURN | ARETURN, insn), i) =>
-        (insn, new SSA.ReturnVal(findStartRegion(insn), frameTop(i, 0)), i) :: Nil
+        (insn, new SSA.ReturnVal(findStartRegion(i), frameTop(i, 0)), i) :: Nil
 
-      case ((ATHROW, insn), i) => (insn, new SSA.AThrow(findStartRegion(insn), frameTop(i, 0)), i) :: Nil
+      case ((ATHROW, insn), i) => (insn, new SSA.AThrow(findStartRegion(i), frameTop(i, 0)), i) :: Nil
 
       case ((GOTO, insn: JumpInsnNode), i) =>
-        mergeBlocks(insn.label, findStartRegion(insn), Some(insn))
+        mergeBlocks(insn.label, findStartRegion(i), Some(insn))
         Nil
 
       case ((IFEQ | IFNE | IFLT | IFGE | IFGT | IFLE, insn: JumpInsnNode), i) =>
-        val n = new SSA.UnaBranch(findStartRegion(insn), frameTop(i, 0), SSA.UnaBranch.lookup(insn.getOpcode))
+        val n = new SSA.UnaBranch(findStartRegion(i), frameTop(i, 0), SSA.UnaBranch.lookup(insn.getOpcode))
         mergeBlocks(insn.label, new SSA.True(n))
         mergeBlocks(insn.getNext, new SSA.False(n))
 
         Nil
 
       case ((IF_ICMPEQ | IF_ICMPNE | IF_ICMPLT | IF_ICMPGE | IF_ICMPGT | IF_ICMPLE | IF_ACMPEQ | IF_ACMPNE, insn: JumpInsnNode), i) =>
-        val startReg = findStartRegion(insn)
+        val startReg = findStartRegion(i)
         val n = new SSA.BinBranch(startReg, frameTop(i, 1), frameTop(i, 0), SSA.BinBranch.lookup(insn.getOpcode))
         mergeBlocks(insn.label, new SSA.True(n))
         mergeBlocks(insn.getNext, new SSA.False(n))
         Nil
 
-      case ((_, insn), i) if Option(insn.getNext).exists(regionStarts.contains) =>
-        mergeBlocks(insn.getNext, findStartRegion(insn), Some(insn))
+      case ((_, insn), i) if Option(insn.getNext).exists(regionStarts(_).isDefined) =>
+        mergeBlocks(insn.getNext, findStartRegion(i), Some(insn))
         Nil
     }.flatten
     terminals
@@ -155,9 +165,8 @@ class Walker(isInterface: JType.Cls => Boolean,
     }
   }
 
-  def simplifyPhiMerges(phiMerges0: mutable.LinkedHashSet[SSA.Phi],
-                        regionStarts: mutable.LinkedHashMap[AbstractInsnNode, SSA.Block]) = {
-    val queue = phiMerges0 ++ regionStarts.values
+  def simplifyPhiMerges(phiMerges0: mutable.LinkedHashSet[SSA.Phi], regions: Seq[SSA.Block]) = {
+    val queue = phiMerges0 ++ regions
 //    queue.foreach(_.checkLinks())
 
     while (queue.nonEmpty) {

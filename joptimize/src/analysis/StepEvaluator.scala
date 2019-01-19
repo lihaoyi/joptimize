@@ -20,9 +20,8 @@ import scala.collection.mutable
   * node's type is specific enough to be a concrete value.
   */
 class StepEvaluator(merges: mutable.LinkedHashSet[SSA.Phi],
-                    blockStartIndex: Int => Boolean,
                     findBlockStart: Int => SSA.Block,
-                    findBlockDest: Int => SSA.Block) extends joptimize.bytecode.Interpreter[SSA.Val]{
+                    findBlockDest: Int => Option[SSA.Block]) extends joptimize.bytecode.Interpreter[SSA.Val]{
 
   def newOperation(insn: AbstractInsnNode) = {
     insn.getOpcode match {
@@ -185,7 +184,7 @@ class StepEvaluator(merges: mutable.LinkedHashSet[SSA.Phi],
   def merge(v1: SSA.Val, v2: SSA.Val, insnIndex: Int, targetInsnIndex: Int) = {
     if (v1 == v2) v1
     else{
-      if (blockStartIndex(targetInsnIndex) && insnIndex != targetInsnIndex) {
+      if (findBlockDest(targetInsnIndex).isDefined && insnIndex != targetInsnIndex) {
         v1.asInstanceOf[SSA.Phi].incoming += (findBlockStart(insnIndex) -> v2)
         findBlockStart(insnIndex).downstreamAdd(v1)
         v2.downstreamAdd(v1)
@@ -196,12 +195,12 @@ class StepEvaluator(merges: mutable.LinkedHashSet[SSA.Phi],
   }
 
   def merge0(value1: SSA.Val, insnIndex: Int, targetInsnIndex: Int) = {
-    if (blockStartIndex(targetInsnIndex) && insnIndex != targetInsnIndex) {
-      val phiStub = new SSA.Phi(findBlockDest(targetInsnIndex), Set(findBlockStart(insnIndex) -> value1), value1.jtype)
-      merges.add(phiStub)
-      phiStub
-    }else{
-      value1
+    findBlockDest(targetInsnIndex) match{
+      case Some(dest) if insnIndex != targetInsnIndex =>
+        val phiStub = new SSA.Phi(dest, Set(findBlockStart(insnIndex) -> value1), value1.jtype)
+        merges.add(phiStub)
+        phiStub
+      case _ => value1
     }
   }
 
