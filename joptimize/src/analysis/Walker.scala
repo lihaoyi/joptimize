@@ -125,6 +125,7 @@ class Walker(isInterface: JType.Cls => Boolean,
       val (allVertices, _, _) =
         Util.breadthFirstAggregation[SSA.Node](terminals.map(_._2: SSA.Node).toSet)(_.upstream)
 
+      // Remove dead phi nodes that may have been inserted during SSA construction
       for (phi <- phiMerges0){
         if (!allVertices.contains(phi)){
           for(up <- phi.upstream){
@@ -132,11 +133,8 @@ class Walker(isInterface: JType.Cls => Boolean,
           }
         }
       }
-      pprint.log(allVertices)
+
       simplifyPhiMerges(phiMerges0, regionStarts)
-      val (allVertices2, _, _) =
-        Util.breadthFirstAggregation[SSA.Node](terminals.map(_._2: SSA.Node).toSet)(_.upstream)
-      pprint.log(allVertices2)
 
       val program = Program(terminals.map(_._2))
 
@@ -161,7 +159,6 @@ class Walker(isInterface: JType.Cls => Boolean,
         case phi: SSA.Phi =>
           val filteredValues = phi.incoming.filter(_._2 != phi)
 
-          pprint.log((current, filteredValues))
           if (filteredValues.map(_._2).size == 1) Some(filteredValues.head._2)
           else None
 
@@ -172,7 +169,6 @@ class Walker(isInterface: JType.Cls => Boolean,
         case _ => None
       }
       for (replacement <- replacementOpt) {
-        pprint.log(current -> replacement)
         for (v <- current.upstream) v.downstreamRemove(current)
         replacement.downstreamRemove(current)
         val deltaDownstream = current.downstreamList.filter(_ != current)

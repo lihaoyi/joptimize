@@ -90,6 +90,7 @@ object SSA{
       case Some(1) => downstream.remove(n)
       case Some(x) if x > 1 => downstream(n) = x - 1
     }
+
     def downstreamList = downstream.keysIterator.toArray
     def downstreamSize = downstream.valuesIterator.sum
 
