@@ -52,7 +52,8 @@ object Indexer {
       savedLocals.update(a, (a.index, "arg" + a.index))
     }
 
-    saveable.collect{
+    var maxControl = 0
+    saveable.toSeq.sortBy(finalOrderingMap).collect{
       case r: SSA.Val =>
         savedLocals(r) = (
           savedLocals.size,
@@ -61,21 +62,28 @@ object Indexer {
         )
 
       case c: SSA.Control =>
-        savedControls(c) = (
-          savedControls.size,
-          c match{
-            case _: SSA.Return => "return" + savedControls.size
-            case _: SSA.ReturnVal => "return" + savedControls.size
-            case _: SSA.AThrow => "return" + savedControls.size
-            case n: SSA.True => "true" + savedControls.size
-            case n: SSA.False => "false" + savedControls.size
-            case r: SSA.Merge =>
-              val name = if (c.upstream.isEmpty) "start" else "block"
-              name + savedControls.size
-            case _: SSA.UnaBranch => "branch" + savedControls.size
-            case _: SSA.BinBranch => "branch" + savedControls.size
-          }
-        )
+        val str = c match{
+          case _: SSA.Return | _: SSA.ReturnVal=>
+            maxControl += 1
+            "return" + maxControl
+
+          case _: SSA.AThrow =>
+            maxControl += 1
+            "throw" + maxControl
+
+          case n: SSA.True => "true" + savedControls(n.branch)._1
+          case n: SSA.False => "false" + savedControls(n.branch)._1
+
+          case r: SSA.Merge =>
+            maxControl += 1
+            val name = if (c.upstream.isEmpty) "start" else "block"
+            name + savedControls.size
+
+          case _: SSA.UnaBranch | _: SSA.BinBranch=>
+            maxControl += 1
+            "branch" + maxControl
+        }
+        savedControls(c) = (maxControl, str)
     }
 
     Result(finalOrderingMap, saveable, (savedLocals ++ savedControls).toMap)
