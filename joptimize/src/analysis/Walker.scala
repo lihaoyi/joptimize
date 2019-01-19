@@ -3,6 +3,7 @@ package joptimize.analysis
 
 
 import joptimize.Util
+import joptimize.bytecode.Frame
 import joptimize.model._
 
 import collection.JavaConverters._
@@ -29,10 +30,6 @@ class Walker(isInterface: JType.Cls => Boolean,
                  seenMethods0: Set[(MethodSig, Seq[IType])]): Walker.MethodResult = {
 
     visitedMethods.getOrElseUpdate((sig, args.drop(if (sig.static) 0 else 1)), {
-      // - Build up non-terminal SSA graph using Analyzer (including Phis)
-      // - Place terminal SSA nodes manually since analyzer can't see them
-      // - Construct lookaside table for control dependencies, state dependencies (same thing???)
-      val seenMethods = seenMethods0 ++ Seq((sig, args.map(_.widen)))
 
       println("+" * 20 + sig + "+" * 20)
       println(Renderer.renderInsns(mn.instructions))
@@ -79,60 +76,9 @@ class Walker(isInterface: JType.Cls => Boolean,
           i => regionStarts(insns(i))
         )
       )
-      def frameTop(i: Int, n: Int) = frames(i).getStack(frames(i).getStackSize - 1 - n)
+      val terminals = extractControlFlow(insns, regionStarts, frames, findStartRegion)
 
-      def mergeBlocks(lhs0: AbstractInsnNode, rhs: SSA.Control, rhsInsn: Option[AbstractInsnNode] = None): Unit = {
-        println(Renderer.renderInsns(mn.instructions, lhs0))
-        val lhs = regionStarts(lhs0)
-        (lhs, rhs) match{
-          case (l: SSA.Merge, r) =>
-            l.incoming += r
-            r.downstreamAdd(l)
-        }
-      }
-
-
-      val terminals = insns.map(i => (i.getOpcode, i)).zipWithIndex.collect{
-        case ((RETURN, insn), i) => (insn, new SSA.Return(findStartRegion(insn)), i) :: Nil
-
-        case ((IRETURN | LRETURN | FRETURN | DRETURN | ARETURN, insn), i) =>
-          (insn, new SSA.ReturnVal(findStartRegion(insn), frameTop(i, 0)), i) :: Nil
-
-        case ((ATHROW, insn), i) => (insn, new SSA.AThrow(findStartRegion(insn), frameTop(i, 0)), i) :: Nil
-
-        case ((GOTO, insn: JumpInsnNode), i) =>
-          mergeBlocks(insn.label, findStartRegion(insn), Some(insn))
-          Nil
-
-        case ((IFEQ | IFNE | IFLT | IFGE | IFGT | IFLE, insn: JumpInsnNode), i) =>
-          val n = new SSA.UnaBranch(findStartRegion(insn), frameTop(i, 0), SSA.UnaBranch.lookup(insn.getOpcode))
-          mergeBlocks(insn.label, new SSA.True(n))
-          mergeBlocks(insn.getNext, new SSA.False(n))
-
-          Nil
-
-        case ((IF_ICMPEQ | IF_ICMPNE | IF_ICMPLT | IF_ICMPGE | IF_ICMPGT | IF_ICMPLE | IF_ACMPEQ | IF_ACMPNE, insn: JumpInsnNode), i) =>
-          val startReg = findStartRegion(insn)
-          val n = new SSA.BinBranch(startReg, frameTop(i, 1), frameTop(i, 0), SSA.BinBranch.lookup(insn.getOpcode))
-          mergeBlocks(insn.label, new SSA.True(n))
-          mergeBlocks(insn.getNext, new SSA.False(n))
-          Nil
-
-        case ((_, insn), i) if Option(insn.getNext).exists(regionStarts.contains) =>
-          mergeBlocks(insn.getNext, findStartRegion(insn), Some(insn))
-          Nil
-      }.flatten
-      val (allVertices, _, _) =
-        Util.breadthFirstAggregation[SSA.Node](terminals.map(_._2: SSA.Node).toSet)(_.upstream)
-
-      // Remove dead phi nodes that may have been inserted during SSA construction
-      for (phi <- phiMerges0){
-        if (!allVertices.contains(phi)){
-          for(up <- phi.upstream){
-            up.downstreamRemove(phi)
-          }
-        }
-      }
+      removeDeadPhis(phiMerges0, terminals.map(_._2: SSA.Node).toSet)
 
       simplifyPhiMerges(phiMerges0, regionStarts)
 
@@ -140,11 +86,73 @@ class Walker(isInterface: JType.Cls => Boolean,
 
       val (printed, mapping) = Renderer.renderSSA(program)
       println(printed)
-//      pprint.log(mapping)
 
       val finalInsns = CodeGen(program, mapping)
       Walker.MethodResult(Nil, sig.desc.ret, finalInsns, false, Nil)
     })
+  }
+
+  def extractControlFlow(insns: Vector[AbstractInsnNode],
+                         regionStarts: mutable.LinkedHashMap[AbstractInsnNode, SSA.Block],
+                         frames: Array[Frame[SSA.Val]],
+                         findStartRegion: AbstractInsnNode => SSA.Block) = {
+    def frameTop(i: Int, n: Int) = frames(i).getStack(frames(i).getStackSize - 1 - n)
+
+    def mergeBlocks(lhs0: AbstractInsnNode, rhs: SSA.Control, rhsInsn: Option[AbstractInsnNode] = None): Unit = {
+      val lhs = regionStarts(lhs0)
+      (lhs, rhs) match {
+        case (l: SSA.Merge, r) =>
+          l.incoming += r
+          r.downstreamAdd(l)
+      }
+    }
+
+
+    val terminals = insns.map(i => (i.getOpcode, i)).zipWithIndex.collect {
+      case ((RETURN, insn), i) => (insn, new SSA.Return(findStartRegion(insn)), i) :: Nil
+
+      case ((IRETURN | LRETURN | FRETURN | DRETURN | ARETURN, insn), i) =>
+        (insn, new SSA.ReturnVal(findStartRegion(insn), frameTop(i, 0)), i) :: Nil
+
+      case ((ATHROW, insn), i) => (insn, new SSA.AThrow(findStartRegion(insn), frameTop(i, 0)), i) :: Nil
+
+      case ((GOTO, insn: JumpInsnNode), i) =>
+        mergeBlocks(insn.label, findStartRegion(insn), Some(insn))
+        Nil
+
+      case ((IFEQ | IFNE | IFLT | IFGE | IFGT | IFLE, insn: JumpInsnNode), i) =>
+        val n = new SSA.UnaBranch(findStartRegion(insn), frameTop(i, 0), SSA.UnaBranch.lookup(insn.getOpcode))
+        mergeBlocks(insn.label, new SSA.True(n))
+        mergeBlocks(insn.getNext, new SSA.False(n))
+
+        Nil
+
+      case ((IF_ICMPEQ | IF_ICMPNE | IF_ICMPLT | IF_ICMPGE | IF_ICMPGT | IF_ICMPLE | IF_ACMPEQ | IF_ACMPNE, insn: JumpInsnNode), i) =>
+        val startReg = findStartRegion(insn)
+        val n = new SSA.BinBranch(startReg, frameTop(i, 1), frameTop(i, 0), SSA.BinBranch.lookup(insn.getOpcode))
+        mergeBlocks(insn.label, new SSA.True(n))
+        mergeBlocks(insn.getNext, new SSA.False(n))
+        Nil
+
+      case ((_, insn), i) if Option(insn.getNext).exists(regionStarts.contains) =>
+        mergeBlocks(insn.getNext, findStartRegion(insn), Some(insn))
+        Nil
+    }.flatten
+    terminals
+  }
+
+  def removeDeadPhis(phiMerges0: mutable.LinkedHashSet[SSA.Phi], terminals: Set[SSA.Node]) = {
+
+    val (allVertices, _, _) =
+      Util.breadthFirstAggregation[SSA.Node](terminals)(_.upstream)
+    // Remove dead phi nodes that may have been inserted during SSA construction
+    for (phi <- phiMerges0) {
+      if (!allVertices.contains(phi)) {
+        for (up <- phi.upstream) {
+          up.downstreamRemove(phi)
+        }
+      }
+    }
   }
 
   def simplifyPhiMerges(phiMerges0: mutable.LinkedHashSet[SSA.Phi],
