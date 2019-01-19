@@ -9,7 +9,7 @@ import scala.collection.mutable
   * Walks the SSA program and assigns unique labels to each named node within
   * it, and unique offsets to values that get stored in local variable slots
   */
-object Indexer {
+object Namer {
   case class Result(finalOrderingMap: Map[SSA.Node, Int],
                     saveable: Set[SSA.Node],
                     savedLocals: Map[SSA.Node, (Int, String)])

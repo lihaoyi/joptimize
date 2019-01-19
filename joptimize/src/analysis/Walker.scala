@@ -62,7 +62,7 @@ class Walker(isInterface: JType.Cls => Boolean,
 
       val allVertices = Util.breadthFirstAggregation[SSA.Node](program.allTerminals.toSet)(_.upstream)._1
 
-      val preScheduleIndex = Indexer.findSaveable(program, Map.empty, allVertices)
+      val preScheduleIndex = Namer.findSaveable(program, Map.empty, allVertices)
 
       println()
       println(Renderer.renderSSA(program, preScheduleIndex))
@@ -95,7 +95,7 @@ class Walker(isInterface: JType.Cls => Boolean,
           allVertices
         )
 
-        val postScheduleIndex = Indexer.findSaveable(program, nodesToBlocks, allVertices)
+        val postScheduleIndex = Namer.findSaveable(program, nodesToBlocks, allVertices)
 
         println()
         println(Renderer.renderSSA(program, postScheduleIndex, nodesToBlocks))
@@ -112,7 +112,7 @@ class Walker(isInterface: JType.Cls => Boolean,
         allVertices2
       )
 
-      val postRegisterAllocIndex = Indexer.findSaveable(program, nodesToBlocks, allVertices2)
+      val postRegisterAllocIndex = Namer.findSaveable(program, nodesToBlocks, allVertices2)
 
       println()
       println(Renderer.renderSSA(program, postRegisterAllocIndex, nodesToBlocks))
