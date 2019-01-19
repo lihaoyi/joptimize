@@ -91,7 +91,7 @@ object SSA{
       case Some(x) if x > 1 => downstream(n) = x - 1
     }
     def downstreamList = downstream.keysIterator.toArray
-    def downstreamSize = downstream.size
+    def downstreamSize = downstream.valuesIterator.sum
 
     def update(): Node = {
       upstream.foreach(_.downstreamAdd(this))

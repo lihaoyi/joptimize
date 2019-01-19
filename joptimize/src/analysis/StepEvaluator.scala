@@ -198,6 +198,7 @@ class StepEvaluator(merges: mutable.LinkedHashSet[SSA.Phi],
   def merge0(value1: SSA.Val, insnIndex: Int, targetInsnIndex: Int) = {
     if (blockStartIndex(targetInsnIndex) && insnIndex != targetInsnIndex) {
       val phiStub = new SSA.Phi(findBlockDest(targetInsnIndex), Set(findBlockStart(insnIndex) -> value1), value1.jtype)
+      pprint.log(phiStub)
       merges.add(phiStub)
       phiStub
     }else{

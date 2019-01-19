@@ -264,6 +264,7 @@ object Util{
             scheduledVals.get(v).exists(c => downstreamControls.exists(_ != c))
           case _ => false
         }
+        pprint.log((k, k.downstreamSize, k.downstreamList))
         k.upstream.nonEmpty && (k.downstreamSize > 1 || allTerminals.contains(k) || scheduled || k.isInstanceOf[SSA.Copy])
       } ++
       allVertices.collect {
@@ -287,6 +288,10 @@ object Util{
         )
       )
     }
+
+    pprint.log(saveable)
+    pprint.log(savedLocals)
+
     (finalOrderingMap, saveable, savedLocals)
   }
 
