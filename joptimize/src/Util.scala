@@ -235,17 +235,12 @@ object Util{
     finalOrderingMap
   }
 
-  def findSaveable(program: Program, scheduledVals: Map[SSA.Val, SSA.Control]) = {
-    val allTerminals = program.allTerminals
-    val (allVertices, roots, downstreamEdges) =
-      Util.breadthFirstAggregation[SSA.Node](allTerminals.toSet) { x =>
-        val addedControl = x match {
-          case v: SSA.Val => scheduledVals.get(v).toSeq
-          case _ => Nil
-        }
-        x.upstream ++ addedControl
-      }
+  def findSaveable(program: Program,
+                   scheduledVals: Map[SSA.Val, SSA.Control],
+                   allVertices: Set[SSA.Node]) = {
 
+
+    val downstreamEdges = allVertices.flatMap(x => x.downstreamList.map(x -> _)).toSeq ++ scheduledVals.map(_.swap)
     val finalOrderingMap = sortVerticesForPrinting(allVertices, downstreamEdges) {
       case (_, _: SSA.Phi | _: SSA.Merge) => true
       case (v: SSA.Val, c: SSA.Control) => true
@@ -264,7 +259,7 @@ object Util{
             scheduledVals.get(v).exists(c => downstreamControls.exists(_ != c))
           case _ => false
         }
-        k.upstream.nonEmpty && (k.downstreamSize > 1 || allTerminals.contains(k) || scheduled || k.isInstanceOf[SSA.Copy])
+        k.upstream.nonEmpty && (k.downstreamSize > 1 || program.allTerminals.contains(k) || scheduled || k.isInstanceOf[SSA.Copy])
       } ++
       allVertices.collect {
         case k: SSA.Phi => k

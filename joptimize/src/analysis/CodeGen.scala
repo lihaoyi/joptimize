@@ -1,17 +1,12 @@
 package joptimize.analysis
 
-import java.util
 
-import fansi.Str
-import joptimize.Util
 import joptimize.model.JType
-//import joptimize.analysis.Renderer.sortVerticesForPrinting
-import joptimize.graph.{HavlakLoopTree, LengauerTarjanDominatorTree, TarjansStronglyConnectedComponents}
+
+import joptimize.graph.{HavlakLoopTree, LengauerTarjanDominatorTree}
 import joptimize.model.{Program, SSA}
 import org.objectweb.asm.Opcodes._
 import org.objectweb.asm.tree._
-
-import collection.JavaConverters._
 import scala.collection.mutable
 
 /**
@@ -21,35 +16,20 @@ import scala.collection.mutable
   */
 
 object CodeGen{
-  def apply(program: Program, nodesToBlocks: Map[SSA.Val, SSA.Block]): InsnList = {
-
-    val (finalOrderingMap, saveable, savedLocals2) = Util.findSaveable(program, nodesToBlocks)
+  def apply(program: Program,
+            allVertices: Set[SSA.Node],
+            nodesToBlocks: Map[SSA.Val, SSA.Block],
+            cfg: Seq[(SSA.Control, SSA.Control)],
+            savedLocals2: Map[SSA.Node, (Int, String)],
+            finalOrderingMap: Map[SSA.Node, Int]): InsnList = {
     val blocksToNodes = nodesToBlocks.groupBy(_._2).map{case (k, v) => (k, v.keys)}
-    val stringified = Renderer.renderSSA(program, finalOrderingMap, saveable, savedLocals2, nodesToBlocks)
-//    pprint.log(nodesToBlocks.mapValues(mapping2))
-
-    println()
-    println(stringified)
-    println()
-
-    val cfg = Util.findControlFlowGraph(program)
-    val allVertices = cfg.flatMap{case (a, b) => Seq(a, b)}
-    val predecessor = cfg.groupBy(_._2).map{case (k, v) => (k, v.map(_._1))}
-    val startNode = allVertices.find(!predecessor.contains(_)).get
-    val successor = cfg.groupBy(_._1).map{case (k, v) => (k, v.map(_._2))}
-    val sortedControls = mutable.LinkedHashSet.empty[SSA.Control]
-    def sortBlocks(block: SSA.Control): Unit = if (!sortedControls(block)){
-      sortedControls.add(block)
-      for(s <- successor.getOrElse(block, Nil)) sortBlocks(s)
-    }
-
-    sortBlocks(startNode)
+    val sortedControls = sortControlFlowGraph(cfg)
 
     val blockIndices = sortedControls.zipWithIndex.toMap
 
     val output = new InsnList()
     val labels = sortedControls.map(_ -> new LabelNode()).toMap
-    val savedLocalNumbers = savedLocals2.collect{case (k: SSA.Val, v) => (k, v._1)}.toMap
+    val savedLocalNumbers = savedLocals2.collect{case (k: SSA.Val, v) => (k, v._1)}
     val blockCode = mutable.Buffer.empty[(Seq[AbstractInsnNode], Option[AbstractInsnNode])]
     for(control <- sortedControls){
 //      pprint.log(block)
@@ -88,8 +68,6 @@ object CodeGen{
             insns.appendAll(nodeInsns)
           }
       }
-
-
 
       val downstreamBlocks = control.downstreamList.collect{case b: SSA.Control => b}
 
@@ -133,14 +111,33 @@ object CodeGen{
     output
   }
 
+  def sortControlFlowGraph(cfg: Seq[(SSA.Control, SSA.Control)]) = {
+    val predecessor = cfg.groupBy(_._2).map { case (k, v) => (k, v.map(_._1)) }
+
+    val startBlock = cfg
+      .flatMap { case (a, b) => Seq(a, b) }
+      .find(!predecessor.contains(_))
+      .get
+
+    val successor = cfg.groupBy(_._1).map { case (k, v) => (k, v.map(_._2)) }
+    val sortedControls = mutable.LinkedHashSet.empty[SSA.Control]
+
+    def sortBlocks(block: SSA.Control): Unit = if (!sortedControls(block)) {
+      sortedControls.add(block)
+      for (s <- successor.getOrElse(block, Nil)) sortBlocks(s)
+    }
+
+    sortBlocks(startBlock)
+    sortedControls
+  }
+
   def schedule(program: Program,
                loopTree: HavlakLoopTree.Loop[SSA.Block],
                dominatorDepth: Map[SSA.Block, Int],
                immediateDominator: Map[SSA.Block, SSA.Block],
                graph: Seq[(SSA.Control, SSA.Control)],
-               mapping: Map[SSA.Node, String]): Map[SSA.Val, SSA.Block] = {
-    val (allVertices, _, _) =
-      Util.breadthFirstAggregation[SSA.Node](program.allTerminals.toSet)(_.upstream)
+               mapping: Map[SSA.Node, String],
+               allVertices: Set[SSA.Node]): Map[SSA.Val, SSA.Block] = {
 
     val loopNestMap = mutable.LinkedHashMap.empty[SSA.Node, Int]
     def recLoop(loop: HavlakLoopTree.Loop[SSA.Block], depth: Int): Unit = {
