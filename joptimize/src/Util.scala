@@ -252,25 +252,24 @@ object Util{
       case _ => false
     }
 
-    val downstreamLookup = downstreamEdges.groupBy(_._1)
     val saveable =
-      downstreamLookup.filter { case (k, x) =>
+      allVertices.filter { k =>
+        val x = k.downstreamList
         val scheduled = k match {
           case v: SSA.Val =>
             val downstreamControls = x.collect {
-              case (_, t: SSA.Val) => scheduledVals.get(t)
-              case (_, t: SSA.SimpleBlock) => Some(t)
+              case t: SSA.Val => scheduledVals.get(t)
+              case t: SSA.SimpleBlock => Some(t)
             }.flatten
             scheduledVals.get(v).exists(c => downstreamControls.exists(_ != c))
           case _ => false
         }
-        k.upstream.nonEmpty && (x.size > 1 || allTerminals.contains(k) || scheduled || k.isInstanceOf[SSA.Copy])
+        k.upstream.nonEmpty && (k.downstreamSize > 1 || allTerminals.contains(k) || scheduled || k.isInstanceOf[SSA.Copy])
+      } ++
+      allVertices.collect {
+        case k: SSA.Phi => k
+        case b: SSA.Control => b
       }
-        .keySet ++
-        allVertices.collect {
-          case k: SSA.Phi => k
-          case b: SSA.Control => b
-        }
 
     val savedLocals = mutable.Map[SSA.Val, (Int, String)]()
 
@@ -283,7 +282,7 @@ object Util{
         r,
         (
           savedLocals.size,
-          if (downstreamLookup.getOrElse(r, Nil).size > 1) "local" + savedLocals.size
+          if (r.downstreamSize > 1) "local" + savedLocals.size
           else "stack" + savedLocals.size
         )
       )

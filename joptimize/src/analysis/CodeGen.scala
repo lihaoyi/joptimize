@@ -93,7 +93,7 @@ object CodeGen{
 
     val output = new InsnList()
     val labels = sortedControls.map(_ -> new LabelNode()).toMap
-    val savedLocalNumbers = savedLocals.map{case (k, v) => (k, (v._2.startsWith("local"), v._1))}.toMap
+    val savedLocalNumbers = savedLocals.map{case (k, v) => (k, v._1)}.toMap
     val blockCode = mutable.Buffer.empty[(Seq[AbstractInsnNode], Option[AbstractInsnNode])]
     for(control <- sortedControls){
 //      pprint.log(block)
@@ -113,7 +113,8 @@ object CodeGen{
               val destination = srcBlock.downstreamList.collect{case t: SSA.False => t}.head
               if (blockIndices(destination) == blockIndices(control) + 1) None
               else Some(labels(destination))
-            }
+            },
+            false
           )
 
           insns.appendAll(code)
@@ -121,7 +122,13 @@ object CodeGen{
           val blockNodes = blocksToNodes.getOrElse(block, Nil).toSeq.sortBy(finalOrderingMap)
           for(node <- blockNodes if savedLocals.contains(node) && !node.isInstanceOf[SSA.Arg]){
             //        pprint.log(node)
-            val nodeInsns = generateBytecode(node, savedLocalNumbers, _ => ???, _ => ???)
+            val nodeInsns = generateBytecode(
+              node,
+              savedLocalNumbers,
+              _ => ???,
+              _ => ???,
+              node.downstreamList.exists(blockNodes.contains)
+            )
             insns.appendAll(nodeInsns)
           }
       }
@@ -145,8 +152,8 @@ object CodeGen{
           blockCode(blockIndices(k)) = (
             insns ++
             Seq(
-              new VarInsnNode(ILOAD, savedLocalNumbers(v)._2),
-              new VarInsnNode(ISTORE, savedLocalNumbers(phi)._2)
+              new VarInsnNode(ILOAD, savedLocalNumbers(v)),
+              new VarInsnNode(ISTORE, savedLocalNumbers(phi))
             ),
             footer
           )
@@ -256,9 +263,10 @@ object CodeGen{
     )
   }
   def generateBytecode(ssa: SSA.Node,
-                       savedLocals: Map[SSA.Val, (Boolean, Int)],
+                       savedLocals: Map[SSA.Val, Int],
                        jumpLabel: SSA.Control => LabelNode,
-                       fallthroughLabel: SSA.Control => Option[LabelNode]) = {
+                       fallthroughLabel: SSA.Control => Option[LabelNode],
+                       usedInBlock: Boolean) = {
     def rec(ssa: SSA.Val): Seq[AbstractInsnNode] = {
       if (savedLocals.contains(ssa)){
         Seq(
@@ -270,7 +278,7 @@ object CodeGen{
               case JType.Prim.D => DLOAD
               case _ => ALOAD
             },
-            savedLocals(ssa)._2
+            savedLocals(ssa)
           )
         )
       }else compute(ssa)
@@ -351,14 +359,11 @@ object CodeGen{
           case SSA.PushCls(value) =>
             Seq(new LdcInsnNode(org.objectweb.asm.Type.getType(value.name)))
           case SSA.InvokeStatic(srcs, cls, name, desc) =>
-            srcs.flatMap(rec) ++
-              Seq(new MethodInsnNode(INVOKESTATIC, cls.name, name, desc.unparse))
+            Seq(new MethodInsnNode(INVOKESTATIC, cls.name, name, desc.unparse))
           case SSA.InvokeSpecial(srcs, cls, name, desc) =>
-            srcs.flatMap(rec) ++
-              Seq(new MethodInsnNode(INVOKESTATIC, cls.name, name, desc.unparse))
+            Seq(new MethodInsnNode(INVOKESTATIC, cls.name, name, desc.unparse))
           case SSA.InvokeVirtual(srcs, cls, name, desc) =>
-            srcs.flatMap(rec) ++
-              Seq(new MethodInsnNode(INVOKESTATIC, cls.name, name, desc.unparse))
+            Seq(new MethodInsnNode(INVOKESTATIC, cls.name, name, desc.unparse))
           case SSA.InvokeDynamic(name, desc, bsTag, bsOwner, bsName, bsDesc, bsArgs) => ???
           case SSA.New(cls) => ???
           case SSA.NewArray(src, typeRef) => ???
@@ -376,7 +381,9 @@ object CodeGen{
         val save = ssa match{
           case n: SSA.Val if savedLocals.contains(n) =>
   //          val n = savedLocals(n)
-            val dup = if (savedLocals(n)._1) Seq(new InsnNode(DUP)) else Nil
+            pprint.log(n)
+            val dup = if (usedInBlock) Seq(new InsnNode(DUP)) else Nil
+            pprint.log(dup)
             dup ++ Seq(
               new VarInsnNode(
                 n.jtype match{
@@ -386,7 +393,7 @@ object CodeGen{
                   case JType.Prim.D => DSTORE
                   case _ => ASTORE
                 },
-                savedLocals(n)._2
+                savedLocals(n)
               )
             )
           case _ => Nil

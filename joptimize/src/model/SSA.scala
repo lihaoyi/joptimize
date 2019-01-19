@@ -77,16 +77,20 @@ object SSA{
   trait Node{
     def checkLinks() = {
       val brokenUps = upstream.filter(!_.downstreamContains(this))
-      val brokenDowns = downstream.filter(!_.upstream.contains(this))
+      val brokenDowns = downstream.keys.filter(!_.upstream.contains(this))
       assert(brokenUps.isEmpty, (this, brokenUps))
       assert(brokenDowns.isEmpty, (this, brokenDowns))
     }
     def upstream: Seq[Node]
-    private[this] val downstream = mutable.LinkedHashSet.empty[Node]
-    def downstreamAdd(n: Node) = downstream.add(n)
+    private[this] val downstream = mutable.LinkedHashMap.empty[Node, Int]
+    def downstreamAdd(n: Node) = downstream(n) = downstream.getOrElse(n, 0) + 1
     def downstreamContains(n: Node) = downstream.contains(n)
-    def downstreamRemove(n: Node) = downstream.remove(n)
-    def downstreamList = downstream
+    def downstreamRemove(n: Node) = downstream.get(n) match{
+      case None => // do nothing
+      case Some(1) => downstream.remove(n)
+      case Some(x) if x > 1 => downstream(n) = x - 1
+    }
+    def downstreamList = downstream.keysIterator.toArray
     def downstreamSize = downstream.size
 
     def update(): Node = {
