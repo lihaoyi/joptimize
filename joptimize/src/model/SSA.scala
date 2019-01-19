@@ -102,8 +102,8 @@ object SSA{
     update()
   }
 
-  sealed abstract class Val(size: Int) extends org.objectweb.asm.tree.analysis.Value with Node{
-    def getSize = size
+  sealed abstract class Val(val jtype: JType) extends org.objectweb.asm.tree.analysis.Value with Node{
+    def getSize = jtype.size
     def internalName = toString
     override def update(): Val = {
       super.update()
@@ -131,14 +131,14 @@ object SSA{
   }
   trait Codes{
     private[this] val lookup0 = mutable.LinkedHashMap.empty[Int, Code]
-    class Code private[SSA] (val i: Int, val typeSize: Int = 0)(implicit name: sourcecode.Name){
+    class Code private[SSA] (val i: Int, val tpe: JType = JType.Null)(implicit name: sourcecode.Name){
       lookup0(i) = this
       override def toString = name.value
     }
     def lookup(i: Int) = lookup0(i)
   }
 
-  class Phi(var block: Block, var incoming: Set[(SSA.Block, SSA.Val)], var typeSize: Int) extends Val(typeSize){
+  class Phi(var block: Block, var incoming: Set[(SSA.Block, SSA.Val)], var tpe: JType) extends Val(tpe){
     override def upstream: Seq[SSA.Node] = Seq(block) ++ incoming.flatMap(x => Seq(x._1, x._2)).toArray[SSA.Node]
     override def toString = s"Phi@${Integer.toHexString(System.identityHashCode(this))}(${incoming.size})"
   }
@@ -159,74 +159,74 @@ object SSA{
     def block = branch.block
     def upstream = Seq(branch)
   }
-  case class Arg(var index: Int, var tpe: IType) extends Val(tpe.size){
+  case class Arg(var index: Int, var tpe: JType) extends Val(tpe){
     def upstream = Nil
   }
-  case class BinOp(var a: Val, var b: Val, var opcode: BinOp.Code) extends Val(opcode.typeSize){
+  case class BinOp(var a: Val, var b: Val, var opcode: BinOp.Code) extends Val(opcode.tpe){
     def upstream = Seq(a, b)
   }
   object BinOp extends Codes{
-    val IADD = new Code(Opcodes.IADD, 1)
-    val ISUB = new Code(Opcodes.ISUB, 1)
-    val IMUL = new Code(Opcodes.IMUL, 1)
-    val IDIV = new Code(Opcodes.IDIV, 1)
-    val IREM = new Code(Opcodes.IREM, 1)
-    val ISHL = new Code(Opcodes.ISHL, 1)
-    val ISHR = new Code(Opcodes.ISHR, 1)
-    val IUSHR = new Code(Opcodes.IUSHR, 1)
-    val IAND = new Code(Opcodes.IAND, 1)
-    val IOR = new Code(Opcodes.IOR, 1)
-    val IXOR = new Code(Opcodes.IXOR, 1)
-    val FADD = new Code(Opcodes.FADD, 1)
-    val FSUB = new Code(Opcodes.FSUB, 1)
-    val FMUL = new Code(Opcodes.FMUL, 1)
-    val FDIV = new Code(Opcodes.FDIV, 1)
-    val FREM = new Code(Opcodes.FREM, 1)
-    val LCMP = new Code(Opcodes.LCMP, 1)
-    val FCMPL = new Code(Opcodes.FCMPL, 1)
-    val FCMPG = new Code(Opcodes.FCMPG, 1)
-    val DCMPL = new Code(Opcodes.DCMPL, 1)
-    val DCMPG = new Code(Opcodes.DCMPG, 1)
-    val LADD = new Code(Opcodes.LADD, 2)
-    val LSUB = new Code(Opcodes.LSUB, 2)
-    val LMUL = new Code(Opcodes.LMUL, 2)
-    val LDIV = new Code(Opcodes.LDIV, 2)
-    val LREM = new Code(Opcodes.LREM, 2)
-    val LSHL = new Code(Opcodes.LSHL, 2)
-    val LSHR = new Code(Opcodes.LSHR, 2)
-    val LUSHR = new Code(Opcodes.LUSHR, 2)
-    val LAND = new Code(Opcodes.LAND, 2)
-    val LOR = new Code(Opcodes.LOR, 2)
-    val LXOR = new Code(Opcodes.LXOR, 2)
-    val DADD = new Code(Opcodes.DADD, 2)
-    val DSUB = new Code(Opcodes.DSUB, 2)
-    val DMUL = new Code(Opcodes.DMUL, 2)
-    val DDIV = new Code(Opcodes.DDIV, 2)
-    val DREM = new Code(Opcodes.DREM, 2)
+    val IADD = new Code(Opcodes.IADD, JType.Prim.I)
+    val ISUB = new Code(Opcodes.ISUB, JType.Prim.I)
+    val IMUL = new Code(Opcodes.IMUL, JType.Prim.I)
+    val IDIV = new Code(Opcodes.IDIV, JType.Prim.I)
+    val IREM = new Code(Opcodes.IREM, JType.Prim.I)
+    val ISHL = new Code(Opcodes.ISHL, JType.Prim.I)
+    val ISHR = new Code(Opcodes.ISHR, JType.Prim.I)
+    val IUSHR = new Code(Opcodes.IUSHR, JType.Prim.I)
+    val IAND = new Code(Opcodes.IAND, JType.Prim.I)
+    val IOR = new Code(Opcodes.IOR, JType.Prim.I)
+    val IXOR = new Code(Opcodes.IXOR, JType.Prim.I)
+    val FADD = new Code(Opcodes.FADD, JType.Prim.F)
+    val FSUB = new Code(Opcodes.FSUB, JType.Prim.F)
+    val FMUL = new Code(Opcodes.FMUL, JType.Prim.F)
+    val FDIV = new Code(Opcodes.FDIV, JType.Prim.F)
+    val FREM = new Code(Opcodes.FREM, JType.Prim.F)
+    val LCMP = new Code(Opcodes.LCMP, JType.Prim.I)
+    val FCMPL = new Code(Opcodes.FCMPL, JType.Prim.I)
+    val FCMPG = new Code(Opcodes.FCMPG, JType.Prim.I)
+    val DCMPL = new Code(Opcodes.DCMPL, JType.Prim.I)
+    val DCMPG = new Code(Opcodes.DCMPG, JType.Prim.I)
+    val LADD = new Code(Opcodes.LADD, JType.Prim.J)
+    val LSUB = new Code(Opcodes.LSUB, JType.Prim.J)
+    val LMUL = new Code(Opcodes.LMUL, JType.Prim.J)
+    val LDIV = new Code(Opcodes.LDIV, JType.Prim.J)
+    val LREM = new Code(Opcodes.LREM, JType.Prim.J)
+    val LSHL = new Code(Opcodes.LSHL, JType.Prim.J)
+    val LSHR = new Code(Opcodes.LSHR, JType.Prim.J)
+    val LUSHR = new Code(Opcodes.LUSHR, JType.Prim.J)
+    val LAND = new Code(Opcodes.LAND, JType.Prim.J)
+    val LOR = new Code(Opcodes.LOR, JType.Prim.J)
+    val LXOR = new Code(Opcodes.LXOR, JType.Prim.J)
+    val DADD = new Code(Opcodes.DADD, JType.Prim.D)
+    val DSUB = new Code(Opcodes.DSUB, JType.Prim.D)
+    val DMUL = new Code(Opcodes.DMUL, JType.Prim.D)
+    val DDIV = new Code(Opcodes.DDIV, JType.Prim.D)
+    val DREM = new Code(Opcodes.DREM, JType.Prim.D)
   }
-  case class UnaOp(var a: Val, var opcode: UnaOp.Code) extends Val(opcode.typeSize){
+  case class UnaOp(var a: Val, var opcode: UnaOp.Code) extends Val(opcode.tpe){
     def upstream = Seq(a)
   }
   object UnaOp extends Codes{
-    val INEG = new Code(Opcodes.INEG, 1)
-    val L2I = new Code(Opcodes.L2I, 1)
-    val F2I = new Code(Opcodes.F2I, 1)
-    val D2I = new Code(Opcodes.D2I, 1)
-    val I2B = new Code(Opcodes.I2B, 1)
-    val I2C = new Code(Opcodes.I2C, 1)
-    val I2S = new Code(Opcodes.I2S, 1)
-    val FNEG = new Code(Opcodes.FNEG, 1)
-    val I2F = new Code(Opcodes.I2F, 1)
-    val L2F = new Code(Opcodes.L2F, 1)
-    val D2F = new Code(Opcodes.D2F, 1)
-    val LNEG = new Code(Opcodes.LNEG, 2)
-    val I2L = new Code(Opcodes.I2L, 2)
-    val F2L = new Code(Opcodes.F2L, 2)
-    val D2L = new Code(Opcodes.D2L, 2)
-    val DNEG = new Code(Opcodes.DNEG, 2)
-    val I2D = new Code(Opcodes.I2D, 2)
-    val L2D = new Code(Opcodes.L2D, 2)
-    val F2D = new Code(Opcodes.F2D, 2)
+    val INEG = new Code(Opcodes.INEG, JType.Prim.I)
+    val L2I = new Code(Opcodes.L2I, JType.Prim.I)
+    val F2I = new Code(Opcodes.F2I, JType.Prim.I)
+    val D2I = new Code(Opcodes.D2I, JType.Prim.I)
+    val I2B = new Code(Opcodes.I2B, JType.Prim.B)
+    val I2C = new Code(Opcodes.I2C, JType.Prim.C)
+    val I2S = new Code(Opcodes.I2S, JType.Prim.S)
+    val FNEG = new Code(Opcodes.FNEG, JType.Prim.F)
+    val I2F = new Code(Opcodes.I2F, JType.Prim.F)
+    val L2F = new Code(Opcodes.L2F, JType.Prim.F)
+    val D2F = new Code(Opcodes.D2F, JType.Prim.F)
+    val LNEG = new Code(Opcodes.LNEG, JType.Prim.J)
+    val I2L = new Code(Opcodes.I2L, JType.Prim.J)
+    val F2L = new Code(Opcodes.F2L, JType.Prim.J)
+    val D2L = new Code(Opcodes.D2L, JType.Prim.J)
+    val DNEG = new Code(Opcodes.DNEG, JType.Prim.D)
+    val I2D = new Code(Opcodes.I2D, JType.Prim.D)
+    val L2D = new Code(Opcodes.L2D, JType.Prim.D)
+    val F2D = new Code(Opcodes.F2D, JType.Prim.D)
   }
 
   case class UnaBranch(var block: Block, var a: Val, var opcode: UnaBranch.Code) extends Jump(){
@@ -271,58 +271,58 @@ object SSA{
   case class LookupSwitch(var block: Block, var src: Val, var keys: Seq[Int]) extends Jump(){
     def upstream = Seq(src)
   }
-  case class Copy(var src: Val) extends Val(src.getSize){
+  case class Copy(var src: Val) extends Val(src.jtype){
     def upstream = Seq(src)
   }
-  case class CheckCast(var src: Val, var desc: JType) extends Val(0){
+  case class CheckCast(var src: Val, var desc: JType) extends Val(desc){
     def upstream = Seq(src)
   }
-  case class ArrayLength(var src: Val) extends Val(1){
+  case class ArrayLength(var src: Val) extends Val(JType.Prim.I){
     def upstream = Seq(src)
   }
-  case class InstanceOf(var src: Val, var desc: JType) extends Val(1){
+  case class InstanceOf(var src: Val, var desc: JType) extends Val(JType.Prim.Z){
     def upstream = Seq(src)
   }
-  case class PushI(var value: Int) extends Val(1){
+  case class PushI(var value: Int) extends Val(JType.Prim.I){
     def upstream = Nil
   }
-  case class PushJ(var value: Long) extends Val(2){
+  case class PushJ(var value: Long) extends Val(JType.Prim.J){
     def upstream = Nil
   }
-  case class PushF(var value: Float) extends Val(1){
+  case class PushF(var value: Float) extends Val(JType.Prim.F){
     def upstream = Nil
   }
-  case class PushD(var value: Double) extends Val(2){
+  case class PushD(var value: Double) extends Val(JType.Prim.D){
     def upstream = Nil
   }
-  case class PushS(var value: String) extends Val(1){
+  case class PushS(var value: String) extends Val(JType.Prim.S){
     def upstream = Nil
   }
-  case class PushNull() extends Val(1){
+  case class PushNull() extends Val(JType.Cls("java/lang/Object")){
     def upstream = Nil
   }
-  case class PushCls(var value: JType.Cls) extends Val(1){
+  case class PushCls(var value: JType.Cls) extends Val(value){
     def upstream = Nil
   }
 
   case class InvokeStatic(var srcs: Seq[Val],
                           var cls: JType.Cls,
                           var name: String,
-                          var desc: Desc) extends Val(desc.ret.size){
+                          var desc: Desc) extends Val(desc.ret){
     def upstream = srcs
   }
 
   case class InvokeSpecial(var srcs: Seq[Val],
                            var cls: JType.Cls,
                            var name: String,
-                           var desc: Desc) extends Val(desc.ret.size){
+                           var desc: Desc) extends Val(desc.ret){
     def upstream = srcs
   }
 
   case class InvokeVirtual(var srcs: Seq[Val],
                            var cls: JType.Cls,
                            var name: String,
-                           var desc: Desc) extends Val(desc.ret.size){
+                           var desc: Desc) extends Val(desc.ret){
     def upstream = srcs
   }
 
@@ -336,38 +336,38 @@ object SSA{
     def upstream = Nil
   }
 
-  case class New(var cls: JType.Cls) extends Val(1){
+  case class New(var cls: JType.Cls) extends Val(cls){
     def upstream = Nil
   }
-  case class NewArray(var src: Val, var typeRef: JType) extends Val(1){
+  case class NewArray(var src: Val, var typeRef: JType) extends Val(typeRef){
     def upstream = Seq(src)
   }
-  case class MultiANewArray(var desc: JType, var dims: Seq[Val]) extends Val(1){
+  case class MultiANewArray(var desc: JType, var dims: Seq[Val]) extends Val(desc){
     def upstream = Nil
   }
-  case class PutStatic(var src: Val, var cls: JType.Cls, var name: String, var desc: JType) extends Val(0){
+  case class PutStatic(var src: Val, var cls: JType.Cls, var name: String, var desc: JType) extends Val(JType.Null){
     def upstream = Seq(src)
   }
-  case class GetStatic(var cls: JType.Cls, var name: String, var desc: JType) extends Val(desc.size){
+  case class GetStatic(var cls: JType.Cls, var name: String, var desc: JType) extends Val(desc){
     def upstream = Nil
   }
-  case class PutField(var src: Val, var obj: Val, var owner: JType.Cls, var name: String, var desc: JType) extends Val(0){
+  case class PutField(var src: Val, var obj: Val, var owner: JType.Cls, var name: String, var desc: JType) extends Val(JType.Null){
     def upstream = Seq(src, obj)
   }
-  case class GetField(var obj: Val, var owner: JType.Cls, var name: String, var desc: JType) extends Val(desc.size){
+  case class GetField(var obj: Val, var owner: JType.Cls, var name: String, var desc: JType) extends Val(desc){
     def upstream = Seq(obj)
   }
-  case class PutArray(var src: Val, var indexSrc: Val, var arrayValue: Val) extends Val(0){
+  case class PutArray(var src: Val, var indexSrc: Val, var arrayValue: Val) extends Val(JType.Null){
     def upstream = Seq(src)
   }
-  case class GetArray(var indexSrc: Val, var array: Val, var typeSize: Int) extends Val(typeSize){
+  case class GetArray(var indexSrc: Val, var array: Val, var tpe: JType) extends Val(tpe){
     def upstream = Seq(indexSrc, array)
   }
 
-  case class MonitorEnter(var indexSrc: Val) extends Val(0){
+  case class MonitorEnter(var indexSrc: Val) extends Val(JType.Null){
     def upstream = Seq(indexSrc)
   }
-  case class MonitorExit(var indexSrc: Val) extends Val(0){
+  case class MonitorExit(var indexSrc: Val) extends Val(JType.Null){
     def upstream = Seq(indexSrc)
   }
 }

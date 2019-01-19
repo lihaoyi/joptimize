@@ -129,10 +129,14 @@ class StepEvaluator(merges: mutable.LinkedHashSet[SSA.Phi],
 
   def binaryOperation(insn: AbstractInsnNode, v1: SSA.Val, v2: SSA.Val) = {
     insn.getOpcode match {
-      case IALOAD | BALOAD | CALOAD | SALOAD | FALOAD | AALOAD =>
-        new SSA.GetArray(v1, v2, 1)
-
-      case LALOAD | DALOAD => new SSA.GetArray(v1, v2, 2)
+      case IALOAD => new SSA.GetArray(v1, v2, JType.Prim.I)
+      case BALOAD => new SSA.GetArray(v1, v2, JType.Prim.B)
+      case CALOAD => new SSA.GetArray(v1, v2, JType.Prim.C)
+      case SALOAD => new SSA.GetArray(v1, v2, JType.Prim.S)
+      case FALOAD => new SSA.GetArray(v1, v2, JType.Prim.F)
+      case AALOAD => new SSA.GetArray(v1, v2, JType.Cls("java/lang/Object"))
+      case LALOAD => new SSA.GetArray(v1, v2, JType.Prim.J)
+      case DALOAD => new SSA.GetArray(v1, v2, JType.Prim.D)
 
       case IADD | ISUB | IMUL | IDIV | IREM | ISHL | ISHR | IUSHR | IAND | IOR | IXOR |
            FADD | FSUB | FMUL | FDIV | FREM | LCMP | FCMPL | FCMPG | DCMPL | DCMPG |
@@ -193,7 +197,7 @@ class StepEvaluator(merges: mutable.LinkedHashSet[SSA.Phi],
 
   def merge0(value1: SSA.Val, insnIndex: Int, targetInsnIndex: Int) = {
     if (blockStartIndex(targetInsnIndex) && insnIndex != targetInsnIndex) {
-      val phiStub = new SSA.Phi(findBlockDest(targetInsnIndex), Set(findBlockStart(insnIndex) -> value1), value1.getSize)
+      val phiStub = new SSA.Phi(findBlockDest(targetInsnIndex), Set(findBlockStart(insnIndex) -> value1), value1.jtype)
       merges.add(phiStub)
       phiStub
     }else{

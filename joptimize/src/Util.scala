@@ -264,7 +264,7 @@ object Util{
             scheduledVals.get(v).exists(c => downstreamControls.exists(_ != c))
           case _ => false
         }
-        k.upstream.nonEmpty && (x.distinct.size > 1 || allTerminals.contains(k) || scheduled || k.isInstanceOf[SSA.Copy])
+        k.upstream.nonEmpty && (x.size > 1 || allTerminals.contains(k) || scheduled || k.isInstanceOf[SSA.Copy])
       }
         .keySet ++
         allVertices.collect {

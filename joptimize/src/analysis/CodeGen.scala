@@ -70,7 +70,7 @@ object CodeGen{
     val (finalOrderingMap, saveable, savedLocals) = Util.findSaveable(program, nodesToBlocks)
     val blocksToNodes = nodesToBlocks.groupBy(_._2).map{case (k, v) => (k, v.keys)}
     val (stringified, mapping2) = Renderer.renderSSA(program, nodesToBlocks)
-    pprint.log(nodesToBlocks.mapValues(mapping2))
+//    pprint.log(nodesToBlocks.mapValues(mapping2))
 
     println()
     println(stringified)
@@ -140,9 +140,7 @@ object CodeGen{
 
     savedLocals.keysIterator.foreach{
       case phi: SSA.Phi =>
-        pprint.log(phi)
         for((k, v) <- phi.incoming){
-          pprint.log(k -> v)
           val (insns, footer) = blockCode(blockIndices(k))
           blockCode(blockIndices(k)) = (
             insns ++
@@ -214,14 +212,14 @@ object CodeGen{
       case scheduleRoot: SSA.Control => scheduler.scheduleEarlyRoot(scheduleRoot)
     }
 
-    pprint.log(scheduler.block.map{case (k, v) => (k, mapping(v))}, height=9999)
+//    pprint.log(scheduler.block.map{case (k, v) => (k, mapping(v))}, height=9999)
 
     allVertices.collect{
       case scheduleRoot: SSA.Phi => scheduler.scheduleLateRoot(scheduleRoot)
       case scheduleRoot: SSA.Control => scheduler.scheduleLateRoot(scheduleRoot)
     }
 
-    pprint.log(scheduler.block.map{case (k, v) => (k, mapping(v))}, height=9999)
+//    pprint.log(scheduler.block.map{case (k, v) => (k, mapping(v))}, height=9999)
 
 //    ???
     scheduler.block.filter{case (k, v) => v != null}.toMap
@@ -266,14 +264,13 @@ object CodeGen{
       if (savedLocals.contains(ssa)){
         Seq(
           new VarInsnNode(
-            ILOAD,
-//            inferredTypes.get(ssa).widen match{
-//              case JType.Prim.I => ILOAD
-//              case JType.Prim.J => LLOAD
-//              case JType.Prim.F => FLOAD
-//              case JType.Prim.D => DLOAD
-//              case _ => ALOAD
-//            },
+            ssa.jtype match{
+              case JType.Prim.I | JType.Prim.S | JType.Prim.Z | JType.Prim.B | JType.Prim.C => ILOAD
+              case JType.Prim.J => LLOAD
+              case JType.Prim.F => FLOAD
+              case JType.Prim.D => DLOAD
+              case _ => ALOAD
+            },
             savedLocals(ssa)._2
           )
         )
@@ -300,14 +297,13 @@ object CodeGen{
           case _: SSA.False => Nil
           case SSA.ReturnVal(block, a) =>
             Seq(new InsnNode(
-              IRETURN
-  //            inferredTypes.get(a).widen match{
-  //              case JType.Prim.I | JType.Prim.B | JType.Prim.S | JType.Prim.C => IRETURN
-  //              case JType.Prim.J => LRETURN
-  //              case JType.Prim.F => FRETURN
-  //              case JType.Prim.D => DRETURN
-  //              case _ => ARETURN
-  //            }
+              a.jtype match{
+                case JType.Prim.I | JType.Prim.S | JType.Prim.Z | JType.Prim.B | JType.Prim.C => IRETURN
+                case JType.Prim.J => LRETURN
+                case JType.Prim.F => FRETURN
+                case JType.Prim.D => DRETURN
+                case _ => ARETURN
+              }
             ))
 
           case SSA.Return(block) => Seq(new InsnNode(RETURN))
@@ -384,14 +380,13 @@ object CodeGen{
             val dup = if (savedLocals(n)._1) Seq(new InsnNode(DUP)) else Nil
             dup ++ Seq(
               new VarInsnNode(
-                ISTORE,
-                //                inferredTypes.get(ssa).widen match{
-                //                  case JType.Prim.I => ISTORE
-                //                  case JType.Prim.J => LSTORE
-                //                  case JType.Prim.F => FSTORE
-                //                  case JType.Prim.D => DSTORE
-                //                  case _ => ASTORE
-                //                },
+                n.jtype match{
+                  case JType.Prim.I | JType.Prim.S | JType.Prim.Z | JType.Prim.B | JType.Prim.C => ISTORE
+                  case JType.Prim.J => LSTORE
+                  case JType.Prim.F => FSTORE
+                  case JType.Prim.D => DSTORE
+                  case _ => ASTORE
+                },
                 savedLocals(n)._2
               )
             )
