@@ -64,11 +64,9 @@ class Walker(isInterface: JType.Cls => Boolean,
 
       val program = Program(terminals.map(_._2))
 
-      val (finalOrderingMap, saveable, savedLocals) = Util.findSaveable(
-        program,
-        Map.empty,
-        Util.breadthFirstAggregation[SSA.Node](program.allTerminals.toSet)(_.upstream)._1
-      )
+      val allVertices = Util.breadthFirstAggregation[SSA.Node](program.allTerminals.toSet)(_.upstream)._1
+
+      val (finalOrderingMap, saveable, savedLocals) = Util.findSaveable(program, Map.empty, allVertices)
 
       println()
       println(Renderer.renderSSA(program, finalOrderingMap, saveable, savedLocals))
@@ -94,27 +92,40 @@ class Walker(isInterface: JType.Cls => Boolean,
 
       val (immediateDominators, dominatorDepth) = findDominators(blockEdges, allBlocks)
 
+      { // Just for debugging
+        val nodesToBlocks = schedule(
+          program, loopTree,
+          dominatorDepth, immediateDominators,
+          controlFlowEdges, savedLocals.mapValues(_._2).toMap,
+          allVertices
+        )
+
+        val (finalOrderingMap2, saveable2, savedLocals2) = Util.findSaveable(program, nodesToBlocks, allVertices)
+
+        println()
+        println(Renderer.renderSSA(program, finalOrderingMap2, saveable2, savedLocals2, nodesToBlocks))
+
+      }
+
       RegisterAllocator.apply(program, immediateDominators)
 
-      val (allVertices, _, _) = Util.breadthFirstAggregation[SSA.Node](program.allTerminals.toSet)(_.upstream)
+      val (allVertices2, _, _) = Util.breadthFirstAggregation[SSA.Node](program.allTerminals.toSet)(_.upstream)
 
       val nodesToBlocks = schedule(
         program, loopTree,
         dominatorDepth, immediateDominators,
         controlFlowEdges, savedLocals.mapValues(_._2).toMap,
-        allVertices
+        allVertices2
       )
 
-      val (finalOrderingMap2, saveable2, savedLocals2) = Util.findSaveable(program, nodesToBlocks, allVertices)
-      val stringified = Renderer.renderSSA(program, finalOrderingMap2, saveable2, savedLocals2, nodesToBlocks)
-      //    pprint.log(nodesToBlocks.mapValues(mapping2))
+      val (finalOrderingMap2, saveable2, savedLocals2) = Util.findSaveable(program, nodesToBlocks, allVertices2)
 
       println()
-      println(stringified)
+      println(Renderer.renderSSA(program, finalOrderingMap2, saveable2, savedLocals2, nodesToBlocks))
 
       val blockCode = CodeGen(
         program,
-        allVertices,
+        allVertices2,
         nodesToBlocks,
         controlFlowEdges,
         savedLocals2.toMap,
