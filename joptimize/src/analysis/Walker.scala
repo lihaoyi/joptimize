@@ -2,8 +2,11 @@ package joptimize.analysis
 
 
 
+import fansi.Str
 import joptimize.Util
+import joptimize.analysis.CodeGen.{findDominators, schedule}
 import joptimize.bytecode.Frame
+import joptimize.graph.HavlakLoopTree
 import joptimize.model._
 
 import collection.JavaConverters._
@@ -61,10 +64,47 @@ class Walker(isInterface: JType.Cls => Boolean,
 
       val program = Program(terminals.map(_._2))
 
-      val (printed, mapping) = Renderer.renderSSA(program)
+      val (finalOrderingMap, saveable, savedLocals) = Util.findSaveable(program, Map.empty)
+
+      val printed = Renderer.renderSSA(program, finalOrderingMap, saveable, savedLocals)
       println(printed)
 
-      val finalInsns = CodeGen(program, mapping)
+      val controlFlowEdges = Util.findControlFlowGraph(program)
+      val allBlocks = controlFlowEdges
+        .flatMap{case (k, v) => Seq(k, v)}
+        .collect{case b: SSA.Block => b}
+
+      val blockEdges = controlFlowEdges.flatMap{
+        case (k: SSA.Block, v: SSA.Jump) => Nil
+        case (k: SSA.Jump, v: SSA.Block) => Seq(k.block -> v)
+        case (k: SSA.Block, v: SSA.Block) => Seq(k -> v)
+      }
+
+      println(
+        Renderer.renderGraph(
+          controlFlowEdges,
+          (lhs, rhs, indent) =>
+            fansi.Color.Magenta(savedLocals(lhs)._2) ++
+              " <- " ++
+              fansi.Str.join(rhs.flatMap(r => Seq[Str](", ", fansi.Color.Magenta(savedLocals(r)._2))).drop(1):_*)
+        )
+      )
+
+      val loopTree = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)
+
+      Renderer.renderLoopTree(loopTree, savedLocals)
+
+      val (immediateDominators, dominatorDepth) = findDominators(blockEdges, allBlocks)
+
+      RegisterAllocator.apply(program, immediateDominators)
+
+      val nodesToBlocks = schedule(
+        program, loopTree,
+        dominatorDepth, immediateDominators,
+        controlFlowEdges, savedLocals.mapValues(_._2).toMap
+      )
+
+      val finalInsns = CodeGen(program, nodesToBlocks)
       Walker.MethodResult(Nil, sig.desc.ret, finalInsns, false, Nil)
     })
   }

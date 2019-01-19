@@ -271,21 +271,36 @@ object Util{
         case b: SSA.Control => b
       }
 
-    val savedLocals = mutable.Map[SSA.Val, (Int, String)]()
+    val savedLocals = mutable.Map[SSA.Node, (Int, String)]()
 
     allVertices.collect{case a: SSA.Arg =>
       savedLocals.update(a, (a.index, "arg" + a.index))
     }
 
-    saveable.collect{case r: SSA.Val =>
-      savedLocals.update(
-        r,
-        (
+    saveable.collect{
+      case r: SSA.Val =>
+        savedLocals(r) = (
           savedLocals.size,
           if (r.downstreamSize > 1) "local" + savedLocals.size
           else "stack" + savedLocals.size
         )
-      )
+
+      case c: SSA.Control =>
+        savedLocals(c) = (
+          savedLocals.size,
+          c match{
+            case _: SSA.Return => "return" + savedLocals.size
+            case _: SSA.ReturnVal => "return" + savedLocals.size
+            case _: SSA.AThrow => "return" + savedLocals.size
+            case n: SSA.True => "true" + savedLocals.size
+            case n: SSA.False => "false" + savedLocals.size
+            case r: SSA.Merge =>
+              val name = if (c.upstream.isEmpty) "start" else "block"
+              name + savedLocals.size
+            case _: SSA.UnaBranch => "branch" + savedLocals.size
+            case _: SSA.BinBranch => "branch" + savedLocals.size
+          }
+        )
     }
 
     (finalOrderingMap, saveable, savedLocals)

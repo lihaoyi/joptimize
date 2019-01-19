@@ -2,6 +2,7 @@ package joptimize.analysis
 
 import java.util
 
+import fansi.Str
 import joptimize.Util
 import joptimize.model.JType
 //import joptimize.analysis.Renderer.sortVerticesForPrinting
@@ -20,56 +21,11 @@ import scala.collection.mutable
   */
 
 object CodeGen{
-  def apply(program: Program, mapping: Map[SSA.Node, String]): InsnList = {
-    val controlFlowEdges = Util.findControlFlowGraph(program)
-    val allBlocks = controlFlowEdges
-      .flatMap{case (k, v) => Seq(k, v)}
-      .collect{case b: SSA.Block => b}
+  def apply(program: Program, nodesToBlocks: Map[SSA.Val, SSA.Block]): InsnList = {
 
-    val blockEdges = controlFlowEdges.flatMap{
-      case (k: SSA.Block, v: SSA.Jump) => Nil
-      case (k: SSA.Jump, v: SSA.Block) => Seq(k.block -> v)
-      case (k: SSA.Block, v: SSA.Block) => Seq(k -> v)
-    }
-
-    println(
-      Renderer.renderGraph(
-        controlFlowEdges,
-        (lhs, rhs, indent) =>
-          fansi.Color.Magenta(mapping(lhs)) ++
-          " <- " ++
-          fansi.Str.join(rhs.flatMap(r => Seq[fansi.Str](", ", fansi.Color.Magenta(mapping(r)))).drop(1):_*)
-      )
-    )
-
-    val loopTree = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)
-
-    def rec(l: HavlakLoopTree.Loop[SSA.Block], depth: Int, label0: List[Int]): Unit = {
-      val indent = "    " * depth
-      val id = label0.reverseIterator.map("-" + _).mkString
-      val reducible = if (l.isReducible) "" else " (Irreducible)"
-      val header = mapping(l.primaryHeader)
-      val blockStr = l.basicBlocks.filter(_ != l.primaryHeader).map(x => mapping(x)).mkString("[", ", ", "]")
-      println(s"${indent}loop$id$reducible, header: $header, blocks: $blockStr")
-
-      for((c, i) <- l.children.zipWithIndex)rec(c, depth + 1, i :: label0)
-    }
-
-    rec(loopTree, 0, Nil)
-
-    val (immediateDominators, dominatorDepth) = findDominators(blockEdges, allBlocks)
-
-    RegisterAllocator.apply(program, immediateDominators)
-
-    val nodesToBlocks = schedule(
-      program, loopTree,
-      dominatorDepth, immediateDominators,
-      controlFlowEdges, mapping
-    )
-
-    val (finalOrderingMap, saveable, savedLocals) = Util.findSaveable(program, nodesToBlocks)
+    val (finalOrderingMap, saveable, savedLocals2) = Util.findSaveable(program, nodesToBlocks)
     val blocksToNodes = nodesToBlocks.groupBy(_._2).map{case (k, v) => (k, v.keys)}
-    val (stringified, mapping2) = Renderer.renderSSA(program, nodesToBlocks)
+    val stringified = Renderer.renderSSA(program, finalOrderingMap, saveable, savedLocals2, nodesToBlocks)
 //    pprint.log(nodesToBlocks.mapValues(mapping2))
 
     println()
@@ -93,7 +49,7 @@ object CodeGen{
 
     val output = new InsnList()
     val labels = sortedControls.map(_ -> new LabelNode()).toMap
-    val savedLocalNumbers = savedLocals.map{case (k, v) => (k, v._1)}.toMap
+    val savedLocalNumbers = savedLocals2.collect{case (k: SSA.Val, v) => (k, v._1)}.toMap
     val blockCode = mutable.Buffer.empty[(Seq[AbstractInsnNode], Option[AbstractInsnNode])]
     for(control <- sortedControls){
 //      pprint.log(block)
@@ -120,7 +76,7 @@ object CodeGen{
           insns.appendAll(code)
         case block: SSA.Block =>
           val blockNodes = blocksToNodes.getOrElse(block, Nil).toSeq.sortBy(finalOrderingMap)
-          for(node <- blockNodes if savedLocals.contains(node) && !node.isInstanceOf[SSA.Arg]){
+          for(node <- blockNodes if savedLocals2.contains(node) && !node.isInstanceOf[SSA.Arg]){
             //        pprint.log(node)
             val nodeInsns = generateBytecode(
               node,
@@ -145,7 +101,7 @@ object CodeGen{
       blockCode.append(insns -> footer)
     }
 
-    savedLocals.keysIterator.foreach{
+    savedLocals2.keysIterator.foreach{
       case phi: SSA.Phi =>
         for((k, v) <- phi.incoming){
           val (insns, footer) = blockCode(blockIndices(k))

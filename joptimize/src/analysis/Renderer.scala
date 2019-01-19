@@ -49,6 +49,22 @@ object Renderer {
     )
   }
 
+  def renderLoopTree(loopTree: HavlakLoopTree.Loop[SSA.Block],
+                     savedLocals: mutable.Map[SSA.Node, (Int, String)]) = {
+    def rec(l: HavlakLoopTree.Loop[SSA.Block], depth: Int, label0: List[Int]): Unit = {
+      val indent = "    " * depth
+      val id = label0.reverseIterator.map("-" + _).mkString
+      val reducible = if (l.isReducible) "" else " (Irreducible)"
+      val header = savedLocals(l.primaryHeader)._2
+      val blockStr = l.basicBlocks.filter(_ != l.primaryHeader).map(x => savedLocals(x)._2).mkString("[", ", ", "]")
+      println(s"${indent}loop$id$reducible, header: $header, blocks: $blockStr")
+
+      for ((c, i) <- l.children.zipWithIndex) rec(c, depth + 1, i :: label0)
+    }
+
+    rec(loopTree, 0, Nil)
+  }
+
   def renderGraph(edges: Seq[(SSA.Control, SSA.Control)],
                   coloring: (SSA.Control, Seq[SSA.Control], String) => fansi.Str,
                   annotation: (SSA.Control, String) => Seq[fansi.Str] = (_, _) => Nil): fansi.Str = {
@@ -86,28 +102,11 @@ object Renderer {
     fansi.Str.join(out:_*)
   }
 
-  def renderSSA(program: Program, scheduledVals: Map[SSA.Val, SSA.Control] = Map.empty): (fansi.Str, Map[SSA.Node, String]) = {
-
-    val (finalOrderingMap, saveable, savedLocals) = Util.findSaveable(program, scheduledVals)
-
-    val savedBlocks = mutable.LinkedHashMap.empty[SSA.Control, (Int, String)]
-    def getBlockId(c: SSA.Control) = fansi.Color.Magenta(getBlockId0(c)._2)
-    def getBlockId0(c: SSA.Control): (Int, String) =
-      savedBlocks.getOrElseUpdate(
-        c,
-        (savedBlocks.size, c match{
-          case _: SSA.Return => "return" + savedBlocks.size
-          case _: SSA.ReturnVal => "return" + savedBlocks.size
-          case _: SSA.AThrow => "return" + savedBlocks.size
-          case n: SSA.True => "true" + getBlockId0(n.branch)._1
-          case n: SSA.False => "false" + getBlockId0(n.branch)._1
-          case r: SSA.Merge =>
-            val name = if (c.upstream.isEmpty) "start" else "block"
-            name + savedBlocks.size
-          case _: SSA.UnaBranch => "branch" + savedBlocks.size
-          case _: SSA.BinBranch => "branch" + savedBlocks.size
-        })
-      )
+  def renderSSA(program: Program,
+                finalOrderingMap: Map[SSA.Node, Int],
+                saveable: Set[SSA.Node],
+                savedLocals: mutable.Map[SSA.Node, (Int, String)],
+                scheduledVals: Map[SSA.Val, SSA.Control] = Map.empty): fansi.Str = {
 
     def apply(lhs: String, operands: Tree*) = pprint.Tree.Apply(lhs, operands.toIterator)
     def atom(lhs: String) = pprint.Tree.Lazy(ctx => Iterator(lhs))
@@ -115,10 +114,10 @@ object Renderer {
     def infix(lhs: Tree, op: String, rhs: Tree) = pprint.Tree.Infix(lhs, op, rhs)
 
     def renderBlock(block: SSA.Control) = {
-      atom(getBlockId(block).toString)
+      atom(savedLocals(block)._2)
     }
     def rec(ssa: SSA.Node): Tree = ssa match{
-      case x: SSA.Control => atom(getBlockId(x).toString)
+      case x: SSA.Control => atom(savedLocals(x)._2)
       case x: SSA.Val =>
         if (savedLocals.contains(x)) atom(fansi.Color.Cyan(savedLocals(x)._2).toString())
         else recVal(x)
@@ -161,31 +160,31 @@ object Renderer {
     }
 
     def recBlock(block: SSA.Control): (Str, Tree) = block match{
-      case n: SSA.True => (getBlockId(block), apply("true", atom(getBlockId(n.branch).toString)))
-      case n: SSA.False => (getBlockId(block), apply("false", atom(getBlockId(n.branch).toString)))
+      case n: SSA.True => (savedLocals(block)._2, apply("true", atom(savedLocals(n.branch)._2)))
+      case n: SSA.False => (savedLocals(block)._2, apply("false", atom(savedLocals(n.branch)._2)))
 
       case reg: SSA.Merge =>
         val name = if (reg.upstream.isEmpty) "start" else "merge"
-        val rhs = apply(name + reg.insnIndex, reg.upstream.iterator.map(x => atom(getBlockId(x).toString)).toSeq:_*)
-        (getBlockId(reg), rhs)
+        val rhs = apply(name + reg.insnIndex, reg.upstream.iterator.map(x => atom(savedLocals(x)._2)).toSeq:_*)
+        (savedLocals(reg)_2, rhs)
 
       case n: SSA.AThrow => ???
       case n: SSA.TableSwitch => ???
       case n: SSA.LookupSwitch => ???
 
       case n: SSA.ReturnVal =>
-        (getBlockId(block), apply("return", atom(getBlockId(n.block).toString()), rec(n.a)))
+        (savedLocals(block)._2, apply("return", atom(savedLocals(n.block)._2), rec(n.a)))
 
       case n: SSA.Return =>
-        (getBlockId(block), apply("return", atom(getBlockId(n.block).toString())))
+        (savedLocals(block)._2, apply("return", atom(savedLocals(n.block)._2)))
 
       case n: SSA.UnaBranch =>
         val rhs = apply("if", renderBlock(n.block), rec(n.a), atom(unaryBranchString(n.opcode)))
-        (getBlockId(n), rhs)
+        (savedLocals(n)._2, rhs)
 
       case n: SSA.BinBranch =>
         val rhs = apply("if", renderBlock(n.block), infix(rec(n.a), binBranchString(n.opcode), rec(n.b)))
-        (getBlockId(n), rhs)
+        (savedLocals(n)._2, rhs)
     }
 
     def renderStmt(r: SSA.Node, leftOffset: Int) = {
@@ -238,8 +237,7 @@ object Renderer {
         )
       }
 
-    val mapping = (savedLocals.mapValues(_._2) ++ savedBlocks.mapValues(_._2)).toMap
-    (out, mapping)
+    out
   }
 
 
