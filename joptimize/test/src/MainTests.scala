@@ -49,6 +49,8 @@ object MainTests extends TestSuite{
         'nestedFor2 - annotatedTest
         'basicWhile - annotatedTest
         'alternatingWhile - annotatedTest
+        'loopReturn1 - annotatedTest
+        'loopReturn2 - annotatedTest
         'sqrtFinder - annotatedTest
 
       }

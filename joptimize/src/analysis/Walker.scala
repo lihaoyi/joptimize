@@ -65,9 +65,14 @@ class Walker(isInterface: JType.Cls => Boolean,
 
         val postScheduleNaming = Namer.apply(program, nodesToBlocks, program.getAllVertices())
 
+//        pprint.log(preScheduleNaming.savedLocals.collect{case (k: SSA.Block, (v1, v2)) => (k, v2)}, height=9999)
+//        pprint.log(preScheduleNaming.saveable)
+//        pprint.log(nodesToBlocks, height=9999)
+//
         println()
         println(Renderer.renderSSA(program, postScheduleNaming, nodesToBlocks))
 
+//        ???
       }
 
       RegisterAllocator.apply(program, dominators.immediateDominators)

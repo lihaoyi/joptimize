@@ -33,7 +33,7 @@ object Namer {
           case v: SSA.Val =>
             val downstreamControls = x.collect {
               case t: SSA.Val => scheduledVals.get(t)
-              case t: SSA.SimpleBlock => Some(t)
+              case t: SSA.Control => Some(t)
             }.flatten
             scheduledVals.get(v).exists(c => downstreamControls.exists(_ != c))
           case _ => false

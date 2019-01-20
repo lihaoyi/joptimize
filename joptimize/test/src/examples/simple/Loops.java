@@ -169,6 +169,25 @@ public class Loops {
         return b;
     }
 
+    @joptimize.Test(inputs = {3, 4, 5})
+    public static double loopReturn1(int n0) {
+
+        int errorSquared = 7;
+        while (true) {
+            if (errorSquared / n0 < 3) return errorSquared;
+        }
+    }
+
+    @joptimize.Test(inputs = {121})
+    public static double loopReturn2(int n0) {
+
+        double errorSquared = 0;
+        while (true) {
+            errorSquared = errorSquared * errorSquared;
+            if (errorSquared / n0 < 0.1) return errorSquared;
+        }
+    }
+
     @joptimize.Test(inputs = {121})
     public static double sqrtFinder(int n0) {
         double n = (double)n0;
@@ -183,5 +202,4 @@ public class Loops {
             }
         }
     }
-
 }
