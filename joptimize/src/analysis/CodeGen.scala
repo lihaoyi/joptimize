@@ -84,23 +84,8 @@ object CodeGen{
           blockCode(blockIndices(k)) = (
             insns ++
             Seq(
-              new VarInsnNode(
-                phi.tpe match{
-                  case JType.Prim.I | JType.Prim.S | JType.Prim.Z | JType.Prim.B | JType.Prim.C => ILOAD
-                  case JType.Prim.J => ILOAD
-                  case JType.Prim.F => ILOAD
-                  case JType.Prim.D => DLOAD
-                  case _ => ALOAD
-                }, savedLocalNumbers(v)),
-              new VarInsnNode(
-                phi.tpe match{
-                  case JType.Prim.I | JType.Prim.S | JType.Prim.Z | JType.Prim.B | JType.Prim.C => ISTORE
-                  case JType.Prim.J => LSTORE
-                  case JType.Prim.F => FSTORE
-                  case JType.Prim.D => DSTORE
-                  case _ => ASTORE
-                },
-                savedLocalNumbers(phi))
+              new VarInsnNode(loadOp(phi), savedLocalNumbers(v)),
+              new VarInsnNode(saveOp(phi), savedLocalNumbers(phi))
             ),
             footer
           )
@@ -141,20 +126,8 @@ object CodeGen{
 
 
   def rec(ssa: SSA.Val, savedLocals: Map[SSA.Val, Int]): Seq[AbstractInsnNode] = {
-    if (savedLocals.contains(ssa)){
-      Seq(
-        new VarInsnNode(
-          ssa.jtype match{
-            case JType.Prim.I | JType.Prim.S | JType.Prim.Z | JType.Prim.B | JType.Prim.C => ILOAD
-            case JType.Prim.J => LLOAD
-            case JType.Prim.F => FLOAD
-            case JType.Prim.D => DLOAD
-            case _ => ALOAD
-          },
-          savedLocals(ssa)
-        )
-      )
-    }else generateValBytecode(ssa, savedLocals, false)
+    if (savedLocals.contains(ssa)) Seq(new VarInsnNode(loadOp(ssa), savedLocals(ssa)))
+    else generateValBytecode(ssa, savedLocals, false)
   }
 
   def generateJumpBytecode(ssa: SSA.Jump,
@@ -172,16 +145,7 @@ object CodeGen{
         val goto = fallthroughLabel(n).map(new JumpInsnNode(GOTO, _))
         val jump = Seq(new JumpInsnNode(opcode.i, jumpLabel(n)))
         jump ++ goto
-      case SSA.ReturnVal(block, a) =>
-        Seq(new InsnNode(
-          a.jtype match{
-            case JType.Prim.I | JType.Prim.S | JType.Prim.Z | JType.Prim.B | JType.Prim.C => IRETURN
-            case JType.Prim.J => LRETURN
-            case JType.Prim.F => FRETURN
-            case JType.Prim.D => DRETURN
-            case _ => ARETURN
-          }
-        ))
+      case SSA.ReturnVal(block, a) => Seq(new InsnNode(returnOp(a)))
 
       case SSA.Return(block) => Seq(new InsnNode(RETURN))
       case SSA.AThrow(_, src) => Seq(new InsnNode(ATHROW))
@@ -271,22 +235,43 @@ object CodeGen{
             else Seq(new InsnNode(DUP2))
           } else Nil
           dup ++ Seq(
-            new VarInsnNode(
-              n.jtype match{
-                case JType.Prim.I | JType.Prim.S | JType.Prim.Z | JType.Prim.B | JType.Prim.C => ISTORE
-                case JType.Prim.J => LSTORE
-                case JType.Prim.F => FSTORE
-                case JType.Prim.D => DSTORE
-                case _ => ASTORE
-              },
-              savedLocals(n)
-            )
+            new VarInsnNode(saveOp(n), savedLocals(n))
           )
         case _ => Nil
       }
 
       upstreams ++ current ++ save
 
+    }
+  }
+
+  def loadOp(ssa: SSA.Val) = {
+    ssa.jtype match {
+      case JType.Prim.I | JType.Prim.S | JType.Prim.Z | JType.Prim.B | JType.Prim.C => ILOAD
+      case JType.Prim.J => LLOAD
+      case JType.Prim.F => FLOAD
+      case JType.Prim.D => DLOAD
+      case _ => ALOAD
+    }
+  }
+
+  def saveOp(n: SSA.Val) = {
+    n.jtype match {
+      case JType.Prim.I | JType.Prim.S | JType.Prim.Z | JType.Prim.B | JType.Prim.C => ISTORE
+      case JType.Prim.J => LSTORE
+      case JType.Prim.F => FSTORE
+      case JType.Prim.D => DSTORE
+      case _ => ASTORE
+    }
+  }
+
+  def returnOp(a: SSA.Val) = {
+    a.jtype match {
+      case JType.Prim.I | JType.Prim.S | JType.Prim.Z | JType.Prim.B | JType.Prim.C => IRETURN
+      case JType.Prim.J => LRETURN
+      case JType.Prim.F => FRETURN
+      case JType.Prim.D => DRETURN
+      case _ => ARETURN
     }
   }
 }
