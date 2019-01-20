@@ -360,7 +360,7 @@ object SSA{
     def upstream = Seq(obj)
   }
   case class PutArray(var src: Val, var indexSrc: Val, var arrayValue: Val) extends Val(JType.Null){
-    def upstream = Seq(indexSrc, src, arrayValue)
+    def upstream = Seq(src, indexSrc, arrayValue)
   }
   case class GetArray(var indexSrc: Val, var array: Val, var tpe: JType) extends Val(tpe){
     def upstream = Seq(indexSrc, array)

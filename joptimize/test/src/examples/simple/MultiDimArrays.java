@@ -3,12 +3,16 @@ package joptimize.examples.simple;
 public class MultiDimArrays {
     @joptimize.Test(inputs = {1, 2, 3, 4, 5, 6})
     public static int[][] make2D(int a, int b) {
-        return new int[a][b];
+        int[][] x = new int[a][b];
+        x[0][0] = 999;
+        return x;
     }
 
     @joptimize.Test(inputs = {1, 2, 3, 4, 5, 6})
-    public static int[][][] make3D(int a, int b, int c) {
-        return new int[a][b][c];
+    public static double[][][] make3D(int a, int b, int c) {
+        double[][][] x = new double[a][b][c];
+        x[a-1][b-1][c-1] = 999;
+        return x;
     }
 
     @joptimize.Test(inputs = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12})
