@@ -178,16 +178,26 @@ public class Loops {
         }
     }
 
-    @joptimize.Test(inputs = {121})
+    @joptimize.Test(inputs = {1, 2, 4, 8, 50000})
     public static int loopReturn2(int n0) {
         int errorSquared = n0;
         while (true) {
             errorSquared = errorSquared - 1;
-            if (errorSquared > 0) return errorSquared;
+            if (errorSquared < 0) return errorSquared;
         }
     }
 
-    @joptimize.Test(inputs = {121})
+    @joptimize.Test(inputs = {-10, 0, 15, 300})
+    public static double loopReturn3(int n0) {
+        double guess = 2;
+
+        while (true) {
+            if (guess > n0) return guess;
+            else guess = guess * guess;
+        }
+    }
+
+    @joptimize.Test(inputs = {1, 9, 121, 10000})
     public static double sqrtFinder(int n0) {
         double n = (double)n0;
         double guess = n / 2 + 5;

@@ -51,6 +51,7 @@ object MainTests extends TestSuite{
         'alternatingWhile - annotatedTest
         'loopReturn1 - annotatedTest
         'loopReturn2 - annotatedTest
+        'loopReturn3 - annotatedTest
         'sqrtFinder - annotatedTest
 
       }

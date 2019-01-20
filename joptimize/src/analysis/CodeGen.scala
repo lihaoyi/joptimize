@@ -3,7 +3,6 @@ package joptimize.analysis
 
 import joptimize.model.JType
 
-import joptimize.graph.{HavlakLoopTree, LengauerTarjanDominatorTree}
 import joptimize.model.{Program, SSA}
 import org.objectweb.asm.Opcodes._
 import org.objectweb.asm.tree._
@@ -81,11 +80,27 @@ object CodeGen{
       case phi: SSA.Phi =>
         for((k, v) <- phi.incoming){
           val (insns, footer) = blockCode(blockIndices(k))
+
           blockCode(blockIndices(k)) = (
             insns ++
             Seq(
-              new VarInsnNode(ILOAD, savedLocalNumbers(v)),
-              new VarInsnNode(ISTORE, savedLocalNumbers(phi))
+              new VarInsnNode(
+                phi.tpe match{
+                  case JType.Prim.I | JType.Prim.S | JType.Prim.Z | JType.Prim.B | JType.Prim.C => ILOAD
+                  case JType.Prim.J => ILOAD
+                  case JType.Prim.F => ILOAD
+                  case JType.Prim.D => DLOAD
+                  case _ => ALOAD
+                }, savedLocalNumbers(v)),
+              new VarInsnNode(
+                phi.tpe match{
+                  case JType.Prim.I | JType.Prim.S | JType.Prim.Z | JType.Prim.B | JType.Prim.C => ISTORE
+                  case JType.Prim.J => LSTORE
+                  case JType.Prim.F => FSTORE
+                  case JType.Prim.D => DSTORE
+                  case _ => ASTORE
+                },
+                savedLocalNumbers(phi))
             ),
             footer
           )
