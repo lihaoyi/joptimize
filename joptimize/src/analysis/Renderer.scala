@@ -236,7 +236,7 @@ object Renderer {
     val out =
       if (scheduledVals.nonEmpty){
         renderGraph(
-          Util.findControlFlowGraph(program),
+          Renderer.findControlFlowGraph(program),
           (l, rhs, indent) => fansi.Str.join(renderStmt(l, indent.length / 2).get:_*),
           (l, indent) => {
 
@@ -328,5 +328,23 @@ object Renderer {
       case IFNULL => "== null"
       case IFNONNULL => "!= null"
     }
+  }
+
+
+  def findControlFlowGraph(program: Program) = {
+    val controlFlowEdges = mutable.Buffer.empty[(SSA.Control, SSA.Control)]
+    val visited = mutable.LinkedHashSet.empty[SSA.Control]
+
+    def rec(current: SSA.Control): Unit = if (!visited(current)){
+      visited.add(current)
+
+      for(control <- current.controls){
+        rec(control)
+        controlFlowEdges.append(control -> current)
+      }
+    }
+
+    program.allTerminals.foreach(rec)
+    controlFlowEdges
   }
 }

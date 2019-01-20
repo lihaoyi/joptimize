@@ -38,10 +38,11 @@ object Namer {
             scheduledVals.get(v).exists(c => downstreamControls.exists(_ != c))
           case _ => false
         }
-        k.upstream.nonEmpty && (k.downstreamSize > 1 || program.allTerminals.contains(k) || scheduled || k.isInstanceOf[SSA.Copy])
+        k.upstream.nonEmpty && (k.downstreamSize > 1 || scheduled)
       } ++
         allVertices.collect {
           case k: SSA.Phi => k
+          case c: SSA.Copy => c
           case b: SSA.Control => b
         }
 

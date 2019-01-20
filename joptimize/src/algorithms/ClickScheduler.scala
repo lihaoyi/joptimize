@@ -1,5 +1,6 @@
-package joptimize.analysis
+package algorithms
 
+import joptimize.analysis.Dominator
 import joptimize.model.SSA
 
 import scala.collection.mutable

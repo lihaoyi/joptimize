@@ -1,5 +1,6 @@
 package joptimize.analysis
 
+import algorithms.ClickScheduler
 import joptimize.graph.HavlakLoopTree
 import joptimize.model.{Program, SSA}
 

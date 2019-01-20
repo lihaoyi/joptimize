@@ -107,7 +107,7 @@ class Walker(isInterface: JType.Cls => Boolean,
   }
 
   def analyzeBlockStructure(program: Program) = {
-    val controlFlowEdges = Util.findControlFlowGraph(program)
+    val controlFlowEdges = Renderer.findControlFlowGraph(program)
     val startBlock = (controlFlowEdges.map(_._1).toSet -- controlFlowEdges.map(_._2)).head.asInstanceOf[SSA.Block]
     val allBlocks = controlFlowEdges
       .flatMap { case (k, v) => Seq(k, v) }

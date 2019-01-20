@@ -235,20 +235,4 @@ object Util{
     finalOrderingMap
   }
 
-  def findControlFlowGraph(program: Program) = {
-    val controlFlowEdges = mutable.Buffer.empty[(SSA.Control, SSA.Control)]
-    val visited = mutable.LinkedHashSet.empty[SSA.Control]
-
-    def rec(current: SSA.Control): Unit = if (!visited(current)){
-      visited.add(current)
-
-      for(control <- current.controls){
-        rec(control)
-        controlFlowEdges.append(control -> current)
-      }
-    }
-
-    program.allTerminals.foreach(rec)
-    controlFlowEdges
-  }
 }
