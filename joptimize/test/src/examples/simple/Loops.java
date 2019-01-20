@@ -180,10 +180,10 @@ public class Loops {
 
     @joptimize.Test(inputs = {121})
     public static int loopReturn2(int n0) {
-        int errorSquared = 1;
+        int errorSquared = n0;
         while (true) {
-            errorSquared = errorSquared * 2;
-            if (errorSquared < n0) return errorSquared;
+            errorSquared = errorSquared - 1;
+            if (errorSquared > 0) return errorSquared;
         }
     }
 
