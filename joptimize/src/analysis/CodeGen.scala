@@ -252,7 +252,10 @@ object CodeGen{
       val save = ssa match{
         case n: SSA.Val if savedLocals.contains(n) =>
           //          val n = savedLocals(n)
-          val dup = if (usedInBlock) Seq(new InsnNode(DUP)) else Nil
+          val dup = if (usedInBlock) {
+            if (n.getSize == 1) Seq(new InsnNode(DUP))
+            else Seq(new InsnNode(DUP2))
+          } else Nil
           dup ++ Seq(
             new VarInsnNode(
               n.jtype match{

@@ -48,22 +48,26 @@ object Namer {
     val savedLocals = mutable.Map[SSA.Val, (Int, String)]()
     val savedControls = mutable.Map[SSA.Control, (Int, String)]()
 
+    var maxVal = 0
     allVertices.collect{case a: SSA.Arg =>
       savedLocals.update(a, (a.index, "arg" + a.index))
+      maxVal += a.getSize
     }
 
     var maxControl = 0
+
     saveable.toSeq.sortBy(finalOrderingMap).collect{
       case r: SSA.Val =>
         savedLocals(r) = (
-          savedLocals.size,
-          if (r.downstreamSize > 1) "local" + savedLocals.size
-          else "stack" + savedLocals.size
+          maxVal,
+          if (r.downstreamSize > 1) "local" + maxVal
+          else "stack" + maxVal
         )
+        maxVal += r.getSize
 
       case c: SSA.Control =>
         val str = c match{
-          case _: SSA.Return | _: SSA.ReturnVal=>
+          case _: SSA.Return | _: SSA.ReturnVal =>
             maxControl += 1
             "return" + maxControl
 
@@ -77,7 +81,7 @@ object Namer {
           case r: SSA.Merge =>
             maxControl += 1
             val name = if (c.upstream.isEmpty) "start" else "block"
-            name + savedControls.size
+            name + maxControl
 
           case _: SSA.UnaBranch | _: SSA.BinBranch=>
             maxControl += 1
