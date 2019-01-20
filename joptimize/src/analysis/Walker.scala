@@ -39,69 +39,62 @@ class Walker(isInterface: JType.Cls => Boolean,
 
       simplifyPhiMerges(program)
 
-      val preScheduleIndex = Namer.findSaveable(program, Map.empty, program.getAllVertices())
+      val preScheduleNaming = Namer.apply(program, Map.empty, program.getAllVertices())
 
       println()
-      println(Renderer.renderSSA(program, preScheduleIndex))
+      println(Renderer.renderSSA(program, preScheduleNaming))
 
       val (controlFlowEdges, startBlock, allBlocks, blockEdges) =
         analyzeBlockStructure(program)
 
       println()
-      println(Renderer.renderControlFlowGraph(controlFlowEdges, preScheduleIndex.savedLocals))
+      println(Renderer.renderControlFlowGraph(controlFlowEdges, preScheduleNaming.savedLocals))
 
       val loopTree = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)
 
       println()
-      println(Renderer.renderLoopTree(loopTree, preScheduleIndex.savedLocals))
+      println(Renderer.renderLoopTree(loopTree, preScheduleNaming.savedLocals))
 
       val dominators = Dominator.findDominators(blockEdges, allBlocks)
 
       { // Just for debugging
-        val nodesToBlocks = Scheduler.schedule(
+        val nodesToBlocks = Scheduler.apply(
           loopTree, dominators, startBlock,
-          preScheduleIndex.savedLocals.mapValues(_._2), program.getAllVertices()
+          preScheduleNaming.savedLocals.mapValues(_._2), program.getAllVertices()
         )
 
-        val postScheduleIndex = Namer.findSaveable(program, nodesToBlocks, program.getAllVertices())
+        val postScheduleNaming = Namer.apply(program, nodesToBlocks, program.getAllVertices())
 
         println()
-        println(Renderer.renderSSA(program, postScheduleIndex, nodesToBlocks))
+        println(Renderer.renderSSA(program, postScheduleNaming, nodesToBlocks))
 
       }
 
       RegisterAllocator.apply(program, dominators.immediateDominators)
 
-      val (allVertices2, _, _) = Util.breadthFirstAggregation[SSA.Node](program.allTerminals.toSet)(_.upstream)
+      val allVertices2 = Util.breadthFirstAggregation[SSA.Node](program.allTerminals.toSet)(_.upstream)._1
 
-      val nodesToBlocks = Scheduler.schedule(
+      val nodesToBlocks = Scheduler.apply(
         loopTree, dominators, startBlock,
-        preScheduleIndex.savedLocals.mapValues(_._2), allVertices2
+        preScheduleNaming.savedLocals.mapValues(_._2), allVertices2
       )
 
-      val postRegisterAllocIndex = Namer.findSaveable(program, nodesToBlocks, allVertices2)
+      val postRegisterAllocNaming = Namer.apply(program, nodesToBlocks, allVertices2)
 
       println()
-      println(Renderer.renderSSA(program, postRegisterAllocIndex, nodesToBlocks))
+      println(Renderer.renderSSA(program, postRegisterAllocNaming, nodesToBlocks))
 
-      val blockCode = CodeGen(
+      val (blockCode, finalInsns) = CodeGen(
         program,
         allVertices2,
         nodesToBlocks,
         controlFlowEdges,
-        postRegisterAllocIndex.savedLocals,
-        postRegisterAllocIndex.finalOrderingMap
+        postRegisterAllocNaming
       )
 
-      val output = new InsnList()
-      for((insns, footer) <- blockCode){
-        insns.foreach(output.add)
-        footer.foreach(output.add)
-      }
+      println(Renderer.renderBlockCode(blockCode, finalInsns))
 
-      println(Renderer.renderBlockCode(blockCode, output))
-
-      Walker.MethodResult(Nil, sig.desc.ret, output, false, Nil)
+      Walker.MethodResult(Nil, sig.desc.ret, finalInsns, false, Nil)
     })
   }
 

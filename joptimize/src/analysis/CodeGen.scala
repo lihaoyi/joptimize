@@ -20,8 +20,7 @@ object CodeGen{
             allVertices: Set[SSA.Node],
             nodesToBlocks: Map[SSA.Val, SSA.Block],
             cfg: Seq[(SSA.Control, SSA.Control)],
-            savedLocals2: Map[SSA.Node, (Int, String)],
-            finalOrderingMap: Map[SSA.Node, Int]) = {
+            naming: Namer.Result) = {
     val blocksToNodes = nodesToBlocks.groupBy(_._2).map{case (k, v) => (k, v.keys)}
     val sortedControls = sortControlFlowGraph(cfg)
 
@@ -29,7 +28,7 @@ object CodeGen{
 
     val output = new InsnList()
     val labels = sortedControls.map(_ -> new LabelNode()).toMap
-    val savedLocalNumbers = savedLocals2.collect{case (k: SSA.Val, v) => (k, v._1)}
+    val savedLocalNumbers = naming.savedLocals.collect{case (k: SSA.Val, v) => (k, v._1)}
     val blockCode = mutable.Buffer.empty[(Seq[AbstractInsnNode], Option[AbstractInsnNode])]
     for(control <- sortedControls){
 //      pprint.log(block)
@@ -52,8 +51,8 @@ object CodeGen{
 
           insns.appendAll(code)
         case block: SSA.Block =>
-          val blockNodes = blocksToNodes.getOrElse(block, Nil).toSeq.sortBy(finalOrderingMap)
-          for(node <- blockNodes if savedLocals2.contains(node) && !node.isInstanceOf[SSA.Arg]){
+          val blockNodes = blocksToNodes.getOrElse(block, Nil).toSeq.sortBy(naming.finalOrderingMap)
+          for(node <- blockNodes if naming.savedLocals.contains(node) && !node.isInstanceOf[SSA.Arg]){
             //        pprint.log(node)
             val nodeInsns = generateValBytecode(
               node,
@@ -74,7 +73,7 @@ object CodeGen{
       blockCode.append(insns -> footer)
     }
 
-    savedLocals2.keysIterator.foreach{
+    naming.savedLocals.keysIterator.foreach{
       case phi: SSA.Phi =>
         for((k, v) <- phi.incoming){
           val (insns, footer) = blockCode(blockIndices(k))
@@ -91,7 +90,14 @@ object CodeGen{
       case _ => //do nothing
     }
 
-    blockCode
+
+    val finalInsns = new InsnList()
+    for((insns, footer) <- blockCode){
+      insns.foreach(finalInsns.add)
+      footer.foreach(finalInsns.add)
+    }
+
+    (blockCode, finalInsns)
   }
 
   def sortControlFlowGraph(cfg: Seq[(SSA.Control, SSA.Control)]) = {

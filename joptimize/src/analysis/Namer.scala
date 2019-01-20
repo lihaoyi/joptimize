@@ -14,9 +14,9 @@ object Namer {
                     saveable: Set[SSA.Node],
                     savedLocals: Map[SSA.Node, (Int, String)])
 
-  def findSaveable(program: Program,
-                   scheduledVals: Map[SSA.Val, SSA.Control],
-                   allVertices: Set[SSA.Node]): Result = {
+  def apply(program: Program,
+            scheduledVals: Map[SSA.Val, SSA.Control],
+            allVertices: Set[SSA.Node]): Result = {
 
     val downstreamEdges = allVertices.flatMap(x => x.downstreamList.map(x -> _)).toSeq ++ scheduledVals.map(_.swap)
 

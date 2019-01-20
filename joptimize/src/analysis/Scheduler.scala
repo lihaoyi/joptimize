@@ -6,11 +6,11 @@ import joptimize.model.{Program, SSA}
 import scala.collection.mutable
 
 object Scheduler {
-  def schedule(loopTree: HavlakLoopTree.Loop[SSA.Block],
-               dominators: Dominator.Result[SSA.Block],
-               startBlock: SSA.Block,
-               mapping: Map[SSA.Node, String],
-               allVertices: Set[SSA.Node]): Map[SSA.Val, SSA.Block] = {
+  def apply(loopTree: HavlakLoopTree.Loop[SSA.Block],
+            dominators: Dominator.Result[SSA.Block],
+            startBlock: SSA.Block,
+            mapping: Map[SSA.Node, String],
+            allVertices: Set[SSA.Node]): Map[SSA.Val, SSA.Block] = {
 
     val loopNestMap = mutable.LinkedHashMap.empty[SSA.Node, Int]
     def recLoop(loop: HavlakLoopTree.Loop[SSA.Block], depth: Int): Unit = {
