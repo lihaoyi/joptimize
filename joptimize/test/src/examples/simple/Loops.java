@@ -179,12 +179,11 @@ public class Loops {
     }
 
     @joptimize.Test(inputs = {121})
-    public static double loopReturn2(int n0) {
-
-        double errorSquared = 0;
+    public static int loopReturn2(int n0) {
+        int errorSquared = 1;
         while (true) {
-            errorSquared = errorSquared * errorSquared;
-            if (errorSquared / n0 < 0.1) return errorSquared;
+            errorSquared = errorSquared * 2;
+            if (errorSquared < n0) return errorSquared;
         }
     }
 
