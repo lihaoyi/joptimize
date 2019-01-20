@@ -33,32 +33,11 @@ class Walker(isInterface: JType.Cls => Boolean,
       println("+" * 20 + sig + "+" * 20)
       println(Renderer.renderInsns(mn.instructions))
 
-      val phiMerges0 = mutable.LinkedHashSet.empty[SSA.Phi]
+      val program = constructSSAProgram(sig, mn)
 
-      val insns = mn.instructions.iterator().asScala.toVector
-      val insnIndices = insns.zipWithIndex.toMap
+      removeDeadNodes(program)
 
-      val regionStarts = findRegionStarts(insns)
-
-      val startRegionLookup = findStartRegionLookup(insns, regionStarts)
-
-      val frames = joptimize.bytecode.Analyzer.analyze(
-        sig.cls.name, mn,
-        new StepEvaluator(phiMerges0, startRegionLookup, regionStarts)
-      )
-
-      val terminals = extractControlFlow(
-        insns,
-        i => regionStarts(insnIndices(i)),
-        frames,
-        startRegionLookup
-      )
-
-      val program = Program(terminals.map(_._2))
-
-      simplifyPhiMerges(phiMerges0, regionStarts.flatten)
-
-      removeDeadNodes(program.getAllVertices())
+      simplifyPhiMerges(program)
 
       val preScheduleIndex = Namer.findSaveable(program, Map.empty, program.getAllVertices())
 
@@ -134,6 +113,28 @@ class Walker(isInterface: JType.Cls => Boolean,
 
       Walker.MethodResult(Nil, sig.desc.ret, output, false, Nil)
     })
+  }
+
+  def constructSSAProgram(sig: MethodSig, mn: MethodNode) = {
+    val phiMerges0 = mutable.LinkedHashSet.empty[SSA.Phi]
+
+    val insns = mn.instructions.iterator().asScala.toVector
+    val insnIndices = insns.zipWithIndex.toMap
+
+    val regionStarts = findRegionStarts(insns)
+
+    val startRegionLookup = findStartRegionLookup(insns, regionStarts)
+
+    val program = extractControlFlow(
+      insns,
+      i => regionStarts(insnIndices(i)),
+      joptimize.bytecode.Analyzer.analyze(
+        sig.cls.name, mn,
+        new StepEvaluator(phiMerges0, startRegionLookup, regionStarts)
+      ),
+      startRegionLookup
+    )
+    program
   }
 
   def findStartRegionLookup(insns: IndexedSeq[AbstractInsnNode],
@@ -215,11 +216,13 @@ class Walker(isInterface: JType.Cls => Boolean,
         mergeBlocks(insn.getNext, findStartRegion(i), Some(insn))
         Nil
     }.flatten
-    terminals
+
+    Program(terminals.map(_._2))
   }
 
-  def removeDeadNodes(allVertices: Set[SSA.Node]) = {
+  def removeDeadNodes(program: Program) = {
     // Remove dead phi nodes that may have been inserted during SSA construction
+    val allVertices = program.getAllVertices()
     for(v <- allVertices){
       for(down <- v.downstreamList){
         if (!allVertices.contains(down)) {
@@ -229,9 +232,13 @@ class Walker(isInterface: JType.Cls => Boolean,
     }
   }
 
-  def simplifyPhiMerges(phiMerges0: mutable.LinkedHashSet[SSA.Phi], regions: Seq[SSA.Block]) = {
-    val queue = phiMerges0 ++ regions
-//    queue.foreach(_.checkLinks())
+  def simplifyPhiMerges(program: Program) = {
+    val queue = program.getAllVertices()
+      .collect{
+        case n: SSA.Merge => n
+        case n: SSA.Phi => n
+      }
+      .to[mutable.LinkedHashSet]
 
     while (queue.nonEmpty) {
       val current = queue.head
