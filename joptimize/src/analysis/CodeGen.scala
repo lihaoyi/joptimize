@@ -34,9 +34,9 @@ object CodeGen{
       val insns = mutable.Buffer.empty[AbstractInsnNode]
       insns.append(labels(control))
       control match{
-        case _: SSA.Jump =>
-          val code = generateControlBytecode(
-            control,
+        case jump: SSA.Jump =>
+          val code = generateJumpBytecode(
+            jump,
             savedLocalNumbers,
             jumpLabel = { srcBlock =>
               labels(srcBlock.downstreamList.collect{case t: SSA.True => t}.head)
@@ -137,13 +137,12 @@ object CodeGen{
     }else generateValBytecode(ssa, savedLocals, false)
   }
 
-  def generateControlBytecode(ssa: SSA.Control,
-                              savedLocals: Map[SSA.Val, Int],
-                              jumpLabel: SSA.Control => LabelNode,
-                              fallthroughLabel: SSA.Control => Option[LabelNode]): Seq[AbstractInsnNode] = {
+  def generateJumpBytecode(ssa: SSA.Jump,
+                           savedLocals: Map[SSA.Val, Int],
+                           jumpLabel: SSA.Control => LabelNode,
+                           fallthroughLabel: SSA.Control => Option[LabelNode]): Seq[AbstractInsnNode] = {
     val upstreams = ssa.upstream.collect{case n: SSA.Val => n}.flatMap(rec(_, savedLocals))
     val current: Seq[AbstractInsnNode] = ssa match{
-      case r: SSA.Merge => Nil
       case n @ SSA.UnaBranch(block, a, opcode) =>
         val goto = fallthroughLabel(n).map(new JumpInsnNode(GOTO, _))
         val jump = Seq(new JumpInsnNode(opcode.i, jumpLabel(n)))
@@ -153,8 +152,6 @@ object CodeGen{
         val goto = fallthroughLabel(n).map(new JumpInsnNode(GOTO, _))
         val jump = Seq(new JumpInsnNode(opcode.i, jumpLabel(n)))
         jump ++ goto
-      case _: SSA.True => Nil
-      case _: SSA.False => Nil
       case SSA.ReturnVal(block, a) =>
         Seq(new InsnNode(
           a.jtype match{
