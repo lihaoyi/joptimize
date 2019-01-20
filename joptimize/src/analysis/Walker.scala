@@ -56,9 +56,9 @@ class Walker(isInterface: JType.Cls => Boolean,
 
       val program = Program(terminals.map(_._2))
 
-      removeDeadPhis(phiMerges0, program.getAllVertices())
-
       simplifyPhiMerges(phiMerges0, regionStarts.flatten)
+
+      removeDeadNodes(program.getAllVertices())
 
       val preScheduleIndex = Namer.findSaveable(program, Map.empty, program.getAllVertices())
 
@@ -218,12 +218,12 @@ class Walker(isInterface: JType.Cls => Boolean,
     terminals
   }
 
-  def removeDeadPhis(phiMerges0: mutable.LinkedHashSet[SSA.Phi], allVertices: Set[SSA.Node]) = {
+  def removeDeadNodes(allVertices: Set[SSA.Node]) = {
     // Remove dead phi nodes that may have been inserted during SSA construction
-    for (phi <- phiMerges0) {
-      if (!allVertices.contains(phi)) {
-        for (up <- phi.upstream) {
-          up.downstreamRemove(phi)
+    for(v <- allVertices){
+      for(down <- v.downstreamList){
+        if (!allVertices.contains(down)) {
+          v.downstreamRemove(down)
         }
       }
     }

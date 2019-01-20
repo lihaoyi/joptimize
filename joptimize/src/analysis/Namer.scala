@@ -18,8 +18,8 @@ object Namer {
                    scheduledVals: Map[SSA.Val, SSA.Control],
                    allVertices: Set[SSA.Node]): Result = {
 
-
     val downstreamEdges = allVertices.flatMap(x => x.downstreamList.map(x -> _)).toSeq ++ scheduledVals.map(_.swap)
+
     val finalOrderingMap = sortVerticesForPrinting(allVertices, downstreamEdges) {
       case (_, _: SSA.Phi | _: SSA.Merge) => true
       case (v: SSA.Val, c: SSA.Control) => true
