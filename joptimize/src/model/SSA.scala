@@ -345,7 +345,7 @@ object SSA{
     def upstream = Seq(src)
   }
   case class MultiANewArray(var desc: JType, var dims: Seq[Val]) extends Val(desc){
-    def upstream = Nil
+    def upstream = dims
   }
   case class PutStatic(var src: Val, var cls: JType.Cls, var name: String, var desc: JType) extends Val(JType.Null){
     def upstream = Seq(src)
@@ -360,7 +360,7 @@ object SSA{
     def upstream = Seq(obj)
   }
   case class PutArray(var src: Val, var indexSrc: Val, var arrayValue: Val) extends Val(JType.Null){
-    def upstream = Seq(src)
+    def upstream = Seq(indexSrc, src, arrayValue)
   }
   case class GetArray(var indexSrc: Val, var array: Val, var tpe: JType) extends Val(tpe){
     def upstream = Seq(indexSrc, array)

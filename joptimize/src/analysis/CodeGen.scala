@@ -215,14 +215,54 @@ object CodeGen{
           Seq(new MethodInsnNode(INVOKESTATIC, cls.name, name, desc.unparse))
         case SSA.InvokeDynamic(name, desc, bsTag, bsOwner, bsName, bsDesc, bsArgs) => ???
         case SSA.New(cls) => ???
-        case SSA.NewArray(src, typeRef) => ???
-        case SSA.MultiANewArray(desc, dims) => ???
+        case SSA.NewArray(src, typeRef) =>
+          Seq(
+            typeRef match {
+              case JType.Arr(JType.Prim.Z) => new IntInsnNode(NEWARRAY, T_BOOLEAN)
+              case JType.Arr(JType.Prim.C) => new IntInsnNode(NEWARRAY, T_CHAR)
+              case JType.Arr(JType.Prim.B) => new IntInsnNode(NEWARRAY, T_BYTE)
+              case JType.Arr(JType.Prim.S) => new IntInsnNode(NEWARRAY, T_SHORT)
+              case JType.Arr(JType.Prim.I) => new IntInsnNode(NEWARRAY, T_INT)
+              case JType.Arr(JType.Prim.F) => new IntInsnNode(NEWARRAY, T_FLOAT)
+              case JType.Arr(JType.Prim.D) => new IntInsnNode(NEWARRAY, T_DOUBLE)
+              case JType.Arr(JType.Prim.J) => new IntInsnNode(NEWARRAY, T_LONG)
+              case t => new TypeInsnNode(ANEWARRAY, t.name)
+            }
+          )
+        case SSA.MultiANewArray(desc, dims) =>
+          Seq(new MultiANewArrayInsnNode(desc.name, dims.length))
         case SSA.PutStatic(src, cls, name, desc) => ???
         case SSA.GetStatic(cls, name, desc) => ???
         case SSA.PutField(src, obj, owner, name, desc) => ???
         case SSA.GetField(obj, owner, name, desc) => ???
-        case SSA.PutArray(src, indexSrc, array) => ???
-        case SSA.GetArray(indexSrc, array, typeSize) => ???
+        case SSA.PutArray(src, indexSrc, array) =>
+          Seq(new InsnNode(
+            src.jtype match {
+              case JType.Arr(JType.Prim.Z) => IASTORE
+              case JType.Arr(JType.Prim.C) => CASTORE
+              case JType.Arr(JType.Prim.B) => BASTORE
+              case JType.Arr(JType.Prim.S) => SASTORE
+              case JType.Arr(JType.Prim.I) => IASTORE
+              case JType.Arr(JType.Prim.F) => FASTORE
+              case JType.Arr(JType.Prim.D) => DASTORE
+              case JType.Arr(JType.Prim.J) => LASTORE
+              case t => AASTORE
+            }
+          ))
+        case SSA.GetArray(indexSrc, array, tpe) =>
+          Seq(new InsnNode(
+            tpe match {
+              case JType.Arr(JType.Prim.Z) => IALOAD
+              case JType.Arr(JType.Prim.C) => CALOAD
+              case JType.Arr(JType.Prim.B) => BALOAD
+              case JType.Arr(JType.Prim.S) => SALOAD
+              case JType.Arr(JType.Prim.I) => IALOAD
+              case JType.Arr(JType.Prim.F) => FALOAD
+              case JType.Arr(JType.Prim.D) => DALOAD
+              case JType.Arr(JType.Prim.J) => LALOAD
+              case t => AALOAD
+            }
+          ))
         case SSA.MonitorEnter(indexSrc) => ???
         case SSA.MonitorExit(indexSrc) => ???
       }

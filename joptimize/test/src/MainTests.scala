@@ -56,138 +56,138 @@ object MainTests extends TestSuite{
 
       }
 
-      'Switches - {
-        'smallSwitch - annotatedTest
-        'bigDenseSwitch - annotatedTest
-        'bigSparseSwitch - annotatedTest
-        'charSwitch - annotatedTest
-        'byteSwitch - annotatedTest
-      }
-      'Statics - {
-        'helloWorld - annotatedTest
-        'timesTwo - annotatedTest
-        'helloWorld2 - annotatedTest
-        'timesTwo2 - annotatedTest
-        'tailFactorial - annotatedTest
-        'fibonacci - annotatedTest
-        'call - annotatedTest
-        'callAtPhiBoundary - annotatedTest
-      }
+//      'Switches - {
+//        'smallSwitch - annotatedTest
+//        'bigDenseSwitch - annotatedTest
+//        'bigSparseSwitch - annotatedTest
+//        'charSwitch - annotatedTest
+//        'byteSwitch - annotatedTest
+//      }
+//      'Statics - {
+//        'helloWorld - annotatedTest
+//        'timesTwo - annotatedTest
+//        'helloWorld2 - annotatedTest
+//        'timesTwo2 - annotatedTest
+//        'tailFactorial - annotatedTest
+//        'fibonacci - annotatedTest
+//        'call - annotatedTest
+//        'callAtPhiBoundary - annotatedTest
+//      }
       'MultiDimArrays - {
         'make2D - annotatedTest
         'make3D - annotatedTest
         'getAndSet - annotatedTest
       }
-      'InvokeDynamic - {
-        'lambda - annotatedTest
-        'lambdaArg - annotatedTest
-        'lambdaBoxed - annotatedTest
-        'lambdaBoxedArgs - annotatedTest
-        'concat - annotatedTest
-      }
-      'ScalaInvokeDynamic - {
-        'lambda - annotatedTest
-        'lambdaBoxed - annotatedTest
-        'concat - annotatedTest
-      }
-      'Inheritance - {
-        'implement - annotatedTest
-        'abstractClass - annotatedTest
-        'shadowedInheritedGet - annotatedTest
-        'shadowedInheritedSet - annotatedTest
-        'superMethod - annotatedTest
-        'staticInheritance - annotatedTest
-        'staticInheritanceMethod - annotatedTest
-      }
-      'Exceptions - {
-        'throwCatch0 - annotatedTest
-        'throwCatch1 - annotatedTest
-        'throwCatch2 - annotatedTest
-        'throwCatch3 - annotatedTest
-        'throwCatch4 - annotatedTest
-        'multiCatch - annotatedTest
-        'nullPointer - annotatedTest
-        'arrayIndexOutOfBounds - annotatedTest
-      }
-      'Sudoku - {
-        'run - annotatedTest
-      }
+//      'InvokeDynamic - {
+//        'lambda - annotatedTest
+//        'lambdaArg - annotatedTest
+//        'lambdaBoxed - annotatedTest
+//        'lambdaBoxedArgs - annotatedTest
+//        'concat - annotatedTest
+//      }
+//      'ScalaInvokeDynamic - {
+//        'lambda - annotatedTest
+//        'lambdaBoxed - annotatedTest
+//        'concat - annotatedTest
+//      }
+//      'Inheritance - {
+//        'implement - annotatedTest
+//        'abstractClass - annotatedTest
+//        'shadowedInheritedGet - annotatedTest
+//        'shadowedInheritedSet - annotatedTest
+//        'superMethod - annotatedTest
+//        'staticInheritance - annotatedTest
+//        'staticInheritanceMethod - annotatedTest
+//      }
+//      'Exceptions - {
+//        'throwCatch0 - annotatedTest
+//        'throwCatch1 - annotatedTest
+//        'throwCatch2 - annotatedTest
+//        'throwCatch3 - annotatedTest
+//        'throwCatch4 - annotatedTest
+//        'multiCatch - annotatedTest
+//        'nullPointer - annotatedTest
+//        'arrayIndexOutOfBounds - annotatedTest
+//      }
+//      'Sudoku - {
+//        'run - annotatedTest
+//      }
     }
-    'narrow - {
-      'Supertype - {
-        'main - annotatedTest
-        'mainDeep - annotatedTest
-      }
-      'Parametric - {
-        'main - annotatedTest
-        'mainDeep - annotatedTest
-      }
-      'NarrowReturn - {
-        'main - annotatedTest
-      }
-      'MergeReturn - {
-        'main - annotatedTest
-      }
-      'IntersectionReturn - {
-        'main - annotatedTest
-      }
-      'ForceWide - {
-        'main - annotatedTest
-      }
-    }
-    'opt - {
-      'SimpleDce - {
-        'main - annotatedTest
-      }
-      'BooleanJumpFlatten - {
-        'simpleTrue - annotatedTest
-        'simpleFalse - annotatedTest
-      }
-      'InstanceofJumpFlatten - {
-        'simpleBar - annotatedTest
-        'simpleBaz - annotatedTest
-        'simpleQux - annotatedTest
-        'simpleBarMatch - annotatedTest
-        'simpleBazMatch - annotatedTest
-        'simpleQuxMatch - annotatedTest
-      }
-      'BooleanWidening - {
-        'simple - annotatedTest
-      }
-      'InstanceDce - {
-        'simple1 - annotatedTest
-        'simple2 - annotatedTest
-        'simple3 - annotatedTest
-
-        'single1 - annotatedTest
-        'single2 - annotatedTest
-        'single3 - annotatedTest
-        'single4 - annotatedTest
-
-        'unknown1 - annotatedTest
-        'unknown2 - annotatedTest
-        'unknown3 - annotatedTest
-      }
-      'InterfacePreservation - {
-        'shallow - annotatedTest
-        'deep - annotatedTest
-      }
-      'ConstantMethod - {
-        'intMain - annotatedTest
-        'boolMain - annotatedTest
-        'impureMain - annotatedTest
-      }
-
-      'Liveness - {
-        'simple - annotatedTest
-        'simple2a - annotatedTest
-        'simple2b - annotatedTest
-
-        'chained - annotatedTest
-        'chained2a - annotatedTest
-        'chained2b - annotatedTest
-      }
-    }
+//    'narrow - {
+//      'Supertype - {
+//        'main - annotatedTest
+//        'mainDeep - annotatedTest
+//      }
+//      'Parametric - {
+//        'main - annotatedTest
+//        'mainDeep - annotatedTest
+//      }
+//      'NarrowReturn - {
+//        'main - annotatedTest
+//      }
+//      'MergeReturn - {
+//        'main - annotatedTest
+//      }
+//      'IntersectionReturn - {
+//        'main - annotatedTest
+//      }
+//      'ForceWide - {
+//        'main - annotatedTest
+//      }
+//    }
+//    'opt - {
+//      'SimpleDce - {
+//        'main - annotatedTest
+//      }
+//      'BooleanJumpFlatten - {
+//        'simpleTrue - annotatedTest
+//        'simpleFalse - annotatedTest
+//      }
+//      'InstanceofJumpFlatten - {
+//        'simpleBar - annotatedTest
+//        'simpleBaz - annotatedTest
+//        'simpleQux - annotatedTest
+//        'simpleBarMatch - annotatedTest
+//        'simpleBazMatch - annotatedTest
+//        'simpleQuxMatch - annotatedTest
+//      }
+//      'BooleanWidening - {
+//        'simple - annotatedTest
+//      }
+//      'InstanceDce - {
+//        'simple1 - annotatedTest
+//        'simple2 - annotatedTest
+//        'simple3 - annotatedTest
+//
+//        'single1 - annotatedTest
+//        'single2 - annotatedTest
+//        'single3 - annotatedTest
+//        'single4 - annotatedTest
+//
+//        'unknown1 - annotatedTest
+//        'unknown2 - annotatedTest
+//        'unknown3 - annotatedTest
+//      }
+//      'InterfacePreservation - {
+//        'shallow - annotatedTest
+//        'deep - annotatedTest
+//      }
+//      'ConstantMethod - {
+//        'intMain - annotatedTest
+//        'boolMain - annotatedTest
+//        'impureMain - annotatedTest
+//      }
+//
+//      'Liveness - {
+//        'simple - annotatedTest
+//        'simple2a - annotatedTest
+//        'simple2b - annotatedTest
+//
+//        'chained - annotatedTest
+//        'chained2a - annotatedTest
+//        'chained2b - annotatedTest
+//      }
+//    }
   }
 
   val classesRoot = os.Path("out/joptimize/test/compile/dest/classes", os.pwd)
