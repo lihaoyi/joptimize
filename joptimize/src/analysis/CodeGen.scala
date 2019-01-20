@@ -54,8 +54,13 @@ object CodeGen{
           for(node <- blockNodes if naming.savedLocals.contains(node) && !node.isInstanceOf[SSA.Arg]){
             val duplicate =
               !node.isInstanceOf[SSA.Phi] &&
+              !node.isInstanceOf[SSA.Copy] &&
               node.downstreamList.size > 1 &&
-              node.downstreamList.exists(down => blockNodes.contains(down) && !down.isInstanceOf[SSA.Phi])
+              node.downstreamList.exists(down =>
+                blockNodes.contains(down) &&
+                !down.isInstanceOf[SSA.Phi] &&
+                !down.isInstanceOf[SSA.Copy]
+              )
 
             val nodeInsns = generateValBytecode(node, savedLocalNumbers, duplicate)
             insns.appendAll(nodeInsns)
