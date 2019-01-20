@@ -26,13 +26,13 @@ object CodeGen{
 
     val blockIndices = sortedControls.zipWithIndex.toMap
 
-    val labels = sortedControls.collect{case x: SSA.Block => x -> new LabelNode()}.toMap
+    val labels = sortedControls.map(_ -> new LabelNode()).toMap
     val savedLocalNumbers = naming.savedLocals.collect{case (k: SSA.Val, v) => (k, v._1)}
     val blockCode = mutable.Buffer.empty[(Seq[AbstractInsnNode], Option[AbstractInsnNode])]
     for(control <- sortedControls){
 //      pprint.log(block)
       val insns = mutable.Buffer.empty[AbstractInsnNode]
-
+      insns.append(labels(control))
       control match{
         case _: SSA.Jump =>
           val code = generateControlBytecode(
@@ -50,8 +50,6 @@ object CodeGen{
 
           insns.appendAll(code)
         case block: SSA.Block =>
-          insns.append(labels(block))
-
           val blockNodes = blocksToNodes.getOrElse(block, Nil).toSeq.sortBy(naming.finalOrderingMap)
           for(node <- blockNodes if naming.savedLocals.contains(node) && !node.isInstanceOf[SSA.Arg]){
             //        pprint.log(node)
@@ -64,7 +62,7 @@ object CodeGen{
           }
       }
 
-      val downstreamBlocks = control.downstreamList.collect{case b: SSA.Block => b}
+      val downstreamBlocks = control.downstreamList.collect{case b: SSA.Control => b}
 
       val footer = downstreamBlocks.toSeq match{
         case Seq(d) if blockIndices(d) != blockIndices(control) + 1 => Some(new JumpInsnNode(GOTO, labels(d)))

@@ -67,27 +67,15 @@ object Namer {
 
       case c: SSA.Control =>
         val str = c match{
-          case _: SSA.Return | _: SSA.ReturnVal =>
-            maxControl += 1
-            "return" + maxControl
-
-          case _: SSA.AThrow =>
-            maxControl += 1
-            "throw" + maxControl
-
-          case n: SSA.True => "true" + savedControls(n.branch)._1
-          case n: SSA.False => "false" + savedControls(n.branch)._1
-
-          case r: SSA.Merge =>
-            maxControl += 1
-            val name = if (c.upstream.isEmpty) "start" else "block"
-            name + maxControl
-
-          case _: SSA.UnaBranch | _: SSA.BinBranch=>
-            maxControl += 1
-            "branch" + maxControl
+          case _: SSA.Return | _: SSA.ReturnVal => "return" + maxControl
+          case _: SSA.AThrow => "throw" + maxControl
+          case n: SSA.True => "true" + savedControls(n.branch)._1 + "_" + maxControl
+          case n: SSA.False => "false" + savedControls(n.branch)._1 + "_" + maxControl
+          case r: SSA.Merge => (if (c.upstream.isEmpty) "start" else "block") + maxControl
+          case _: SSA.UnaBranch | _: SSA.BinBranch=> "branch" + maxControl
         }
         savedControls(c) = (maxControl, str)
+        maxControl += 1
     }
 
     Result(finalOrderingMap, saveable, (savedLocals ++ savedControls).toMap)

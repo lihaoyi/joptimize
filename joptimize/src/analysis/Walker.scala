@@ -8,6 +8,7 @@ import joptimize.model._
 import collection.JavaConverters._
 import org.objectweb.asm.Opcodes._
 import org.objectweb.asm.tree._
+import org.objectweb.asm.util.{Textifier, TraceMethodVisitor}
 
 import scala.collection.{immutable, mutable}
 
@@ -31,7 +32,9 @@ class Walker(isInterface: JType.Cls => Boolean,
     visitedMethods.getOrElseUpdate((sig, args.drop(if (sig.static) 0 else 1)), {
 
       println("+" * 20 + sig + "+" * 20)
-      println(Renderer.renderInsns(mn.instructions))
+      val printer = new Textifier
+      val methodPrinter = new TraceMethodVisitor(printer)
+      println(Renderer.renderInsns(mn.instructions, printer, methodPrinter))
 
       val program = constructSSAProgram(sig, mn)
 

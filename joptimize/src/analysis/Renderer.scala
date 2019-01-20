@@ -12,10 +12,11 @@ import pprint.Tree
 
 import collection.mutable
 object Renderer {
-  private val printer = new Textifier
-  private val methodPrinter = new TraceMethodVisitor(printer)
 
-  def prettyprint(insnNode: AbstractInsnNode) = {
+
+  def prettyprint(insnNode: AbstractInsnNode,
+                  printer: Textifier,
+                  methodPrinter: TraceMethodVisitor) = {
     insnNode.accept(methodPrinter)
     val sw = new StringWriter
     printer.print(new PrintWriter(sw))
@@ -23,14 +24,17 @@ object Renderer {
     sw.toString.stripSuffix("\n")
   }
 
-  def renderInsns(insns: InsnList, target: AbstractInsnNode = null): fansi.Str = {
+  def renderInsns(insns: InsnList,
+                  printer: Textifier,
+                  methodPrinter: TraceMethodVisitor,
+                  target: AbstractInsnNode = null): fansi.Str = {
     import collection.JavaConverters._
     val listing = if (target == null) insns.iterator.asScala else Iterator(target)
     val indices = insns.iterator().asScala.zipWithIndex.toMap
     fansi.Str.join(
       listing
         .flatMap{ k =>
-          val rhs = prettyprint(k)
+          val rhs = prettyprint(k, printer, methodPrinter)
           val splitIndex0 = rhs.indexWhere(_ != ' ')
           val splitIndex = rhs.indexWhere(_ == ' ', splitIndex0) match{
             case -1 => rhs.length
@@ -52,8 +56,10 @@ object Renderer {
   def renderBlockCode(blockCode: Seq[(Seq[AbstractInsnNode], Option[AbstractInsnNode])],
                       finalInsns: InsnList) = {
     val output = mutable.Buffer.empty[fansi.Str]
+    val printer = new Textifier
+    val methodPrinter = new TraceMethodVisitor(printer)
     for((insns, footer) <- blockCode){
-      for(insn <- insns ++ footer) output.append(Renderer.renderInsns(finalInsns, insn))
+      for(insn <- insns ++ footer) output.append(Renderer.renderInsns(finalInsns, printer, methodPrinter, insn))
       output.append("")
     }
     output.mkString("\n")
