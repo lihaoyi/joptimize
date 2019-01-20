@@ -52,12 +52,12 @@ object CodeGen{
         case block: SSA.Block =>
           val blockNodes = blocksToNodes.getOrElse(block, Nil).toSeq.sortBy(naming.finalOrderingMap)
           for(node <- blockNodes if naming.savedLocals.contains(node) && !node.isInstanceOf[SSA.Arg]){
-            //        pprint.log(node)
-            val nodeInsns = generateValBytecode(
-              node,
-              savedLocalNumbers,
-              node.downstreamList.exists(blockNodes.contains)
-            )
+            val duplicate =
+              !node.isInstanceOf[SSA.Phi] &&
+              node.downstreamList.size > 1 &&
+              node.downstreamList.exists(down => blockNodes.contains(down) && !down.isInstanceOf[SSA.Phi])
+
+            val nodeInsns = generateValBytecode(node, savedLocalNumbers, duplicate)
             insns.appendAll(nodeInsns)
           }
       }
