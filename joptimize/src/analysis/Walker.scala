@@ -44,16 +44,8 @@ class Walker(isInterface: JType.Cls => Boolean,
       println()
       println(Renderer.renderSSA(program, preScheduleIndex))
 
-      val controlFlowEdges = Util.findControlFlowGraph(program)
-      val allBlocks = controlFlowEdges
-        .flatMap{case (k, v) => Seq(k, v)}
-        .collect{case b: SSA.Block => b}
-
-      val blockEdges = controlFlowEdges.flatMap{
-        case (k: SSA.Block, v: SSA.Jump) => Nil
-        case (k: SSA.Jump, v: SSA.Block) => Seq(k.block -> v)
-        case (k: SSA.Block, v: SSA.Block) => Seq(k -> v)
-      }
+      val (controlFlowEdges, startBlock, allBlocks, blockEdges) =
+        analyzeBlockStructure(program)
 
       println()
       println(Renderer.renderControlFlowGraph(controlFlowEdges, preScheduleIndex.savedLocals))
@@ -67,9 +59,8 @@ class Walker(isInterface: JType.Cls => Boolean,
 
       { // Just for debugging
         val nodesToBlocks = Scheduler.schedule(
-          program, loopTree, dominators,
-          controlFlowEdges, preScheduleIndex.savedLocals.mapValues(_._2),
-          program.getAllVertices()
+          loopTree, dominators, startBlock,
+          preScheduleIndex.savedLocals.mapValues(_._2), program.getAllVertices()
         )
 
         val postScheduleIndex = Namer.findSaveable(program, nodesToBlocks, program.getAllVertices())
@@ -84,9 +75,8 @@ class Walker(isInterface: JType.Cls => Boolean,
       val (allVertices2, _, _) = Util.breadthFirstAggregation[SSA.Node](program.allTerminals.toSet)(_.upstream)
 
       val nodesToBlocks = Scheduler.schedule(
-        program, loopTree, dominators,
-        controlFlowEdges, preScheduleIndex.savedLocals.mapValues(_._2),
-        allVertices2
+        loopTree, dominators, startBlock,
+        preScheduleIndex.savedLocals.mapValues(_._2), allVertices2
       )
 
       val postRegisterAllocIndex = Namer.findSaveable(program, nodesToBlocks, allVertices2)
@@ -113,6 +103,21 @@ class Walker(isInterface: JType.Cls => Boolean,
 
       Walker.MethodResult(Nil, sig.desc.ret, output, false, Nil)
     })
+  }
+
+  def analyzeBlockStructure(program: Program) = {
+    val controlFlowEdges = Util.findControlFlowGraph(program)
+    val startBlock = (controlFlowEdges.map(_._1).toSet -- controlFlowEdges.map(_._2)).head.asInstanceOf[SSA.Block]
+    val allBlocks = controlFlowEdges
+      .flatMap { case (k, v) => Seq(k, v) }
+      .collect { case b: SSA.Block => b }
+
+    val blockEdges = controlFlowEdges.flatMap {
+      case (k: SSA.Block, v: SSA.Jump) => Nil
+      case (k: SSA.Jump, v: SSA.Block) => Seq(k.block -> v)
+      case (k: SSA.Block, v: SSA.Block) => Seq(k -> v)
+    }
+    (controlFlowEdges, startBlock, allBlocks, blockEdges)
   }
 
   def constructSSAProgram(sig: MethodSig, mn: MethodNode) = {

@@ -6,10 +6,9 @@ import joptimize.model.{Program, SSA}
 import scala.collection.mutable
 
 object Scheduler {
-  def schedule(program: Program,
-               loopTree: HavlakLoopTree.Loop[SSA.Block],
+  def schedule(loopTree: HavlakLoopTree.Loop[SSA.Block],
                dominators: Dominator.Result[SSA.Block],
-               graph: Seq[(SSA.Control, SSA.Control)],
+               startBlock: SSA.Block,
                mapping: Map[SSA.Node, String],
                allVertices: Set[SSA.Node]): Map[SSA.Val, SSA.Block] = {
 
@@ -34,7 +33,6 @@ object Scheduler {
       }
     }
 
-    val startBlock = (graph.map(_._1).toSet -- graph.map(_._2)).head.asInstanceOf[SSA.Block]
     allVertices.collect{
       case c: SSA.Phi => scheduler.block(c) = c.block
       case c: SSA.Val if c.upstream.isEmpty => scheduler.block(c) = startBlock
