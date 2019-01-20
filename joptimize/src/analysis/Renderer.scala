@@ -135,7 +135,7 @@ object Renderer {
     def infix(lhs: Tree, op: String, rhs: Tree) = pprint.Tree.Infix(lhs, op, rhs)
 
     def renderBlock(block: SSA.Control) = {
-      atom(naming.savedLocals(block)._2)
+      fansi.Color.Magenta(naming.savedLocals(block)._2).toString
     }
     def rec(ssa: SSA.Node): Tree = ssa match{
       case x: SSA.Control => atom(naming.savedLocals(x)._2)
@@ -148,8 +148,8 @@ object Renderer {
       case n: SSA.Arg => literal("arg" + n.index)
       case n: SSA.Copy => apply("copy", rec(n.src))
       case phi: SSA.Phi =>
-        val block = Seq(renderBlock(phi.block))
-        val children = phi.incoming.map{case (block, ssa) => infix(renderBlock(block), ":", rec(ssa))}.toSeq
+        val block = Seq(atom(renderBlock(phi.block)))
+        val children = phi.incoming.map{case (block, ssa) => infix(atom(renderBlock(block)), ":", rec(ssa))}.toSeq
         apply("phi", block ++ children:_*)
       case n: SSA.BinOp => infix(rec(n.a), binOpString(n.opcode), rec(n.b))
       case n: SSA.UnaOp => apply(unaryOpString(n.opcode), rec(n.a))
@@ -181,31 +181,31 @@ object Renderer {
     }
 
     def recBlock(block: SSA.Control): (Str, Tree) = block match{
-      case n: SSA.True => (naming.savedLocals(block)._2, apply("true", atom(naming.savedLocals(n.branch)._2)))
-      case n: SSA.False => (naming.savedLocals(block)._2, apply("false", atom(naming.savedLocals(n.branch)._2)))
+      case n: SSA.True => (renderBlock(n), apply("true", atom(fansi.Color.Magenta(naming.savedLocals(n.branch)._2).toString)))
+      case n: SSA.False => (renderBlock(n), apply("false", atom(fansi.Color.Magenta(naming.savedLocals(n.branch)._2).toString)))
 
       case reg: SSA.Merge =>
         val name = if (reg.upstream.isEmpty) "start" else "merge"
-        val rhs = apply(name + reg.insnIndex, reg.upstream.iterator.map(x => atom(naming.savedLocals(x)._2)).toSeq:_*)
-        (naming.savedLocals(reg)_2, rhs)
+        val rhs = apply(name + reg.insnIndex, reg.upstream.iterator.map(x => atom(fansi.Color.Magenta(naming.savedLocals(x)._2).toString)).toSeq:_*)
+        (fansi.Color.Magenta(naming.savedLocals(reg)._2), rhs)
 
       case n: SSA.AThrow => ???
       case n: SSA.TableSwitch => ???
       case n: SSA.LookupSwitch => ???
 
       case n: SSA.ReturnVal =>
-        (naming.savedLocals(block)._2, apply("return", atom(naming.savedLocals(n.block)._2), rec(n.a)))
+        (renderBlock(n), apply("return", atom(renderBlock(n.block)), rec(n.a)))
 
       case n: SSA.Return =>
-        (naming.savedLocals(block)._2, apply("return", atom(naming.savedLocals(n.block)._2)))
+        (renderBlock(n), apply("return", atom(renderBlock(n.block))))
 
       case n: SSA.UnaBranch =>
-        val rhs = apply("if", renderBlock(n.block), rec(n.a), atom(unaryBranchString(n.opcode)))
-        (naming.savedLocals(n)._2, rhs)
+        val rhs = apply("if", atom(renderBlock(n.block)), rec(n.a), atom(unaryBranchString(n.opcode)))
+        (fansi.Color.Magenta(naming.savedLocals(n)._2), rhs)
 
       case n: SSA.BinBranch =>
-        val rhs = apply("if", renderBlock(n.block), infix(rec(n.a), binBranchString(n.opcode), rec(n.b)))
-        (naming.savedLocals(n)._2, rhs)
+        val rhs = apply("if", atom(renderBlock(n.block)), infix(rec(n.a), binBranchString(n.opcode), rec(n.b)))
+        (fansi.Color.Magenta(naming.savedLocals(n)._2), rhs)
     }
 
     def renderStmt(r: SSA.Node, leftOffset: Int) = {
