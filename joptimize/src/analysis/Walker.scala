@@ -54,15 +54,13 @@ class Walker(isInterface: JType.Cls => Boolean,
         startRegionLookup
       )
 
-      removeDeadPhis(phiMerges0, terminals.map(_._2: SSA.Node).toSet)
+      val program = Program(terminals.map(_._2))
+
+      removeDeadPhis(phiMerges0, program.getAllVertices())
 
       simplifyPhiMerges(phiMerges0, regionStarts.flatten)
 
-      val program = Program(terminals.map(_._2))
-
-      val allVertices = Util.breadthFirstAggregation[SSA.Node](program.allTerminals.toSet)(_.upstream)._1
-
-      val preScheduleIndex = Namer.findSaveable(program, Map.empty, allVertices)
+      val preScheduleIndex = Namer.findSaveable(program, Map.empty, program.getAllVertices())
 
       println()
       println(Renderer.renderSSA(program, preScheduleIndex))
@@ -92,10 +90,10 @@ class Walker(isInterface: JType.Cls => Boolean,
         val nodesToBlocks = Scheduler.schedule(
           program, loopTree, dominators,
           controlFlowEdges, preScheduleIndex.savedLocals.mapValues(_._2),
-          allVertices
+          program.getAllVertices()
         )
 
-        val postScheduleIndex = Namer.findSaveable(program, nodesToBlocks, allVertices)
+        val postScheduleIndex = Namer.findSaveable(program, nodesToBlocks, program.getAllVertices())
 
         println()
         println(Renderer.renderSSA(program, postScheduleIndex, nodesToBlocks))
@@ -220,10 +218,7 @@ class Walker(isInterface: JType.Cls => Boolean,
     terminals
   }
 
-  def removeDeadPhis(phiMerges0: mutable.LinkedHashSet[SSA.Phi], terminals: Set[SSA.Node]) = {
-
-    val (allVertices, _, _) =
-      Util.breadthFirstAggregation[SSA.Node](terminals)(_.upstream)
+  def removeDeadPhis(phiMerges0: mutable.LinkedHashSet[SSA.Phi], allVertices: Set[SSA.Node]) = {
     // Remove dead phi nodes that may have been inserted during SSA construction
     for (phi <- phiMerges0) {
       if (!allVertices.contains(phi)) {
@@ -255,13 +250,16 @@ class Walker(isInterface: JType.Cls => Boolean,
         case _ => None
       }
       for (replacement <- replacementOpt) {
+//        pprint.log(current)
         for (v <- current.upstream) v.downstreamRemove(current)
-        replacement.downstreamRemove(current)
         val deltaDownstream = current.downstreamList.filter(_ != current)
         deltaDownstream.foreach(replacement.downstreamAdd)
 
         for (down <- deltaDownstream) SSA.update(down, current, replacement)
         queue.add(replacement)
+//        replacement.checkLinks()
+//        replacement.upstream.foreach(_.checkLinks())
+//        replacement.downstreamList.foreach(_.checkLinks())
       }
     }
   }
