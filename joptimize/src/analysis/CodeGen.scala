@@ -120,9 +120,7 @@ object CodeGen{
   }
 
 
-  def rec(ssa: SSA.Val,
-          savedLocals: Map[SSA.Val, Int],
-          usedInBlock: Boolean): Seq[AbstractInsnNode] = {
+  def rec(ssa: SSA.Val, savedLocals: Map[SSA.Val, Int]): Seq[AbstractInsnNode] = {
     if (savedLocals.contains(ssa)){
       Seq(
         new VarInsnNode(
@@ -136,14 +134,14 @@ object CodeGen{
           savedLocals(ssa)
         )
       )
-    }else generateValBytecode(ssa, savedLocals, usedInBlock)
+    }else generateValBytecode(ssa, savedLocals, false)
   }
 
   def generateControlBytecode(ssa: SSA.Control,
                               savedLocals: Map[SSA.Val, Int],
                               jumpLabel: SSA.Control => LabelNode,
                               fallthroughLabel: SSA.Control => Option[LabelNode]): Seq[AbstractInsnNode] = {
-    val upstreams = ssa.upstream.collect{case n: SSA.Val => n}.flatMap(rec(_, savedLocals, false))
+    val upstreams = ssa.upstream.collect{case n: SSA.Val => n}.flatMap(rec(_, savedLocals))
     val current: Seq[AbstractInsnNode] = ssa match{
       case r: SSA.Merge => Nil
       case n @ SSA.UnaBranch(block, a, opcode) =>
@@ -183,7 +181,7 @@ object CodeGen{
                           usedInBlock: Boolean): Seq[AbstractInsnNode] = {
     if (ssa.isInstanceOf[SSA.Phi]) Nil
     else {
-      val upstreams = ssa.upstream.collect{case n: SSA.Val => n}.flatMap(rec(_, savedLocals, false))
+      val upstreams = ssa.upstream.collect{case n: SSA.Val => n}.flatMap(rec(_, savedLocals))
       val current: Seq[AbstractInsnNode] = ssa match{
 
         case n: SSA.Copy => Nil
