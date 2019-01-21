@@ -61,7 +61,17 @@ public class MultiDimArrays {
     }
 
     @joptimize.Test(inputs = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12})
-    public static int getAndSetLoop(int n) {
+    public static int[] getAndSetLoop1(int n) {
+        int[] arr = new int[n];
+        for (int i = 0; i < n; i++) {
+            arr[i] = i;
+        }
+
+        return arr;
+    }
+
+    @joptimize.Test(inputs = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12})
+    public static int getAndSetLoop2(int n) {
         int[][] arr = new int[n][n];
         for (int i = 0; i < n; i++) {
             for (int j = 0; j < n; j++) {
@@ -76,5 +86,4 @@ public class MultiDimArrays {
         }
         return total;
     }
-
 }

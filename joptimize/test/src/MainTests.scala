@@ -82,7 +82,8 @@ object MainTests extends TestSuite{
         'getAndSet1 - annotatedTest
         'getAndSet2 - annotatedTest
         'getAndSet3 - annotatedTest
-        'getAndSetLoop - annotatedTest
+        'getAndSetLoop1 - annotatedTest
+        'getAndSetLoop2 - annotatedTest
       }
 //      'InvokeDynamic - {
 //        'lambda - annotatedTest

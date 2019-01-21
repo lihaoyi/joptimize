@@ -13,9 +13,13 @@ case class Program(allTerminals: Seq[SSA.Control]){
   def checkLinks() = {
     val allVertices = getAllVertices()
     allVertices.foreach(_.checkLinks())
-    for{
+
+    val missing = for{
       v <- allVertices
       down <- v.downstreamList
-    } assert(allVertices.contains(down))
+      if !allVertices.contains(down)
+    } yield down
+
+    assert(missing.isEmpty, missing)
   }
 }
