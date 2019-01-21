@@ -61,7 +61,8 @@ object Namer {
       case r: SSA.Val =>
         savedLocals(r) = (
           maxVal,
-          if (r.downstreamSize > 1) "local" + maxVal
+          if (r.getSize == 0) ""
+          else if (r.downstreamSize > 1) "local" + maxVal
           else "stack" + maxVal
         )
         maxVal += r.getSize

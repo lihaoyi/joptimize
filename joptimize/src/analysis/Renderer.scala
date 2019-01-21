@@ -226,7 +226,12 @@ object Renderer {
           case r: SSA.Val => (fansi.Color.Cyan(naming.savedLocals(r)._2), recVal(r))
         }
 
-        out.append(lhs, " = ")
+        val printLeft = r match{
+          case s: SSA.Val => s.getSize != 0
+          case _ => true
+        }
+        if (printLeft) out.append(lhs, " = ")
+
         out.appendAll(
           new pprint.Renderer(80, fansi.Color.Yellow, fansi.Color.Green, 2)
             .rec(rhs, lhs.length + " = ".length, leftOffset).iter

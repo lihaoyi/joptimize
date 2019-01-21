@@ -51,17 +51,7 @@ object CodeGen{
         case block: SSA.Block =>
           val blockNodes = blocksToNodes.getOrElse(block, Nil).toSeq.sortBy(naming.finalOrderingMap)
           for(node <- blockNodes if naming.savedLocals.contains(node) && !node.isInstanceOf[SSA.Arg]){
-            val duplicate =
-              !node.isInstanceOf[SSA.Phi] &&
-              !node.isInstanceOf[SSA.Copy] &&
-              node.downstreamList.size > 1 &&
-              node.downstreamList.exists(down =>
-                blockNodes.contains(down) &&
-                !down.isInstanceOf[SSA.Phi] &&
-                !down.isInstanceOf[SSA.Copy]
-              )
-
-            val nodeInsns = generateValBytecode(node, savedLocalNumbers, duplicate)
+            val nodeInsns = generateValBytecode(node, savedLocalNumbers)
             insns.appendAll(nodeInsns)
           }
       }
@@ -127,14 +117,14 @@ object CodeGen{
 
   def rec(ssa: SSA.Val, savedLocals: Map[SSA.Val, Int]): Seq[AbstractInsnNode] = {
     if (savedLocals.contains(ssa)) Seq(new VarInsnNode(loadOp(ssa), savedLocals(ssa)))
-    else generateValBytecode(ssa, savedLocals, false)
+    else generateValBytecode(ssa, savedLocals)
   }
 
   def generateJumpBytecode(ssa: SSA.Jump,
                            savedLocals: Map[SSA.Val, Int],
                            jumpLabel: SSA.Control => LabelNode,
                            fallthroughLabel: SSA.Control => Option[LabelNode]): Seq[AbstractInsnNode] = {
-    val upstreams = ssa.upstream.collect{case n: SSA.Val => n}.flatMap(rec(_, savedLocals))
+    val upstreams = ssa.upstreamVals.flatMap(rec(_, savedLocals))
     val current: Seq[AbstractInsnNode] = ssa match{
       case n @ SSA.UnaBranch(state, block, a, opcode) =>
         val goto = fallthroughLabel(n).map(new JumpInsnNode(GOTO, _))
@@ -157,12 +147,10 @@ object CodeGen{
 
   }
 
-  def generateValBytecode(ssa: SSA.Val,
-                          savedLocals: Map[SSA.Val, Int],
-                          usedInBlock: Boolean): Seq[AbstractInsnNode] = {
+  def generateValBytecode(ssa: SSA.Val, savedLocals: Map[SSA.Val, Int]): Seq[AbstractInsnNode] = {
     if (ssa.isInstanceOf[SSA.Phi]) Nil
     else {
-      val upstreams = ssa.upstream.collect{case n: SSA.Val => n}.flatMap(rec(_, savedLocals))
+      val upstreams = ssa.upstreamVals.flatMap(rec(_, savedLocals))
       val current: Seq[AbstractInsnNode] = ssa match{
 
         case n: SSA.Copy => Nil
@@ -268,15 +256,8 @@ object CodeGen{
       }
 
       val save = ssa match{
-        case n: SSA.Val if savedLocals.contains(n) =>
-          //          val n = savedLocals(n)
-          val dup = if (usedInBlock) {
-            if (n.getSize == 1) Seq(new InsnNode(DUP))
-            else Seq(new InsnNode(DUP2))
-          } else Nil
-          dup ++ Seq(
-            new VarInsnNode(saveOp(n), savedLocals(n))
-          )
+        case n: SSA.Val if savedLocals.contains(n) && n.getSize > 0 =>
+          Seq(new VarInsnNode(saveOp(n), savedLocals(n)))
         case _ => Nil
       }
 

@@ -92,6 +92,7 @@ object SSA{
       assert(brokenDowns.isEmpty, (this, brokenDowns))
     }
     def upstream: Seq[Node]
+    def upstreamVals: Seq[Val] = upstream.collect{case v: Val => v}
     private[this] val downstream = mutable.LinkedHashMap.empty[Node, Int]
     def downstreamAdd(n: Node) = downstream(n) = downstream.getOrElse(n, 0) + 1
     def downstreamContains(n: Node) = downstream.contains(n)
@@ -124,12 +125,6 @@ object SSA{
   }
 
   sealed trait State extends Node
-  sealed trait SimpleState extends State{
-    def previousState: State
-  }
-  case class SimpleState0(var previousState: State) extends SimpleState {
-    def upstream = Seq(previousState)
-  }
 
   sealed abstract class Control() extends Node{
     def controls: Seq[Control]
@@ -150,7 +145,7 @@ object SSA{
 
   trait Codes{
     private[this] val lookup0 = mutable.LinkedHashMap.empty[Int, Code]
-    class Code private[SSA] (val i: Int, val tpe: JType = JType.Null)(implicit name: sourcecode.Name){
+    class Code private[SSA] (val i: Int, val tpe: JType = JType.Prim.V)(implicit name: sourcecode.Name){
       lookup0(i) = this
       override def toString = name.value
     }
@@ -277,18 +272,23 @@ object SSA{
   }
   case class ReturnVal(var state: State, var block: Block, var a: Val) extends Jump(){
     def upstream = Seq(state, block, a)
+    override def upstreamVals = Seq(a)
   }
   case class Return(var state: State, var block: Block) extends Jump(){
     def upstream = Seq(state, block)
+    override def upstreamVals = Seq()
   }
   case class AThrow(var state: State, var block: Block, var src: Val) extends Jump(){
     def upstream = Seq(state, block, src)
+    override def upstreamVals = Seq(src)
   }
   case class TableSwitch(var state: State, var block: Block, var src: Val, min: Int, max: Int) extends Jump(){
     def upstream = Seq(state, block, src)
+    override def upstreamVals = Seq(src)
   }
   case class LookupSwitch(var state: State, var block: Block, var src: Val, var keys: Seq[Int]) extends Jump(){
     def upstream = Seq(state, block, src)
+    override def upstreamVals = Seq(src)
   }
   case class Copy(var src: Val) extends Val(src.jtype){
     def upstream = Seq(src)
@@ -364,29 +364,31 @@ object SSA{
   case class MultiANewArray(var desc: JType, var dims: Seq[Val]) extends Val(desc){
     def upstream = dims
   }
-  case class PutStatic(var src: Val, var cls: JType.Cls, var name: String, var desc: JType) extends Val(JType.Null){
+  case class PutStatic(var src: Val, var cls: JType.Cls, var name: String, var desc: JType) extends Val(JType.Prim.V){
     def upstream = Seq(src)
   }
   case class GetStatic(var cls: JType.Cls, var name: String, var desc: JType) extends Val(desc){
     def upstream = Nil
   }
-  case class PutField(var src: Val, var obj: Val, var owner: JType.Cls, var name: String, var desc: JType) extends Val(JType.Null){
+  case class PutField(var src: Val, var obj: Val, var owner: JType.Cls, var name: String, var desc: JType) extends Val(JType.Prim.V){
     def upstream = Seq(src, obj)
   }
   case class GetField(var obj: Val, var owner: JType.Cls, var name: String, var desc: JType) extends Val(desc){
     def upstream = Seq(obj)
   }
-  case class PutArray(var state: State, var src: Val, var indexSrc: Val, var arrayValue: Val) extends Val(JType.Null) with State{
+  case class PutArray(var state: State, var src: Val, var indexSrc: Val, var arrayValue: Val) extends Val(JType.Prim.V) with State{
     def upstream = Seq(state, src, indexSrc, arrayValue)
+    override def upstreamVals = Seq(src, indexSrc, arrayValue)
   }
   case class GetArray(var state: State, var indexSrc: Val, var array: Val, var tpe: JType) extends Val(tpe) with State{
     def upstream = Seq(state, indexSrc, array)
+    override def upstreamVals = Seq(indexSrc, array)
   }
 
-  case class MonitorEnter(var indexSrc: Val) extends Val(JType.Null){
+  case class MonitorEnter(var indexSrc: Val) extends Val(JType.Prim.V){
     def upstream = Seq(indexSrc)
   }
-  case class MonitorExit(var indexSrc: Val) extends Val(JType.Null){
+  case class MonitorExit(var indexSrc: Val) extends Val(JType.Prim.V){
     def upstream = Seq(indexSrc)
   }
 }
