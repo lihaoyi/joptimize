@@ -376,9 +376,9 @@ object SSA{
   case class GetField(var obj: Val, var owner: JType.Cls, var name: String, var desc: JType) extends Val(desc){
     def upstream = Seq(obj)
   }
-  case class PutArray(var state: State, var src: Val, var indexSrc: Val, var arrayValue: Val) extends Val(JType.Prim.V) with State{
-    def upstream = Seq(state, src, indexSrc, arrayValue)
-    override def upstreamVals = Seq(src, indexSrc, arrayValue)
+  case class PutArray(var state: State, var arrayValue: Val, var indexSrc: Val, var src: Val) extends Val(JType.Prim.V) with State{
+    def upstream = Seq(state, arrayValue, indexSrc, src)
+    override def upstreamVals = Seq(arrayValue, indexSrc, src)
   }
   case class GetArray(var state: State, var indexSrc: Val, var array: Val, var tpe: JType) extends Val(tpe) with State{
     def upstream = Seq(state, indexSrc, array)

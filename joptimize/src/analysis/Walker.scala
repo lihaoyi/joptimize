@@ -227,6 +227,7 @@ class Walker(isInterface: JType.Cls => Boolean,
             currentState = getArray
           }
           def astore() = {
+            pprint.log((frameTop(i, 2), frameTop(i, 1), frameTop(i, 0)))
             val newNode = new SSA.PutArray(currentState, frameTop(i, 2), frameTop(i, 1), frameTop(i, 0))
             currentState = newNode
           }

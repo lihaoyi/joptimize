@@ -261,9 +261,12 @@ object MainTests extends TestSuite{
           sketchyToJson(res)
         )
       )
+
       // Make sure the correct value is computed
       (res, expected) match {
-        case (a: Array[_], b: Array[_]) => a ==> b
+        case (a: Array[AnyRef], b: Array[AnyRef]) => assert(java.util.Arrays.deepEquals(a, b))
+        case (a: Array[_], b: Array[_]) => assert(a.toSeq == b.toSeq)
+
         case _ =>
           val argList = args.toList
           assert {

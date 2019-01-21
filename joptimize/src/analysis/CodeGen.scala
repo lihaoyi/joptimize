@@ -223,17 +223,20 @@ object CodeGen{
         case SSA.GetStatic(cls, name, desc) => ???
         case SSA.PutField(src, obj, owner, name, desc) => ???
         case SSA.GetField(obj, owner, name, desc) => ???
-        case SSA.PutArray(_, src, indexSrc, array) =>
+        case SSA.PutArray(_, array, indexSrc, src) =>
+          pprint.log(src.jtype)
+          pprint.log(src)
+          pprint.log(array)
           Seq(new InsnNode(
             src.jtype match {
-              case JType.Arr(JType.Prim.Z) => IASTORE
-              case JType.Arr(JType.Prim.C) => CASTORE
-              case JType.Arr(JType.Prim.B) => BASTORE
-              case JType.Arr(JType.Prim.S) => SASTORE
-              case JType.Arr(JType.Prim.I) => IASTORE
-              case JType.Arr(JType.Prim.F) => FASTORE
-              case JType.Arr(JType.Prim.D) => DASTORE
-              case JType.Arr(JType.Prim.J) => LASTORE
+              case JType.Prim.Z => IASTORE
+              case JType.Prim.C => CASTORE
+              case JType.Prim.B => BASTORE
+              case JType.Prim.S => SASTORE
+              case JType.Prim.I => IASTORE
+              case JType.Prim.F => FASTORE
+              case JType.Prim.D => DASTORE
+              case JType.Prim.J => LASTORE
               case t => AASTORE
             }
           ))
