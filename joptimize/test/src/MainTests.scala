@@ -74,10 +74,15 @@ object MainTests extends TestSuite{
 //        'callAtPhiBoundary - annotatedTest
 //      }
       'MultiDimArrays - {
-        'make1D - annotatedTest
-        'make2D - annotatedTest
-        'make3D - annotatedTest
-        'getAndSet - annotatedTest
+        'get1 - annotatedTest
+        'get2 - annotatedTest
+        'set1 - annotatedTest
+        'set2 - annotatedTest
+        'set3 - annotatedTest
+        'getAndSet1 - annotatedTest
+        'getAndSet2 - annotatedTest
+        'getAndSet3 - annotatedTest
+        'getAndSetLoop - annotatedTest
       }
 //      'InvokeDynamic - {
 //        'lambda - annotatedTest

@@ -183,7 +183,7 @@ object Renderer {
       case n: SSA.PutField => apply("putfield", rec(n.src), rec(n.obj), atom(n.owner.name), atom(n.name), atom(n.desc.name))
       case n: SSA.GetField => apply("getfield", rec(n.obj), atom(n.owner.name), atom(n.name), atom(n.desc.name))
       case n: SSA.PutArray => apply("putarray", rec(n.src), rec(n.indexSrc), rec(n.arrayValue))
-      case n: SSA.GetArray => apply("getarray", rec(n.indexSrc), rec(n.array))
+      case n: SSA.GetArray => apply("getarray", rec(n.array), rec(n.indexSrc))
       case n: SSA.MonitorEnter => ???
       case n: SSA.MonitorExit => ???
     }

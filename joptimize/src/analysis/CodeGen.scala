@@ -243,14 +243,14 @@ object CodeGen{
         case SSA.GetArray(_, indexSrc, array, tpe) =>
           Seq(new InsnNode(
             tpe match {
-              case JType.Arr(JType.Prim.Z) => IALOAD
-              case JType.Arr(JType.Prim.C) => CALOAD
-              case JType.Arr(JType.Prim.B) => BALOAD
-              case JType.Arr(JType.Prim.S) => SALOAD
-              case JType.Arr(JType.Prim.I) => IALOAD
-              case JType.Arr(JType.Prim.F) => FALOAD
-              case JType.Arr(JType.Prim.D) => DALOAD
-              case JType.Arr(JType.Prim.J) => LALOAD
+              case JType.Prim.Z => IALOAD
+              case JType.Prim.C => CALOAD
+              case JType.Prim.B => BALOAD
+              case JType.Prim.S => SALOAD
+              case JType.Prim.I => IALOAD
+              case JType.Prim.F => FALOAD
+              case JType.Prim.D => DALOAD
+              case JType.Prim.J => LALOAD
               case t => AALOAD
             }
           ))

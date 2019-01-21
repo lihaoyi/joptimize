@@ -223,11 +223,12 @@ class Walker(isInterface: JType.Cls => Boolean,
         case _ =>
           def aload(jtype: JType) = {
             val getArray = frameTop(i + 1, 0).asInstanceOf[SSA.GetArray]
+            currentState.downstreamAdd(getArray)
             getArray.state = currentState
             currentState = getArray
           }
           def astore() = {
-            pprint.log((frameTop(i, 2), frameTop(i, 1), frameTop(i, 0)))
+
             val newNode = new SSA.PutArray(currentState, frameTop(i, 2), frameTop(i, 1), frameTop(i, 0))
             currentState = newNode
           }

@@ -380,9 +380,9 @@ object SSA{
     def upstream = Seq(state, arrayValue, indexSrc, src)
     override def upstreamVals = Seq(arrayValue, indexSrc, src)
   }
-  case class GetArray(var state: State, var indexSrc: Val, var array: Val, var tpe: JType) extends Val(tpe) with State{
-    def upstream = Seq(state, indexSrc, array)
-    override def upstreamVals = Seq(indexSrc, array)
+  case class GetArray(var state: State, var array: Val, var indexSrc: Val, var tpe: JType) extends Val(tpe) with State{
+    def upstream = Seq(state, array, indexSrc)
+    override def upstreamVals = Seq(array, indexSrc)
   }
 
   case class MonitorEnter(var indexSrc: Val) extends Val(JType.Prim.V){

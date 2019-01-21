@@ -44,6 +44,7 @@ object Namer {
           case k: SSA.Phi => k
           case c: SSA.Copy => c
           case b: SSA.Control => b
+          case b: SSA.State => b
         }
 
     val savedLocals = mutable.Map[SSA.Val, (Int, String)]()
