@@ -136,21 +136,21 @@ object CodeGen{
                            fallthroughLabel: SSA.Control => Option[LabelNode]): Seq[AbstractInsnNode] = {
     val upstreams = ssa.upstream.collect{case n: SSA.Val => n}.flatMap(rec(_, savedLocals))
     val current: Seq[AbstractInsnNode] = ssa match{
-      case n @ SSA.UnaBranch(block, a, opcode) =>
+      case n @ SSA.UnaBranch(state, block, a, opcode) =>
         val goto = fallthroughLabel(n).map(new JumpInsnNode(GOTO, _))
         val jump = Seq(new JumpInsnNode(opcode.i, jumpLabel(n)))
         jump ++ goto
 
-      case n @ SSA.BinBranch(block, a, b, opcode) =>
+      case n @ SSA.BinBranch(state, block, a, b, opcode) =>
         val goto = fallthroughLabel(n).map(new JumpInsnNode(GOTO, _))
         val jump = Seq(new JumpInsnNode(opcode.i, jumpLabel(n)))
         jump ++ goto
-      case SSA.ReturnVal(block, a) => Seq(new InsnNode(returnOp(a)))
+      case SSA.ReturnVal(state, block, a) => Seq(new InsnNode(returnOp(a)))
 
-      case SSA.Return(block) => Seq(new InsnNode(RETURN))
-      case SSA.AThrow(_, src) => Seq(new InsnNode(ATHROW))
-      case SSA.TableSwitch(_, src, min, max) => ???
-      case SSA.LookupSwitch(_, src, keys) => ???
+      case SSA.Return(state, block) => Seq(new InsnNode(RETURN))
+      case SSA.AThrow(state, _, src) => Seq(new InsnNode(ATHROW))
+      case SSA.TableSwitch(state, _, src, min, max) => ???
+      case SSA.LookupSwitch(state, _, src, keys) => ???
     }
 
     upstreams ++ current
@@ -184,7 +184,7 @@ object CodeGen{
           case 5 => new InsnNode(ICONST_5)
           case _ =>
             if (-128 <= value && value < 127) new IntInsnNode(BIPUSH, value)
-            else if (-32768 <= value && value <= 32767) new IntInsnNode(BIPUSH, value)
+            else if (-32768 <= value && value <= 32767) new IntInsnNode(SIPUSH, value)
             else new LdcInsnNode(value)
         })
         case SSA.PushJ(value) => Seq(value match{
@@ -235,7 +235,7 @@ object CodeGen{
         case SSA.GetStatic(cls, name, desc) => ???
         case SSA.PutField(src, obj, owner, name, desc) => ???
         case SSA.GetField(obj, owner, name, desc) => ???
-        case SSA.PutArray(src, indexSrc, array) =>
+        case SSA.PutArray(_, src, indexSrc, array) =>
           Seq(new InsnNode(
             src.jtype match {
               case JType.Arr(JType.Prim.Z) => IASTORE
@@ -249,7 +249,7 @@ object CodeGen{
               case t => AASTORE
             }
           ))
-        case SSA.GetArray(indexSrc, array, tpe) =>
+        case SSA.GetArray(_, indexSrc, array, tpe) =>
           Seq(new InsnNode(
             tpe match {
               case JType.Arr(JType.Prim.Z) => IALOAD

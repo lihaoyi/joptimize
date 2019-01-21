@@ -47,9 +47,11 @@ object SSA{
       case n: SSA.GetField => n.obj = swap(n.obj)
       case n: SSA.PutArray =>
         n.src = swap(n.src)
+        n.state = swap(n.state)
         n.indexSrc = swap(n.indexSrc)
       case n: SSA.GetArray =>
         n.indexSrc = swap(n.indexSrc)
+        n.state = swap(n.state)
         n.array = swap(n.array)
       case n: SSA.MonitorEnter => n.indexSrc = swap(n.indexSrc)
       case n: SSA.MonitorExit => n.indexSrc = swap(n.indexSrc)
@@ -58,17 +60,25 @@ object SSA{
       case n: SSA.True => n.branch = swap(n.branch)
       case n: SSA.False => n.branch = swap(n.branch)
       case n: SSA.UnaBranch =>
+        n.state = swap(n.state)
         n.block = swap(n.block)
         n.a = swap(n.a)
       case n: SSA.BinBranch =>
+        n.state = swap(n.state)
         n.block = swap(n.block)
         n.a = swap(n.a)
         n.b = swap(n.b)
       case n: SSA.ReturnVal =>
+        n.state = swap(n.state)
         n.block = swap(n.block)
         n.a = swap(n.a)
-      case n: SSA.Return => n.block = swap(n.block)
-      case n: SSA.AThrow => n.src = swap(n.src)
+      case n: SSA.Return =>
+        n.state = swap(n.state)
+        n.block = swap(n.block)
+      case n: SSA.AThrow =>
+        n.state = swap(n.state)
+        n.block = swap(n.block)
+        n.src = swap(n.src)
       case n: SSA.TableSwitch => n.src = swap(n.src)
       case n: SSA.LookupSwitch => n.src = swap(n.src)
     }
@@ -95,7 +105,7 @@ object SSA{
     def downstreamSize = downstream.valuesIterator.sum
 
     def update(): Node = {
-      upstream.foreach(_.downstreamAdd(this))
+      upstream.filter(_ != null).foreach(_.downstreamAdd(this))
       this
     }
 
@@ -111,8 +121,16 @@ object SSA{
       super.update()
       this
     }
-
   }
+
+  sealed trait State extends Node
+  sealed trait SimpleState extends State{
+    def previousState: State
+  }
+  case class SimpleState0(var previousState: State) extends SimpleState {
+    def upstream = Seq(previousState)
+  }
+
   sealed abstract class Control() extends Node{
     def controls: Seq[Control]
     override def update(): Control = {
@@ -120,9 +138,7 @@ object SSA{
       this
     }
   }
-  sealed abstract class Block() extends Control(){
-
-  }
+  sealed abstract class Block() extends Control() with State
   sealed abstract class Jump() extends Control(){
     def controls = Seq(block)
     def block: SSA.Block
@@ -131,6 +147,7 @@ object SSA{
 
     def block: SSA.Block
   }
+
   trait Codes{
     private[this] val lookup0 = mutable.LinkedHashMap.empty[Int, Code]
     class Code private[SSA] (val i: Int, val tpe: JType = JType.Null)(implicit name: sourcecode.Name){
@@ -145,7 +162,7 @@ object SSA{
     override def toString = s"Phi@${Integer.toHexString(System.identityHashCode(this))}(${incoming.size})"
   }
 
-  class Merge(var insnIndex: Int, var incoming: Set[Control]) extends Block(){
+  class Merge(var insnIndex: Int, var incoming: Set[Control]) extends Block() with State{
     def controls = upstream
     def upstream = incoming.toSeq
 
@@ -231,7 +248,7 @@ object SSA{
     val F2D = new Code(Opcodes.F2D, JType.Prim.D)
   }
 
-  case class UnaBranch(var block: Block, var a: Val, var opcode: UnaBranch.Code) extends Jump(){
+  case class UnaBranch(var state: State, var block: Block, var a: Val, var opcode: UnaBranch.Code) extends Jump(){
     def upstream = Seq(block, a)
   }
   object UnaBranch  extends Codes{
@@ -244,7 +261,7 @@ object SSA{
     val IFNULL = new Code(Opcodes.IFNULL)
     val IFNONNULL = new Code(Opcodes.IFNONNULL)
   }
-  case class BinBranch(var block: Block, var a: Val, var b: Val, var opcode: BinBranch.Code) extends Jump(){
+  case class BinBranch(var state: State, var block: Block, var a: Val, var b: Val, var opcode: BinBranch.Code) extends Jump(){
     def upstream = Seq(block, a, b)
   }
 
@@ -258,20 +275,20 @@ object SSA{
     val IF_ACMPEQ = new Code(Opcodes.IF_ACMPEQ)
     val IF_ACMPNE = new Code(Opcodes.IF_ACMPNE)
   }
-  case class ReturnVal(var block: Block, var a: Val) extends Jump(){
-    def upstream = Seq(block, a)
+  case class ReturnVal(var state: State, var block: Block, var a: Val) extends Jump(){
+    def upstream = Seq(state, block, a)
   }
-  case class Return(var block: Block) extends Jump(){
-    def upstream = Seq(block)
+  case class Return(var state: State, var block: Block) extends Jump(){
+    def upstream = Seq(state, block)
   }
-  case class AThrow(var block: Block, var src: Val) extends Jump(){
-    def upstream = Seq(src)
+  case class AThrow(var state: State, var block: Block, var src: Val) extends Jump(){
+    def upstream = Seq(state, block, src)
   }
-  case class TableSwitch(var block: Block, var src: Val, min: Int, max: Int) extends Jump(){
-    def upstream = Seq(src)
+  case class TableSwitch(var state: State, var block: Block, var src: Val, min: Int, max: Int) extends Jump(){
+    def upstream = Seq(state, block, src)
   }
-  case class LookupSwitch(var block: Block, var src: Val, var keys: Seq[Int]) extends Jump(){
-    def upstream = Seq(src)
+  case class LookupSwitch(var state: State, var block: Block, var src: Val, var keys: Seq[Int]) extends Jump(){
+    def upstream = Seq(state, block, src)
   }
   case class Copy(var src: Val) extends Val(src.jtype){
     def upstream = Seq(src)
@@ -359,11 +376,11 @@ object SSA{
   case class GetField(var obj: Val, var owner: JType.Cls, var name: String, var desc: JType) extends Val(desc){
     def upstream = Seq(obj)
   }
-  case class PutArray(var src: Val, var indexSrc: Val, var arrayValue: Val) extends Val(JType.Null){
-    def upstream = Seq(src, indexSrc, arrayValue)
+  case class PutArray(var state: State, var src: Val, var indexSrc: Val, var arrayValue: Val) extends Val(JType.Null) with State{
+    def upstream = Seq(state, src, indexSrc, arrayValue)
   }
-  case class GetArray(var indexSrc: Val, var array: Val, var tpe: JType) extends Val(tpe){
-    def upstream = Seq(indexSrc, array)
+  case class GetArray(var state: State, var indexSrc: Val, var array: Val, var tpe: JType) extends Val(tpe) with State{
+    def upstream = Seq(state, indexSrc, array)
   }
 
   case class MonitorEnter(var indexSrc: Val) extends Val(JType.Null){

@@ -175,13 +175,15 @@ object Renderer {
       case n: SSA.InvokeDynamic => ???
       case n: SSA.New => apply("new", atom(n.cls.name))
       case n: SSA.NewArray => apply("newarray", rec(n.src), atom(n.typeRef.name))
-      case n: SSA.MultiANewArray => apply("multianewarray", atom(n.desc.name))
+      case n: SSA.MultiANewArray =>
+        val atoms = atom(n.desc.name) +: n.dims.map(rec)
+        apply("multianewarray", atoms:_*)
       case n: SSA.PutStatic => apply("putstatic", rec(n.src), atom(n.cls.name), atom(n.name), atom(n.desc.name))
       case n: SSA.GetStatic => apply("getstatic", atom(n.cls.name), atom(n.name), atom(n.desc.name))
       case n: SSA.PutField => apply("putfield", rec(n.src), rec(n.obj), atom(n.owner.name), atom(n.name), atom(n.desc.name))
       case n: SSA.GetField => apply("getfield", rec(n.obj), atom(n.owner.name), atom(n.name), atom(n.desc.name))
       case n: SSA.PutArray => apply("putarray", rec(n.src), rec(n.indexSrc), rec(n.arrayValue))
-      case n: SSA.GetArray => apply("putarray", rec(n.indexSrc), rec(n.array))
+      case n: SSA.GetArray => apply("getarray", rec(n.indexSrc), rec(n.array))
       case n: SSA.MonitorEnter => ???
       case n: SSA.MonitorExit => ???
     }

@@ -190,38 +190,73 @@ class Walker(isInterface: JType.Cls => Boolean,
           r.downstreamAdd(l)
       }
     }
+    var currentState: SSA.State = null
 
+    val terminals = insns.zipWithIndex.flatMap{case (insn, i) =>
+      regionStarts(insn).foreach(currentState = _)
+      val newNodes = (insn.getOpcode, insn) match{
+        case (RETURN, insn) => (insn, new SSA.Return(currentState, findStartRegion(i)), i) :: Nil
 
-    val terminals = insns.map(i => (i.getOpcode, i)).zipWithIndex.collect {
-      case ((RETURN, insn), i) => (insn, new SSA.Return(findStartRegion(i)), i) :: Nil
+        case (IRETURN | LRETURN | FRETURN | DRETURN | ARETURN, insn) =>
+          (insn, new SSA.ReturnVal(currentState, findStartRegion(i), frameTop(i, 0)), i) :: Nil
 
-      case ((IRETURN | LRETURN | FRETURN | DRETURN | ARETURN, insn), i) =>
-        (insn, new SSA.ReturnVal(findStartRegion(i), frameTop(i, 0)), i) :: Nil
+        case (ATHROW, insn) => (insn, new SSA.AThrow(currentState, findStartRegion(i), frameTop(i, 0)), i) :: Nil
 
-      case ((ATHROW, insn), i) => (insn, new SSA.AThrow(findStartRegion(i), frameTop(i, 0)), i) :: Nil
+        case (GOTO, insn: JumpInsnNode) =>
+          mergeBlocks(insn.label, findStartRegion(i), Some(insn))
+          Nil
 
-      case ((GOTO, insn: JumpInsnNode), i) =>
-        mergeBlocks(insn.label, findStartRegion(i), Some(insn))
-        Nil
+        case (IFEQ | IFNE | IFLT | IFGE | IFGT | IFLE, insn: JumpInsnNode) =>
+          val n = new SSA.UnaBranch(currentState, findStartRegion(i), frameTop(i, 0), SSA.UnaBranch.lookup(insn.getOpcode))
+          mergeBlocks(insn.label, new SSA.True(n))
+          mergeBlocks(insn.getNext, new SSA.False(n))
 
-      case ((IFEQ | IFNE | IFLT | IFGE | IFGT | IFLE, insn: JumpInsnNode), i) =>
-        val n = new SSA.UnaBranch(findStartRegion(i), frameTop(i, 0), SSA.UnaBranch.lookup(insn.getOpcode))
-        mergeBlocks(insn.label, new SSA.True(n))
-        mergeBlocks(insn.getNext, new SSA.False(n))
+          Nil
 
-        Nil
+        case (IF_ICMPEQ | IF_ICMPNE | IF_ICMPLT | IF_ICMPGE | IF_ICMPGT | IF_ICMPLE | IF_ACMPEQ | IF_ACMPNE, insn: JumpInsnNode) =>
+          val startReg = findStartRegion(i)
+          val n = new SSA.BinBranch(currentState, startReg, frameTop(i, 1), frameTop(i, 0), SSA.BinBranch.lookup(insn.getOpcode))
+          mergeBlocks(insn.label, new SSA.True(n))
+          mergeBlocks(insn.getNext, new SSA.False(n))
+          Nil
 
-      case ((IF_ICMPEQ | IF_ICMPNE | IF_ICMPLT | IF_ICMPGE | IF_ICMPGT | IF_ICMPLE | IF_ACMPEQ | IF_ACMPNE, insn: JumpInsnNode), i) =>
-        val startReg = findStartRegion(i)
-        val n = new SSA.BinBranch(startReg, frameTop(i, 1), frameTop(i, 0), SSA.BinBranch.lookup(insn.getOpcode))
-        mergeBlocks(insn.label, new SSA.True(n))
-        mergeBlocks(insn.getNext, new SSA.False(n))
-        Nil
+        case _ =>
+          def aload(jtype: JType) = {
+            val getArray = frameTop(i + 1, 0).asInstanceOf[SSA.GetArray]
+            getArray.state = currentState
+            currentState = getArray
+          }
+          def astore() = {
+            val newNode = new SSA.PutArray(currentState, frameTop(i, 2), frameTop(i, 1), frameTop(i, 0))
+            currentState = newNode
+          }
+          insn.getOpcode match{
+            case IALOAD => aload(JType.Prim.I)
+            case LALOAD => aload(JType.Prim.J)
+            case FALOAD => aload(JType.Prim.F)
+            case DALOAD => aload(JType.Prim.D)
+            case AALOAD => aload(JType.Cls("java/lang/Object"))
+            case BALOAD => aload(JType.Prim.B)
+            case CALOAD => aload(JType.Prim.C)
+            case SALOAD => aload(JType.Prim.S)
+            case IASTORE => astore()
+            case LASTORE => astore()
+            case FASTORE => astore()
+            case DASTORE => astore()
+            case AASTORE => astore()
+            case BASTORE => astore()
+            case CASTORE => astore()
+            case SASTORE => astore()
+            case _ => //donothing
+          }
+          if (Option(insn.getNext).exists(regionStarts(_).isDefined)){
+            mergeBlocks(insn.getNext, findStartRegion(i), Some(insn))
+          }
+          Nil
+      }
+      newNodes
 
-      case ((_, insn), i) if Option(insn.getNext).exists(regionStarts(_).isDefined) =>
-        mergeBlocks(insn.getNext, findStartRegion(i), Some(insn))
-        Nil
-    }.flatten
+    }
 
     Program(terminals.map(_._2))
   }

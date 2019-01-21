@@ -2,6 +2,13 @@ package joptimize.examples.simple;
 
 public class MultiDimArrays {
     @joptimize.Test(inputs = {1, 2, 3, 4, 5, 6})
+    public static int[] make1D(int a) {
+        int[] x = new int[a];
+        x[0] = 999;
+        return x;
+    }
+
+    @joptimize.Test(inputs = {1, 2, 3, 4, 5, 6})
     public static int[][] make2D(int a, int b) {
         int[][] x = new int[a][b];
         x[0][0] = 999;

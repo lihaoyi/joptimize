@@ -74,6 +74,7 @@ object MainTests extends TestSuite{
 //        'callAtPhiBoundary - annotatedTest
 //      }
       'MultiDimArrays - {
+        'make1D - annotatedTest
         'make2D - annotatedTest
         'make3D - annotatedTest
         'getAndSet - annotatedTest
@@ -262,7 +263,7 @@ object MainTests extends TestSuite{
       )
       // Make sure the correct value is computed
       (res, expected) match {
-        case (a: Array[AnyRef], b: Array[AnyRef]) => assert(java.util.Arrays.deepEquals(a, b))
+        case (a: Array[_], b: Array[_]) => a ==> b
         case _ =>
           val argList = args.toList
           assert {

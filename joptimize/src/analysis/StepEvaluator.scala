@@ -128,14 +128,14 @@ class StepEvaluator(merges: mutable.LinkedHashSet[SSA.Phi],
 
   def binaryOperation(insn: AbstractInsnNode, v1: SSA.Val, v2: SSA.Val) = {
     insn.getOpcode match {
-      case IALOAD => new SSA.GetArray(v1, v2, JType.Prim.I)
-      case BALOAD => new SSA.GetArray(v1, v2, JType.Prim.B)
-      case CALOAD => new SSA.GetArray(v1, v2, JType.Prim.C)
-      case SALOAD => new SSA.GetArray(v1, v2, JType.Prim.S)
-      case FALOAD => new SSA.GetArray(v1, v2, JType.Prim.F)
-      case AALOAD => new SSA.GetArray(v1, v2, JType.Cls("java/lang/Object"))
-      case LALOAD => new SSA.GetArray(v1, v2, JType.Prim.J)
-      case DALOAD => new SSA.GetArray(v1, v2, JType.Prim.D)
+      case IALOAD => new SSA.GetArray(null, v1, v2, JType.Prim.I)
+      case BALOAD => new SSA.GetArray(null, v1, v2, JType.Prim.B)
+      case CALOAD => new SSA.GetArray(null, v1, v2, JType.Prim.C)
+      case SALOAD => new SSA.GetArray(null, v1, v2, JType.Prim.S)
+      case FALOAD => new SSA.GetArray(null, v1, v2, JType.Prim.F)
+      case AALOAD => new SSA.GetArray(null, v1, v2, JType.Cls("java/lang/Object"))
+      case LALOAD => new SSA.GetArray(null, v1, v2, JType.Prim.J)
+      case DALOAD => new SSA.GetArray(null, v1, v2, JType.Prim.D)
 
       case IADD | ISUB | IMUL | IDIV | IREM | ISHL | ISHR | IUSHR | IAND | IOR | IXOR |
            FADD | FSUB | FMUL | FDIV | FREM | LCMP | FCMPL | FCMPG | DCMPL | DCMPG |
