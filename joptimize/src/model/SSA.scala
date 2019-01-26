@@ -86,8 +86,8 @@ object SSA{
     def checkLinks() = {
       val brokenUps = upstream.filter(!_.downstreamContains(this))
       val brokenDowns = downstream.keys.filter(!_.upstream.contains(this))
-      assert(brokenUps.isEmpty, (this, brokenUps))
-      assert(brokenDowns.isEmpty, (this, brokenDowns))
+      assert(brokenUps.isEmpty, s"Unreciprocated upstream edges: $this <-> ${brokenUps.mkString(", ")}")
+      assert(brokenDowns.isEmpty, s"Unreciprocated downstream edges: $this <-> ${brokenDowns.mkString(", ")}")
     }
     def upstream: Seq[Node]
     def upstreamVals: Seq[Val] = upstream.collect{case v: Val => v}
