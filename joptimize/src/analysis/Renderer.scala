@@ -183,7 +183,7 @@ object Renderer {
       case n: SSA.GetStatic => apply("getstatic", atom(n.cls.name), atom(n.name), atom(n.desc.name))
       case n: SSA.PutField => apply("putfield", rec(n.src), rec(n.obj), atom(n.owner.name), atom(n.name), atom(n.desc.name))
       case n: SSA.GetField => apply("getfield", rec(n.obj), atom(n.owner.name), atom(n.name), atom(n.desc.name))
-      case n: SSA.PutArray => apply("putarray", rec(n.src), rec(n.indexSrc), rec(n.arrayValue))
+      case n: SSA.PutArray => apply("putarray", rec(n.src), rec(n.indexSrc), rec(n.array))
       case n: SSA.GetArray => apply("getarray", rec(n.array), rec(n.indexSrc))
       case n: SSA.MonitorEnter => ???
       case n: SSA.MonitorExit => ???
@@ -203,7 +203,7 @@ object Renderer {
       case n: SSA.LookupSwitch => ???
 
       case n: SSA.ReturnVal =>
-        (renderBlock(n), apply("return", atom(renderBlock(n.block)), rec(n.a)))
+        (renderBlock(n), apply("return", atom(renderBlock(n.block)), rec(n.src)))
 
       case n: SSA.Return =>
         (renderBlock(n), apply("return", atom(renderBlock(n.block))))
