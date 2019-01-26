@@ -39,10 +39,11 @@ class Walker(isInterface: JType.Cls => Boolean,
       val program = constructSSAProgram(sig, mn)
 
       removeDeadNodes(program)
-
       program.checkLinks()
+
       simplifyPhiMerges(program)
       program.checkLinks()
+
       val preScheduleNaming = Namer.apply(program, Map.empty, program.getAllVertices())
 
       println()
@@ -271,15 +272,12 @@ class Walker(isInterface: JType.Cls => Boolean,
       }
       for (replacement <- replacementOpt) {
 //        pprint.log(current)
-        for (v <- current.upstream) v.downstreamRemove(current)
+        for (v <- current.upstream) v.downstreamRemoveAll(current)
         val deltaDownstream = current.downstreamList.filter(_ != current)
         deltaDownstream.foreach(replacement.downstreamAdd)
 
         for (down <- deltaDownstream) SSA.update(down, current, replacement)
         queue.add(replacement)
-//        replacement.checkLinks()
-//        replacement.upstream.foreach(_.checkLinks())
-//        replacement.downstreamList.foreach(_.checkLinks())
       }
     }
   }
