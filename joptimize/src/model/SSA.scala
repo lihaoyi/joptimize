@@ -365,16 +365,16 @@ object SSA{
     def upstream = dims
   }
   case class PutStatic(var state: State, var src: Val, var cls: JType.Cls, var name: String, var desc: JType) extends Val(JType.Prim.V){
-    def upstream = Seq(src)
+    def upstream = Seq(state, src)
   }
   case class GetStatic(var state: State, var cls: JType.Cls, var name: String, var desc: JType) extends Val(desc){
-    def upstream = Nil
+    def upstream = Seq(state)
   }
   case class PutField(var state: State, var src: Val, var obj: Val, var owner: JType.Cls, var name: String, var desc: JType) extends Val(JType.Prim.V){
-    def upstream = Seq(src, obj)
+    def upstream = Seq(state, src, obj)
   }
   case class GetField(var state: State, var obj: Val, var owner: JType.Cls, var name: String, var desc: JType) extends Val(desc){
-    def upstream = Seq(obj)
+    def upstream = Seq(state, obj)
   }
   case class PutArray(var state: State, var arrayValue: Val, var indexSrc: Val, var src: Val) extends Val(JType.Prim.V) {
     def upstream = Seq(state, arrayValue, indexSrc, src)
