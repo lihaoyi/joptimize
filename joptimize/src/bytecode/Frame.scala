@@ -455,15 +455,13 @@ class Frame[V <: Value, S <: V] (var numLocals: Int, val numStack0: Int){
     */
   def merge(insnIndex: Int, targetInsnIndex: Int, frame: Frame[V, S], interpreter: Interpreter[V, S]) = {
     if (numStack != frame.numStack) throw new AnalyzerException(null, "Incompatible stack heights")
-    var changed = false
+    state = interpreter.merge(state, frame.state, insnIndex, targetInsnIndex)
     for(i <- 0 until (numLocals + numStack)){
       val v = interpreter.merge(values(i), frame.values(i), insnIndex, targetInsnIndex)
       if (v != values(i)) {
         values(i) = v
-        changed = true
       }
     }
-    changed
   }
 
   /**
@@ -475,15 +473,13 @@ class Frame[V <: Value, S <: V] (var numLocals: Int, val numStack0: Int){
     * @throws AnalyzerException if the frames have incompatible sizes.
     */
   def merge0(insnIndex: Int, targetInsnIndex: Int, interpreter: Interpreter[V, S]) = {
-    var changed = false
+    state = interpreter.merge0(state, insnIndex, targetInsnIndex)
     for(i <- 0 until (numLocals + numStack)){
       val v = interpreter.merge0(values(i), insnIndex, targetInsnIndex)
       if (v != values(i)) {
         values(i) = v
-        changed = true
       }
     }
-    changed
   }
 
   /**

@@ -55,7 +55,7 @@ object Analyzer{
     }
 
     if ((method.access & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE)) != 0) {
-      return new Array[Frame[V, S]](0).asInstanceOf[Array[Frame[V, S]]]
+      return new Array[Frame[V, S]](0)
     }
 
     // For each exception handler, and each instruction within its range, record in 'handlers' the

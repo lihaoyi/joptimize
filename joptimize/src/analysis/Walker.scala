@@ -40,8 +40,9 @@ class Walker(isInterface: JType.Cls => Boolean,
 
       removeDeadNodes(program)
 
+      program.checkLinks()
       simplifyPhiMerges(program)
-
+      program.checkLinks()
       val preScheduleNaming = Namer.apply(program, Map.empty, program.getAllVertices())
 
       println()
@@ -137,7 +138,7 @@ class Walker(isInterface: JType.Cls => Boolean,
       joptimize.bytecode.Analyzer.analyze(
         sig.cls.name, mn,
         new StepEvaluator(phiMerges0, startRegionLookup, regionStarts),
-        new SSA.State(null)
+        new SSA.ChangedState(null)
       ),
       startRegionLookup
     )
@@ -238,7 +239,7 @@ class Walker(isInterface: JType.Cls => Boolean,
     for(v <- allVertices){
       for(down <- v.downstreamList){
         if (!allVertices.contains(down)) {
-          v.downstreamRemove(down)
+          v.downstreamRemoveAll(down)
         }
       }
     }

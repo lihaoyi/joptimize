@@ -99,6 +99,10 @@ object SSA{
       case Some(1) => downstream.remove(n)
       case Some(x) if x > 1 => downstream(n) = x - 1
     }
+    def downstreamRemoveAll(n: Node) = downstream.get(n) match{
+      case None => // do nothing
+      case Some(_) => downstream.remove(n)
+    }
 
     def downstreamList = downstream.keysIterator.toArray
     def downstreamSize = downstream.valuesIterator.sum
@@ -122,7 +126,8 @@ object SSA{
     }
   }
 
-  class State(parent: Node) extends Val(JType.Prim.V) {
+  sealed trait State extends Val
+  class ChangedState(parent: Node) extends Val(JType.Prim.V) with State{
     override def upstream = Option(parent).toSeq
   }
 
@@ -152,7 +157,7 @@ object SSA{
     def lookup(i: Int) = lookup0(i)
   }
 
-  class Phi(var block: Block, var incoming: Set[(SSA.Block, SSA.Val)], var tpe: JType) extends Val(tpe){
+  class Phi(var block: Block, var incoming: Set[(SSA.Block, SSA.Val)], var tpe: JType) extends Val(tpe) with State{
     override def upstream: Seq[SSA.Node] = Seq(block) ++ incoming.flatMap(x => Seq(x._1, x._2)).toArray[SSA.Node]
     override def toString = s"Phi@${Integer.toHexString(System.identityHashCode(this))}(${incoming.size})"
   }
@@ -270,23 +275,23 @@ object SSA{
     val IF_ACMPEQ = new Code(Opcodes.IF_ACMPEQ)
     val IF_ACMPNE = new Code(Opcodes.IF_ACMPNE)
   }
-  case class ReturnVal(var state: State, var block: Block, var a: Val) extends Jump(){
+  case class ReturnVal(var state: Val, var block: Block, var a: Val) extends Jump(){
     def upstream = Seq(state, block, a)
     override def upstreamVals = Seq(a)
   }
-  case class Return(var state: State, var block: Block) extends Jump(){
+  case class Return(var state: Val, var block: Block) extends Jump(){
     def upstream = Seq(state, block)
     override def upstreamVals = Seq()
   }
-  case class AThrow(var state: State, var block: Block, var src: Val) extends Jump(){
+  case class AThrow(var state: Val, var block: Block, var src: Val) extends Jump(){
     def upstream = Seq(state, block, src)
     override def upstreamVals = Seq(src)
   }
-  case class TableSwitch(var state: State, var block: Block, var src: Val, min: Int, max: Int) extends Jump(){
+  case class TableSwitch(var state: Val, var block: Block, var src: Val, min: Int, max: Int) extends Jump(){
     def upstream = Seq(state, block, src)
     override def upstreamVals = Seq(src)
   }
-  case class LookupSwitch(var state: State, var block: Block, var src: Val, var keys: Seq[Int]) extends Jump(){
+  case class LookupSwitch(var state: Val, var block: Block, var src: Val, var keys: Seq[Int]) extends Jump(){
     def upstream = Seq(state, block, src)
     override def upstreamVals = Seq(src)
   }

@@ -18,8 +18,8 @@ case class Program(allTerminals: Seq[SSA.Control]){
       v <- allVertices
       down <- v.downstreamList
       if !allVertices.contains(down)
-    } yield down
+    } yield (v, down)
 
-    assert(missing.isEmpty, missing)
+    assert(missing.isEmpty, "Downstream nodes not part of allVertices: " + missing.mkString(", "))
   }
 }
