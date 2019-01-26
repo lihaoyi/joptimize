@@ -271,12 +271,18 @@ class Walker(isInterface: JType.Cls => Boolean,
         case _ => None
       }
       for (replacement <- replacementOpt) {
-//        pprint.log(current)
+        pprint.log(current)
+        pprint.log(replacement)
+        pprint.log(current.upstream)
         for (v <- current.upstream) v.downstreamRemoveAll(current)
         val deltaDownstream = current.downstreamList.filter(_ != current)
         deltaDownstream.foreach(replacement.downstreamAdd)
 
+        pprint.log(deltaDownstream)
         for (down <- deltaDownstream) SSA.update(down, current, replacement)
+        pprint.log(deltaDownstream)
+        assert(!program.getAllVertices().contains(current))
+        program.checkLinks()
         queue.add(replacement)
       }
     }

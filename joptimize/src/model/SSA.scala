@@ -39,17 +39,25 @@ object SSA{
       case n: SSA.InvokeDynamic => ???
       case n: SSA.NewArray => n.src = swap(n.src)
       case n: SSA.MultiANewArray =>
-      case n: SSA.PutStatic => n.src = swap(n.src)
+      case n: SSA.PutStatic =>
+        n.state = swap(n.state)
+        n.src = swap(n.src)
       case n: SSA.GetStatic =>
+        n.state = swap(n.state)
       case n: SSA.PutField =>
+        n.state = swap(n.state)
         n.src = swap(n.src)
         n.obj = swap(n.obj)
-      case n: SSA.GetField => n.obj = swap(n.obj)
-      case n: SSA.PutArray =>
-        n.src = swap(n.src)
+      case n: SSA.GetField =>
         n.state = swap(n.state)
+        n.obj = swap(n.obj)
+      case n: SSA.PutArray =>
+        n.state = swap(n.state)
+        n.src = swap(n.src)
+        n.arrayValue = swap(n.arrayValue)
         n.indexSrc = swap(n.indexSrc)
       case n: SSA.GetArray =>
+        n.state = swap(n.state)
         n.indexSrc = swap(n.indexSrc)
         n.state = swap(n.state)
         n.array = swap(n.array)
