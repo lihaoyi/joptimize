@@ -5,7 +5,6 @@ import joptimize.model.JType
 import joptimize.model.{Program, SSA}
 import org.objectweb.asm.Opcodes._
 import org.objectweb.asm.tree._
-import org.objectweb.asm.util.{Textifier, TraceMethodVisitor}
 
 import scala.collection.mutable
 
@@ -53,19 +52,10 @@ object CodeGen{
           val blockNodes = blocksToNodes.getOrElse(block, Nil).toSeq.sortBy(naming.finalOrderingMap)
           for(node <- blockNodes){
             if (naming.savedLocals.contains(node) && !node.isInstanceOf[SSA.Arg]){
-              pprint.log(node)
-              val nodeInsns = if (node.isInstanceOf[SSA.ChangedState]){
-                node.upstream
-                  .collect{case v: SSA.Val if !savedLocalNumbers.contains(v) =>
-                    generateValBytecodeSideEffects(v, savedLocalNumbers)
-                  }
-                  .flatten
-              }else{
-                generateValBytecode(node, savedLocalNumbers)
-              }
-              val printer = new Textifier
-              val methodPrinter = new TraceMethodVisitor(printer)
-              pprint.log(nodeInsns.map(Renderer.prettyprint(_, printer, methodPrinter)))
+              val nodeInsns =
+                if (node.isInstanceOf[SSA.ChangedState]) generateStateChangeBytecode(node, savedLocalNumbers)
+                else generateValBytecode(node, savedLocalNumbers)
+
               insns.appendAll(nodeInsns)
             }
           }
@@ -99,6 +89,14 @@ object CodeGen{
     }
 
     (blockCode, finalInsns)
+  }
+
+  def generateStateChangeBytecode(node: SSA.Val, savedLocalNumbers: Map[SSA.Val, Int]) = {
+    node.upstream
+      .collect { case v: SSA.Val if !savedLocalNumbers.contains(v) =>
+        generateValBytecodeSideEffects(v, savedLocalNumbers)
+      }
+      .flatten
   }
 
   def sortControlFlowGraph(cfg: Seq[(SSA.Control, SSA.Control)]) = {
@@ -159,7 +157,7 @@ object CodeGen{
     else {
       val upstreams = ssa.upstreamVals.flatMap(rec(_, savedLocals))
       val current: Seq[AbstractInsnNode] = ssa match{
-        case _: SSA.State => Nil
+        case _: SSA.ChangedState => Nil
         case _: SSA.Copy => Nil
 
         case _: SSA.Phi => Nil
