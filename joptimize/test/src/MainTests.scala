@@ -84,6 +84,7 @@ object MainTests extends TestSuite{
         'getAndSet3 - annotatedTest
         'getAndSetLoop1 - annotatedTest
         'getAndSetLoop2 - annotatedTest
+        'getAndSetLoop3 - annotatedTest
       }
 //      'InvokeDynamic - {
 //        'lambda - annotatedTest
@@ -271,7 +272,10 @@ object MainTests extends TestSuite{
       // Make sure the correct value is computed
       (res, expected) match {
         case (a: Array[AnyRef], b: Array[AnyRef]) => assert(java.util.Arrays.deepEquals(a, b))
-        case (a: Array[_], b: Array[_]) => assert(a.toSeq == b.toSeq)
+        case (a: Array[_], b: Array[_]) =>
+          val lhs = a.toSeq
+          val rhs = b.toSeq
+          assert(lhs == rhs)
 
         case _ =>
           val argList = args.toList

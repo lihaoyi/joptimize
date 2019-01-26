@@ -2,10 +2,11 @@ package joptimize.analysis
 
 
 import joptimize.model.JType
-
 import joptimize.model.{Program, SSA}
 import org.objectweb.asm.Opcodes._
 import org.objectweb.asm.tree._
+import org.objectweb.asm.util.{Textifier, TraceMethodVisitor}
+
 import scala.collection.mutable
 
 /**
@@ -50,9 +51,23 @@ object CodeGen{
           insns.appendAll(code)
         case block: SSA.Block =>
           val blockNodes = blocksToNodes.getOrElse(block, Nil).toSeq.sortBy(naming.finalOrderingMap)
-          for(node <- blockNodes if naming.savedLocals.contains(node) && !node.isInstanceOf[SSA.Arg]){
-            val nodeInsns = generateValBytecode(node, savedLocalNumbers)
-            insns.appendAll(nodeInsns)
+          for(node <- blockNodes){
+            if (naming.savedLocals.contains(node) && !node.isInstanceOf[SSA.Arg]){
+              pprint.log(node)
+              val nodeInsns = if (node.isInstanceOf[SSA.ChangedState]){
+                node.upstream
+                  .collect{case v: SSA.Val if !savedLocalNumbers.contains(v) =>
+                    generateValBytecodeSideEffects(v, savedLocalNumbers)
+                  }
+                  .flatten
+              }else{
+                generateValBytecode(node, savedLocalNumbers)
+              }
+              val printer = new Textifier
+              val methodPrinter = new TraceMethodVisitor(printer)
+              pprint.log(nodeInsns.map(Renderer.prettyprint(_, printer, methodPrinter)))
+              insns.appendAll(nodeInsns)
+            }
           }
       }
 
@@ -69,31 +84,9 @@ object CodeGen{
     naming.savedLocals.keysIterator.foreach{
       case phi: SSA.Phi if phi.getSize != 0 =>
         for((k, v) <- phi.incoming){
-          v match{
-            case c: SSA.Copy =>
-              val (insns, footer) = blockCode(blockIndices(k))
-
-              blockCode(blockIndices(k)) = (
-                insns ++
-                  Seq(
-                    new VarInsnNode(loadOp(phi), savedLocalNumbers(v)),
-                    new VarInsnNode(saveOp(phi), savedLocalNumbers(phi))
-                  ),
-                footer
-              )
-            case _ =>
-              val (insns, footer) = blockCode(blockIndices(k))
-
-
-              blockCode(blockIndices(k)) = (
-                insns ++
-                  generateValBytecode(v, savedLocalNumbers) ++ Seq(
-                    new VarInsnNode(saveOp(phi), savedLocalNumbers(phi))
-                  ),
-                footer
-              )
-          }
-
+          val (insns, footer) = blockCode(blockIndices(k))
+          val added = rec(v, savedLocalNumbers) ++ Seq(new VarInsnNode(saveOp(phi), savedLocalNumbers(phi)))
+          blockCode(blockIndices(k)) = (insns ++ added, footer)
         }
       case _ => //do nothing
     }
@@ -173,9 +166,9 @@ object CodeGen{
         case SSA.Arg(index, typeSize) => Nil
         case SSA.BinOp(a, b, opcode) => Seq(new InsnNode(opcode.i))
         case SSA.UnaOp(a, opcode) => Seq(new InsnNode(opcode.i))
-        case SSA.CheckCast(src, desc) => ???
-        case SSA.ArrayLength(src) => ???
-        case SSA.InstanceOf(src, desc) => ???
+        case SSA.CheckCast(src, desc) => Seq(new TypeInsnNode(CHECKCAST, desc.name))
+        case SSA.ArrayLength(src) => Seq(new InsnNode(ARRAYLENGTH))
+        case SSA.InstanceOf(src, desc) => Seq(new TypeInsnNode(INSTANCEOF, desc.name))
         case SSA.PushI(value) => Seq(value match{
           case -1 => new InsnNode(ICONST_M1)
           case 0 => new InsnNode(ICONST_0)
@@ -212,59 +205,19 @@ object CodeGen{
         case SSA.InvokeStatic(srcs, cls, name, desc) =>
           Seq(new MethodInsnNode(INVOKESTATIC, cls.name, name, desc.unparse))
         case SSA.InvokeSpecial(srcs, cls, name, desc) =>
-          Seq(new MethodInsnNode(INVOKESTATIC, cls.name, name, desc.unparse))
+          Seq(new MethodInsnNode(INVOKESPECIAL, cls.name, name, desc.unparse))
         case SSA.InvokeVirtual(srcs, cls, name, desc) =>
-          Seq(new MethodInsnNode(INVOKESTATIC, cls.name, name, desc.unparse))
+          Seq(new MethodInsnNode(INVOKEVIRTUAL, cls.name, name, desc.unparse))
         case SSA.InvokeDynamic(name, desc, bsTag, bsOwner, bsName, bsDesc, bsArgs) => ???
         case SSA.New(cls) => ???
-        case SSA.NewArray(src, typeRef) =>
-          Seq(
-            typeRef match {
-              case JType.Arr(JType.Prim.Z) => new IntInsnNode(NEWARRAY, T_BOOLEAN)
-              case JType.Arr(JType.Prim.C) => new IntInsnNode(NEWARRAY, T_CHAR)
-              case JType.Arr(JType.Prim.B) => new IntInsnNode(NEWARRAY, T_BYTE)
-              case JType.Arr(JType.Prim.S) => new IntInsnNode(NEWARRAY, T_SHORT)
-              case JType.Arr(JType.Prim.I) => new IntInsnNode(NEWARRAY, T_INT)
-              case JType.Arr(JType.Prim.F) => new IntInsnNode(NEWARRAY, T_FLOAT)
-              case JType.Arr(JType.Prim.D) => new IntInsnNode(NEWARRAY, T_DOUBLE)
-              case JType.Arr(JType.Prim.J) => new IntInsnNode(NEWARRAY, T_LONG)
-              case t => new TypeInsnNode(ANEWARRAY, t.name)
-            }
-          )
-        case SSA.MultiANewArray(desc, dims) =>
-          Seq(new MultiANewArrayInsnNode(desc.name, dims.length))
-        case SSA.PutStatic(_, src, cls, name, desc) => ???
-        case SSA.GetStatic(_, cls, name, desc) => ???
-        case SSA.PutField(_, src, obj, owner, name, desc) => ???
-        case SSA.GetField(_, obj, owner, name, desc) => ???
-        case SSA.PutArray(_, array, indexSrc, src) =>
-          Seq(new InsnNode(
-            src.jtype match {
-              case JType.Prim.Z => IASTORE
-              case JType.Prim.C => CASTORE
-              case JType.Prim.B => BASTORE
-              case JType.Prim.S => SASTORE
-              case JType.Prim.I => IASTORE
-              case JType.Prim.F => FASTORE
-              case JType.Prim.D => DASTORE
-              case JType.Prim.J => LASTORE
-              case t => AASTORE
-            }
-          ))
-        case SSA.GetArray(_, indexSrc, array, tpe) =>
-          Seq(new InsnNode(
-            tpe match {
-              case JType.Prim.Z => IALOAD
-              case JType.Prim.C => CALOAD
-              case JType.Prim.B => BALOAD
-              case JType.Prim.S => SALOAD
-              case JType.Prim.I => IALOAD
-              case JType.Prim.F => FALOAD
-              case JType.Prim.D => DALOAD
-              case JType.Prim.J => LALOAD
-              case t => AALOAD
-            }
-          ))
+        case SSA.NewArray(src, typeRef) => Seq(newArrayOp(typeRef))
+        case SSA.MultiANewArray(desc, dims) => Seq(new MultiANewArrayInsnNode(desc.name, dims.length))
+        case SSA.PutStatic(_, src, cls, name, desc) => Seq(new FieldInsnNode(PUTSTATIC, cls.name, name, desc.name))
+        case SSA.GetStatic(_, cls, name, desc) => Seq(new FieldInsnNode(GETSTATIC, cls.name, name, desc.name))
+        case SSA.PutField(_, src, obj, owner, name, desc) => Seq(new FieldInsnNode(PUTFIELD, owner.name, name, desc.name))
+        case SSA.GetField(_, obj, owner, name, desc) => Seq(new FieldInsnNode(GETFIELD, owner.name, name, desc.name))
+        case SSA.PutArray(_, array, indexSrc, src) => Seq(new InsnNode(arrayStoreOp(src)))
+        case SSA.GetArray(_, indexSrc, array, tpe) => Seq(new InsnNode(arrayLoadOp(tpe)))
         case SSA.MonitorEnter(indexSrc) => ???
         case SSA.MonitorExit(indexSrc) => ???
       }
@@ -277,6 +230,91 @@ object CodeGen{
 
       upstreams ++ current ++ save
 
+    }
+  }
+
+
+  def generateValBytecodeSideEffects(ssa: SSA.Val, savedLocals: Map[SSA.Val, Int]): Seq[AbstractInsnNode] = {
+    if (ssa.isInstanceOf[SSA.Phi]) Nil
+    else {
+      val upstreams = ssa.upstreamVals.flatMap(rec(_, savedLocals))
+      val current: Seq[AbstractInsnNode] = ssa match{
+        case _: SSA.State | _: SSA.Copy | _: SSA.Phi | _: SSA.Arg => Nil
+        case SSA.BinOp(a, b, opcode) => Seq(new InsnNode(opcode.i), new InsnNode(POP))
+        case SSA.UnaOp(a, opcode) => Seq(new InsnNode(opcode.i), new InsnNode(POP))
+        case SSA.CheckCast(src, desc) => Seq(new TypeInsnNode(CHECKCAST, desc.name), new InsnNode(POP))
+        case SSA.ArrayLength(src) => Seq(new InsnNode(ARRAYLENGTH), new InsnNode(POP))
+        case SSA.InstanceOf(src, desc) => Seq(new TypeInsnNode(INSTANCEOF, desc.name), new InsnNode(POP))
+        case _: SSA.PushI | _: SSA.PushJ | _: SSA.PushF | _: SSA.PushD |
+             _: SSA.PushS | _: SSA.PushNull | _: SSA.PushCls  => Nil
+
+        case SSA.InvokeStatic(srcs, cls, name, desc) =>
+          Seq(new MethodInsnNode(INVOKESTATIC, cls.name, name, desc.unparse)) ++
+          (if (desc.ret.size == 0) Nil else Seq(new InsnNode(POP)))
+        case SSA.InvokeSpecial(srcs, cls, name, desc) =>
+          Seq(new MethodInsnNode(INVOKESPECIAL, cls.name, name, desc.unparse)) ++
+          (if (desc.ret.size == 0) Nil else Seq(new InsnNode(POP)))
+        case SSA.InvokeVirtual(srcs, cls, name, desc) =>
+          Seq(new MethodInsnNode(INVOKEVIRTUAL, cls.name, name, desc.unparse)) ++
+          (if (desc.ret.size == 0) Nil else Seq(new InsnNode(POP)))
+        case SSA.InvokeDynamic(name, desc, bsTag, bsOwner, bsName, bsDesc, bsArgs) => ???
+        case SSA.New(cls) => ???
+        case SSA.NewArray(src, typeRef) => Seq(newArrayOp(typeRef), new InsnNode(POP))
+        case SSA.MultiANewArray(desc, dims) => Seq(new MultiANewArrayInsnNode(desc.name, dims.length), new InsnNode(POP))
+        case SSA.PutStatic(_, src, cls, name, desc) => Seq(new FieldInsnNode(PUTSTATIC, cls.name, name, desc.name))
+        case SSA.GetStatic(_, cls, name, desc) => Seq(new FieldInsnNode(GETSTATIC, cls.name, name, desc.name), new InsnNode(POP))
+        case SSA.PutField(_, src, obj, owner, name, desc) => Seq(new FieldInsnNode(PUTFIELD, owner.name, name, desc.name))
+        case SSA.GetField(_, obj, owner, name, desc) => Seq(new FieldInsnNode(GETFIELD, owner.name, name, desc.name), new InsnNode(POP))
+        case SSA.PutArray(_, array, indexSrc, src) => Seq(new InsnNode(arrayStoreOp(src)))
+        case SSA.GetArray(_, indexSrc, array, tpe) => Seq(new InsnNode(arrayLoadOp(tpe)), new InsnNode(POP))
+        case SSA.MonitorEnter(indexSrc) => ???
+        case SSA.MonitorExit(indexSrc) => ???
+      }
+
+      upstreams ++ current
+
+    }
+  }
+
+  def newArrayOp(typeRef: JType) = {
+    typeRef match {
+      case JType.Arr(JType.Prim.Z) => new IntInsnNode(NEWARRAY, T_BOOLEAN)
+      case JType.Arr(JType.Prim.C) => new IntInsnNode(NEWARRAY, T_CHAR)
+      case JType.Arr(JType.Prim.B) => new IntInsnNode(NEWARRAY, T_BYTE)
+      case JType.Arr(JType.Prim.S) => new IntInsnNode(NEWARRAY, T_SHORT)
+      case JType.Arr(JType.Prim.I) => new IntInsnNode(NEWARRAY, T_INT)
+      case JType.Arr(JType.Prim.F) => new IntInsnNode(NEWARRAY, T_FLOAT)
+      case JType.Arr(JType.Prim.D) => new IntInsnNode(NEWARRAY, T_DOUBLE)
+      case JType.Arr(JType.Prim.J) => new IntInsnNode(NEWARRAY, T_LONG)
+      case t => new TypeInsnNode(ANEWARRAY, t.name)
+    }
+  }
+
+  def arrayStoreOp(src: SSA.Val) = {
+    src.jtype match {
+      case JType.Prim.Z => IASTORE
+      case JType.Prim.C => CASTORE
+      case JType.Prim.B => BASTORE
+      case JType.Prim.S => SASTORE
+      case JType.Prim.I => IASTORE
+      case JType.Prim.F => FASTORE
+      case JType.Prim.D => DASTORE
+      case JType.Prim.J => LASTORE
+      case t => AASTORE
+    }
+  }
+
+  def arrayLoadOp(tpe: JType) = {
+    tpe match {
+      case JType.Prim.Z => IALOAD
+      case JType.Prim.C => CALOAD
+      case JType.Prim.B => BALOAD
+      case JType.Prim.S => SALOAD
+      case JType.Prim.I => IALOAD
+      case JType.Prim.F => FALOAD
+      case JType.Prim.D => DALOAD
+      case JType.Prim.J => LALOAD
+      case t => AALOAD
     }
   }
 
