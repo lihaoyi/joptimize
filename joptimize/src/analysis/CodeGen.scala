@@ -69,16 +69,30 @@ object CodeGen{
     naming.savedLocals.keysIterator.foreach{
       case phi: SSA.Phi if phi.getSize != 0 =>
         for((k, v) <- phi.incoming){
-          val (insns, footer) = blockCode(blockIndices(k))
+          v match{
+            case c: SSA.Copy =>
+              val (insns, footer) = blockCode(blockIndices(k))
 
-          blockCode(blockIndices(k)) = (
-            insns ++
-            Seq(
-              new VarInsnNode(loadOp(phi), savedLocalNumbers(v)),
-              new VarInsnNode(saveOp(phi), savedLocalNumbers(phi))
-            ),
-            footer
-          )
+              blockCode(blockIndices(k)) = (
+                insns ++
+                  Seq(
+                    new VarInsnNode(loadOp(phi), savedLocalNumbers(v)),
+                    new VarInsnNode(saveOp(phi), savedLocalNumbers(phi))
+                  ),
+                footer
+              )
+            case _ =>
+              val (insns, footer) = blockCode(blockIndices(k))
+
+
+              blockCode(blockIndices(k)) = (
+                insns ++
+                  generateValBytecode(v, savedLocalNumbers) ++ Seq(
+                    new VarInsnNode(saveOp(phi), savedLocalNumbers(phi))
+                  ),
+                footer
+              )
+          }
 
         }
       case _ => //do nothing

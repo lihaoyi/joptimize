@@ -18,11 +18,17 @@ object RegisterAllocator {
       v match{
         case phi: SSA.Phi if phi.getSize != 0 =>
           phi.incoming = phi.incoming.map{ case (k, v) =>
-            val copy = SSA.Copy(v)
-            v.downstreamRemove(phi)
-            copy.downstreamAdd(phi)
-            copies.add(copy)
-            (k, copy)
+            v match{
+              case _: SSA.Arg | _: SSA.PushNull | _: SSA.PushF | _: SSA.PushD |
+                   _: SSA.PushI | _: SSA.PushJ | _: SSA.PushS | _: SSA.PushCls =>
+                (k, v)
+              case _ =>
+                val copy = SSA.Copy(v)
+                v.downstreamRemove(phi)
+                copy.downstreamAdd(phi)
+                copies.add(copy)
+                (k, copy)
+            }
           }
           val replacement = SSA.Copy(phi)
           phi.downstreamList.withFilter(_ != replacement).foreach{down =>
