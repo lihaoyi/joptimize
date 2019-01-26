@@ -224,9 +224,6 @@ object CodeGen{
         case SSA.PutField(_, src, obj, owner, name, desc) => ???
         case SSA.GetField(_, obj, owner, name, desc) => ???
         case SSA.PutArray(_, array, indexSrc, src) =>
-          pprint.log(src.jtype)
-          pprint.log(src)
-          pprint.log(array)
           Seq(new InsnNode(
             src.jtype match {
               case JType.Prim.Z => IASTORE
