@@ -2,6 +2,12 @@ package joptimize.examples.simple;
 
 public class Arrays {
     @joptimize.Test(inputs = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12})
+    public static int length(int n) {
+        int[] x = new int[n + 1];
+        return x.length;
+    }
+
+    @joptimize.Test(inputs = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12})
     public static int get1(int n) {
         int[] x = new int[n + 1];
         return x[n];
