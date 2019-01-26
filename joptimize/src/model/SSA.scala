@@ -60,11 +60,9 @@ object SSA{
       case n: SSA.True => n.branch = swap(n.branch)
       case n: SSA.False => n.branch = swap(n.branch)
       case n: SSA.UnaBranch =>
-        n.state = swap(n.state)
         n.block = swap(n.block)
         n.a = swap(n.a)
       case n: SSA.BinBranch =>
-        n.state = swap(n.state)
         n.block = swap(n.block)
         n.a = swap(n.a)
         n.b = swap(n.b)
@@ -245,7 +243,7 @@ object SSA{
     val F2D = new Code(Opcodes.F2D, JType.Prim.D)
   }
 
-  case class UnaBranch(var state: State, var block: Block, var a: Val, var opcode: UnaBranch.Code) extends Jump(){
+  case class UnaBranch(var block: Block, var a: Val, var opcode: UnaBranch.Code) extends Jump(){
     def upstream = Seq(block, a)
   }
   object UnaBranch  extends Codes{
@@ -258,7 +256,7 @@ object SSA{
     val IFNULL = new Code(Opcodes.IFNULL)
     val IFNONNULL = new Code(Opcodes.IFNONNULL)
   }
-  case class BinBranch(var state: State, var block: Block, var a: Val, var b: Val, var opcode: BinBranch.Code) extends Jump(){
+  case class BinBranch(var block: Block, var a: Val, var b: Val, var opcode: BinBranch.Code) extends Jump(){
     def upstream = Seq(block, a, b)
   }
 

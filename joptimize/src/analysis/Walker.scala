@@ -118,6 +118,7 @@ class Walker(isInterface: JType.Cls => Boolean,
       case (k: SSA.Jump, v: SSA.Block) => Seq(k.block -> v)
       case (k: SSA.Block, v: SSA.Block) => Seq(k -> v)
     }
+
     (controlFlowEdges, startBlock, allBlocks, blockEdges)
   }
 
@@ -130,7 +131,6 @@ class Walker(isInterface: JType.Cls => Boolean,
     val regionStarts = findRegionStarts(insns)
 
     val startRegionLookup = findStartRegionLookup(insns, regionStarts)
-
     val program = extractControlFlow(
       insns,
       i => regionStarts(insnIndices(i)),
@@ -197,7 +197,6 @@ class Walker(isInterface: JType.Cls => Boolean,
         case (RETURN, insn) => (insn, new SSA.Return(frames(i).state, findStartRegion(i)), i) :: Nil
 
         case (IRETURN | LRETURN | FRETURN | DRETURN | ARETURN, insn) =>
-          pprint.log(frames(i).state)
           (insn, new SSA.ReturnVal(frames(i).state, findStartRegion(i), frameTop(i, 0)), i) :: Nil
 
         case (ATHROW, insn) => (insn, new SSA.AThrow(frames(i).state, findStartRegion(i), frameTop(i, 0)), i) :: Nil
@@ -207,7 +206,7 @@ class Walker(isInterface: JType.Cls => Boolean,
           Nil
 
         case (IFEQ | IFNE | IFLT | IFGE | IFGT | IFLE, insn: JumpInsnNode) =>
-          val n = new SSA.UnaBranch(frames(i).state, findStartRegion(i), frameTop(i, 0), SSA.UnaBranch.lookup(insn.getOpcode))
+          val n = new SSA.UnaBranch(findStartRegion(i), frameTop(i, 0), SSA.UnaBranch.lookup(insn.getOpcode))
           mergeBlocks(insn.label, new SSA.True(n))
           mergeBlocks(insn.getNext, new SSA.False(n))
 
@@ -215,12 +214,16 @@ class Walker(isInterface: JType.Cls => Boolean,
 
         case (IF_ICMPEQ | IF_ICMPNE | IF_ICMPLT | IF_ICMPGE | IF_ICMPGT | IF_ICMPLE | IF_ACMPEQ | IF_ACMPNE, insn: JumpInsnNode) =>
           val startReg = findStartRegion(i)
-          val n = new SSA.BinBranch(frames(i).state, startReg, frameTop(i, 1), frameTop(i, 0), SSA.BinBranch.lookup(insn.getOpcode))
+          val n = new SSA.BinBranch(startReg, frameTop(i, 1), frameTop(i, 0), SSA.BinBranch.lookup(insn.getOpcode))
           mergeBlocks(insn.label, new SSA.True(n))
           mergeBlocks(insn.getNext, new SSA.False(n))
           Nil
 
-        case _ => Nil
+        case _ =>
+          if (Option(insn.getNext).exists(regionStarts(_).isDefined)){
+            mergeBlocks(insn.getNext, findStartRegion(i), Some(insn))
+          }
+          Nil
       }
       newNodes
 

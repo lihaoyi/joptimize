@@ -185,14 +185,14 @@ class StepEvaluator(merges: mutable.LinkedHashSet[SSA.Phi],
     */
   def binaryOpUnsafe(insn: AbstractInsnNode, v1: SSA.Val, v2: SSA.Val, state: SSA.State): (SSA.Val, SSA.State) = {
     val op = insn.getOpcode match {
-      case IALOAD => new SSA.GetArray(null, v1, v2, JType.Prim.I)
-      case BALOAD => new SSA.GetArray(null, v1, v2, JType.Prim.B)
-      case CALOAD => new SSA.GetArray(null, v1, v2, JType.Prim.C)
-      case SALOAD => new SSA.GetArray(null, v1, v2, JType.Prim.S)
-      case FALOAD => new SSA.GetArray(null, v1, v2, JType.Prim.F)
-      case AALOAD => new SSA.GetArray(null, v1, v2, JType.Cls("java/lang/Object"))
-      case LALOAD => new SSA.GetArray(null, v1, v2, JType.Prim.J)
-      case DALOAD => new SSA.GetArray(null, v1, v2, JType.Prim.D)
+      case IALOAD => new SSA.GetArray(state, v1, v2, JType.Prim.I)
+      case BALOAD => new SSA.GetArray(state, v1, v2, JType.Prim.B)
+      case CALOAD => new SSA.GetArray(state, v1, v2, JType.Prim.C)
+      case SALOAD => new SSA.GetArray(state, v1, v2, JType.Prim.S)
+      case FALOAD => new SSA.GetArray(state, v1, v2, JType.Prim.F)
+      case AALOAD => new SSA.GetArray(state, v1, v2, JType.Cls("java/lang/Object"))
+      case LALOAD => new SSA.GetArray(state, v1, v2, JType.Prim.J)
+      case DALOAD => new SSA.GetArray(state, v1, v2, JType.Prim.D)
 
       case IDIV | IREM | FDIV | FREM | LDIV | LREM | DDIV | DREM =>
         new SSA.BinOp(v1, v2, SSA.BinOp.lookup(insn.getOpcode))

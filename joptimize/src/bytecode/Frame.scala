@@ -202,6 +202,7 @@ class Frame[V <: Value, S <: V] (var numLocals: Int, val numStack0: Int){
         value3 = pop()
         value2 = pop()
         value1 = pop()
+        state = interpreter.ternaryOperation(insn, value1, value2, value3, state)
       case Opcodes.POP =>
         if (pop().getSize == 2) throw new AnalyzerException(insn, "Illegal use of POP")
       case Opcodes.POP2 =>

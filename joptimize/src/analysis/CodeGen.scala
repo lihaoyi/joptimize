@@ -126,12 +126,12 @@ object CodeGen{
                            fallthroughLabel: SSA.Control => Option[LabelNode]): Seq[AbstractInsnNode] = {
     val upstreams = ssa.upstreamVals.flatMap(rec(_, savedLocals))
     val current: Seq[AbstractInsnNode] = ssa match{
-      case n @ SSA.UnaBranch(state, block, a, opcode) =>
+      case n @ SSA.UnaBranch(block, a, opcode) =>
         val goto = fallthroughLabel(n).map(new JumpInsnNode(GOTO, _))
         val jump = Seq(new JumpInsnNode(opcode.i, jumpLabel(n)))
         jump ++ goto
 
-      case n @ SSA.BinBranch(state, block, a, b, opcode) =>
+      case n @ SSA.BinBranch(block, a, b, opcode) =>
         val goto = fallthroughLabel(n).map(new JumpInsnNode(GOTO, _))
         val jump = Seq(new JumpInsnNode(opcode.i, jumpLabel(n)))
         jump ++ goto
