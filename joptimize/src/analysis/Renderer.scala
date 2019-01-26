@@ -216,9 +216,10 @@ object Renderer {
         (fansi.Color.Magenta(naming.savedLocals(n)._2), rhs)
     }
 
-    def renderStmt(r: SSA.Node, leftOffset: Int) = {
-      if (r.isInstanceOf[SSA.Arg] || r.isInstanceOf[SSA.ChangedState]) None
-      else {
+    def renderStmt(r: SSA.Node, leftOffset: Int) = r match{
+      case _: SSA.Arg => None
+      case v: SSA.Val if v.getSize == 0 => None
+      case _ =>
         val out = mutable.Buffer.empty[Str]
         val (lhs, rhs) = r match {
           case r: SSA.Control =>
@@ -237,7 +238,6 @@ object Renderer {
             .rec(rhs, lhs.length + " = ".length, leftOffset).iter
         )
         Some(out)
-      }
     }
 
     val out =
