@@ -39,15 +39,11 @@ object Analyzer{
     var numInstructionsToProcess = 0
 
     def merge(insnIndex: Int, targetInsnIndex: Int, frame: Frame[V]) = {
-      var changed = false
       val oldFrame = frames(targetInsnIndex)
-      if (oldFrame == null) {
+      if (oldFrame != null) oldFrame.merge(insnIndex, targetInsnIndex, frame, interpreter)
+      else {
         frames(targetInsnIndex) = new Frame[V](frame)
         frames(targetInsnIndex).merge0(insnIndex, targetInsnIndex, interpreter)
-        changed = true
-      }
-      else changed = oldFrame.merge(insnIndex, targetInsnIndex, frame, interpreter)
-      if (changed && !inInstructionsToProcess(targetInsnIndex)) {
         inInstructionsToProcess(targetInsnIndex) = true
 
         instructionsToProcess(numInstructionsToProcess) = targetInsnIndex
