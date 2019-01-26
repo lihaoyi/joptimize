@@ -73,7 +73,7 @@ object MainTests extends TestSuite{
 //        'call - annotatedTest
 //        'callAtPhiBoundary - annotatedTest
 //      }
-      'MultiDimArrays - {
+      'Arrays - {
         'get1 - annotatedTest
         'get2 - annotatedTest
         'set1 - annotatedTest
