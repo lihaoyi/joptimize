@@ -21,9 +21,14 @@ import scala.collection.mutable
   */
 class StepEvaluator(merges: mutable.LinkedHashSet[SSA.Phi],
                     findBlockStart: Int => SSA.Block,
-                    findBlockDest: Int => Option[SSA.Block]) extends joptimize.bytecode.Interpreter[SSA.Val]{
+                    findBlockDest: Int => Option[SSA.Block]) extends joptimize.bytecode.Interpreter[SSA.Val, SSA.State]{
 
-  def newOperation(insn: AbstractInsnNode) = {
+  /**
+    * ACONST_NULL, ICONST_M1, ICONST_0, ICONST_1, ICONST_2, ICONST_3, ICONST_4, ICONST_5,
+    * LCONST_0, LCONST_1, FCONST_0, FCONST_1, FCONST_2, DCONST_0, DCONST_1, BIPUSH, SIPUSH, LDC, JSR,
+    * NEW
+    */
+  def constOperation(insn: AbstractInsnNode): SSA.Val = {
     insn.getOpcode match {
       case ACONST_NULL => new SSA.PushNull()
       case ICONST_M1 => new SSA.PushI(-1)
@@ -55,20 +60,30 @@ class StepEvaluator(merges: mutable.LinkedHashSet[SSA.Phi],
           case _: Handle => ???
         }
       case JSR => ???
-      case GETSTATIC =>
-        val insn2 = insn.asInstanceOf[FieldInsnNode]
-        new SSA.GetStatic(JType.Cls(insn2.owner), insn2.name, insn2.desc)
       case NEW => new SSA.New(insn.asInstanceOf[TypeInsnNode].desc)
     }
   }
+  /**
+    * GETSTATIC
+    */
+  def getStaticOperation(insn: AbstractInsnNode, state: SSA.State): (SSA.Val, SSA.State) = {
+    val insn2 = insn.asInstanceOf[FieldInsnNode]
+    val op = new SSA.GetStatic(state, JType.Cls(insn2.owner), insn2.name, insn2.desc)
+    (op, new SSA.State(op))
+  }
 
-  // We do not record any of these copy operations in the SSA dataflow graph
-  // that we construct during abstract interpretation. Those do not meaningfully
-  // affect the shape of the graph, and we will generate our own copy operations
-  // as-necessary when serializing the graph back out to bytecode
-  def copyOperation(insn: AbstractInsnNode, value: SSA.Val) = value
+  /**
+    * ILOAD, LLOAD, FLOAD, DLOAD, ALOAD, ISTORE, LSTORE, FSTORE, DSTORE, ASTORE, DUP, DUP_X1,
+    * DUP_X2, DUP2, DUP2_X1, DUP2_X2, SWAP
+    */
+  def copyOperation(insn: AbstractInsnNode, value: SSA.Val): SSA.Val = value
 
-  def unaryOperation(insn: AbstractInsnNode, value: SSA.Val) = {
+  /**
+    * INEG, LNEG, FNEG, DNEG, IINC, I2L, I2F, I2D, L2I, L2F, L2D, F2I, F2L, F2D, D2I, D2L, D2F,
+    * I2B, I2C, I2S, INSTANCEOF
+    */
+
+  def unaryOp(insn: AbstractInsnNode, value: SSA.Val): SSA.Val = {
     insn.getOpcode match {
       case IINC =>
         val n = insn.asInstanceOf[IincInsnNode].incr
@@ -79,20 +94,15 @@ class StepEvaluator(merges: mutable.LinkedHashSet[SSA.Phi],
            D2F | LNEG | I2L | F2L | D2L | DNEG | I2D | L2D | F2D =>
         new SSA.UnaOp(value, SSA.UnaOp.lookup(insn.getOpcode))
 
-      case IFEQ | IFNE | IFLT | IFGE | IFGT | IFLE | IFNULL | IFNONNULL => null
-      case TABLESWITCH => null
-      case LOOKUPSWITCH => null
-      case IRETURN | LRETURN | FRETURN | DRETURN | ARETURN => null
+      case INSTANCEOF => new SSA.InstanceOf(value, insn.asInstanceOf[TypeInsnNode].desc)
+    }
+  }
+  /**
+    * CHECKCAST, NEWARRAY, ANEWARRAY, ARRAYLENGTH
+    */
 
-      case PUTSTATIC =>
-        val insn2 = insn.asInstanceOf[FieldInsnNode]
-        val res = new SSA.PutStatic(value, insn2.owner, insn2.name, insn2.desc)
-        res
-
-      case GETFIELD =>
-        val insn2 = insn.asInstanceOf[FieldInsnNode]
-        new SSA.GetField(value, insn2.owner, insn2.name, insn2.desc)
-
+  def unaryOpUnsafe(insn: AbstractInsnNode, value: SSA.Val, state: SSA.State): (SSA.Val, SSA.State) = {
+    val op = insn.getOpcode match {
       case NEWARRAY =>
         new SSA.NewArray(
           value,
@@ -117,17 +127,64 @@ class StepEvaluator(merges: mutable.LinkedHashSet[SSA.Phi],
       case ARRAYLENGTH => new SSA.ArrayLength(value)
 
       case CHECKCAST => new SSA.CheckCast(value, insn.asInstanceOf[TypeInsnNode].desc)
+    }
+    (op, new SSA.State(op))
+  }
 
-      case INSTANCEOF => new SSA.InstanceOf(value, insn.asInstanceOf[TypeInsnNode].desc)
+  /**
+    * GETFIELD
+    */
+  def getFieldOp(insn: AbstractInsnNode, value: SSA.Val, state: SSA.State): (SSA.Val, SSA.State) = {
+    val insn2 = insn.asInstanceOf[FieldInsnNode]
+    val op = new SSA.GetField(state, value, insn2.owner, insn2.name, insn2.desc)
+    (op, new SSA.State(op))
+  }
 
-      case MONITORENTER => new SSA.MonitorEnter(value)
-
-      case MONITOREXIT => new SSA.MonitorExit(value)
+  /**
+    * IFEQ, IFNE, IFLT, IFGE, IFGT, IFLE, TABLESWITCH, LOOKUPSWITCH, IRETURN, LRETURN,
+    * * FRETURN, DRETURN, ARETURN, PUTSTATIC, ATHROW,
+    * * MONITORENTER, MONITOREXIT, IFNULL, IFNONNULL
+    */
+  def unaryCommand(insn: AbstractInsnNode, value: SSA.Val): Unit = {
+    insn.getOpcode match {
+      case IFEQ | IFNE | IFLT | IFGE | IFGT | IFLE | IFNULL | IFNONNULL =>
+      case TABLESWITCH =>
+      case LOOKUPSWITCH =>
+      case IRETURN | LRETURN | FRETURN | DRETURN | ARETURN =>
+      case MONITORENTER =>
+      case MONITOREXIT =>
     }
   }
 
-  def binaryOperation(insn: AbstractInsnNode, v1: SSA.Val, v2: SSA.Val) = {
+  /**
+    * PUTSTATIC
+    */
+  def putStaticCommand(insn: AbstractInsnNode, value: SSA.Val, state: SSA.State): SSA.State = {
+    val insn2 = insn.asInstanceOf[FieldInsnNode]
+    val res = new SSA.PutStatic(state, value, insn2.owner, insn2.name, insn2.desc)
+    new SSA.State(res)
+  }
+  /**
+    * IADD, LADD, FADD, DADD, ISUB, LSUB, FSUB, DSUB, IMUL, LMUL, FMUL, DMUL,
+    * ISHL, LSHL, ISHR, LSHR, IUSHR, LUSHR, IAND, LAND, IOR, LOR, IXOR, LXOR,
+    * LCMP, FCMPL, FCMPG, DCMPL, DCMPG
+    */
+  def binaryOp(insn: AbstractInsnNode, v1: SSA.Val, v2: SSA.Val): SSA.Val = {
     insn.getOpcode match {
+      case IADD | ISUB | IMUL | IDIV | IREM | ISHL | ISHR | IUSHR | IAND | IOR | IXOR |
+           FADD | FSUB | FMUL | FDIV | FREM | LCMP | FCMPL | FCMPG | DCMPL | DCMPG |
+           LADD | LSUB | LMUL | LDIV | LREM | LSHL | LSHR | LUSHR | LAND | LOR | LXOR |
+           DADD | DSUB | DMUL | DDIV | DREM =>
+        new SSA.BinOp(v1, v2, SSA.BinOp.lookup(insn.getOpcode))
+    }
+  }
+
+  /**
+    * IALOAD, LALOAD, FALOAD, DALOAD, AALOAD, BALOAD, CALOAD, SALOAD,
+    * IDIV, LDIV, FDIV, DDIV, IREM, LREM, FREM, DREM,
+    */
+  def binaryOpUnsafe(insn: AbstractInsnNode, v1: SSA.Val, v2: SSA.Val, state: SSA.State): (SSA.Val, SSA.State) = {
+    val op = insn.getOpcode match {
       case IALOAD => new SSA.GetArray(null, v1, v2, JType.Prim.I)
       case BALOAD => new SSA.GetArray(null, v1, v2, JType.Prim.B)
       case CALOAD => new SSA.GetArray(null, v1, v2, JType.Prim.C)
@@ -137,22 +194,46 @@ class StepEvaluator(merges: mutable.LinkedHashSet[SSA.Phi],
       case LALOAD => new SSA.GetArray(null, v1, v2, JType.Prim.J)
       case DALOAD => new SSA.GetArray(null, v1, v2, JType.Prim.D)
 
-      case IADD | ISUB | IMUL | IDIV | IREM | ISHL | ISHR | IUSHR | IAND | IOR | IXOR |
-           FADD | FSUB | FMUL | FDIV | FREM | LCMP | FCMPL | FCMPG | DCMPL | DCMPG |
-           LADD | LSUB | LMUL | LDIV | LREM | LSHL |
-           LSHR | LUSHR | LAND | LOR | LXOR | DADD | DSUB | DMUL | DDIV | DREM =>
+      case IDIV | IREM | FDIV | FREM | LDIV | LREM | DDIV | DREM =>
         new SSA.BinOp(v1, v2, SSA.BinOp.lookup(insn.getOpcode))
+    }
+    (op, new SSA.State(op))
+  }
 
-
+  /**
+    * IF_ICMPEQ, IF_ICMPNE, IF_ICMPLT, IF_ICMPGE, IF_ICMPGT, IF_ICMPLE, IF_ACMPEQ,
+    * IF_ACMPNE
+    */
+  def binaryCommand(insn: AbstractInsnNode, value1: SSA.Val, value2: SSA.Val): Unit = {
+    insn.getOpcode match {
       case IF_ICMPEQ | IF_ICMPNE | IF_ICMPLT | IF_ICMPGE | IF_ICMPGT |
-           IF_ICMPLE | IF_ACMPEQ | IF_ACMPNE => null
-
-      case PUTFIELD => null
+           IF_ICMPLE | IF_ACMPEQ | IF_ACMPNE =>
     }
   }
 
-  def naryOperation(insn: AbstractInsnNode, vs: Seq[SSA.Val]) = {
-    insn.getOpcode match{
+  /**
+    * PUTFIELD
+    */
+  def putFieldOp(insn: AbstractInsnNode, value1: SSA.Val, value2: SSA.Val, state: SSA.State): SSA.State = {
+    val insn2 = insn.asInstanceOf[FieldInsnNode]
+    val op = new SSA.PutField(state, value1, value2, insn2.owner, insn2.name, insn2.desc)
+    new SSA.State(op)
+  }
+
+  /**
+    * IASTORE, LASTORE, FASTORE, DASTORE, AASTORE, BASTORE, CASTORE, SASTORE
+    */
+  def ternaryOperation(insn: AbstractInsnNode, value1: SSA.Val, value2: SSA.Val, value3: SSA.Val, state: SSA.State): SSA.State = {
+    val op = new SSA.PutArray(state, value1, value2, value3)
+    new SSA.State(op)
+  }
+
+  /**
+    * INVOKEVIRTUAL, INVOKESPECIAL, INVOKESTATIC, INVOKEINTERFACE, MULTIANEWARRAY and
+    * INVOKEDYNAMIC
+    */
+  def naryOperation(insn: AbstractInsnNode, vs: Seq[SSA.Val], state: SSA.State): (SSA.Val, SSA.State) = {
+    val op = insn.getOpcode match{
       case MULTIANEWARRAY =>
         val insn2 = insn.asInstanceOf[MultiANewArrayInsnNode]
         new SSA.MultiANewArray(insn2.desc, vs)
@@ -177,7 +258,9 @@ class StepEvaluator(merges: mutable.LinkedHashSet[SSA.Phi],
         val insn2 = insn.asInstanceOf[MethodInsnNode]
         new SSA.InvokeSpecial(vs, insn2.owner, insn2.name, Desc.read(insn2.desc))
     }
+    (op, new SSA.State(op))
   }
+
 
   def returnOperation(insn: AbstractInsnNode, value: SSA.Val, expected: SSA.Val) = ()
 

@@ -124,7 +124,9 @@ object SSA{
     }
   }
 
-  sealed trait State extends Node
+  class State(parent: Node) extends Val(JType.Prim.V) {
+    override def upstream = Option(parent).toSeq
+  }
 
   sealed abstract class Control() extends Node{
     def controls: Seq[Control]
@@ -133,7 +135,7 @@ object SSA{
       this
     }
   }
-  sealed abstract class Block() extends Control() with State
+  sealed abstract class Block() extends Control()
   sealed abstract class Jump() extends Control(){
     def controls = Seq(block)
     def block: SSA.Block
@@ -157,7 +159,7 @@ object SSA{
     override def toString = s"Phi@${Integer.toHexString(System.identityHashCode(this))}(${incoming.size})"
   }
 
-  class Merge(var insnIndex: Int, var incoming: Set[Control]) extends Block() with State{
+  class Merge(var insnIndex: Int, var incoming: Set[Control]) extends Block() {
     def controls = upstream
     def upstream = incoming.toSeq
 
@@ -364,23 +366,23 @@ object SSA{
   case class MultiANewArray(var desc: JType, var dims: Seq[Val]) extends Val(desc){
     def upstream = dims
   }
-  case class PutStatic(var src: Val, var cls: JType.Cls, var name: String, var desc: JType) extends Val(JType.Prim.V){
+  case class PutStatic(var state: State, var src: Val, var cls: JType.Cls, var name: String, var desc: JType) extends Val(JType.Prim.V){
     def upstream = Seq(src)
   }
-  case class GetStatic(var cls: JType.Cls, var name: String, var desc: JType) extends Val(desc){
+  case class GetStatic(var state: State, var cls: JType.Cls, var name: String, var desc: JType) extends Val(desc){
     def upstream = Nil
   }
-  case class PutField(var src: Val, var obj: Val, var owner: JType.Cls, var name: String, var desc: JType) extends Val(JType.Prim.V){
+  case class PutField(var state: State, var src: Val, var obj: Val, var owner: JType.Cls, var name: String, var desc: JType) extends Val(JType.Prim.V){
     def upstream = Seq(src, obj)
   }
-  case class GetField(var obj: Val, var owner: JType.Cls, var name: String, var desc: JType) extends Val(desc){
+  case class GetField(var state: State, var obj: Val, var owner: JType.Cls, var name: String, var desc: JType) extends Val(desc){
     def upstream = Seq(obj)
   }
-  case class PutArray(var state: State, var arrayValue: Val, var indexSrc: Val, var src: Val) extends Val(JType.Prim.V) with State{
+  case class PutArray(var state: State, var arrayValue: Val, var indexSrc: Val, var src: Val) extends Val(JType.Prim.V) {
     def upstream = Seq(state, arrayValue, indexSrc, src)
     override def upstreamVals = Seq(arrayValue, indexSrc, src)
   }
-  case class GetArray(var state: State, var array: Val, var indexSrc: Val, var tpe: JType) extends Val(tpe) with State{
+  case class GetArray(var state: State, var array: Val, var indexSrc: Val, var tpe: JType) extends Val(tpe) {
     def upstream = Seq(state, array, indexSrc)
     override def upstreamVals = Seq(array, indexSrc)
   }

@@ -151,6 +151,7 @@ object Renderer {
     }
 
     def recVal(ssa: SSA.Val): Tree = ssa match{
+      case s: SSA.State => literal("state")
       case n: SSA.Arg => literal("arg" + n.index)
       case n: SSA.Copy => apply("copy", rec(n.src))
       case phi: SSA.Phi =>

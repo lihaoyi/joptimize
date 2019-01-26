@@ -1,4 +1,6 @@
 package joptimize.bytecode
+import joptimize.model.SSA
+
 import collection.JavaConverters._
 import org.objectweb.asm.Opcodes
 import org.objectweb.asm.Type
@@ -20,9 +22,10 @@ import scala.collection.mutable
   * graph's incoming edges during the {@link Interpreter#merge}
   */
 object Analyzer{
-  def analyze[V <: Value](owner: String,
-                          method: MethodNode,
-                          interpreter: Interpreter[V]): Array[Frame[V]] = {
+  def analyze[V <: Value, S <: V](owner: String,
+                                  method: MethodNode,
+                                  interpreter: Interpreter[V, S],
+                                  initialState: S): Array[Frame[V, S]] = {
     /** The instructions of the currently analyzed method. */
     val insnList = method.instructions
     /** The size of {@link #insnList}. */
@@ -30,7 +33,7 @@ object Analyzer{
     /** The exception handlers of the currently analyzed method (one list per instruction index). */
     val handlers = new Array[mutable.Buffer[TryCatchBlockNode]](insnListSize)
     /** The execution stack frames of the currently analyzed method (one per instruction index). */
-    val frames = new Array[Frame[V]](insnListSize)
+    val frames = new Array[Frame[V, S]](insnListSize)
     /** The instructions that remain to process (one boolean per instruction index). */
     val inInstructionsToProcess = new Array[Boolean](insnListSize)
     /** The indices of the instructions that remain to process in the currently analyzed method. */
@@ -38,11 +41,11 @@ object Analyzer{
     /** The number of instructions that remain to process in the currently analyzed method. */
     var numInstructionsToProcess = 0
 
-    def merge(insnIndex: Int, targetInsnIndex: Int, frame: Frame[V]) = {
+    def merge(insnIndex: Int, targetInsnIndex: Int, frame: Frame[V, S]) = {
       val oldFrame = frames(targetInsnIndex)
       if (oldFrame != null) oldFrame.merge(insnIndex, targetInsnIndex, frame, interpreter)
       else {
-        frames(targetInsnIndex) = new Frame[V](frame)
+        frames(targetInsnIndex) = new Frame[V, S](frame)
         frames(targetInsnIndex).merge0(insnIndex, targetInsnIndex, interpreter)
         inInstructionsToProcess(targetInsnIndex) = true
 
@@ -52,7 +55,7 @@ object Analyzer{
     }
 
     if ((method.access & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE)) != 0) {
-      return new Array[Frame[_]](0).asInstanceOf[Array[Frame[V]]]
+      return new Array[Frame[V, S]](0).asInstanceOf[Array[Frame[V, S]]]
     }
 
     // For each exception handler, and each instruction within its range, record in 'handlers' the
@@ -71,7 +74,7 @@ object Analyzer{
       }
     }
     // Initializes the data structures for the control flow analysis.
-    val currentFrame = computeInitialFrame(owner, method, interpreter)
+    val currentFrame = computeInitialFrame(owner, method, interpreter, initialState)
     merge(0, 0, currentFrame)
     // Control flow analysis.
 
@@ -128,7 +131,7 @@ object Analyzer{
               if (tryCatchBlock.`type` == null) Type.getObjectType("java/lang/Throwable")
               else Type.getObjectType(tryCatchBlock.`type`)
 
-            val handler = new Frame[V](oldFrame)
+            val handler = new Frame[V, S](oldFrame)
             handler.clearStack()
             handler.push(interpreter.newExceptionValue(tryCatchBlock, catchType))
             merge(insnIndex, insnList.indexOf(tryCatchBlock.handler), handler)
@@ -150,10 +153,12 @@ object Analyzer{
     * @param method the method to be analyzed.
     * @return the initial execution stack frame of the 'method'.
     */
-  private def computeInitialFrame[V <: Value](owner: String,
-                                              method: MethodNode,
-                                              interpreter: Interpreter[V]) = {
-    val frame = new Frame[V](method.maxLocals, method.maxStack)
+  private def computeInitialFrame[V <: Value, S <: V](owner: String,
+                                                      method: MethodNode,
+                                                      interpreter: Interpreter[V, S],
+                                                      initialState: S) = {
+    val frame = new Frame[V, S](method.maxLocals, method.maxStack)
+    frame.state = initialState
     var currentLocal = 0
     val isInstanceMethod = (method.access & Opcodes.ACC_STATIC) == 0
     if (isInstanceMethod) {

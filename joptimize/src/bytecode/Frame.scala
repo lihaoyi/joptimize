@@ -26,8 +26,7 @@ import scala.collection.mutable
   * @param < V> type of the Value used for the analysis.
   * @author Eric Bruneton
   */
-class Frame[V <: Value] @SuppressWarnings(Array("unchecked"))(/** The number of local variables of this frame. */
-                                                              var numLocals: Int, val numStack0: Int){
+class Frame[V <: Value, S <: V] (var numLocals: Int, val numStack0: Int){
 
 /**
   * Constructs a new frame with the given size.
@@ -41,6 +40,7 @@ class Frame[V <: Value] @SuppressWarnings(Array("unchecked"))(/** The number of 
     * operand stack.
     */
   private val values = new Array[Value](numLocals + numStack0).asInstanceOf[Array[V]]
+  var state: S = null.asInstanceOf[S]
   /** The number of elements in the operand stack. */
   private var numStack = 0
 
@@ -49,7 +49,7 @@ class Frame[V <: Value] @SuppressWarnings(Array("unchecked"))(/** The number of 
     *
     * @param frame a frame.
     */
-  def this(frame: Frame[_ <: V]) {
+  def this(frame: Frame[V, S]) {
     this(frame.numLocals, frame.values.length - frame.numLocals)
     init(frame) // NOPMD(ConstructorCallsOverridableMethod): can't fix for backward compatibility.
 
@@ -61,9 +61,10 @@ class Frame[V <: Value] @SuppressWarnings(Array("unchecked"))(/** The number of 
     * @param frame a frame.
     * @return this frame.
     */
-  def init(frame: Frame[_ <: V]) = {
+  def init(frame: Frame[V, S]) = {
     System.arraycopy(frame.values, 0, values, 0, values.length)
     numStack = frame.numStack
+    state = frame.state
     this
   }
 
@@ -172,7 +173,7 @@ class Frame[V <: Value] @SuppressWarnings(Array("unchecked"))(/** The number of 
     *                           POP on an empty operand stack).
     */
   @throws[AnalyzerException]
-  def execute(insn: AbstractInsnNode, interpreter: Interpreter[V]): Unit = {
+  def execute(insn: AbstractInsnNode, interpreter: Interpreter[V, S]): Unit = {
     var value1: V = null.asInstanceOf[V]
     var value2: V = null.asInstanceOf[V]
     var value3: V = null.asInstanceOf[V]
@@ -184,7 +185,8 @@ class Frame[V <: Value] @SuppressWarnings(Array("unchecked"))(/** The number of 
       case ACONST_NULL | ICONST_M1 | ICONST_0 | ICONST_1 | ICONST_2 | ICONST_3 |
            ICONST_4 | ICONST_5 | LCONST_0 | LCONST_1 | FCONST_0 | FCONST_1 | FCONST_2 |
            DCONST_0 | DCONST_1 | BIPUSH | SIPUSH | LDC =>
-        push(interpreter.newOperation(insn))
+        val res = interpreter.constOperation(insn)
+        push(res)
       case ILOAD | LLOAD | FLOAD | DLOAD | ALOAD =>
         push(interpreter.copyOperation(insn, getLocal(insn.asInstanceOf[VarInsnNode].`var`)))
       case ISTORE | LSTORE | FSTORE | DSTORE | ASTORE =>
@@ -326,38 +328,65 @@ class Frame[V <: Value] @SuppressWarnings(Array("unchecked"))(/** The number of 
         if (value1.getSize != 1 || value2.getSize != 1) throw new AnalyzerException(insn, "Illegal use of SWAP")
         push(interpreter.copyOperation(insn, value2))
         push(interpreter.copyOperation(insn, value1))
-      case IALOAD | LALOAD | FALOAD | DALOAD | AALOAD | BALOAD | CALOAD | SALOAD |
-           IADD | LADD | FADD | DADD | ISUB | LSUB | FSUB | DSUB | IMUL | LMUL | FMUL |
-           DMUL | IDIV | LDIV | FDIV | DDIV | IREM | LREM | FREM | DREM | ISHL | LSHL |
-           ISHR | LSHR | IUSHR | LUSHR | IAND | LAND | IOR | LOR | IXOR | LXOR | LCMP |
-           FCMPL | FCMPG | DCMPL | DCMPG =>
+      case IADD | LADD | FADD | DADD | ISUB | LSUB | FSUB | DSUB | IMUL | LMUL | FMUL |
+           DMUL | ISHL | LSHL | ISHR | LSHR | IUSHR | LUSHR | IAND | LAND | IOR | LOR |
+           IXOR | LXOR | LCMP | FCMPL | FCMPG | DCMPL | DCMPG =>
         value2 = pop()
         value1 = pop()
-        push(interpreter.binaryOperation(insn, value1, value2))
-      case INEG | LNEG | FNEG | DNEG => push(interpreter.unaryOperation(insn, pop()))
+        val res = interpreter.binaryOp(insn, value1, value2)
+        push(res)
+      case IALOAD | LALOAD | FALOAD | DALOAD | AALOAD | BALOAD | CALOAD | SALOAD |
+           IDIV | LDIV | FDIV | DDIV | IREM | LREM | FREM | DREM  =>
+        value2 = pop()
+        value1 = pop()
+        val (res, newState) = interpreter.binaryOpUnsafe(insn, value1, value2, state)
+        push(res)
+        state = newState
+      case INEG | LNEG | FNEG | DNEG =>
+        val res = interpreter.unaryOp(insn, pop())
+        push(res)
       case IINC =>
         `var` = insn.asInstanceOf[IincInsnNode].`var`
-        setLocal(`var`, interpreter.unaryOperation(insn, getLocal(`var`)))
+        val res = interpreter.unaryOp(insn, getLocal(`var`))
+        setLocal(`var`, res)
       case I2L | I2F | I2D | L2I | L2F | L2D | F2I | F2L | F2D | D2I | D2L |
            D2F | I2B | I2C | I2S =>
-        push(interpreter.unaryOperation(insn, pop()))
+        val res  = interpreter.unaryOp(insn, pop())
+        push(res)
       case IFEQ | IFNE | IFLT | IFGE | IFGT | IFLE =>
-        interpreter.unaryOperation(insn, pop())
+        interpreter.unaryCommand(insn, pop())
+
       case IF_ICMPEQ | IF_ICMPNE | IF_ICMPLT | IF_ICMPGE | IF_ICMPGT | IF_ICMPLE |
            IF_ACMPEQ | IF_ACMPNE | PUTFIELD =>
         value2 = pop()
         value1 = pop()
-        interpreter.binaryOperation(insn, value1, value2)
+        interpreter.binaryCommand(insn, value1, value2)
+      case PUTFIELD =>
+        value2 = pop()
+        value1 = pop()
+        val newState = interpreter.putFieldOp(insn, value1, value2, state)
+        state = newState
       case GOTO =>
-      case JSR => push(interpreter.newOperation(insn))
-      case RET | TABLESWITCH | LOOKUPSWITCH => interpreter.unaryOperation(insn, pop())
+      case JSR =>
+        val res = interpreter.constOperation(insn)
+        push(res)
+      case RET | TABLESWITCH | LOOKUPSWITCH =>
+        interpreter.unaryCommand(insn, pop())
       case IRETURN | LRETURN | FRETURN | DRETURN | ARETURN =>
         value1 = pop()
-        interpreter.unaryOperation(insn, value1)
+        interpreter.unaryCommand(insn, value1)
       case RETURN =>
-      case GETSTATIC => push(interpreter.newOperation(insn))
-      case PUTSTATIC => interpreter.unaryOperation(insn, pop())
-      case GETFIELD => push(interpreter.unaryOperation(insn, pop()))
+      case GETSTATIC =>
+        val (res, newState) = interpreter.getStaticOperation(insn, state)
+        push(res)
+        state = newState
+      case PUTSTATIC =>
+        val newState = interpreter.putStaticCommand(insn, pop(), state)
+        state = newState
+      case GETFIELD =>
+        val (res, newState) = interpreter.getFieldOp(insn, pop(), state)
+        push(res)
+        state = newState
       case INVOKEVIRTUAL | INVOKESPECIAL | INVOKESTATIC | INVOKEINTERFACE =>
         val valueList = new mutable.ArrayBuffer[V]
         val methodDescriptor = insn.asInstanceOf[MethodInsnNode].desc
@@ -367,8 +396,9 @@ class Frame[V <: Value] @SuppressWarnings(Array("unchecked"))(/** The number of 
           i -= 1
         }
         if (insn.getOpcode != Opcodes.INVOKESTATIC) valueList.insert(0, pop())
-        if (Type.getReturnType(methodDescriptor) eq Type.VOID_TYPE) interpreter.naryOperation(insn, valueList)
-        else push(interpreter.naryOperation(insn, valueList))
+        val (res, newState) = interpreter.naryOperation(insn, valueList, state)
+        state = newState
+        if (Type.getReturnType(methodDescriptor) ne Type.VOID_TYPE) push(res)
 
       case INVOKEDYNAMIC =>
         val valueList = new mutable.ArrayBuffer[V]
@@ -378,14 +408,26 @@ class Frame[V <: Value] @SuppressWarnings(Array("unchecked"))(/** The number of 
           valueList.insert(0, pop())
           i -= 1
         }
-        if (Type.getReturnType(methodDesccriptor) eq Type.VOID_TYPE) interpreter.naryOperation(insn, valueList)
-        else push(interpreter.naryOperation(insn, valueList))
+        val (res, newState) = interpreter.naryOperation(insn, valueList, state)
+        if (Type.getReturnType(methodDesccriptor) eq Type.VOID_TYPE) push(res)
+        state = newState
 
-      case NEW => push(interpreter.newOperation(insn))
-      case NEWARRAY | ANEWARRAY | ARRAYLENGTH => push(interpreter.unaryOperation(insn, pop()))
-      case ATHROW => interpreter.unaryOperation(insn, pop())
-      case CHECKCAST | INSTANCEOF => push(interpreter.unaryOperation(insn, pop()))
-      case MONITORENTER | MONITOREXIT => interpreter.unaryOperation(insn, pop())
+      case NEW =>
+        val res = interpreter.constOperation(insn)
+        push(res)
+      case NEWARRAY | ANEWARRAY | ARRAYLENGTH =>
+        val (res, newState) = interpreter.unaryOpUnsafe(insn, pop(), state)
+        push(res)
+        state = newState
+      case ATHROW => interpreter.unaryCommand(insn, pop())
+      case CHECKCAST =>
+        val (res, newState) = interpreter.unaryOpUnsafe(insn, pop(), state)
+        push(res)
+        state = newState
+      case INSTANCEOF =>
+        val res = interpreter.unaryOp(insn, pop())
+        push(res)
+      case MONITORENTER | MONITOREXIT => interpreter.unaryCommand(insn, pop())
       case MULTIANEWARRAY =>
         val valueList = new mutable.ArrayBuffer[V]
         var i = insn.asInstanceOf[MultiANewArrayInsnNode].dims
@@ -393,8 +435,10 @@ class Frame[V <: Value] @SuppressWarnings(Array("unchecked"))(/** The number of 
           valueList.insert(0, pop())
           i -= 1
         }
-        push(interpreter.naryOperation(insn, valueList))
-      case IFNULL | IFNONNULL => interpreter.unaryOperation(insn, pop())
+        val (res, newState) = interpreter.naryOperation(insn, valueList, state)
+        push(res)
+        state = newState
+      case IFNULL | IFNONNULL => interpreter.unaryCommand(insn, pop())
       case _ => throw new AnalyzerException(insn, "Illegal opcode " + insn.getOpcode)
     }
   }
@@ -408,7 +452,7 @@ class Frame[V <: Value] @SuppressWarnings(Array("unchecked"))(/** The number of 
     *                    { @literal false} otherwise.
     * @throws AnalyzerException if the frames have incompatible sizes.
     */
-  def merge(insnIndex: Int, targetInsnIndex: Int, frame: Frame[_ <: V], interpreter: Interpreter[V]) = {
+  def merge(insnIndex: Int, targetInsnIndex: Int, frame: Frame[V, S], interpreter: Interpreter[V, S]) = {
     if (numStack != frame.numStack) throw new AnalyzerException(null, "Incompatible stack heights")
     var changed = false
     for(i <- 0 until (numLocals + numStack)){
@@ -429,7 +473,7 @@ class Frame[V <: Value] @SuppressWarnings(Array("unchecked"))(/** The number of 
     *                    { @literal false} otherwise.
     * @throws AnalyzerException if the frames have incompatible sizes.
     */
-  def merge0(insnIndex: Int, targetInsnIndex: Int, interpreter: Interpreter[V]) = {
+  def merge0(insnIndex: Int, targetInsnIndex: Int, interpreter: Interpreter[V, S]) = {
     var changed = false
     for(i <- 0 until (numLocals + numStack)){
       val v = interpreter.merge0(values(i), insnIndex, targetInsnIndex)

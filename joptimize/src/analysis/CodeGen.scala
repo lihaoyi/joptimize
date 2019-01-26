@@ -152,8 +152,8 @@ object CodeGen{
     else {
       val upstreams = ssa.upstreamVals.flatMap(rec(_, savedLocals))
       val current: Seq[AbstractInsnNode] = ssa match{
-
-        case n: SSA.Copy => Nil
+        case _: SSA.State => Nil
+        case _: SSA.Copy => Nil
 
         case _: SSA.Phi => Nil
         case SSA.Arg(index, typeSize) => Nil
@@ -219,10 +219,10 @@ object CodeGen{
           )
         case SSA.MultiANewArray(desc, dims) =>
           Seq(new MultiANewArrayInsnNode(desc.name, dims.length))
-        case SSA.PutStatic(src, cls, name, desc) => ???
-        case SSA.GetStatic(cls, name, desc) => ???
-        case SSA.PutField(src, obj, owner, name, desc) => ???
-        case SSA.GetField(obj, owner, name, desc) => ???
+        case SSA.PutStatic(_, src, cls, name, desc) => ???
+        case SSA.GetStatic(_, cls, name, desc) => ???
+        case SSA.PutField(_, src, obj, owner, name, desc) => ???
+        case SSA.GetField(_, obj, owner, name, desc) => ???
         case SSA.PutArray(_, array, indexSrc, src) =>
           pprint.log(src.jtype)
           pprint.log(src)
