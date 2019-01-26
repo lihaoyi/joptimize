@@ -151,7 +151,6 @@ object Renderer {
     }
 
     def recVal(ssa: SSA.Val): Tree = ssa match{
-      case s: SSA.State => literal("state")
       case n: SSA.Arg => literal("arg" + n.index)
       case n: SSA.Copy => apply("copy", rec(n.src))
       case phi: SSA.Phi =>
@@ -218,7 +217,7 @@ object Renderer {
     }
 
     def renderStmt(r: SSA.Node, leftOffset: Int) = {
-      if (r.isInstanceOf[SSA.Arg]) None
+      if (r.isInstanceOf[SSA.Arg] || r.isInstanceOf[SSA.ChangedState]) None
       else {
         val out = mutable.Buffer.empty[Str]
         val (lhs, rhs) = r match {
