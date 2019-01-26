@@ -16,7 +16,7 @@ object RegisterAllocator {
     // PhiLifting
     for(v <- allVertices){
       v match{
-        case phi: SSA.Phi =>
+        case phi: SSA.Phi if phi.getSize != 0 =>
           phi.incoming = phi.incoming.map{ case (k, v) =>
             val copy = SSA.Copy(v)
             v.downstreamRemove(phi)

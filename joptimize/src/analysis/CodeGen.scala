@@ -67,7 +67,7 @@ object CodeGen{
     }
 
     naming.savedLocals.keysIterator.foreach{
-      case phi: SSA.Phi =>
+      case phi: SSA.Phi if phi.getSize != 0 =>
         for((k, v) <- phi.incoming){
           val (insns, footer) = blockCode(blockIndices(k))
 
