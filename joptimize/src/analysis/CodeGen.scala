@@ -5,6 +5,7 @@ import joptimize.model.JType
 import joptimize.model.{Program, SSA}
 import org.objectweb.asm.Opcodes._
 import org.objectweb.asm.tree._
+import org.objectweb.asm.util.{Textifier, TraceMethodVisitor}
 
 import scala.collection.mutable
 
@@ -56,6 +57,10 @@ object CodeGen{
                 if (node.isInstanceOf[SSA.ChangedState]) generateStateChangeBytecode(node, savedLocalNumbers)
                 else generateValBytecode(node, savedLocalNumbers)
 
+//              val printer = new Textifier
+//              val methodPrinter = new TraceMethodVisitor(printer)
+//              pprint.log(node)
+//              pprint.log(nodeInsns.map(Renderer.prettyprint(_, printer, methodPrinter)))
               insns.appendAll(nodeInsns)
             }
           }
@@ -121,7 +126,8 @@ object CodeGen{
 
 
   def rec(ssa: SSA.Val, savedLocals: Map[SSA.Val, Int]): Seq[AbstractInsnNode] = {
-    if (savedLocals.contains(ssa)) Seq(new VarInsnNode(loadOp(ssa), savedLocals(ssa)))
+    if (ssa.isInstanceOf[SSA.ChangedState]) generateStateChangeBytecode(ssa, savedLocals)
+    else if (savedLocals.contains(ssa)) Seq(new VarInsnNode(loadOp(ssa), savedLocals(ssa)))
     else generateValBytecode(ssa, savedLocals)
   }
 
