@@ -12,100 +12,91 @@ import org.objectweb.asm.util.{Textifier, TraceMethodVisitor}
 
 import scala.collection.{immutable, mutable}
 
-class Walker(isInterface: JType.Cls => Boolean,
-             lookupMethod: MethodSig => Option[MethodNode],
-             visitedMethods: mutable.LinkedHashMap[(MethodSig, Seq[IType]), Walker.MethodResult],
-             visitedClasses: mutable.LinkedHashSet[JType.Cls],
-             findSubtypes: JType.Cls => List[JType.Cls],
-             findSupertypes: JType.Cls => Seq[JType.Cls],
-             isConcrete: MethodSig => Boolean,
-             exists: MethodSig => Boolean,
-             merge: Seq[IType] => IType,
-//             typer: Typer,
-             ignore: String => Boolean) {
+class Walker() {
 
-  def walkMethod(sig: MethodSig,
-                 mn: MethodNode,
-                 args: Seq[IType],
-                 seenMethods0: Set[(MethodSig, Seq[IType])]): Walker.MethodResult = {
+  def walkMethod(sig: MethodSig, mn: MethodNode): (Walker.MethodResult, Set[MethodSig]) = {
+    println("+" * 20 + sig + "+" * 20)
+    val printer = new Textifier
+    val methodPrinter = new TraceMethodVisitor(printer)
+    println(Renderer.renderInsns(mn.instructions, printer, methodPrinter))
 
-    visitedMethods.getOrElseUpdate((sig, args.drop(if (sig.static) 0 else 1)), {
+    val program = constructSSAProgram(sig, mn)
 
-      println("+" * 20 + sig + "+" * 20)
-      val printer = new Textifier
-      val methodPrinter = new TraceMethodVisitor(printer)
-      println(Renderer.renderInsns(mn.instructions, printer, methodPrinter))
+    removeDeadNodes(program)
+    program.checkLinks()
 
-      val program = constructSSAProgram(sig, mn)
+    simplifyPhiMerges(program)
+    program.checkLinks()
 
-      removeDeadNodes(program)
-      program.checkLinks()
+    val preScheduleNaming = Namer.apply(program, Map.empty, program.getAllVertices())
 
-      simplifyPhiMerges(program)
-      program.checkLinks()
+    println()
+    println(Renderer.renderSSA(program, preScheduleNaming))
 
-      val preScheduleNaming = Namer.apply(program, Map.empty, program.getAllVertices())
+    val (controlFlowEdges, startBlock, allBlocks, blockEdges) =
+      analyzeBlockStructure(program)
 
-      println()
-      println(Renderer.renderSSA(program, preScheduleNaming))
+    println()
+    println(Renderer.renderControlFlowGraph(controlFlowEdges, preScheduleNaming.savedLocals))
 
-      val (controlFlowEdges, startBlock, allBlocks, blockEdges) =
-        analyzeBlockStructure(program)
+    val loopTree = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)
 
-      println()
-      println(Renderer.renderControlFlowGraph(controlFlowEdges, preScheduleNaming.savedLocals))
+    println()
+    println(Renderer.renderLoopTree(loopTree, preScheduleNaming.savedLocals))
 
-      val loopTree = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)
+    val dominators = Dominator.findDominators(blockEdges, allBlocks)
 
-      println()
-      println(Renderer.renderLoopTree(loopTree, preScheduleNaming.savedLocals))
+    { // Just for debugging
+      val nodesToBlocks = Scheduler.apply(
+        loopTree, dominators, startBlock,
+        preScheduleNaming.savedLocals.mapValues(_._2), program.getAllVertices()
+      )
 
-      val dominators = Dominator.findDominators(blockEdges, allBlocks)
-
-      { // Just for debugging
-        val nodesToBlocks = Scheduler.apply(
-          loopTree, dominators, startBlock,
-          preScheduleNaming.savedLocals.mapValues(_._2), program.getAllVertices()
-        )
-
-        val postScheduleNaming = Namer.apply(program, nodesToBlocks, program.getAllVertices())
+      val postScheduleNaming = Namer.apply(program, nodesToBlocks, program.getAllVertices())
 
 //        pprint.log(preScheduleNaming.savedLocals.collect{case (k: SSA.Block, (v1, v2)) => (k, v2)}, height=9999)
 //        pprint.log(preScheduleNaming.saveable)
 //        pprint.log(nodesToBlocks, height=9999)
 //
-        println()
-        println(Renderer.renderSSA(program, postScheduleNaming, nodesToBlocks))
+      println()
+      println(Renderer.renderSSA(program, postScheduleNaming, nodesToBlocks))
 
 //        ???
-      }
+    }
 
-      RegisterAllocator.apply(program, dominators.immediateDominators)
+    RegisterAllocator.apply(program, dominators.immediateDominators)
 
-      val allVertices2 = Util.breadthFirstAggregation[SSA.Node](program.allTerminals.toSet)(_.upstream)._1
+    val allVertices2 = Util.breadthFirstAggregation[SSA.Node](program.allTerminals.toSet)(_.upstream)._1
 
-      val nodesToBlocks = Scheduler.apply(
-        loopTree, dominators, startBlock,
-        preScheduleNaming.savedLocals.mapValues(_._2), allVertices2
-      )
+    val nodesToBlocks = Scheduler.apply(
+      loopTree, dominators, startBlock,
+      preScheduleNaming.savedLocals.mapValues(_._2), allVertices2
+    )
 
-      val postRegisterAllocNaming = Namer.apply(program, nodesToBlocks, allVertices2)
+    val postRegisterAllocNaming = Namer.apply(program, nodesToBlocks, allVertices2)
 
-      println()
-      println(Renderer.renderSSA(program, postRegisterAllocNaming, nodesToBlocks))
+    println()
+    println(Renderer.renderSSA(program, postRegisterAllocNaming, nodesToBlocks))
 
-      val (blockCode, finalInsns) = CodeGen(
-        program,
-        allVertices2,
-        nodesToBlocks,
-        controlFlowEdges,
-        postRegisterAllocNaming
-      )
+    val (blockCode, finalInsns) = CodeGen(
+      program,
+      allVertices2,
+      nodesToBlocks,
+      controlFlowEdges,
+      postRegisterAllocNaming
+    )
 
-      println(Renderer.renderBlockCode(blockCode, finalInsns))
+    println(Renderer.renderBlockCode(blockCode, finalInsns))
 
-      Walker.MethodResult(Nil, sig.desc.ret, finalInsns, false, Nil)
-    })
+    val called = allVertices2.collect{
+      case SSA.InvokeStatic(srcs, cls, name, desc) => MethodSig(cls, name, desc, true)
+      case SSA.InvokeVirtual(srcs, cls, name, desc) => MethodSig(cls, name, desc, false)
+      case SSA.InvokeSpecial(srcs, cls, name, desc) => MethodSig(cls, name, desc, false)
+    }
+
+    val result = Walker.MethodResult(Nil, sig.desc.ret, finalInsns, false, Nil)
+
+    (result, called)
   }
 
   def analyzeBlockStructure(program: Program) = {

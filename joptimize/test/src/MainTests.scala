@@ -63,16 +63,16 @@ object MainTests extends TestSuite{
 //        'charSwitch - annotatedTest
 //        'byteSwitch - annotatedTest
 //      }
-//      'Statics - {
-//        'helloWorld - annotatedTest
-//        'timesTwo - annotatedTest
-//        'helloWorld2 - annotatedTest
-//        'timesTwo2 - annotatedTest
+      'Statics - {
+        'helloWorld - annotatedTest
+        'timesTwo - annotatedTest
+        'helloWorld2 - annotatedTest
+        'timesTwo2 - annotatedTest
 //        'tailFactorial - annotatedTest
 //        'fibonacci - annotatedTest
-//        'call - annotatedTest
-//        'callAtPhiBoundary - annotatedTest
-//      }
+        'call - annotatedTest
+        'callAtPhiBoundary - annotatedTest
+      }
       'Arrays - {
         'length - annotatedTest
         'get1 - annotatedTest

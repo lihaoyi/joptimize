@@ -34,8 +34,6 @@ object JOptimize{
       m <- cls.methods.iterator().asScala
     } yield (MethodSig(cls.name, m.name, Desc.read(m.desc), (m.access & Opcodes.ACC_STATIC) != 0), m)
 
-    val visitedMethods = collection.mutable.LinkedHashMap.empty[(MethodSig, Seq[IType]), Walker.MethodResult]
-
     def leastUpperBound(classes: Seq[JType.Cls]) = {
       Util.leastUpperBound(classes.toSet) { cls =>
         classNodeMap.get(cls) match{
@@ -79,38 +77,23 @@ object JOptimize{
       output
     }
     val visitedClasses = mutable.LinkedHashSet.empty[JType.Cls]
-    val interp = new Walker(
-      isInterface = s => (classNodeMap(s).access & Opcodes.ACC_INTERFACE) != 0,
-      lookupMethod = sig => originalMethods.get(sig),
-      visitedMethods = visitedMethods,
-      visitedClasses = visitedClasses,
-      findSubtypes = subtypeMap.getOrElse(_, Nil),
-      findSupertypes = findSupertypes,
-      exists = sig => originalMethods.contains(sig),
-      isConcrete = sig => originalMethods(sig).instructions.size != 0,
-      merge = merge,
-//      typer = new Typer(merge),
-      ignore = ignore
-    )
+    val walker = new Walker()
 
-    for(entrypoint <- entrypoints){
-      val mn = originalMethods(entrypoint)
-      interp.walkMethod(
-        entrypoint,
-        mn,
-        Desc.read(mn.desc).args,
-        Set()
-      )
+    val visitedMethods = mutable.Buffer.empty[(MethodSig, Walker.MethodResult)]
+
+    Util.breadthFirstAggregation(entrypoints.toSet){ sig =>
+      val (result, called) = walker.walkMethod(sig, originalMethods(sig))
+      visitedMethods.append((sig, result))
+      called.toSeq
     }
 
+
     val newMethods = visitedMethods.toList.collect{
-      case ((sig, inferredTypes), Walker.MethodResult(liveArgs, returnType, insns, pure, seenTryCatchBlocks)) =>
+      case (sig, Walker.MethodResult(liveArgs, returnType, insns, pure, seenTryCatchBlocks)) =>
 
         val originalNode = originalMethods(sig)
 
-        val (mangledName, mangledDesc) =
-          if (Util.isCompatible(inferredTypes, sig.desc.args)) (originalNode.name, Desc.read(originalNode.desc))
-          else Util.mangle(originalNode.name, inferredTypes, sig.desc.args, returnType, sig.desc.ret)
+        val (mangledName, mangledDesc) = (originalNode.name, Desc.read(originalNode.desc))
 
         val newNode = new MethodNode(
           Opcodes.ASM6,
