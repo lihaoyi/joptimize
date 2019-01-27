@@ -2,6 +2,12 @@ package joptimize.examples.simple;
 
 public class Inheritance {
     @joptimize.Test(inputs = {1, 2, 4, 8})
+    public static int hello(int n) {
+        Object b = new Object();
+        return b.getClass().getName().length() + n;
+    }
+
+    @joptimize.Test(inputs = {1, 2, 4, 8})
     public static String implement(int n) {
         Baas b = new Sheep();
         return b.baa(n);

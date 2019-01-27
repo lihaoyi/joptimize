@@ -40,14 +40,14 @@ object Namer {
             v.downstreamList.exists(_.isInstanceOf[SSA.ChangedState])
           case _ => false
         }
-        k.upstream.nonEmpty && (k.downstreamSize > 1 || scheduled)
+        (k.upstream.nonEmpty || k.isInstanceOf[SSA.New]) && (k.downstreamSize > 1 || scheduled)
       } ++
-        allVertices.collect {
-          case k: SSA.Phi => k
-          case c: SSA.Copy => c
-          case b: SSA.Control => b
-          case b: SSA.ChangedState => b
-        }
+      allVertices.collect {
+        case k: SSA.Phi => k
+        case c: SSA.Copy => c
+        case b: SSA.Control => b
+        case b: SSA.ChangedState => b
+      }
 
     val savedLocals = mutable.Map[SSA.Val, (Int, String)]()
     val savedControls = mutable.Map[SSA.Control, (Int, String)]()

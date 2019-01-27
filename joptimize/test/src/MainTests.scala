@@ -105,6 +105,7 @@ object MainTests extends TestSuite{
 //        'concat - annotatedTest
 //      }
       'Inheritance - {
+        'hello - annotatedTest
         'implement - annotatedTest
 //        'abstractClass - annotatedTest
 //        'shadowedInheritedGet - annotatedTest
