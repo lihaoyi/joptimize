@@ -127,6 +127,7 @@ object CodeGen{
 
   def rec(ssa: SSA.Val, savedLocals: Map[SSA.Val, Int]): Seq[AbstractInsnNode] = {
     if (ssa.isInstanceOf[SSA.ChangedState]) generateStateChangeBytecode(ssa, savedLocals)
+    else if (ssa.isInstanceOf[SSA.Phi] && ssa.getSize == 0) Nil
     else if (savedLocals.contains(ssa)) Seq(new VarInsnNode(loadOp(ssa), savedLocals(ssa)))
     else generateValBytecode(ssa, savedLocals)
   }

@@ -249,7 +249,7 @@ class Walker() {
       val current = queue.head
       queue.remove(current)
       val replacementOpt = current match {
-        case phi: SSA.Phi =>
+        case phi: SSA.Phi if phi.getSize != 0 =>
           val filteredValues = phi.incoming.filter(_._2 != phi)
 
           if (filteredValues.map(_._2).size == 1) Some(filteredValues.head._2)

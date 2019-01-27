@@ -218,6 +218,7 @@ object Renderer {
 
     def renderStmt(r: SSA.Node, leftOffset: Int): Option[Seq[Str]] = r match{
       case _: SSA.Arg => None
+      case r: SSA.Phi if r.getSize == 0 => None
       case v: SSA.ChangedState => None
       case _ =>
         val out = mutable.Buffer.empty[Str]
