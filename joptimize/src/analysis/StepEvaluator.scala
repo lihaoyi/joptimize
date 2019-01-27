@@ -233,32 +233,34 @@ class StepEvaluator(merges: mutable.LinkedHashSet[SSA.Phi],
     * INVOKEDYNAMIC
     */
   def naryOperation(insn: AbstractInsnNode, vs: Seq[SSA.Val], state: SSA.State): (SSA.Val, SSA.State) = {
-    val op = insn.getOpcode match{
+    insn.getOpcode match{
       case MULTIANEWARRAY =>
         val insn2 = insn.asInstanceOf[MultiANewArrayInsnNode]
-        new SSA.MultiANewArray(insn2.desc, vs)
+        (new SSA.MultiANewArray(insn2.desc, vs), state)
 
       case INVOKEDYNAMIC =>
         val insn2 = insn.asInstanceOf[InvokeDynamicInsnNode]
         val bsm = insn2.bsm
-        new SSA.InvokeDynamic(
+        val op = new SSA.InvokeDynamic(
           insn2.name, insn2.desc, bsm.getTag, bsm.getOwner,
           bsm.getName, bsm.getDesc, insn2.bsmArgs
         )
+        (op, new SSA.ChangedState(op))
 
       case INVOKESTATIC =>
         val insn2 = insn.asInstanceOf[MethodInsnNode]
-        new SSA.InvokeStatic(vs, insn2.owner, insn2.name, Desc.read(insn2.desc))
-
+        val op = new SSA.InvokeStatic(state, vs, insn2.owner, insn2.name, Desc.read(insn2.desc))
+        (op, new SSA.ChangedState(op))
       case INVOKEVIRTUAL =>
         val insn2 = insn.asInstanceOf[MethodInsnNode]
-        new SSA.InvokeVirtual(vs, insn2.owner, insn2.name, Desc.read(insn2.desc))
-
+        val op = new SSA.InvokeVirtual(state, vs, insn2.owner, insn2.name, Desc.read(insn2.desc))
+        (op, new SSA.ChangedState(op))
       case INVOKESPECIAL =>
         val insn2 = insn.asInstanceOf[MethodInsnNode]
-        new SSA.InvokeSpecial(vs, insn2.owner, insn2.name, Desc.read(insn2.desc))
+        val op = new SSA.InvokeSpecial(state, vs, insn2.owner, insn2.name, Desc.read(insn2.desc))
+        (op, new SSA.ChangedState(op))
     }
-    (op, new SSA.ChangedState(op))
+
   }
 
 

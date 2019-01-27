@@ -200,11 +200,11 @@ object CodeGen{
         case SSA.PushNull() => Seq(new InsnNode(ACONST_NULL))
         case SSA.PushCls(value) =>
           Seq(new LdcInsnNode(org.objectweb.asm.Type.getType(value.name)))
-        case SSA.InvokeStatic(srcs, cls, name, desc) =>
+        case SSA.InvokeStatic(state, srcs, cls, name, desc) =>
           Seq(new MethodInsnNode(INVOKESTATIC, cls.name, name, desc.unparse))
-        case SSA.InvokeSpecial(srcs, cls, name, desc) =>
+        case SSA.InvokeSpecial(state, srcs, cls, name, desc) =>
           Seq(new MethodInsnNode(INVOKESPECIAL, cls.name, name, desc.unparse))
-        case SSA.InvokeVirtual(srcs, cls, name, desc) =>
+        case SSA.InvokeVirtual(state, srcs, cls, name, desc) =>
           Seq(new MethodInsnNode(INVOKEVIRTUAL, cls.name, name, desc.unparse))
         case SSA.InvokeDynamic(name, desc, bsTag, bsOwner, bsName, bsDesc, bsArgs) => ???
         case SSA.New(cls) => ???
@@ -246,13 +246,13 @@ object CodeGen{
         case _: SSA.PushI | _: SSA.PushJ | _: SSA.PushF | _: SSA.PushD |
              _: SSA.PushS | _: SSA.PushNull | _: SSA.PushCls  => Nil
 
-        case SSA.InvokeStatic(srcs, cls, name, desc) =>
+        case SSA.InvokeStatic(state, srcs, cls, name, desc) =>
           Seq(new MethodInsnNode(INVOKESTATIC, cls.name, name, desc.unparse)) ++
           (if (desc.ret.size == 0) Nil else Seq(new InsnNode(POP)))
-        case SSA.InvokeSpecial(srcs, cls, name, desc) =>
+        case SSA.InvokeSpecial(state, srcs, cls, name, desc) =>
           Seq(new MethodInsnNode(INVOKESPECIAL, cls.name, name, desc.unparse)) ++
           (if (desc.ret.size == 0) Nil else Seq(new InsnNode(POP)))
-        case SSA.InvokeVirtual(srcs, cls, name, desc) =>
+        case SSA.InvokeVirtual(state, srcs, cls, name, desc) =>
           Seq(new MethodInsnNode(INVOKEVIRTUAL, cls.name, name, desc.unparse)) ++
           (if (desc.ret.size == 0) Nil else Seq(new InsnNode(POP)))
         case SSA.InvokeDynamic(name, desc, bsTag, bsOwner, bsName, bsDesc, bsArgs) => ???

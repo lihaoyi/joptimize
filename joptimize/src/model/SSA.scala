@@ -341,32 +341,38 @@ object SSA{
     def update(swap: Swapper): Unit = {}
   }
 
-  case class InvokeStatic(var srcs: Seq[Val],
+  case class InvokeStatic(var state: State,
+                          var srcs: Seq[Val],
                           var cls: JType.Cls,
                           var name: String,
                           var desc: Desc) extends Val(desc.ret){
-    def upstream = srcs
+    def upstream = state +: srcs
     def update(swap: Swapper): Unit = {
+      state = swap(state)
       srcs = srcs.map(swap(_))
     }
   }
 
-  case class InvokeSpecial(var srcs: Seq[Val],
+  case class InvokeSpecial(var state: State,
+                           var srcs: Seq[Val],
                            var cls: JType.Cls,
                            var name: String,
                            var desc: Desc) extends Val(desc.ret){
-    def upstream = srcs
+    def upstream = state +: srcs
     def update(swap: Swapper): Unit = {
+      state = swap(state)
       srcs = srcs.map(swap(_))
     }
   }
 
-  case class InvokeVirtual(var srcs: Seq[Val],
+  case class InvokeVirtual(var state: State,
+                           var srcs: Seq[Val],
                            var cls: JType.Cls,
                            var name: String,
                            var desc: Desc) extends Val(desc.ret){
-    def upstream = srcs
+    def upstream = state +: srcs
     def update(swap: Swapper): Unit = {
+      state = swap(state)
       srcs = srcs.map(swap(_))
     }
   }

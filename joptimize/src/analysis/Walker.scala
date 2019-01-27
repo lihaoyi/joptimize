@@ -89,9 +89,9 @@ class Walker() {
     println(Renderer.renderBlockCode(blockCode, finalInsns))
 
     val called = allVertices2.collect{
-      case SSA.InvokeStatic(srcs, cls, name, desc) => MethodSig(cls, name, desc, true)
-      case SSA.InvokeVirtual(srcs, cls, name, desc) => MethodSig(cls, name, desc, false)
-      case SSA.InvokeSpecial(srcs, cls, name, desc) => MethodSig(cls, name, desc, false)
+      case SSA.InvokeStatic(state, srcs, cls, name, desc) => MethodSig(cls, name, desc, true)
+      case SSA.InvokeVirtual(state, srcs, cls, name, desc) => MethodSig(cls, name, desc, false)
+      case SSA.InvokeSpecial(state, srcs, cls, name, desc) => MethodSig(cls, name, desc, false)
     }
 
     val result = Walker.MethodResult(Nil, sig.desc.ret, finalInsns, false, Nil)
