@@ -377,6 +377,19 @@ object SSA{
     }
   }
 
+
+  case class InvokeInterface(var state: State,
+                           var srcs: Seq[Val],
+                           var cls: JType.Cls,
+                           var name: String,
+                           var desc: Desc) extends Val(desc.ret){
+    def upstream = state +: srcs
+    def update(swap: Swapper): Unit = {
+      state = swap(state)
+      srcs = srcs.map(swap(_))
+    }
+  }
+
   case class InvokeDynamic(var name: String,
                            var desc: String,
                            var bsTag: Int,

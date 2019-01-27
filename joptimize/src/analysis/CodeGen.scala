@@ -213,8 +213,10 @@ object CodeGen{
           Seq(new MethodInsnNode(INVOKESPECIAL, cls.name, name, desc.unparse))
         case SSA.InvokeVirtual(state, srcs, cls, name, desc) =>
           Seq(new MethodInsnNode(INVOKEVIRTUAL, cls.name, name, desc.unparse))
+        case SSA.InvokeInterface(state, srcs, cls, name, desc) =>
+          Seq(new MethodInsnNode(INVOKEINTERFACE, cls.name, name, desc.unparse))
         case SSA.InvokeDynamic(name, desc, bsTag, bsOwner, bsName, bsDesc, bsArgs) => ???
-        case SSA.New(cls) => ???
+        case SSA.New(cls) => Seq(new TypeInsnNode(NEW, cls.name))
         case SSA.NewArray(src, typeRef) => Seq(newArrayOp(typeRef))
         case SSA.MultiANewArray(desc, dims) => Seq(new MultiANewArrayInsnNode(desc.name, dims.length))
         case SSA.PutStatic(_, src, cls, name, desc) => Seq(new FieldInsnNode(PUTSTATIC, cls.name, name, desc.name))
@@ -261,6 +263,9 @@ object CodeGen{
           (if (desc.ret.size == 0) Nil else Seq(new InsnNode(POP)))
         case SSA.InvokeVirtual(state, srcs, cls, name, desc) =>
           Seq(new MethodInsnNode(INVOKEVIRTUAL, cls.name, name, desc.unparse)) ++
+          (if (desc.ret.size == 0) Nil else Seq(new InsnNode(POP)))
+        case SSA.InvokeInterface(state, srcs, cls, name, desc) =>
+          Seq(new MethodInsnNode(INVOKEINTERFACE, cls.name, name, desc.unparse)) ++
           (if (desc.ret.size == 0) Nil else Seq(new InsnNode(POP)))
         case SSA.InvokeDynamic(name, desc, bsTag, bsOwner, bsName, bsDesc, bsArgs) => ???
         case SSA.New(cls) => ???

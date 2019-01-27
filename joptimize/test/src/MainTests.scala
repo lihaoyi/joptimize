@@ -104,15 +104,15 @@ object MainTests extends TestSuite{
 //        'lambdaBoxed - annotatedTest
 //        'concat - annotatedTest
 //      }
-//      'Inheritance - {
-//        'implement - annotatedTest
+      'Inheritance - {
+        'implement - annotatedTest
 //        'abstractClass - annotatedTest
 //        'shadowedInheritedGet - annotatedTest
 //        'shadowedInheritedSet - annotatedTest
 //        'superMethod - annotatedTest
 //        'staticInheritance - annotatedTest
 //        'staticInheritanceMethod - annotatedTest
-//      }
+      }
 //      'Exceptions - {
 //        'throwCatch0 - annotatedTest
 //        'throwCatch1 - annotatedTest

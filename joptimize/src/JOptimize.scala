@@ -82,9 +82,14 @@ object JOptimize{
     val visitedMethods = mutable.Buffer.empty[(MethodSig, Walker.MethodResult)]
 
     Util.breadthFirstAggregation(entrypoints.toSet){ sig =>
-      val (result, called) = walker.walkMethod(sig, originalMethods(sig))
-      visitedMethods.append((sig, result))
-      called.toSeq
+      originalMethods.get(sig) match{
+        case None => Nil
+        case Some(mn) =>
+          val (result, called) = walker.walkMethod(sig, mn)
+          visitedMethods.append((sig, result))
+          called.toSeq
+      }
+
     }
 
 
