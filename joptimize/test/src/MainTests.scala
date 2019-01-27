@@ -68,10 +68,14 @@ object MainTests extends TestSuite{
         'timesTwo - annotatedTest
         'helloWorld2 - annotatedTest
         'timesTwo2 - annotatedTest
-        'tailFactorial - annotatedTest
-        'fibonacci - annotatedTest
         'call - annotatedTest
         'callAtPhiBoundary - annotatedTest
+        'voidCall - annotatedTest
+        'tailFactorial - annotatedTest
+        'tailFactorialLong - annotatedTest
+        'tailFactorialVoid - annotatedTest
+        'fibonacci - annotatedTest
+
       }
       'Arrays - {
         'length - annotatedTest

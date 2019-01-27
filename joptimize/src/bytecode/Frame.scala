@@ -230,15 +230,14 @@ class Frame[V <: Value, S <: V] (var numLocals: Int, val numStack0: Int){
               push(value3)
               push(value2)
               push(value1)
-            }
-          }
-          else {
+            }else throw new AnalyzerException(insn, "Illegal use of DUP_X2")
+          } else {
             push(interpreter.copyOperation(insn, value1))
             push(value2)
             push(value1)
           }
-        }
-        throw new AnalyzerException(insn, "Illegal use of DUP_X2")
+        }else throw new AnalyzerException(insn, "Illegal use of DUP_X2")
+
       case Opcodes.DUP2 =>
         value1 = pop()
         if (value1.getSize == 1) {
@@ -248,13 +247,12 @@ class Frame[V <: Value, S <: V] (var numLocals: Int, val numStack0: Int){
             push(value1)
             push(interpreter.copyOperation(insn, value2))
             push(interpreter.copyOperation(insn, value1))
-          }
-        }
-        else {
+          }else throw new AnalyzerException(insn, "Illegal use of DUP2")
+        } else {
           push(value1)
           push(interpreter.copyOperation(insn, value1))
         }
-        throw new AnalyzerException(insn, "Illegal use of DUP2")
+
       case Opcodes.DUP2_X1 =>
         value1 = pop()
         if (value1.getSize == 1) {
@@ -267,18 +265,17 @@ class Frame[V <: Value, S <: V] (var numLocals: Int, val numStack0: Int){
               push(value3)
               push(value2)
               push(value1)
-            }
-          }
-        }
-        else {
+            }else throw new AnalyzerException(insn, "Illegal use of DUP2_X1")
+          }else throw new AnalyzerException(insn, "Illegal use of DUP2_X1")
+        } else {
           value2 = pop()
           if (value2.getSize == 1) {
             push(interpreter.copyOperation(insn, value1))
             push(value2)
             push(value1)
-          }
+          }else throw new AnalyzerException(insn, "Illegal use of DUP2_X1")
         }
-        throw new AnalyzerException(insn, "Illegal use of DUP2_X1")
+
       case Opcodes.DUP2_X2 =>
         value1 = pop()
         if (value1.getSize == 1) {
@@ -294,7 +291,7 @@ class Frame[V <: Value, S <: V] (var numLocals: Int, val numStack0: Int){
                 push(value3)
                 push(value2)
                 push(value1)
-              }
+              }else throw new AnalyzerException(insn, "Illegal use of DUP2_X2")
             }
             else {
               push(interpreter.copyOperation(insn, value2))
@@ -303,9 +300,8 @@ class Frame[V <: Value, S <: V] (var numLocals: Int, val numStack0: Int){
               push(value2)
               push(value1)
             }
-          }
-        }
-        else {
+          }else throw new AnalyzerException(insn, "Illegal use of DUP2_X2")
+        } else {
           value2 = pop()
           if (value2.getSize == 1) {
             value3 = pop()
@@ -314,15 +310,14 @@ class Frame[V <: Value, S <: V] (var numLocals: Int, val numStack0: Int){
               push(value3)
               push(value2)
               push(value1)
-            }
-          }
-          else {
+            }else throw new AnalyzerException(insn, "Illegal use of DUP2_X2")
+          } else {
             push(interpreter.copyOperation(insn, value1))
             push(value2)
             push(value1)
           }
         }
-        throw new AnalyzerException(insn, "Illegal use of DUP2_X2")
+
       case Opcodes.SWAP =>
         value2 = pop()
         value1 = pop()
