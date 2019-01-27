@@ -216,14 +216,13 @@ object Renderer {
         (fansi.Color.Magenta(naming.savedLocals(n)._2), rhs)
     }
 
-    def renderStmt(r: SSA.Node, leftOffset: Int) = r match{
+    def renderStmt(r: SSA.Node, leftOffset: Int): Option[Seq[Str]] = r match{
       case _: SSA.Arg => None
-      case v: SSA.Val if v.getSize == 0 => None
+      case v: SSA.ChangedState => None
       case _ =>
         val out = mutable.Buffer.empty[Str]
         val (lhs, rhs) = r match {
-          case r: SSA.Control =>
-            recBlock(r)
+          case r: SSA.Control => recBlock(r)
           case r: SSA.Val => (fansi.Color.Cyan(naming.savedLocals(r)._2), recVal(r))
         }
 
@@ -249,7 +248,8 @@ object Renderer {
 
             val n = scheduledVals
               .collect{case (a, b) if b == l && naming.saveable(a) => a}
-              .toSeq.sortBy(naming.finalOrderingMap(_))
+              .toSeq
+              .sortBy(naming.finalOrderingMap(_))
               .map{ a =>
                 renderStmt(a, indent.length / 2).map(x => fansi.Str.join(fansi.Str(indent) +: x:_*))
               }

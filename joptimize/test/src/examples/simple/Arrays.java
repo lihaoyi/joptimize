@@ -40,6 +40,14 @@ public class Arrays {
         return x;
     }
 
+    @joptimize.Test(inputs = {1, 2, 3, 4, 5, 6})
+    public static int[] setIf(int a) {
+        int[] x = new int[a];
+        if (a > 4) x[0] = 999;
+        else x[0] = 777;
+        return x;
+    }
+
     @joptimize.Test(inputs = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12})
     public static int getAndSet1(int n) {
         int[] x = new int[n + 1];

@@ -34,8 +34,10 @@ object Namer {
             val downstreamControls = x.collect {
               case t: SSA.Val => scheduledVals.get(t)
               case t: SSA.Control => Some(t)
+
             }.flatten
-            scheduledVals.get(v).exists(c => downstreamControls.exists(_ != c))
+            scheduledVals.get(v).exists(c => downstreamControls.exists(_ != c)) ||
+            v.downstreamList.exists(_.isInstanceOf[SSA.ChangedState])
           case _ => false
         }
         k.upstream.nonEmpty && (k.downstreamSize > 1 || scheduled)
