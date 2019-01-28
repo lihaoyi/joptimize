@@ -353,7 +353,7 @@ class Frame[V <: Value, S <: V] (var numLocals: Int, val numStack0: Int){
         interpreter.unaryCommand(insn, pop())
 
       case IF_ICMPEQ | IF_ICMPNE | IF_ICMPLT | IF_ICMPGE | IF_ICMPGT | IF_ICMPLE |
-           IF_ACMPEQ | IF_ACMPNE | PUTFIELD =>
+           IF_ACMPEQ | IF_ACMPNE =>
         value2 = pop()
         value1 = pop()
         interpreter.binaryCommand(insn, value1, value2)
