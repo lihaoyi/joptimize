@@ -8,6 +8,15 @@ public class Inheritance {
     }
 
     @joptimize.Test(inputs = {1, 2, 4, 8})
+    public static String strings(int n) {
+        String s = "v";
+        for (int i = 0; i < n; i++) {
+            s = s.concat("o");
+        }
+        return s;
+    }
+
+    @joptimize.Test(inputs = {1, 2, 4, 8})
     public static String implement(int n) {
         Baas b = new Sheep();
         return b.baa(n);
@@ -139,6 +148,6 @@ class Car {
         for (int i = 0; i < cc; i++) {
             s = s.concat("o");
         }
-        return s.concat("m");
+        return s;
     }
 }
