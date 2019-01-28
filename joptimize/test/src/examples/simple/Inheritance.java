@@ -16,6 +16,13 @@ public class Inheritance {
         return s;
     }
 
+    @joptimize.Test()
+    public static String getSetField() {
+        Car honda = new Honda();
+        ((Honda) honda).cc++;
+        return "";
+    }
+
     @joptimize.Test(inputs = {1, 2, 4, 8})
     public static String implement(int n) {
         Baas b = new Sheep();
@@ -37,8 +44,8 @@ public class Inheritance {
     @joptimize.Test()
     public static String shadowedInheritedSet() {
         Car honda = new Honda();
-//        honda.rev();
-//        honda.cc++;
+        honda.rev();
+        honda.cc++;
         ((Honda) honda).cc++;
         return "";
     }

@@ -97,7 +97,8 @@ object JOptimize{
             }
           visitedMethods.append((sig, result))
           classes.foreach(visitedClasses.add)
-          (called ++ subSigs).toSeq
+          val clinits = classes.map(cls => MethodSig(cls, "<clinit>", Desc.read("()V"), true))
+          (called ++ subSigs ++ clinits).toSeq
       }
     }
 

@@ -113,7 +113,7 @@ object MainTests extends TestSuite{
         'shadowedInheritedSet - annotatedTest
         'superMethod - annotatedTest
         'staticInheritance - annotatedTest
-//        'staticInheritanceMethod - annotatedTest
+        'staticInheritanceMethod - annotatedTest
       }
 //      'Exceptions - {
 //        'throwCatch0 - annotatedTest
@@ -249,8 +249,8 @@ object MainTests extends TestSuite{
     val output = mutable.Buffer.empty[ujson.Value]
     for (args <- cases) checkWithClassloader{ cl =>
       val cls = cl.loadClass(s"joptimize.examples.${tp.value.dropRight(1).mkString(".")}")
-      val method = cls.getDeclaredMethod(tp.value.last, rawMethod.getParameterTypes: _*)
-      method.setAccessible(true)
+      val joptimizedMethod = cls.getDeclaredMethod(tp.value.last, rawMethod.getParameterTypes: _*)
+      joptimizedMethod.setAccessible(true)
       rawMethod.setAccessible(true)
 
       val boxedArgs =
@@ -267,18 +267,18 @@ object MainTests extends TestSuite{
           else throw new Exception(p.toString)
         }
 
-      val expected = rawMethod.invoke(null, boxedArgs: _*)
-      val res = method.invoke(null, boxedArgs: _*)
+      val expectedResult = rawMethod.invoke(null, boxedArgs: _*)
+      val joptimizedResult = joptimizedMethod.invoke(null, boxedArgs: _*)
 
       output.append(
         ujson.Arr(
           ujson.Arr(boxedArgs.map(sketchyToJson(_)):_*),
-          sketchyToJson(res)
+          sketchyToJson(joptimizedResult)
         )
       )
 
       // Make sure the correct value is computed
-      (res, expected) match {
+      (joptimizedResult, expectedResult) match {
         case (a: Array[AnyRef], b: Array[AnyRef]) => assert(java.util.Arrays.deepEquals(a, b))
         case (a: Array[_], b: Array[_]) =>
           val lhs = a.toSeq
@@ -289,7 +289,7 @@ object MainTests extends TestSuite{
           val argList = args.toList
           assert {
             argList
-            res == expected
+            joptimizedResult == expectedResult
           }
       }
     }
