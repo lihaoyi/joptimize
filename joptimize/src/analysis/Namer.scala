@@ -53,7 +53,7 @@ object Namer {
     val savedControls = mutable.Map[SSA.Control, (Int, String)]()
 
     var maxVal = 0
-    allVertices.collect{case a: SSA.Arg =>
+    for(a <- program.args){
       savedLocals.update(a, (a.index, "arg" + a.index))
       maxVal += a.getSize
     }
