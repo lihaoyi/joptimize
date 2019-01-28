@@ -328,7 +328,7 @@ object SSA{
     def upstream = Nil
     def update(swap: Swapper): Unit = {}
   }
-  case class PushS(var value: String) extends Val(JType.Prim.S){
+  case class PushStr(var value: String) extends Val(JType.Cls("java/lang/String")){
     def upstream = Nil
     def update(swap: Swapper): Unit = {}
   }

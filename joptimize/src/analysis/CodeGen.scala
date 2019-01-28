@@ -203,7 +203,7 @@ object CodeGen{
           case 1 => new InsnNode(DCONST_1)
           case _ => new LdcInsnNode(value)
         })
-        case SSA.PushS(value) => Seq(new LdcInsnNode(value))
+        case SSA.PushStr(value) => Seq(new LdcInsnNode(value))
         case SSA.PushNull() => Seq(new InsnNode(ACONST_NULL))
         case SSA.PushCls(value) =>
           Seq(new LdcInsnNode(org.objectweb.asm.Type.getType(value.name)))
@@ -253,7 +253,7 @@ object CodeGen{
         case SSA.ArrayLength(src) => Seq(new InsnNode(ARRAYLENGTH), new InsnNode(POP))
         case SSA.InstanceOf(src, desc) => Seq(new TypeInsnNode(INSTANCEOF, desc.name), new InsnNode(POP))
         case _: SSA.PushI | _: SSA.PushJ | _: SSA.PushF | _: SSA.PushD |
-             _: SSA.PushS | _: SSA.PushNull | _: SSA.PushCls  => Nil
+             _: SSA.PushStr | _: SSA.PushNull | _: SSA.PushCls  => Nil
 
         case SSA.InvokeStatic(state, srcs, cls, name, desc) =>
           Seq(new MethodInsnNode(INVOKESTATIC, cls.name, name, desc.unparse)) ++

@@ -51,7 +51,7 @@ class StepEvaluator(merges: mutable.LinkedHashSet[SSA.Phi],
           case i: java.lang.Integer => new SSA.PushI(i)
           case f: java.lang.Float => new SSA.PushF(f)
           case d: java.lang.Double => new SSA.PushD(d)
-          case s: java.lang.String => new SSA.PushS(s)
+          case s: java.lang.String => new SSA.PushStr(s)
           case value: org.objectweb.asm.Type =>
             value.getSort match {
               case OBJECT | ARRAY => new SSA.PushCls(JType.Cls(value.getClassName))

@@ -166,7 +166,7 @@ object Renderer {
       case n: SSA.PushJ => literal(n.value + "L")
       case n: SSA.PushF => literal(n.value + "F")
       case n: SSA.PushD => literal(n.value + "D")
-      case n: SSA.PushS => literal(pprint.Util.literalize(n.value))
+      case n: SSA.PushStr => literal(pprint.Util.literalize(n.value))
       case n: SSA.PushNull => literal("null")
       case n: SSA.PushCls => literal(n.value.name)
       case n: SSA.InvokeStatic => apply(n.cls.javaName + "." + n.name + n.desc.unparse, n.srcs.map(rec):_*)
