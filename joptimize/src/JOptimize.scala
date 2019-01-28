@@ -71,7 +71,7 @@ object JOptimize{
 
     def findSupertypes(cls: JType.Cls) = {
       val output = mutable.Buffer(cls)
-      while(classNodeMap(output.last).superName != null && !ignore(classNodeMap(output.last).superName)){
+      while(classNodeMap.contains(output.last) && classNodeMap(output.last).superName != null && !ignore(classNodeMap(output.last).superName)){
         output.append(JType.Cls(classNodeMap(output.last).superName))
       }
       output
@@ -82,13 +82,18 @@ object JOptimize{
     val visitedMethods = mutable.Buffer.empty[(MethodSig, Walker.MethodResult)]
 
     Util.breadthFirstAggregation(entrypoints.toSet){ sig =>
-      originalMethods.get(sig) match{
-        case None => Nil
-        case Some(mn) =>
-          val subSigs =
-            for(sub <- subtypeMap.getOrElse(sig.cls, Nil))
-            yield sig.copy(cls = sub)
+      val subSigs =
+        if (sig.static){
+          for(sub <- findSupertypes(sig.cls))
+          yield sig.copy(cls = sub)
+        } else{
+          for(sub <- subtypeMap.getOrElse(sig.cls, Nil))
+          yield sig.copy(cls = sub)
+        }
 
+      originalMethods.get(sig) match{
+        case None => subSigs
+        case Some(mn) =>
           val (result, called, classes) =
             if (mn.instructions.size != 0) walker.walkMethod(sig, mn)
             else {
