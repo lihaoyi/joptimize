@@ -225,7 +225,7 @@ class Walker() {
 
     val locals = Range(0, frames(0).getLocals)
       .map(frames(0).getLocal)
-      .takeWhile(_.jtype != JType.Prim.V)
+      .filter(_.jtype != JType.Prim.V)
 
     Program(locals.map(_.asInstanceOf[SSA.Arg]), terminals.map(_._2))
   }

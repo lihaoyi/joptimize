@@ -5,8 +5,6 @@ import reflect.ClassTag
 
 
 object JType{
-  implicit def strClsTypeShorthand(name: String): Cls = Cls(name)
-
   def fromJavaCls(c: Class[_]): JType =
     if (c.isPrimitive) Prim.allJava(c.getTypeName)
     else if (c.isArray) Arr(fromJavaCls(c.getComponentType))

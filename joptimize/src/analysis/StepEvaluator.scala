@@ -68,7 +68,7 @@ class StepEvaluator(merges: mutable.LinkedHashSet[SSA.Phi],
     */
   def getStaticOperation(insn: AbstractInsnNode, state: SSA.State): (SSA.Val, SSA.State) = {
     val insn2 = insn.asInstanceOf[FieldInsnNode]
-    val op = new SSA.GetStatic(state, JType.Cls(insn2.owner), insn2.name, insn2.desc)
+    val op = new SSA.GetStatic(state, JType.Cls(insn2.owner), insn2.name, JType.read(insn2.desc))
     (op, new SSA.ChangedState(op))
   }
 
@@ -94,7 +94,7 @@ class StepEvaluator(merges: mutable.LinkedHashSet[SSA.Phi],
            D2F | LNEG | I2L | F2L | D2L | DNEG | I2D | L2D | F2D =>
         new SSA.UnaOp(value, SSA.UnaOp.lookup(insn.getOpcode))
 
-      case INSTANCEOF => new SSA.InstanceOf(value, insn.asInstanceOf[TypeInsnNode].desc)
+      case INSTANCEOF => new SSA.InstanceOf(value, JType.read(insn.asInstanceOf[TypeInsnNode].desc))
     }
   }
   /**
@@ -126,7 +126,7 @@ class StepEvaluator(merges: mutable.LinkedHashSet[SSA.Phi],
 
       case ARRAYLENGTH => new SSA.ArrayLength(value)
 
-      case CHECKCAST => new SSA.CheckCast(value, insn.asInstanceOf[TypeInsnNode].desc)
+      case CHECKCAST => new SSA.CheckCast(value, JType.read(insn.asInstanceOf[TypeInsnNode].desc))
     }
     (op, new SSA.ChangedState(op))
   }
@@ -136,7 +136,7 @@ class StepEvaluator(merges: mutable.LinkedHashSet[SSA.Phi],
     */
   def getFieldOp(insn: AbstractInsnNode, value: SSA.Val, state: SSA.State): (SSA.Val, SSA.State) = {
     val insn2 = insn.asInstanceOf[FieldInsnNode]
-    val op = new SSA.GetField(state, value, insn2.owner, insn2.name, insn2.desc)
+    val op = new SSA.GetField(state, value, insn2.owner, insn2.name, JType.read(insn2.desc))
     (op, new SSA.ChangedState(op))
   }
 
@@ -161,7 +161,7 @@ class StepEvaluator(merges: mutable.LinkedHashSet[SSA.Phi],
     */
   def putStaticCommand(insn: AbstractInsnNode, value: SSA.Val, state: SSA.State): SSA.State = {
     val insn2 = insn.asInstanceOf[FieldInsnNode]
-    val res = new SSA.PutStatic(state, value, insn2.owner, insn2.name, insn2.desc)
+    val res = new SSA.PutStatic(state, value, insn2.owner, insn2.name, JType.read(insn2.desc))
     new SSA.ChangedState(res)
   }
   /**
@@ -216,7 +216,7 @@ class StepEvaluator(merges: mutable.LinkedHashSet[SSA.Phi],
     */
   def putFieldOp(insn: AbstractInsnNode, value1: SSA.Val, value2: SSA.Val, state: SSA.State): SSA.State = {
     val insn2 = insn.asInstanceOf[FieldInsnNode]
-    val op = new SSA.PutField(state, value1, value2, insn2.owner, insn2.name, insn2.desc)
+    val op = new SSA.PutField(state, value1, value2, insn2.owner, insn2.name, JType.read(insn2.desc))
     new SSA.ChangedState(op)
   }
 
@@ -236,7 +236,7 @@ class StepEvaluator(merges: mutable.LinkedHashSet[SSA.Phi],
     insn.getOpcode match{
       case MULTIANEWARRAY =>
         val insn2 = insn.asInstanceOf[MultiANewArrayInsnNode]
-        (new SSA.MultiANewArray(insn2.desc, vs), state)
+        (new SSA.MultiANewArray(JType.read(insn2.desc), vs), state)
 
       case INVOKEDYNAMIC =>
         val insn2 = insn.asInstanceOf[InvokeDynamicInsnNode]
