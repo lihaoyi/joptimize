@@ -85,13 +85,20 @@ object JOptimize{
       originalMethods.get(sig) match{
         case None => Nil
         case Some(mn) =>
-          val (result, called) = walker.walkMethod(sig, mn)
+          val subSigs =
+            for(sub <- subtypeMap.getOrElse(sig.cls, Nil))
+            yield sig.copy(cls = sub)
+
+          val (result, called) =
+            if (mn.instructions.size != 0) walker.walkMethod(sig, mn)
+            else {
+
+              (Walker.MethodResult(Nil, sig.desc.ret, mn.instructions, false, Nil), Nil)
+            }
           visitedMethods.append((sig, result))
-          called.toSeq
+        (called ++ subSigs).toSeq
       }
-
     }
-
 
     val newMethods = visitedMethods.toList.collect{
       case (sig, Walker.MethodResult(liveArgs, returnType, insns, pure, seenTryCatchBlocks)) =>

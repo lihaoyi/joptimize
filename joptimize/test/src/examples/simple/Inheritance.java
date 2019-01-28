@@ -92,7 +92,7 @@ class Child2 extends Cowc implements ParentInterface {
 class Sheep implements Baas {
     public String baa(int n) {
         String s = "b";
-        for (int i = 0; i < n; i++) s = s + "a";
+        for (int i = 0; i < n; i++) s = s.concat("a");
         return s;
     }
 }
@@ -119,7 +119,7 @@ class Honda extends Car {
     public int cc = 5;
 
     public String vStart() {
-        return "v" + cc + "r" + ((Car) this).cc + "r" + super.cc;
+        return "v".concat(String.valueOf(cc)).concat("r").concat(String.valueOf(((Car) this).cc)).concat("r").concat(String.valueOf(super.cc));
     }
 }
 
@@ -137,8 +137,8 @@ class Car {
     public String vroom() {
         String s = vStart();
         for (int i = 0; i < cc; i++) {
-            s = s + "o";
+            s = s.concat("o");
         }
-        return s + "m";
+        return s.concat("m");
     }
 }

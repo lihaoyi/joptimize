@@ -92,6 +92,7 @@ class Walker() {
       case SSA.InvokeStatic(state, srcs, cls, name, desc) => MethodSig(cls, name, desc, true)
       case SSA.InvokeVirtual(state, srcs, cls, name, desc) => MethodSig(cls, name, desc, false)
       case SSA.InvokeSpecial(state, srcs, cls, name, desc) => MethodSig(cls, name, desc, false)
+      case SSA.InvokeInterface(state, srcs, cls, name, desc) => MethodSig(cls, name, desc, false)
     }
 
     val result = Walker.MethodResult(Nil, sig.desc.ret, finalInsns, false, Nil)
