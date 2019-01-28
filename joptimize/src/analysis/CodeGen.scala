@@ -169,10 +169,10 @@ object CodeGen{
 
         case _: SSA.Phi => Nil
         case SSA.Arg(index, typeSize) => Nil
-        case SSA.BinOp(a, b, opcode) => Seq(new InsnNode(opcode.i))
+        case SSA.BinOp(stateOpt, a, b, opcode) => Seq(new InsnNode(opcode.i))
         case SSA.UnaOp(a, opcode) => Seq(new InsnNode(opcode.i))
-        case SSA.CheckCast(src, desc) => Seq(new TypeInsnNode(CHECKCAST, desc.name))
-        case SSA.ArrayLength(src) => Seq(new InsnNode(ARRAYLENGTH))
+        case SSA.CheckCast(state, src, desc) => Seq(new TypeInsnNode(CHECKCAST, desc.name))
+        case SSA.ArrayLength(state, src) => Seq(new InsnNode(ARRAYLENGTH))
         case SSA.InstanceOf(src, desc) => Seq(new TypeInsnNode(INSTANCEOF, desc.name))
         case SSA.PushI(value) => Seq(value match{
           case -1 => new InsnNode(ICONST_M1)
@@ -217,8 +217,8 @@ object CodeGen{
           Seq(new MethodInsnNode(INVOKEINTERFACE, cls.name, name, desc.unparse))
         case SSA.InvokeDynamic(name, desc, bsTag, bsOwner, bsName, bsDesc, bsArgs) => ???
         case SSA.New(cls) => Seq(new TypeInsnNode(NEW, cls.name))
-        case SSA.NewArray(src, typeRef) => Seq(newArrayOp(typeRef))
-        case SSA.MultiANewArray(desc, dims) => Seq(new MultiANewArrayInsnNode(desc.name, dims.length))
+        case SSA.NewArray(state, src, typeRef) => Seq(newArrayOp(typeRef))
+        case SSA.MultiANewArray(state, desc, dims) => Seq(new MultiANewArrayInsnNode(desc.name, dims.length))
         case SSA.PutStatic(_, src, cls, name, desc) => Seq(new FieldInsnNode(PUTSTATIC, cls.name, name, desc.name))
         case SSA.GetStatic(_, cls, name, desc) => Seq(new FieldInsnNode(GETSTATIC, cls.name, name, desc.name))
         case SSA.PutField(_, src, obj, owner, name, desc) => Seq(new FieldInsnNode(PUTFIELD, owner.name, name, desc.name))
@@ -247,10 +247,10 @@ object CodeGen{
       val upstreams = ssa.upstreamVals.flatMap(rec(_, savedLocals))
       val current: Seq[AbstractInsnNode] = ssa match{
         case _: SSA.State | _: SSA.Copy | _: SSA.Phi | _: SSA.Arg => Nil
-        case SSA.BinOp(a, b, opcode) => Seq(new InsnNode(opcode.i), new InsnNode(POP))
+        case SSA.BinOp(stateOpt, a, b, opcode) => Seq(new InsnNode(opcode.i), new InsnNode(POP))
         case SSA.UnaOp(a, opcode) => Seq(new InsnNode(opcode.i), new InsnNode(POP))
-        case SSA.CheckCast(src, desc) => Seq(new TypeInsnNode(CHECKCAST, desc.name), new InsnNode(POP))
-        case SSA.ArrayLength(src) => Seq(new InsnNode(ARRAYLENGTH), new InsnNode(POP))
+        case SSA.CheckCast(state, src, desc) => Seq(new TypeInsnNode(CHECKCAST, desc.name), new InsnNode(POP))
+        case SSA.ArrayLength(state, src) => Seq(new InsnNode(ARRAYLENGTH), new InsnNode(POP))
         case SSA.InstanceOf(src, desc) => Seq(new TypeInsnNode(INSTANCEOF, desc.name), new InsnNode(POP))
         case _: SSA.PushI | _: SSA.PushJ | _: SSA.PushF | _: SSA.PushD |
              _: SSA.PushStr | _: SSA.PushNull | _: SSA.PushCls  => Nil
@@ -269,8 +269,8 @@ object CodeGen{
           (if (desc.ret.size == 0) Nil else Seq(new InsnNode(POP)))
         case SSA.InvokeDynamic(name, desc, bsTag, bsOwner, bsName, bsDesc, bsArgs) => ???
         case SSA.New(cls) => ???
-        case SSA.NewArray(src, typeRef) => Seq(newArrayOp(typeRef), new InsnNode(POP))
-        case SSA.MultiANewArray(desc, dims) => Seq(new MultiANewArrayInsnNode(desc.name, dims.length), new InsnNode(POP))
+        case SSA.NewArray(state, src, typeRef) => Seq(newArrayOp(typeRef), new InsnNode(POP))
+        case SSA.MultiANewArray(state, desc, dims) => Seq(new MultiANewArrayInsnNode(desc.name, dims.length), new InsnNode(POP))
         case SSA.PutStatic(_, src, cls, name, desc) => Seq(new FieldInsnNode(PUTSTATIC, cls.name, name, desc.name))
         case SSA.GetStatic(_, cls, name, desc) => Seq(new FieldInsnNode(GETSTATIC, cls.name, name, desc.name), new InsnNode(POP))
         case SSA.PutField(_, src, obj, owner, name, desc) => Seq(new FieldInsnNode(PUTFIELD, owner.name, name, desc.name))

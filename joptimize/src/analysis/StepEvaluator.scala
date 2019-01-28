@@ -88,7 +88,7 @@ class StepEvaluator(merges: mutable.LinkedHashSet[SSA.Phi],
       case IINC =>
         val n = insn.asInstanceOf[IincInsnNode].incr
         val const = new SSA.PushI(n)
-        new SSA.BinOp(const, value, SSA.BinOp.IADD)
+        new SSA.BinOp(None, const, value, SSA.BinOp.IADD)
 
       case INEG | L2I | F2I | D2I | I2B | I2C | I2S | FNEG | I2F | L2F |
            D2F | LNEG | I2L | F2L | D2L | DNEG | I2D | L2D | F2D =>
@@ -105,6 +105,7 @@ class StepEvaluator(merges: mutable.LinkedHashSet[SSA.Phi],
     val op = insn.getOpcode match {
       case NEWARRAY =>
         new SSA.NewArray(
+          state,
           value,
           insn.asInstanceOf[IntInsnNode].operand match {
             case T_BOOLEAN => JType.Arr(JType.Prim.Z)
@@ -120,13 +121,14 @@ class StepEvaluator(merges: mutable.LinkedHashSet[SSA.Phi],
 
       case ANEWARRAY =>
         new SSA.NewArray(
+          state,
           value,
           JType.Arr(JType.read(insn.asInstanceOf[TypeInsnNode].desc))
         )
 
-      case ARRAYLENGTH => new SSA.ArrayLength(value)
+      case ARRAYLENGTH => new SSA.ArrayLength(state, value)
 
-      case CHECKCAST => new SSA.CheckCast(value, JType.read(insn.asInstanceOf[TypeInsnNode].desc))
+      case CHECKCAST => new SSA.CheckCast(state, value, JType.read(insn.asInstanceOf[TypeInsnNode].desc))
     }
     (op, new SSA.ChangedState(op))
   }
@@ -136,6 +138,7 @@ class StepEvaluator(merges: mutable.LinkedHashSet[SSA.Phi],
     */
   def getFieldOp(insn: AbstractInsnNode, value: SSA.Val, state: SSA.State): (SSA.Val, SSA.State) = {
     val insn2 = insn.asInstanceOf[FieldInsnNode]
+    pprint.log(state)
     val op = new SSA.GetField(state, value, insn2.owner, insn2.name, JType.read(insn2.desc))
     (op, new SSA.ChangedState(op))
   }
@@ -175,7 +178,7 @@ class StepEvaluator(merges: mutable.LinkedHashSet[SSA.Phi],
            FADD | FSUB | FMUL | FDIV | FREM | LCMP | FCMPL | FCMPG | DCMPL | DCMPG |
            LADD | LSUB | LMUL | LDIV | LREM | LSHL | LSHR | LUSHR | LAND | LOR | LXOR |
            DADD | DSUB | DMUL | DDIV | DREM =>
-        new SSA.BinOp(v1, v2, SSA.BinOp.lookup(insn.getOpcode))
+        new SSA.BinOp(None, v1, v2, SSA.BinOp.lookup(insn.getOpcode))
     }
   }
 
@@ -195,7 +198,7 @@ class StepEvaluator(merges: mutable.LinkedHashSet[SSA.Phi],
       case DALOAD => new SSA.GetArray(state, v1, v2, JType.Prim.D)
 
       case IDIV | IREM | FDIV | FREM | LDIV | LREM | DDIV | DREM =>
-        new SSA.BinOp(v1, v2, SSA.BinOp.lookup(insn.getOpcode))
+        new SSA.BinOp(Some(state), v1, v2, SSA.BinOp.lookup(insn.getOpcode))
     }
     (op, new SSA.ChangedState(op))
   }
@@ -236,7 +239,7 @@ class StepEvaluator(merges: mutable.LinkedHashSet[SSA.Phi],
     insn.getOpcode match{
       case MULTIANEWARRAY =>
         val insn2 = insn.asInstanceOf[MultiANewArrayInsnNode]
-        (new SSA.MultiANewArray(JType.read(insn2.desc), vs), state)
+        (new SSA.MultiANewArray(state, JType.read(insn2.desc), vs), state)
 
       case INVOKEDYNAMIC =>
         val insn2 = insn.asInstanceOf[InvokeDynamicInsnNode]

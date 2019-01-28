@@ -37,10 +37,10 @@ public class Inheritance {
     @joptimize.Test()
     public static String shadowedInheritedSet() {
         Car honda = new Honda();
-        honda.rev();
-        honda.cc++;
+//        honda.rev();
+//        honda.cc++;
         ((Honda) honda).cc++;
-        return honda.vroom();
+        return "";
     }
 
     @joptimize.Test()

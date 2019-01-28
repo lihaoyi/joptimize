@@ -134,9 +134,10 @@ object SSA{
     def upstream = Nil
     def update(swap: Swapper): Unit = {}
   }
-  case class BinOp(var a: Val, var b: Val, var opcode: BinOp.Code) extends Val(opcode.tpe){
-    def upstream = Seq(a, b)
+  case class BinOp(var stateOpt: Option[State], var a: Val, var b: Val, var opcode: BinOp.Code) extends Val(opcode.tpe){
+    def upstream = stateOpt.toSeq ++ Seq(a, b)
     def update(swap: Swapper): Unit = {
+      stateOpt = stateOpt.map(swap(_))
       a = swap(a)
       b = swap(b)
     }
@@ -294,15 +295,17 @@ object SSA{
       src = swap(src)
     }
   }
-  case class CheckCast(var src: Val, var desc: JType) extends Val(desc){
-    def upstream = Seq(src)
+  case class CheckCast(var state: State, var src: Val, var desc: JType) extends Val(desc){
+    def upstream = Seq(state, src)
     def update(swap: Swapper): Unit = {
+      state = swap(state)
       src = swap(src)
     }
   }
-  case class ArrayLength(var src: Val) extends Val(JType.Prim.I){
-    def upstream = Seq(src)
+  case class ArrayLength(var state: State, var src: Val) extends Val(JType.Prim.I){
+    def upstream = Seq(state, src)
     def update(swap: Swapper): Unit = {
+      state = swap(state)
       src = swap(src)
     }
   }
@@ -405,15 +408,17 @@ object SSA{
     def upstream = Nil
     def update(swap: Swapper): Unit = {}
   }
-  case class NewArray(var src: Val, var typeRef: JType) extends Val(typeRef){
-    def upstream = Seq(src)
+  case class NewArray(var state: State, var src: Val, var typeRef: JType) extends Val(typeRef){
+    def upstream = Seq(state, src)
     def update(swap: Swapper): Unit = {
+      state = swap(state)
       src = swap(src)
     }
   }
-  case class MultiANewArray(var desc: JType, var dims: Seq[Val]) extends Val(desc){
-    def upstream = dims
+  case class MultiANewArray(var state: State, var desc: JType, var dims: Seq[Val]) extends Val(desc){
+    def upstream = state +: dims
     def update(swap: Swapper): Unit = {
+      state = swap(state)
       dims = dims.map(swap(_))
     }
   }
