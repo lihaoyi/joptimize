@@ -112,7 +112,7 @@ object MainTests extends TestSuite{
         'shadowedInheritedGet - annotatedTest
         'shadowedInheritedSet - annotatedTest
         'superMethod - annotatedTest
-//        'staticInheritance - annotatedTest
+        'staticInheritance - annotatedTest
 //        'staticInheritanceMethod - annotatedTest
       }
 //      'Exceptions - {

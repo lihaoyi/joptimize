@@ -14,7 +14,7 @@ import scala.collection.{immutable, mutable}
 
 class Walker() {
 
-  def walkMethod(sig: MethodSig, mn: MethodNode): (Walker.MethodResult, Set[MethodSig]) = {
+  def walkMethod(sig: MethodSig, mn: MethodNode): (Walker.MethodResult, Set[MethodSig], Set[JType.Cls]) = {
     println("+" * 20 + sig + "+" * 20)
     val printer = new Textifier
     val methodPrinter = new TraceMethodVisitor(printer)
@@ -95,9 +95,16 @@ class Walker() {
       case SSA.InvokeInterface(state, srcs, cls, name, desc) => MethodSig(cls, name, desc, false)
     }
 
+    val classes = allVertices2.collect{
+      case n: SSA.GetField => n.owner
+      case n: SSA.PutField => n.owner
+      case n: SSA.GetStatic => n.cls
+      case n: SSA.PutStatic => n.cls
+    }
+
     val result = Walker.MethodResult(Nil, sig.desc.ret, finalInsns, false, Nil)
 
-    (result, called)
+    (result, called, classes)
   }
 
   def analyzeBlockStructure(program: Program) = {

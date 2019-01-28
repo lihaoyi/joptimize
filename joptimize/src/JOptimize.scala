@@ -89,14 +89,15 @@ object JOptimize{
             for(sub <- subtypeMap.getOrElse(sig.cls, Nil))
             yield sig.copy(cls = sub)
 
-          val (result, called) =
+          val (result, called, classes) =
             if (mn.instructions.size != 0) walker.walkMethod(sig, mn)
             else {
 
-              (Walker.MethodResult(Nil, sig.desc.ret, mn.instructions, false, Nil), Nil)
+              (Walker.MethodResult(Nil, sig.desc.ret, mn.instructions, false, Nil), Nil, Nil)
             }
           visitedMethods.append((sig, result))
-        (called ++ subSigs).toSeq
+          classes.foreach(visitedClasses.add)
+          (called ++ subSigs).toSeq
       }
     }
 
