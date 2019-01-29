@@ -200,7 +200,9 @@ object Renderer {
 
       case n: SSA.AThrow => ???
       case n: SSA.TableSwitch => ???
-      case n: SSA.LookupSwitch => ???
+      case n: SSA.LookupSwitch => (renderBlock(n), apply("lookupswitch", rec(n.src)))
+      case n: SSA.Case => (renderBlock(n), apply("case", rec(n.branch)))
+      case n: SSA.Default => (renderBlock(n), apply("default", rec(n.branch)))
 
       case n: SSA.ReturnVal =>
         (renderBlock(n), apply("return", atom(renderBlock(n.block)), rec(n.src)))

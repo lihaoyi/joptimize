@@ -197,8 +197,9 @@ public class Switches {
         }
     }
 
+    @joptimize.Test(inputs = {1, 2, 4})
     public static int stringSwitch(int n) {
-        switch ("" + n) {
+        switch ("".concat(String.valueOf(n))) {
             case "0":
                 return 0;
             case "1":
@@ -208,6 +209,7 @@ public class Switches {
         }
     }
 
+    @joptimize.Test(inputs = {1, 2, 4})
     public static String stringSwitchTwo(String s) {
         switch (s) {
             case "omg":

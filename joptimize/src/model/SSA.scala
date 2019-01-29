@@ -271,22 +271,37 @@ object SSA{
       src = swap(src)
     }
   }
-  case class TableSwitch(var state: Val, var block: Block, var src: Val, min: Int, max: Int) extends Jump(){
-    def upstream = Seq(state, block, src)
+  case class TableSwitch(var block: Block, var src: Val, min: Int, max: Int) extends Jump(){
+    def upstream = Seq(block, src)
     override def upstreamVals = Seq(src)
     def update(swap: Swapper): Unit = {
-      state = swap(state)
       block = swap(block)
       src = swap(src)
     }
   }
-  case class LookupSwitch(var state: Val, var block: Block, var src: Val, var keys: Seq[Int]) extends Jump(){
-    def upstream = Seq(state, block, src)
+  case class LookupSwitch(var block: Block, var src: Val, var keys: Seq[Int]) extends Jump(){
+    def upstream = Seq(block, src)
     override def upstreamVals = Seq(src)
     def update(swap: Swapper): Unit = {
-      state = swap(state)
       block = swap(block)
       src = swap(src)
+    }
+  }
+
+  case class Case(var branch: Jump, var n: Int) extends SimpleBlock(){
+    def controls = Seq(branch)
+    def block = branch.block
+    def upstream = Seq(branch)
+    def update(swap: Swapper): Unit = {
+      branch = swap(branch)
+    }
+  }
+  case class Default(var branch: Jump) extends SimpleBlock(){
+    def controls = Seq(branch)
+    def block = branch.block
+    def upstream = Seq(branch)
+    def update(swap: Swapper): Unit = {
+      branch = swap(branch)
     }
   }
   case class Copy(var src: Val) extends Val(src.jtype){

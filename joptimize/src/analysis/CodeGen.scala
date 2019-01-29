@@ -41,6 +41,12 @@ object CodeGen{
             jumpLabel = { srcBlock =>
               labels(srcBlock.downstreamList.collect{case t: SSA.True => t}.head)
             },
+            switchLabels = { srcBlock =>
+              (
+                labels(srcBlock.downstreamList.collect{case t: SSA.Default => t}.head),
+                srcBlock.downstreamList.collect{case t: SSA.Case => t}.map(labels),
+              )
+            },
             fallthroughLabel = {srcBlock =>
               val destination = srcBlock.downstreamList.collect{case t: SSA.False => t}.head
               if (blockIndices(destination) == blockIndices(control) + 1) None
@@ -135,6 +141,7 @@ object CodeGen{
   def generateJumpBytecode(ssa: SSA.Jump,
                            savedLocals: Map[SSA.Val, Int],
                            jumpLabel: SSA.Control => LabelNode,
+                           switchLabels: SSA.Control => (LabelNode, Seq[LabelNode]),
                            fallthroughLabel: SSA.Control => Option[LabelNode]): Seq[AbstractInsnNode] = {
     val upstreams = ssa.upstreamVals.flatMap(rec(_, savedLocals))
     val current: Seq[AbstractInsnNode] = ssa match{
@@ -151,8 +158,10 @@ object CodeGen{
 
       case SSA.Return(state, block) => Seq(new InsnNode(RETURN))
       case SSA.AThrow(state, _, src) => Seq(new InsnNode(ATHROW))
-      case SSA.TableSwitch(state, _, src, min, max) => ???
-      case SSA.LookupSwitch(state, _, src, keys) => ???
+      case SSA.TableSwitch(_, src, min, max) => ???
+      case n @ SSA.LookupSwitch(_, src, keys) =>
+        val (default, labels) = switchLabels(n)
+        Seq(new LookupSwitchInsnNode(default, keys.toArray, labels.toArray))
     }
 
     upstreams ++ current
