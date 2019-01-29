@@ -158,7 +158,9 @@ object CodeGen{
 
       case SSA.Return(state, block) => Seq(new InsnNode(RETURN))
       case SSA.AThrow(state, _, src) => Seq(new InsnNode(ATHROW))
-      case SSA.TableSwitch(_, src, min, max) => ???
+      case n @ SSA.TableSwitch(_, src, min, max) =>
+        val (default, labels) = switchLabels(n)
+        Seq(new TableSwitchInsnNode(min, max, default, labels.toArray:_*))
       case n @ SSA.LookupSwitch(_, src, keys) =>
         val (default, labels) = switchLabels(n)
         Seq(new LookupSwitchInsnNode(default, keys.toArray, labels.toArray))

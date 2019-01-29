@@ -58,11 +58,11 @@ object MainTests extends TestSuite{
 
       'Switches - {
         'smallSwitch - annotatedTest
-//        'bigDenseSwitch - annotatedTest
-//        'bigSparseSwitch - annotatedTest
-//        'charSwitch - annotatedTest
-//        'byteSwitch - annotatedTest
-//        'stringSwitch - annotatedTest
+        'bigDenseSwitch - annotatedTest
+        'bigSparseSwitch - annotatedTest
+        'charSwitch - annotatedTest
+        'byteSwitch - annotatedTest
+        'stringSwitch - annotatedTest
 //        'stringSwitchTwo - annotatedTest
       }
       'Statics - {

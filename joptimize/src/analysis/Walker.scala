@@ -216,6 +216,16 @@ class Walker() {
           mergeBlocks(insn.dflt, new SSA.Default(n))
           Nil
 
+        case (TABLESWITCH, insn: TableSwitchInsnNode) =>
+          val keys = Range.inclusive(insn.min, insn.max)
+          val labels = insn.labels.asScala
+          val n = new SSA.TableSwitch(findStartRegion(i), frameTop(i, 0), insn.min, insn.max)
+          for((k, l) <- keys.zip(labels)){
+            mergeBlocks(l, new SSA.Case(n, k))
+          }
+          mergeBlocks(insn.dflt, new SSA.Default(n))
+          Nil
+
         case (IFEQ | IFNE | IFLT | IFGE | IFGT | IFLE, insn: JumpInsnNode) =>
           val n = new SSA.UnaBranch(findStartRegion(i), frameTop(i, 0), SSA.UnaBranch.lookup(insn.getOpcode))
           mergeBlocks(insn.label, new SSA.True(n))

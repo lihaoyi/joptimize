@@ -79,6 +79,7 @@ object Namer {
           case r: SSA.Merge => (if (c.upstream.isEmpty) "start" else "block") + maxControl
           case _: SSA.UnaBranch | _: SSA.BinBranch=> "branch" + maxControl
           case _: SSA.LookupSwitch => "lookupswitch" + maxControl
+          case _: SSA.TableSwitch => "tableswitch" + maxControl
           case _: SSA.Case => "case" + maxControl
           case _: SSA.Default => "default" + maxControl
         }

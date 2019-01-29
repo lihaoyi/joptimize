@@ -199,7 +199,7 @@ object Renderer {
         (fansi.Color.Magenta(naming.savedLocals(reg)._2), rhs)
 
       case n: SSA.AThrow => ???
-      case n: SSA.TableSwitch => ???
+      case n: SSA.TableSwitch => (renderBlock(n), apply("tableswitch", rec(n.src)))
       case n: SSA.LookupSwitch => (renderBlock(n), apply("lookupswitch", rec(n.src)))
       case n: SSA.Case => (renderBlock(n), apply("case", rec(n.branch)))
       case n: SSA.Default => (renderBlock(n), apply("default", rec(n.branch)))
