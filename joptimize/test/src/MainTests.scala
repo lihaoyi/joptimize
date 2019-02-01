@@ -103,6 +103,7 @@ object MainTests extends TestSuite{
       }
       'ScalaInvokeDynamic - {
         'hello - annotatedTest
+        'hello2 - annotatedTest
         'lambda - annotatedTest
         'lambdaBoxed - annotatedTest
         'concat - annotatedTest

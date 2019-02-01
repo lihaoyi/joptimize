@@ -92,7 +92,7 @@ object JOptimize{
         }
 
       originalMethods.get(sig) match{
-        case None => if (sig.static || sig.name == "<init>") Nil else subSigs
+        case None => if (sig.name == "<init>") Nil else subSigs
         case Some(mn) =>
           val (result, called, classes) =
             if (mn.instructions.size != 0) walker.walkMethod(sig, mn)
@@ -101,7 +101,8 @@ object JOptimize{
               (Walker.MethodResult(Nil, sig.desc.ret, mn.instructions, false, Nil), Nil, Nil)
             }
           visitedMethods.append((sig, result))
-          classes.foreach(visitedClasses.add)
+
+          classes.filter(classNodeMap.contains).foreach(visitedClasses.add)
           val clinits = classes.map(cls => MethodSig(cls, "<clinit>", Desc.read("()V"), true))
           (called ++ subSigs ++ clinits).toSeq
       }
