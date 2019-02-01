@@ -227,18 +227,19 @@ object CodeGen{
           Seq(new MethodInsnNode(INVOKEVIRTUAL, cls.name, name, desc.unparse))
         case SSA.InvokeInterface(state, srcs, cls, name, desc) =>
           Seq(new MethodInsnNode(INVOKEINTERFACE, cls.name, name, desc.unparse))
-        case SSA.InvokeDynamic(name, desc, bsTag, bsOwner, bsName, bsDesc, bsArgs, vs) =>
+        case SSA.InvokeDynamic(name, desc, bootstrap, bootstrapArgs, vs) =>
           Seq(new InvokeDynamicInsnNode(
-            name, desc.unparse, new Handle(bsTag, bsOwner.name, bsName, bsDesc.unparse),
-            bsArgs.map(SSA.InvokeDynamic.argToAny):_*
+            name, desc.unparse,
+            new Handle(bootstrap.tag, bootstrap.owner.name, bootstrap.name, bootstrap.desc.unparse),
+            bootstrapArgs.map(SSA.InvokeDynamic.argToAny):_*
           ))
         case SSA.New(cls) => Seq(new TypeInsnNode(NEW, cls.name))
         case SSA.NewArray(state, src, typeRef) => Seq(newArrayOp(typeRef))
         case SSA.MultiANewArray(state, desc, dims) => Seq(new MultiANewArrayInsnNode(desc.name, dims.length))
-        case SSA.PutStatic(_, src, cls, name, desc) => Seq(new FieldInsnNode(PUTSTATIC, cls.name, name, desc.name))
-        case SSA.GetStatic(_, cls, name, desc) => Seq(new FieldInsnNode(GETSTATIC, cls.name, name, desc.name))
-        case SSA.PutField(_, src, obj, owner, name, desc) => Seq(new FieldInsnNode(PUTFIELD, owner.name, name, desc.name))
-        case SSA.GetField(_, obj, owner, name, desc) => Seq(new FieldInsnNode(GETFIELD, owner.name, name, desc.name))
+        case SSA.PutStatic(_, src, cls, name, desc) => Seq(new FieldInsnNode(PUTSTATIC, cls.name, name, desc.internalName))
+        case SSA.GetStatic(_, cls, name, desc) => Seq(new FieldInsnNode(GETSTATIC, cls.name, name, desc.internalName))
+        case SSA.PutField(_, src, obj, owner, name, desc) => Seq(new FieldInsnNode(PUTFIELD, owner.name, name, desc.internalName))
+        case SSA.GetField(_, obj, owner, name, desc) => Seq(new FieldInsnNode(GETFIELD, owner.name, name, desc.internalName))
         case SSA.PutArray(_, array, indexSrc, src) => Seq(new InsnNode(arrayStoreOp(src)))
         case SSA.GetArray(_, indexSrc, array, tpe) => Seq(new InsnNode(arrayLoadOp(tpe)))
         case SSA.MonitorEnter(indexSrc) => ???
@@ -283,18 +284,19 @@ object CodeGen{
         case SSA.InvokeInterface(state, srcs, cls, name, desc) =>
           Seq(new MethodInsnNode(INVOKEINTERFACE, cls.name, name, desc.unparse)) ++
           (if (desc.ret.size == 0) Nil else Seq(new InsnNode(POP)))
-        case SSA.InvokeDynamic(name, desc, bsTag, bsOwner, bsName, bsDesc, bsArgs, vs) =>
+        case SSA.InvokeDynamic(name, desc, bootstrap, bootstrapArgs, vs) =>
           Seq(new InvokeDynamicInsnNode(
-            name, desc.unparse, new Handle(bsTag, bsOwner.name, bsName, bsDesc.unparse),
-            bsArgs.map(SSA.InvokeDynamic.argToAny):_*
+            name, desc.unparse,
+            new Handle(bootstrap.tag, bootstrap.owner.name, bootstrap.name, bootstrap.desc.unparse),
+            bootstrapArgs.map(SSA.InvokeDynamic.argToAny):_*
           ))
         case SSA.New(cls) => ???
         case SSA.NewArray(state, src, typeRef) => Seq(newArrayOp(typeRef), new InsnNode(POP))
         case SSA.MultiANewArray(state, desc, dims) => Seq(new MultiANewArrayInsnNode(desc.name, dims.length), new InsnNode(POP))
-        case SSA.PutStatic(_, src, cls, name, desc) => Seq(new FieldInsnNode(PUTSTATIC, cls.name, name, desc.name))
-        case SSA.GetStatic(_, cls, name, desc) => Seq(new FieldInsnNode(GETSTATIC, cls.name, name, desc.name), new InsnNode(POP))
-        case SSA.PutField(_, src, obj, owner, name, desc) => Seq(new FieldInsnNode(PUTFIELD, owner.name, name, desc.name))
-        case SSA.GetField(_, obj, owner, name, desc) => Seq(new FieldInsnNode(GETFIELD, owner.name, name, desc.name), new InsnNode(POP))
+        case SSA.PutStatic(_, src, cls, name, desc) => Seq(new FieldInsnNode(PUTSTATIC, cls.name, name, desc.internalName))
+        case SSA.GetStatic(_, cls, name, desc) => Seq(new FieldInsnNode(GETSTATIC, cls.name, name, desc.internalName), new InsnNode(POP))
+        case SSA.PutField(_, src, obj, owner, name, desc) => Seq(new FieldInsnNode(PUTFIELD, owner.name, name, desc.internalName))
+        case SSA.GetField(_, obj, owner, name, desc) => Seq(new FieldInsnNode(GETFIELD, owner.name, name, desc.internalName), new InsnNode(POP))
         case SSA.PutArray(_, array, indexSrc, src) => Seq(new InsnNode(arrayStoreOp(src)))
         case SSA.GetArray(_, indexSrc, array, tpe) => Seq(new InsnNode(arrayLoadOp(tpe)), new InsnNode(POP))
         case SSA.MonitorEnter(indexSrc) => ???

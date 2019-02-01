@@ -2,6 +2,11 @@ package joptimize.examples.simple
 
 object ScalaInvokeDynamic {
     @joptimize.Test(inputs = Array(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12))
+    def hello(a: Int) = {
+        val x = 1
+        a + x
+    }
+    @joptimize.Test(inputs = Array(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12))
     def lambda(a: Int) = {
         val x = 1
         val r1: Function0[Int] = () => a + x

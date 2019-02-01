@@ -245,13 +245,8 @@ class StepEvaluator(merges: mutable.LinkedHashSet[SSA.Phi],
         val insn2 = insn.asInstanceOf[InvokeDynamicInsnNode]
         val bsm = insn2.bsm
         val op = new SSA.InvokeDynamic(
-          insn2.name, Desc.read(insn2.desc), bsm.getTag, JType.Cls(bsm.getOwner),
-          bsm.getName, Desc.read(bsm.getDesc),
-          /*
-          an {@link Integer}, {@link Float}, {@link Long}, {@link Double}, {@link String}, {@link
-   *     org.objectweb.asm.Type} or {@link Handle} value. This method is allowed to modify the
-   *     content of the array so a caller should expect that this array may change.
-           */
+          insn2.name, Desc.read(insn2.desc),
+          SSA.InvokeDynamic.bootstrapFromHandle(bsm),
           insn2.bsmArgs.map(SSA.InvokeDynamic.anyToArg),
           vs
         )

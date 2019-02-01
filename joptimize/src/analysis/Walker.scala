@@ -4,6 +4,7 @@ import joptimize.Util
 import joptimize.bytecode.Frame
 import joptimize.graph.HavlakLoopTree
 import joptimize.model._
+import org.objectweb.asm.Opcodes
 
 import collection.JavaConverters._
 import org.objectweb.asm.Opcodes._
@@ -93,6 +94,15 @@ class Walker() {
       case SSA.InvokeVirtual(state, srcs, cls, name, desc) => MethodSig(cls, name, desc, false)
       case SSA.InvokeSpecial(state, srcs, cls, name, desc) => MethodSig(cls, name, desc, false)
       case SSA.InvokeInterface(state, srcs, cls, name, desc) => MethodSig(cls, name, desc, false)
+      case SSA.InvokeDynamic(name, desc, bootstrap, bsArgs, srcs)
+        if bootstrap == Util.metafactory || bootstrap == Util.altMetafactory =>
+        val target = bsArgs(1).asInstanceOf[SSA.InvokeDynamic.HandleArg]
+        MethodSig(
+          target.cls,
+          target.name,
+          target.desc,
+          target.tag == Opcodes.H_INVOKESTATIC
+        )
     }
 
     val classes = allVertices2.collect{

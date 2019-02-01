@@ -174,9 +174,9 @@ object Renderer {
       case n: SSA.InvokeInterface => apply(n.cls.javaName + "#" + n.name + n.desc.unparse, n.srcs.map(rec):_*)
       case n: SSA.InvokeDynamic =>
         apply(
-          n.bsOwner.javaName + "." + n.name,
+          n.bootstrap.owner.javaName + "." + n.name,
           (
-            n.bsArgs.map{
+            n.bootstrapArgs.map{
               case SSA.InvokeDynamic.StringArg(s: String) => pprint.treeify(s)
               case SSA.InvokeDynamic.IntArg(i: Int) => pprint.treeify(i)
               case SSA.InvokeDynamic.LongArg(i: Long) => pprint.treeify(i)

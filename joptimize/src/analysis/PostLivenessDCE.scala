@@ -1,7 +1,7 @@
 package joptimize.analysis
 
 import joptimize.Util
-import joptimize.model.{Desc, JType, MethodSig}
+import joptimize.model.{Desc, JType, MethodSig, SSA}
 import org.objectweb.asm.tree.InvokeDynamicInsnNode
 import org.objectweb.asm.{Handle, Opcodes}
 import org.objectweb.asm.tree.{ClassNode, FieldInsnNode, MethodInsnNode, TypeInsnNode}
@@ -53,7 +53,7 @@ object PostLivenessDCE {
 
         mn.instructions.iterator().asScala.foreach{
           case current: InvokeDynamicInsnNode =>
-            if (current.bsm == Util.metafactory || current.bsm == Util.altMetafactory){
+            if (Set(Util.metafactory, Util.altMetafactory).contains(SSA.InvokeDynamic.bootstrapFromHandle(current.bsm))){
               val target = current.bsmArgs(1).asInstanceOf[Handle]
               val targetSig = MethodSig(
                 JType.Cls(target.getOwner),

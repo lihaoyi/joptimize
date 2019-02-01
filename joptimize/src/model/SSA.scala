@@ -410,11 +410,8 @@ object SSA{
 
   case class InvokeDynamic(var name: String,
                            var desc: Desc,
-                           var bsTag: Int,
-                           var bsOwner: JType.Cls,
-                           var bsName: String,
-                           var bsDesc: Desc,
-                           var bsArgs: Seq[InvokeDynamic.Arg],
+                           var bootstrap: InvokeDynamic.Bootstrap,
+                           var bootstrapArgs: Seq[InvokeDynamic.Arg],
                            var srcs: Seq[Val]) extends Val(desc.ret){
     def upstream = srcs
     def update(swap: Swapper): Unit = {
@@ -422,6 +419,16 @@ object SSA{
     }
   }
   object InvokeDynamic{
+    case class Bootstrap(var tag: Int,
+                         var owner: JType.Cls,
+                         var name: String,
+                         var desc: Desc)
+    def bootstrapFromHandle(bsm: Handle) = {
+      SSA.InvokeDynamic.Bootstrap(
+        bsm.getTag, JType.Cls(bsm.getOwner),
+        bsm.getName, Desc.read(bsm.getDesc)
+      )
+    }
     sealed trait Arg
     case class StringArg(s: String) extends Arg
     case class IntArg(i: Int) extends Arg

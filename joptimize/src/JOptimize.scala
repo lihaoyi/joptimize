@@ -92,7 +92,7 @@ object JOptimize{
         }
 
       originalMethods.get(sig) match{
-        case None => subSigs
+        case None => if (sig.static || sig.name == "<init>") Nil else subSigs
         case Some(mn) =>
           val (result, called, classes) =
             if (mn.instructions.size != 0) walker.walkMethod(sig, mn)
