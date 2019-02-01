@@ -1,5 +1,5 @@
 package joptimize.model
-import org.objectweb.asm.Opcodes
+import org.objectweb.asm.{Handle, Opcodes}
 
 import scala.collection.immutable.SortedSet
 import scala.collection.mutable
@@ -397,10 +397,10 @@ object SSA{
 
 
   case class InvokeInterface(var state: State,
-                           var srcs: Seq[Val],
-                           var cls: JType.Cls,
-                           var name: String,
-                           var desc: Desc) extends Val(desc.ret){
+                             var srcs: Seq[Val],
+                             var cls: JType.Cls,
+                             var name: String,
+                             var desc: Desc) extends Val(desc.ret){
     def upstream = state +: srcs
     def update(swap: Swapper): Unit = {
       state = swap(state)
@@ -409,16 +409,54 @@ object SSA{
   }
 
   case class InvokeDynamic(var name: String,
-                           var desc: String,
+                           var desc: Desc,
                            var bsTag: Int,
-                           var bsOwner: String,
+                           var bsOwner: JType.Cls,
                            var bsName: String,
-                           var bsDesc: String,
-                           var bsArgs: Seq[AnyRef]) extends Val(???){
-    def upstream = Nil
-    def update(swap: Swapper): Unit = {}
+                           var bsDesc: Desc,
+                           var bsArgs: Seq[InvokeDynamic.Arg],
+                           var srcs: Seq[Val]) extends Val(desc.ret){
+    def upstream = srcs
+    def update(swap: Swapper): Unit = {
+      srcs = srcs.map(swap(_))
+    }
   }
-
+  object InvokeDynamic{
+    sealed trait Arg
+    case class StringArg(s: String) extends Arg
+    case class IntArg(i: Int) extends Arg
+    case class LongArg(i: Long) extends Arg
+    case class FloatArg(i: Float) extends Arg
+    case class DoubleArg(i: Double) extends Arg
+    case class ClsArg(i: JType.Cls) extends Arg
+    case class HandleArg(cls: JType.Cls, name: String, desc: Desc, tag: Int) extends Arg
+    case class MethodArg(i: Desc) extends Arg
+    def anyToArg(any: Any): Arg = any match{
+      case i: java.lang.String => SSA.InvokeDynamic.StringArg(i)
+      case i: java.lang.Integer => SSA.InvokeDynamic.IntArg(i)
+      case i: java.lang.Float => SSA.InvokeDynamic.FloatArg(i)
+      case i: java.lang.Long => SSA.InvokeDynamic.LongArg(i)
+      case i: java.lang.Double => SSA.InvokeDynamic.DoubleArg(i)
+      case i: org.objectweb.asm.Type =>
+        if (i.getSort == org.objectweb.asm.Type.METHOD){
+          SSA.InvokeDynamic.MethodArg(Desc.read(i.getDescriptor))
+        }else{
+          SSA.InvokeDynamic.ClsArg(JType.Cls(i.getClassName))
+        }
+      case i: org.objectweb.asm.Handle =>
+        SSA.InvokeDynamic.HandleArg(JType.Cls(i.getOwner), i.getName, Desc.read(i.getDesc), i.getTag)
+    }
+    def argToAny(arg: Arg): AnyRef = arg match{
+      case SSA.InvokeDynamic.StringArg(i) => i
+      case SSA.InvokeDynamic.IntArg(i) => i.asInstanceOf[AnyRef]
+      case SSA.InvokeDynamic.FloatArg(i) => i.asInstanceOf[AnyRef]
+      case SSA.InvokeDynamic.LongArg(i) => i.asInstanceOf[AnyRef]
+      case SSA.InvokeDynamic.DoubleArg(i) => i.asInstanceOf[AnyRef]
+      case SSA.InvokeDynamic.MethodArg(desc) => org.objectweb.asm.Type.getMethodType(desc.unparse)
+      case SSA.InvokeDynamic.ClsArg(cls) => org.objectweb.asm.Type.getObjectType(cls.name)
+      case SSA.InvokeDynamic.HandleArg(cls, name, desc, tag) => new Handle(tag, cls.name, name, desc.unparse)
+    }
+  }
   case class New(var cls: JType.Cls) extends Val(cls){
     def upstream = Nil
     def update(swap: Swapper): Unit = {}

@@ -3,6 +3,7 @@ package joptimize.analysis
 
 import joptimize.model.JType
 import joptimize.model.{Program, SSA}
+import org.objectweb.asm.Handle
 import org.objectweb.asm.Opcodes._
 import org.objectweb.asm.tree._
 import org.objectweb.asm.util.{Textifier, TraceMethodVisitor}
@@ -226,7 +227,11 @@ object CodeGen{
           Seq(new MethodInsnNode(INVOKEVIRTUAL, cls.name, name, desc.unparse))
         case SSA.InvokeInterface(state, srcs, cls, name, desc) =>
           Seq(new MethodInsnNode(INVOKEINTERFACE, cls.name, name, desc.unparse))
-        case SSA.InvokeDynamic(name, desc, bsTag, bsOwner, bsName, bsDesc, bsArgs) => ???
+        case SSA.InvokeDynamic(name, desc, bsTag, bsOwner, bsName, bsDesc, bsArgs, vs) =>
+          Seq(new InvokeDynamicInsnNode(
+            name, desc.unparse, new Handle(bsTag, bsOwner.name, bsName, bsDesc.unparse),
+            bsArgs.map(SSA.InvokeDynamic.argToAny):_*
+          ))
         case SSA.New(cls) => Seq(new TypeInsnNode(NEW, cls.name))
         case SSA.NewArray(state, src, typeRef) => Seq(newArrayOp(typeRef))
         case SSA.MultiANewArray(state, desc, dims) => Seq(new MultiANewArrayInsnNode(desc.name, dims.length))
@@ -278,7 +283,11 @@ object CodeGen{
         case SSA.InvokeInterface(state, srcs, cls, name, desc) =>
           Seq(new MethodInsnNode(INVOKEINTERFACE, cls.name, name, desc.unparse)) ++
           (if (desc.ret.size == 0) Nil else Seq(new InsnNode(POP)))
-        case SSA.InvokeDynamic(name, desc, bsTag, bsOwner, bsName, bsDesc, bsArgs) => ???
+        case SSA.InvokeDynamic(name, desc, bsTag, bsOwner, bsName, bsDesc, bsArgs, vs) =>
+          Seq(new InvokeDynamicInsnNode(
+            name, desc.unparse, new Handle(bsTag, bsOwner.name, bsName, bsDesc.unparse),
+            bsArgs.map(SSA.InvokeDynamic.argToAny):_*
+          ))
         case SSA.New(cls) => ???
         case SSA.NewArray(state, src, typeRef) => Seq(newArrayOp(typeRef), new InsnNode(POP))
         case SSA.MultiANewArray(state, desc, dims) => Seq(new MultiANewArrayInsnNode(desc.name, dims.length), new InsnNode(POP))

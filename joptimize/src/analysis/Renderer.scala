@@ -3,9 +3,8 @@ import java.io.{PrintWriter, StringWriter}
 
 import fansi.Str
 import joptimize.Util
-
 import joptimize.graph.HavlakLoopTree
-import joptimize.model.{Program, SSA}
+import joptimize.model.{Desc, JType, Program, SSA}
 import org.objectweb.asm.tree.{AbstractInsnNode, InsnList}
 import org.objectweb.asm.util.{Textifier, TraceMethodVisitor}
 import pprint.Tree
@@ -173,7 +172,25 @@ object Renderer {
       case n: SSA.InvokeSpecial => apply(n.cls.javaName + "##" + n.name + n.desc.unparse, n.srcs.map(rec):_*)
       case n: SSA.InvokeVirtual => apply(n.cls.javaName + "#" + n.name + n.desc.unparse, n.srcs.map(rec):_*)
       case n: SSA.InvokeInterface => apply(n.cls.javaName + "#" + n.name + n.desc.unparse, n.srcs.map(rec):_*)
-      case n: SSA.InvokeDynamic => ???
+      case n: SSA.InvokeDynamic =>
+        apply(
+          n.bsOwner.javaName + "." + n.name,
+          (
+            n.bsArgs.map{
+              case SSA.InvokeDynamic.StringArg(s: String) => pprint.treeify(s)
+              case SSA.InvokeDynamic.IntArg(i: Int) => pprint.treeify(i)
+              case SSA.InvokeDynamic.LongArg(i: Long) => pprint.treeify(i)
+              case SSA.InvokeDynamic.FloatArg(i: Float) => pprint.treeify(i)
+              case SSA.InvokeDynamic.DoubleArg(i: Double) => pprint.treeify(i)
+              case SSA.InvokeDynamic.ClsArg(i: JType.Cls) => pprint.treeify(i.name)
+              case SSA.InvokeDynamic.HandleArg(cls: JType.Cls, name: String, desc: Desc, tag: Int) =>
+                pprint.treeify(cls + " " + name + desc.unparse)
+              case SSA.InvokeDynamic.MethodArg(i: Desc) => pprint.treeify(i.unparse)
+            } ++
+            Seq(literal("--")) ++
+            n.srcs.map(rec)
+          ):_*
+        )
       case n: SSA.New => apply("new", atom(n.cls.name))
       case n: SSA.NewArray => apply("newarray", rec(n.src), atom(n.typeRef.name))
       case n: SSA.MultiANewArray =>

@@ -1,7 +1,7 @@
 package joptimize.analysis
 import java.util
 
-import joptimize.model.{Desc, JType, SSA}
+import joptimize.model.{Desc, JType, MethodSig, SSA}
 import org.objectweb.asm.Opcodes._
 import org.objectweb.asm.Type._
 import org.objectweb.asm.tree.analysis._
@@ -245,8 +245,15 @@ class StepEvaluator(merges: mutable.LinkedHashSet[SSA.Phi],
         val insn2 = insn.asInstanceOf[InvokeDynamicInsnNode]
         val bsm = insn2.bsm
         val op = new SSA.InvokeDynamic(
-          insn2.name, insn2.desc, bsm.getTag, bsm.getOwner,
-          bsm.getName, bsm.getDesc, insn2.bsmArgs
+          insn2.name, Desc.read(insn2.desc), bsm.getTag, JType.Cls(bsm.getOwner),
+          bsm.getName, Desc.read(bsm.getDesc),
+          /*
+          an {@link Integer}, {@link Float}, {@link Long}, {@link Double}, {@link String}, {@link
+   *     org.objectweb.asm.Type} or {@link Handle} value. This method is allowed to modify the
+   *     content of the array so a caller should expect that this array may change.
+           */
+          insn2.bsmArgs.map(SSA.InvokeDynamic.anyToArg),
+          vs
         )
         (op, new SSA.ChangedState(op))
 
