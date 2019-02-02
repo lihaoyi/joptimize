@@ -19,6 +19,24 @@ public class Arrays {
         return x[n][n];
     }
 
+    @joptimize.Test(inputs = {0, 1, 2})
+    public static int get3(int n) {
+        int[] x = {5, 7, 9};
+        return x[n];
+    }
+
+    @joptimize.Test(inputs = {0, 0})
+    public static int get4(int n, int m) {
+        int[][] x = {{1337}};
+        return x[n][m];
+    }
+
+    @joptimize.Test(inputs = {0, 0, 0, 1, 1, 1, 1, 0})
+    public static int get5(int n, int m) {
+        int[][] x = {{1, 2}, {4, 5}};
+        return x[n][m];
+    }
+
     @joptimize.Test(inputs = {1, 2, 3, 4, 5, 6})
     public static int[] set1(int a) {
         int[] x = new int[a];

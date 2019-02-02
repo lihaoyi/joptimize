@@ -310,14 +310,14 @@ object CodeGen{
 
   def newArrayOp(typeRef: JType) = {
     typeRef match {
-      case JType.Arr(JType.Prim.Z) => new IntInsnNode(NEWARRAY, T_BOOLEAN)
-      case JType.Arr(JType.Prim.C) => new IntInsnNode(NEWARRAY, T_CHAR)
-      case JType.Arr(JType.Prim.B) => new IntInsnNode(NEWARRAY, T_BYTE)
-      case JType.Arr(JType.Prim.S) => new IntInsnNode(NEWARRAY, T_SHORT)
-      case JType.Arr(JType.Prim.I) => new IntInsnNode(NEWARRAY, T_INT)
-      case JType.Arr(JType.Prim.F) => new IntInsnNode(NEWARRAY, T_FLOAT)
-      case JType.Arr(JType.Prim.D) => new IntInsnNode(NEWARRAY, T_DOUBLE)
-      case JType.Arr(JType.Prim.J) => new IntInsnNode(NEWARRAY, T_LONG)
+      case JType.Prim.Z => new IntInsnNode(NEWARRAY, T_BOOLEAN)
+      case JType.Prim.C => new IntInsnNode(NEWARRAY, T_CHAR)
+      case JType.Prim.B => new IntInsnNode(NEWARRAY, T_BYTE)
+      case JType.Prim.S => new IntInsnNode(NEWARRAY, T_SHORT)
+      case JType.Prim.I => new IntInsnNode(NEWARRAY, T_INT)
+      case JType.Prim.F => new IntInsnNode(NEWARRAY, T_FLOAT)
+      case JType.Prim.D => new IntInsnNode(NEWARRAY, T_DOUBLE)
+      case JType.Prim.J => new IntInsnNode(NEWARRAY, T_LONG)
       case t => new TypeInsnNode(ANEWARRAY, t.name)
     }
   }

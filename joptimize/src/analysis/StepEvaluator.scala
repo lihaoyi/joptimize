@@ -108,14 +108,14 @@ class StepEvaluator(merges: mutable.LinkedHashSet[SSA.Phi],
           state,
           value,
           insn.asInstanceOf[IntInsnNode].operand match {
-            case T_BOOLEAN => JType.Arr(JType.Prim.Z)
-            case T_CHAR => JType.Arr(JType.Prim.C)
-            case T_BYTE => JType.Arr(JType.Prim.B)
-            case T_SHORT => JType.Arr(JType.Prim.S)
-            case T_INT => JType.Arr(JType.Prim.I)
-            case T_FLOAT => JType.Arr(JType.Prim.F)
-            case T_DOUBLE => JType.Arr(JType.Prim.D)
-            case T_LONG => JType.Arr(JType.Prim.J)
+            case T_BOOLEAN => JType.Prim.Z
+            case T_CHAR => JType.Prim.C
+            case T_BYTE => JType.Prim.B
+            case T_SHORT => JType.Prim.S
+            case T_INT => JType.Prim.I
+            case T_FLOAT => JType.Prim.F
+            case T_DOUBLE => JType.Prim.D
+            case T_LONG => JType.Prim.J
           }
         )
 
@@ -123,7 +123,7 @@ class StepEvaluator(merges: mutable.LinkedHashSet[SSA.Phi],
         new SSA.NewArray(
           state,
           value,
-          JType.Arr(JType.read(insn.asInstanceOf[TypeInsnNode].desc))
+          JType.read(insn.asInstanceOf[TypeInsnNode].desc)
         )
 
       case ARRAYLENGTH => new SSA.ArrayLength(state, value)
@@ -239,6 +239,9 @@ class StepEvaluator(merges: mutable.LinkedHashSet[SSA.Phi],
     insn.getOpcode match{
       case MULTIANEWARRAY =>
         val insn2 = insn.asInstanceOf[MultiANewArrayInsnNode]
+        pprint.log(insn2.desc)
+        pprint.log(insn2.dims)
+        pprint.log(vs)
         (new SSA.MultiANewArray(state, JType.read(insn2.desc), vs), state)
 
       case INVOKEDYNAMIC =>

@@ -83,6 +83,9 @@ object MainTests extends TestSuite{
         'length - annotatedTest
         'get1 - annotatedTest
         'get2 - annotatedTest
+        'get3 - annotatedTest
+        'get4 - annotatedTest
+        'get5 - annotatedTest
         'set1 - annotatedTest
         'set2 - annotatedTest
         'set3 - annotatedTest
@@ -129,9 +132,9 @@ object MainTests extends TestSuite{
 //        'nullPointer - annotatedTest
 //        'arrayIndexOutOfBounds - annotatedTest
 //      }
-//      'Sudoku - {
-//        'run - annotatedTest
-//      }
+      'Sudoku - {
+        'run - annotatedTest
+      }
     }
 //    'narrow - {
 //      'Supertype - {

@@ -468,7 +468,7 @@ object SSA{
     def upstream = Nil
     def update(swap: Swapper): Unit = {}
   }
-  case class NewArray(var state: State, var src: Val, var typeRef: JType) extends Val(typeRef){
+  case class NewArray(var state: State, var src: Val, var typeRef: JType) extends Val(JType.Arr(typeRef)){
     def upstream = Seq(state, src)
     def update(swap: Swapper): Unit = {
       state = swap(state)
