@@ -334,12 +334,7 @@ class Walker() {
         case _ => None
       }
       for (replacement <- replacementOpt) {
-        for (v <- current.upstream) v.downstreamRemoveAll(current)
-        val deltaDownstream = current.downstreamList.filter(_ != current)
-        deltaDownstream.foreach(replacement.downstreamAdd)
-
-        for (down <- deltaDownstream) SSA.update(down, current, replacement)
-        queue.add(replacement)
+        Util.replace(current, replacement, queue)
       }
     }
   }

@@ -1,5 +1,6 @@
 package joptimize.analysis
 
+import joptimize.Util
 import joptimize.model.{Program, SSA}
 
 import scala.collection.mutable
@@ -29,14 +30,7 @@ object PartialEvaluator {
           val filteredValues = phi.incoming.filter(_._2 != phi)
 
           if (filteredValues.map(_._2).size == 1) {
-            val replacement = filteredValues.head._2
-            for (v <- current.upstream) v.downstreamRemoveAll(current)
-            val deltaDownstream = current.downstreamList.filter(_ != current)
-            deltaDownstream.foreach(replacement.downstreamAdd)
-
-            for (down <- deltaDownstream) SSA.update(down, current, replacement)
-            queue.add(replacement)
-            replacement.downstreamList.foreach(queue.add)
+            Util.replace(current, filteredValues.head._2, queue)
           }
 
         case current: SSA.Val =>
@@ -100,13 +94,7 @@ object PartialEvaluator {
 
         case reg: SSA.Merge =>
           if (reg.incoming.size == 1) {
-            val replacement = reg.incoming.head
-            for (v <- current.upstream) v.downstreamRemoveAll(current)
-            val deltaDownstream = current.downstreamList.filter(_ != current)
-            deltaDownstream.foreach(replacement.downstreamAdd)
-
-            for (down <- deltaDownstream) SSA.update(down, current, replacement)
-            queue.add(replacement)
+            Util.replace(current, reg.incoming.head, queue)
           }
 
         case _ =>
