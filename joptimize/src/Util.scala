@@ -242,10 +242,11 @@ object Util{
 
   def replace(current: SSA.Node, replacement: SSA.Node): Seq[SSA.Node] = {
     for (v <- current.upstream) v.downstreamRemoveAll(current)
-    val deltaDownstream = current.downstreamList.filter(_ != current)
-    deltaDownstream.foreach(replacement.downstreamAdd)
 
-    for (down <- deltaDownstream) down.replaceUpstream(current, replacement)
+    for (down <- current.downstreamList if down != current) {
+      replacement.downstreamAdd(down)
+      down.replaceUpstream(current, replacement)
+    }
     replacement +: replacement.downstreamList
   }
 }

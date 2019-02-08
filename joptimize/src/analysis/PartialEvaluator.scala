@@ -1,5 +1,6 @@
 package joptimize.analysis
 
+import joptimize.Util
 import joptimize.model.{Program, SSA}
 
 object PartialEvaluator {
@@ -8,15 +9,7 @@ object PartialEvaluator {
     case current: SSA.Val =>
       evaluateVal(current) match{
         case None => Nil
-        case Some(replacement) =>
-          for (v <- current.upstream) v.downstreamRemoveAll(current)
-          val deltaDownstream = current.downstreamList.filter(_ != current)
-          deltaDownstream.foreach(replacement.downstreamAdd)
-
-          for (down <- deltaDownstream) {
-            down.replaceUpstream(current, replacement)
-          }
-          deltaDownstream
+        case Some(replacement) => Util.replace(current, replacement)
       }
     case current: SSA.Jump =>
       val directNextOpt = evaluateJump(current)
@@ -35,14 +28,9 @@ object PartialEvaluator {
         // block - d
         //      \   \
         //       --- phi
-        for(down <- directNext.downstreamList){
-          down.replaceUpstream(directNext, current.block)
-          current.block.downstreamAdd(down)
-        }
+        Util.replace(directNext, current.block)
 
-        for(up <- current.upstream){
-          up.downstreamRemove(current)
-        }
+        current.block.downstreamRemove(current)
 
         val branchBlocks = current.downstreamList.toSet
 
@@ -67,7 +55,6 @@ object PartialEvaluator {
       next.toSeq.flatten
   }
   def apply(program: Program) = {
-    println("PartialEvaluator.apply")
     program.transform(Simplifier.transform.orElse(PartialEvaluator.transform))
   }
 
