@@ -245,7 +245,7 @@ object Util{
     val deltaDownstream = current.downstreamList.filter(_ != current)
     deltaDownstream.foreach(replacement.downstreamAdd)
 
-    for (down <- deltaDownstream) SSA.update(down, current, replacement)
+    for (down <- deltaDownstream) down.replaceUpstream(current, replacement)
     replacement +: replacement.downstreamList
   }
 }

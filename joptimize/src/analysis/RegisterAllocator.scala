@@ -32,7 +32,7 @@ object RegisterAllocator {
           }
           val replacement = SSA.Copy(phi)
           phi.downstreamList.withFilter(_ != replacement).foreach{down =>
-            SSA.update(down, phi, replacement)
+            down.replaceUpstream(phi, replacement)
             replacement.downstreamAdd(down)
             phi.downstreamRemove(down)
           }
