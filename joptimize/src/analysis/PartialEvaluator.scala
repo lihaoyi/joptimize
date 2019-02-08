@@ -14,6 +14,31 @@ object PartialEvaluator {
       val current = queue.head
       queue.remove(current)
       current match{
+
+        case phi: SSA.Phi if phi.getSize != 0 =>
+          //          b
+          //         /
+          // a -- phi -- c
+          //         \
+          //          d
+          //    b
+          //   /
+          // a -- c
+          //   \
+          //    d
+          val filteredValues = phi.incoming.filter(_._2 != phi)
+
+          if (filteredValues.map(_._2).size == 1) {
+            val replacement = filteredValues.head._2
+            for (v <- current.upstream) v.downstreamRemoveAll(current)
+            val deltaDownstream = current.downstreamList.filter(_ != current)
+            deltaDownstream.foreach(replacement.downstreamAdd)
+
+            for (down <- deltaDownstream) SSA.update(down, current, replacement)
+            queue.add(replacement)
+            replacement.downstreamList.foreach(queue.add)
+          }
+
         case current: SSA.Val =>
           val replacement = evaluateVal(current)
           if (replacement ne current){
@@ -27,54 +52,110 @@ object PartialEvaluator {
             }
           }
         case current: SSA.Jump =>
-          def findDownstreamBlock(boolean: Boolean) = {
-            if (boolean) current.downstreamList.collectFirst{case n: SSA.True => n}
-            else current.downstreamList.collectFirst{case n: SSA.False => n}
-          }
-          val directNext: Option[SSA.SimpleBlock] = current match{
-            case current: SSA.UnaBranch =>
-              current.a match{
-                case const: SSA.ConstI =>
-                  current.opcode match{
-                    case SSA.UnaBranch.IFEQ => findDownstreamBlock(const.value == 0)
-                    case SSA.UnaBranch.IFGE => findDownstreamBlock(const.value >= 0)
-                    case SSA.UnaBranch.IFGT => findDownstreamBlock(const.value > 0)
-                    case SSA.UnaBranch.IFLE => findDownstreamBlock(const.value <= 0)
-                    case SSA.UnaBranch.IFLT => findDownstreamBlock(const.value < 0)
-                    case SSA.UnaBranch.IFNE => findDownstreamBlock(const.value != 0)
-                    case _ => None
-                  }
-                case _ => None
-              }
-            case current: SSA.BinBranch =>
-              (current.a, current.b) match{
-                case (a: SSA.ConstI, b: SSA.ConstI) =>
-                  current.opcode match{
-                    case SSA.BinBranch.IF_ICMPEQ => findDownstreamBlock(a.value == b.value)
-                    case SSA.BinBranch.IF_ICMPGE => findDownstreamBlock(a.value >= b.value)
-                    case SSA.BinBranch.IF_ICMPGT => findDownstreamBlock(a.value > b.value)
-                    case SSA.BinBranch.IF_ICMPLE => findDownstreamBlock(a.value <= b.value)
-                    case SSA.BinBranch.IF_ICMPLT => findDownstreamBlock(a.value < b.value)
-                    case SSA.BinBranch.IF_ICMPNE => findDownstreamBlock(a.value != b.value)
-                    case _ => None
-                  }
-                case _ => None
-              }
-            case current: SSA.TableSwitch => None
-            case current: SSA.LookupSwitch => None
-            case current: SSA.Return => None
-            case current: SSA.ReturnVal => None
+          val directNextOpt = evaluateJump(current)
+
+          for(directNext <- directNextOpt){
+            //                     c
+            //                    /
+            //       a        TRUE - d -
+            //        \      /    \      \
+            // block - branch      ----- phi
+            //        /      \          / |
+            //       b        false ----  |
+            //                     \      /
+            //       c              e ----
+            //      /
+            // block - d
+            //      \   \
+            //       --- phi
+            for(down <- directNext.downstreamList){
+              SSA.update(down, directNext, current.block)
+              current.block.downstreamAdd(down)
+            }
+
+            for(up <- current.upstream){
+              up.downstreamRemove(current)
+            }
+
+            val branchBlocks = current.downstreamList.toSet
+
+            branchBlocks.flatMap(_.downstreamList).foreach{
+              case phi: SSA.Phi =>
+                phi.incoming = phi.incoming.flatMap(x =>
+                  if (x._1 == directNext) Some(current.block -> x._2)
+                  else if (branchBlocks(x._1)) None
+                  else Some(x)
+                )
+                queue.add(phi)
+
+              case r: SSA.Merge =>
+                r.incoming = r.incoming.flatMap{ x =>
+                  if (x == directNext) Some(current.block)
+                  else if (branchBlocks(x)) None
+                  else Some(x)
+                }
+                queue.add(r)
+            }
           }
 
-          directNext match{
-            case None =>
-            case Some(next) =>
-//              next.block
+        case reg: SSA.Merge =>
+          if (reg.incoming.size == 1) {
+            val replacement = reg.incoming.head
+            for (v <- current.upstream) v.downstreamRemoveAll(current)
+            val deltaDownstream = current.downstreamList.filter(_ != current)
+            deltaDownstream.foreach(replacement.downstreamAdd)
+
+            for (down <- deltaDownstream) SSA.update(down, current, replacement)
+            queue.add(replacement)
           }
-        case current: SSA.Block =>
+
+        case _ =>
       }
     }
   }
+
+  def evaluateJump(current: SSA.Jump): Option[SSA.SimpleBlock] = {
+    def findDownstreamBlock(boolean: Boolean) = {
+      if (boolean) current.downstreamList.collectFirst { case n: SSA.True => n }
+      else current.downstreamList.collectFirst { case n: SSA.False => n }
+    }
+
+    current match {
+      case current: SSA.UnaBranch =>
+        current.a match {
+          case const: SSA.ConstI =>
+            current.opcode match {
+              case SSA.UnaBranch.IFEQ => findDownstreamBlock(const.value == 0)
+              case SSA.UnaBranch.IFGE => findDownstreamBlock(const.value >= 0)
+              case SSA.UnaBranch.IFGT => findDownstreamBlock(const.value > 0)
+              case SSA.UnaBranch.IFLE => findDownstreamBlock(const.value <= 0)
+              case SSA.UnaBranch.IFLT => findDownstreamBlock(const.value < 0)
+              case SSA.UnaBranch.IFNE => findDownstreamBlock(const.value != 0)
+              case _ => None
+            }
+          case _ => None
+        }
+      case current: SSA.BinBranch =>
+        (current.a, current.b) match {
+          case (a: SSA.ConstI, b: SSA.ConstI) =>
+            current.opcode match {
+              case SSA.BinBranch.IF_ICMPEQ => findDownstreamBlock(a.value == b.value)
+              case SSA.BinBranch.IF_ICMPGE => findDownstreamBlock(a.value >= b.value)
+              case SSA.BinBranch.IF_ICMPGT => findDownstreamBlock(a.value > b.value)
+              case SSA.BinBranch.IF_ICMPLE => findDownstreamBlock(a.value <= b.value)
+              case SSA.BinBranch.IF_ICMPLT => findDownstreamBlock(a.value < b.value)
+              case SSA.BinBranch.IF_ICMPNE => findDownstreamBlock(a.value != b.value)
+              case _ => None
+            }
+          case _ => None
+        }
+      case current: SSA.TableSwitch => None
+      case current: SSA.LookupSwitch => None
+      case current: SSA.Return => None
+      case current: SSA.ReturnVal => None
+    }
+  }
+
   def evaluateVal(s: SSA.Val): SSA.Val = s match {
 
     case n: SSA.BinOp =>

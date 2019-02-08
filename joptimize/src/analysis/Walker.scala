@@ -67,9 +67,19 @@ class Walker() {
 
     PartialEvaluator.apply(program)
 
+    removeDeadNodes(program)
+    val loopTree2 = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)
+
+    println()
+    println(Renderer.renderLoopTree(loopTree2, preScheduleNaming.savedLocals))
+
+    val dominators2 = Dominator.findDominators(blockEdges, allBlocks)
+
+    pprint.log(startBlock)
+
     { // Just for debugging
       val nodesToBlocks = Scheduler.apply(
-        loopTree, dominators, startBlock,
+        loopTree2, dominators2, startBlock,
         preScheduleNaming.savedLocals.mapValues(_._2), program.getAllVertices()
       )
 
@@ -85,12 +95,12 @@ class Walker() {
 //      ???
     }
 
-    RegisterAllocator.apply(program, dominators.immediateDominators)
+    RegisterAllocator.apply(program, dominators2.immediateDominators)
 
     val allVertices2 = Util.breadthFirstAggregation[SSA.Node](program.allTerminals.toSet)(_.upstream)._1
 
     val nodesToBlocks = Scheduler.apply(
-      loopTree, dominators, startBlock,
+      loopTree2, dominators2, startBlock,
       preScheduleNaming.savedLocals.mapValues(_._2), allVertices2
     )
 
@@ -103,7 +113,7 @@ class Walker() {
       program,
       allVertices2,
       nodesToBlocks,
-      controlFlowEdges,
+      analyzeBlockStructure(program)._1,
       postRegisterAllocNaming
     )
 

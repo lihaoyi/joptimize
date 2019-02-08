@@ -265,14 +265,43 @@ class Folding {
     }
 
 
-    @joptimize.Test(inputs = {1, 2}, removedNumConst = {200, 100})
-    static int jump(int x) {
+    @joptimize.Test(inputs = {1, 2}, removedNumConst = {200, 100}, addedNumConst = {102})
+    static int jump0(int x) {
         int y = 100;
         int z = 200;
         int w;
         if (y > z) w = 1;
         else w = 2;
         return y + w;
+    }
+    @joptimize.Test(inputs = {1, 2}, removedNumConst = {200, 100}, addedNumConst = {201})
+    static int jump1(int x) {
+        int y = 200;
+        int z = 100;
+        int w;
+        if (y > z) w = 1;
+        else w = 2;
+        return y + w;
+    }
+
+    @joptimize.Test(inputs = {1, 2}, removedNumConst = {200, 100}, addedNumConst = {201})
+    static long jump2(int x) {
+        long y = 200;
+        long z = 100;
+        int w;
+        if (y > z) w = 1;
+        else w = 2;
+        return y + w;
+    }
+
+    @joptimize.Test(inputs = {1, 2}, removedNumConst = {200, 100}, addedNumConst = {102})
+    static long jump(int x) {
+        float y = 100f;
+        float z = 200;
+        int w;
+        if (y > z) w = 1;
+        else w = 2;
+        return (int)(y + w);
     }
 
 

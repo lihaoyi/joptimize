@@ -109,7 +109,7 @@ object SSA{
     def controls = upstream
     def upstream = incoming.toSeq
 
-    override def toString = s"Region@${Integer.toHexString(System.identityHashCode(this))}(${incoming.size})"
+    override def toString = s"Merge@${Integer.toHexString(System.identityHashCode(this))}(${incoming.size})"
     def update(swap: Swapper): Unit = {
       incoming = incoming.map(swap(_))
     }
