@@ -72,11 +72,11 @@ object PartialEvaluator {
         //     \        /      \
         //      c      b        false - e
         //
-        //       d --- phi
-        //      /     /
+        //      d --- phi
+        //     /     /
         // block -----
-        //      \
-        //       c
+        //     \
+        //      c
 
       }
       next.toSeq.flatten
