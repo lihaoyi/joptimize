@@ -65,6 +65,26 @@ class Walker() {
 //      ???
     }
 
+    PartialEvaluator.apply(program)
+
+    { // Just for debugging
+      val nodesToBlocks = Scheduler.apply(
+        loopTree, dominators, startBlock,
+        preScheduleNaming.savedLocals.mapValues(_._2), program.getAllVertices()
+      )
+
+      val postScheduleNaming = Namer.apply(program, nodesToBlocks, program.getAllVertices())
+
+//        pprint.log(preScheduleNaming.savedLocals.collect{case (k: SSA.Block, (v1, v2)) => (k, v2)}, height=9999)
+//        pprint.log(preScheduleNaming.saveable)
+//        pprint.log(nodesToBlocks, height=9999)
+//
+      println()
+      println(Renderer.renderSSA(program, postScheduleNaming, nodesToBlocks))
+
+//      ???
+    }
+
     RegisterAllocator.apply(program, dominators.immediateDominators)
 
     val allVertices2 = Util.breadthFirstAggregation[SSA.Node](program.allTerminals.toSet)(_.upstream)._1

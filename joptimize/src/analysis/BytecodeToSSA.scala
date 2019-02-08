@@ -49,6 +49,7 @@ class BytecodeToSSA(merges: mutable.LinkedHashSet[SSA.Phi],
       case LDC =>
         insn.asInstanceOf[LdcInsnNode].cst match {
           case i: java.lang.Integer => new SSA.PushI(i)
+          case i: java.lang.Long => new SSA.PushJ(i)
           case f: java.lang.Float => new SSA.PushF(f)
           case d: java.lang.Double => new SSA.PushD(d)
           case s: java.lang.String => new SSA.PushStr(s)

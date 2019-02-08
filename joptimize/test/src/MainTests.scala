@@ -2,6 +2,8 @@ package joptimize
 import java.net.URLClassLoader
 
 import joptimize.model.{Desc, JType, MethodSig}
+import org.objectweb.asm.{ClassReader, Opcodes}
+import org.objectweb.asm.tree.{ClassNode, IntInsnNode, LdcInsnNode}
 import utest._
 import utest.framework.TestPath
 
@@ -134,6 +136,39 @@ object MainTests extends TestSuite{
 //      }
       'Sudoku - {
         'run - annotatedTest
+      }
+    }
+    'opt - {
+      'Folding - {
+        'iadd - annotatedTest
+        'isub - annotatedTest
+        'imul - annotatedTest
+        'idiv - annotatedTest
+        'irem  - annotatedTest
+        'ishl  - annotatedTest
+        'ishr  - annotatedTest
+        'iushr  - annotatedTest
+
+        'jadd - annotatedTest
+        'jsub - annotatedTest
+        'jmul - annotatedTest
+        'jdiv - annotatedTest
+        'jrem  - annotatedTest
+        'jshl  - annotatedTest
+        'jshr  - annotatedTest
+        'jushr  - annotatedTest
+
+        'fadd - annotatedTest
+        'fsub - annotatedTest
+        'fmul - annotatedTest
+        'fdiv - annotatedTest
+        'frem  - annotatedTest
+
+        'dadd - annotatedTest
+        'dsub - annotatedTest
+        'dmul - annotatedTest
+        'ddiv - annotatedTest
+        'drem  - annotatedTest
       }
     }
 //    'narrow - {
@@ -295,12 +330,13 @@ object MainTests extends TestSuite{
         case _ =>
           val argList = args.toList
           assert {
-            argList
+            identity(argList)
             joptimizedResult == expectedResult
           }
       }
     }
     checkWithClassloader { cl =>
+      testAnnot.numConst().foreach(checkNumConst(cl, _))
       testAnnot.checkPresent().foreach(checkPresent(cl, _))
       testAnnot.checkRemoved().foreach(checkRemoved(cl, _))
       testAnnot.checkMangled().foreach(checkMangled(cl, _))
@@ -354,6 +390,50 @@ object MainTests extends TestSuite{
     (cls2, methodName)
   }
 
+  def checkNumConst(cl: ClassLoader, const: Int)(implicit tp: TestPath) = {
+
+    val clsName = tp.value(tp.value.length - 2)
+    val bytestream = os.read.inputStream(
+      os.resource(cl) / "joptimize" / "examples" / tp.value.dropRight(2) / (clsName + ".class")
+    )
+    val cr = new ClassReader(bytestream)
+    val cn = new ClassNode()
+    cr.accept(cn, ClassReader.SKIP_FRAMES)
+    import collection.JavaConverters._
+    val allInsns = cn.methods.asScala.flatMap(_.instructions.iterator().asScala)
+    val constants = allInsns.map(x => (x.getOpcode, x)).flatMap{
+      case (Opcodes.ICONST_0, _) => Some(0)
+      case (Opcodes.ICONST_1, _) => Some(1)
+      case (Opcodes.ICONST_2, _) => Some(2)
+      case (Opcodes.ICONST_3, _) => Some(3)
+      case (Opcodes.ICONST_4, _) => Some(4)
+      case (Opcodes.ICONST_5, _) => Some(5)
+      case (Opcodes.ICONST_M1, _) => Some(-1)
+
+      case (Opcodes.LCONST_0, _) => Some(0)
+      case (Opcodes.LCONST_1, _) => Some(1)
+
+      case (Opcodes.FCONST_0, _) => Some(0)
+      case (Opcodes.FCONST_1, _) => Some(1)
+      case (Opcodes.FCONST_2, _) => Some(2)
+
+      case (Opcodes.DCONST_0, _) => Some(0)
+      case (Opcodes.DCONST_1, _) => Some(1)
+
+      case (Opcodes.BIPUSH, i: IntInsnNode) => Some(i.operand)
+      case (Opcodes.SIPUSH, i: IntInsnNode) => Some(i.operand)
+      case (Opcodes.LDC, i: LdcInsnNode) =>
+        i.cst match{
+          case n: java.lang.Integer => Some(n.toInt)
+          case n: java.lang.Long => Some(n.toInt)
+          case n: java.lang.Float => Some(n.toInt)
+          case n: java.lang.Double => Some(n.toInt)
+          case _ => None
+        }
+      case (k, i) => None
+    }
+    assert(constants.contains(const))
+  }
   def checkPresent(cl: ClassLoader, sigString: String)(implicit tp: TestPath) = {
     val (cls2, methodName) = resolveMethod(sigString, cl)
     // That the previously-existing method has been removed
