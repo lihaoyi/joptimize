@@ -187,6 +187,8 @@ object MainTests extends TestSuite{
         'dcmp0 - annotatedTest
         'dcmp1 - annotatedTest
         'dcmp2 - annotatedTest
+
+        'jump - annotatedTest
       }
     }
 //    'narrow - {

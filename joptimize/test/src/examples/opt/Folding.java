@@ -263,4 +263,17 @@ class Folding {
         double z = 200d;
         return y > z;
     }
+
+
+    @joptimize.Test(inputs = {1, 2}, removedNumConst = {200, 100})
+    static int jump(int x) {
+        int y = 100;
+        int z = 200;
+        int w;
+        if (y > z) w = 1;
+        else w = 2;
+        return y + w;
+    }
+
+
 }

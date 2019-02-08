@@ -26,7 +26,51 @@ object PartialEvaluator {
               queue.add(down)
             }
           }
-        case current: SSA.Jump => // do nothing so far
+        case current: SSA.Jump =>
+          def findDownstreamBlock(boolean: Boolean) = {
+            if (boolean) current.downstreamList.collectFirst{case n: SSA.True => n}
+            else current.downstreamList.collectFirst{case n: SSA.False => n}
+          }
+          val directNext: Option[SSA.SimpleBlock] = current match{
+            case current: SSA.UnaBranch =>
+              current.a match{
+                case const: SSA.ConstI =>
+                  current.opcode match{
+                    case SSA.UnaBranch.IFEQ => findDownstreamBlock(const.value == 0)
+                    case SSA.UnaBranch.IFGE => findDownstreamBlock(const.value >= 0)
+                    case SSA.UnaBranch.IFGT => findDownstreamBlock(const.value > 0)
+                    case SSA.UnaBranch.IFLE => findDownstreamBlock(const.value <= 0)
+                    case SSA.UnaBranch.IFLT => findDownstreamBlock(const.value < 0)
+                    case SSA.UnaBranch.IFNE => findDownstreamBlock(const.value != 0)
+                    case _ => None
+                  }
+                case _ => None
+              }
+            case current: SSA.BinBranch =>
+              (current.a, current.b) match{
+                case (a: SSA.ConstI, b: SSA.ConstI) =>
+                  current.opcode match{
+                    case SSA.BinBranch.IF_ICMPEQ => findDownstreamBlock(a.value == b.value)
+                    case SSA.BinBranch.IF_ICMPGE => findDownstreamBlock(a.value >= b.value)
+                    case SSA.BinBranch.IF_ICMPGT => findDownstreamBlock(a.value > b.value)
+                    case SSA.BinBranch.IF_ICMPLE => findDownstreamBlock(a.value <= b.value)
+                    case SSA.BinBranch.IF_ICMPLT => findDownstreamBlock(a.value < b.value)
+                    case SSA.BinBranch.IF_ICMPNE => findDownstreamBlock(a.value != b.value)
+                    case _ => None
+                  }
+                case _ => None
+              }
+            case current: SSA.TableSwitch => None
+            case current: SSA.LookupSwitch => None
+            case current: SSA.Return => None
+            case current: SSA.ReturnVal => None
+          }
+
+          directNext match{
+            case None =>
+            case Some(next) =>
+//              next.block
+          }
         case current: SSA.Block =>
       }
     }
