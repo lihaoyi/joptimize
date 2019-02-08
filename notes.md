@@ -208,6 +208,8 @@ What about method specialization?
       in analysis of the specialized code
     - Performing incremental pessimistic optimizations after each transformation
       is half-half
+      - e.g. if we specialize an impure recursive method such that it becomes
+        pure, a pessimistic analysis would not discover that fact
     - Some kind of batching of multiple specializations together before
       re-running the optimistic analyses
       - Is it possible to update the optimistic analysis incrementally?
