@@ -5,33 +5,47 @@ import joptimize.model.{Program, SSA}
 
 object PartialEvaluator {
   val transform: PartialFunction[SSA.Node, Seq[SSA.Node]] = {
-
     case current: SSA.Val =>
+      // consta - op
+      //         /
+      //   constb
       evaluateVal(current) match{
         case None => Nil
         case Some(replacement) => Util.replace(current, replacement)
       }
+      // constc
+
     case current: SSA.Jump =>
       val directNextOpt = evaluateJump(current)
 
       val next = for(directNext <- directNextOpt) yield {
         //                     c
         //                    /
-        //       a        TRUE - d -
-        //        \      /    \      \
-        // block - branch      ----- phi
+        //       a        TRUE -- d
+        //        \      /    \     \
+        // block - branch      ---- phi
         //        /      \          / |
-        //       b        false ----  |
-        //                     \      /
-        //       c              e ----
-        //      /
-        // block - d
-        //      \   \
-        //       --- phi
+        //       b        false ---  |
+        //                     \     /
+        //                      e----
         Util.replace(directNext, current.block)
-
+        //       --------------------
+        //      /      a        TRUE \--- d
+        //     /        \      /      \    \
+        // block ------- branch        --- phi
+        //     \        /      \          / |
+        //      c      b        false ----  |
+        //                           \      /
+        //                            e ----
         current.block.downstreamRemove(current)
-
+        //       --------------------
+        //      /      a        TRUE \--- d
+        //     /        \      /      \    \
+        // block         branch        -- phi
+        //     \        /      \          / |
+        //      c      b        false ----  |
+        //                           \      /
+        //                            e ----
         val branchBlocks = current.downstreamList.toSet
 
         branchBlocks.flatMap(_.downstreamList).collect{
@@ -51,6 +65,19 @@ object PartialEvaluator {
             }
             r
         }
+        //       ---------------------
+        //      /      a        TRUE  \-- d
+        //     /        \      /       \    \
+        // block         branch         --- phi
+        //     \        /      \
+        //      c      b        false - e
+        //
+        //       d --- phi
+        //      /     /
+        // block -----
+        //      \
+        //       c
+
       }
       next.toSeq.flatten
   }
