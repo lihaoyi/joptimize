@@ -147,7 +147,7 @@ class Walker() {
       i => regionStarts(insnIndices(i)),
       joptimize.bytecode.Analyzer.analyze(
         sig.cls.name, mn,
-        new StepEvaluator(phiMerges0, startRegionLookup, regionStarts),
+        new BytecodeToSSA(phiMerges0, startRegionLookup, regionStarts),
         new SSA.ChangedState(null)
       ),
       startRegionLookup
