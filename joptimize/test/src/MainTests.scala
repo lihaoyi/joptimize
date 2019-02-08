@@ -188,7 +188,15 @@ object MainTests extends TestSuite{
         'dcmp1 - annotatedTest
         'dcmp2 - annotatedTest
 
-        'jump - annotatedTest
+        'jump0 - annotatedTest
+        'jump1 - annotatedTest
+        'jump2 - annotatedTest
+        'jump3 - annotatedTest
+
+        'switch0 - annotatedTest
+        'switch1 - annotatedTest
+        'switch2 - annotatedTest
+        'switch3 - annotatedTest
       }
     }
 //    'narrow - {

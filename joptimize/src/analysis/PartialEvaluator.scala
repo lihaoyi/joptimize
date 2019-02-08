@@ -121,6 +121,22 @@ object PartialEvaluator {
     }
 
     current match {
+      case current: SSA.LookupSwitch =>
+        current.src match{
+          case const: SSA.ConstI =>
+            current.downstreamList.collectFirst{case d: SSA.Case if d.n == const.value => d}.orElse(
+              current.downstreamList.collectFirst{case d: SSA.Default => d}
+            )
+          case _ => None
+        }
+      case current: SSA.TableSwitch =>
+        current.src match{
+          case const: SSA.ConstI =>
+            current.downstreamList.collectFirst{case d: SSA.Case if d.n == const.value => d}.orElse(
+              current.downstreamList.collectFirst{case d: SSA.Default => d}
+            )
+          case _ => None
+        }
       case current: SSA.UnaBranch =>
         current.a match {
           case const: SSA.ConstI =>

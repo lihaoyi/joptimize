@@ -295,13 +295,73 @@ class Folding {
     }
 
     @joptimize.Test(inputs = {1, 2}, removedNumConst = {200, 100}, addedNumConst = {102})
-    static long jump(int x) {
+    static long jump3(int x) {
         float y = 100f;
         float z = 200;
         int w;
         if (y > z) w = 1;
         else w = 2;
         return (int)(y + w);
+    }
+
+    @joptimize.Test(inputs = {1, 2}, removedNumConst = {200, 100}, addedNumConst = {103})
+    static long switch0(int x) {
+        int y = 100;
+        int z = 200;
+        int w;
+        switch(y + z){
+            case 100: w = 1; break;
+            case 200: w = 2; break;
+            case 300: w = 3; break;
+            default: w = 4; break;
+        }
+
+        return y + w;
+    }
+
+    @joptimize.Test(inputs = {1, 2}, removedNumConst = {0, 100}, addedNumConst = {101})
+    static long switch1(int x) {
+        int y = 100;
+        int z = 0;
+        int w;
+        switch(y + z){
+            case 100: w = 1; break;
+            case 200: w = 2; break;
+            case 300: w = 3; break;
+            default: w = 4; break;
+        }
+
+        return y + w;
+    }
+
+    @joptimize.Test(inputs = {1, 2}, removedNumConst = {50, 150}, addedNumConst = {52})
+    static long switch2(int x) {
+        int y = 50;
+        int z = 150;
+        int w;
+        switch(y + z){
+            case 100: w = 1; break;
+            case 200: w = 2; break;
+            case 300: w = 3; break;
+            default: w = 4; break;
+        }
+
+        return y + w;
+    }
+
+    @joptimize.Test(inputs = {1, 2}, removedNumConst = {1000, 0}, addedNumConst = {1004})
+    static long switch3(int x) {
+        int y = 1000;
+        int z = 0;
+        int w;
+        switch(y + z){
+            case 100: w = 1; break;
+            case 200: w = 2; break;
+            case 300: w = 3; break;
+            default: w = 4; break;
+        }
+
+        return y + w;
     }
 
 
