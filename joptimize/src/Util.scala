@@ -240,13 +240,12 @@ object Util{
   }
 
 
-  def replace(current: SSA.Node, replacement: SSA.Node, queue: mutable.LinkedHashSet[SSA.Node]) = {
+  def replace(current: SSA.Node, replacement: SSA.Node): Seq[SSA.Node] = {
     for (v <- current.upstream) v.downstreamRemoveAll(current)
     val deltaDownstream = current.downstreamList.filter(_ != current)
     deltaDownstream.foreach(replacement.downstreamAdd)
 
     for (down <- deltaDownstream) SSA.update(down, current, replacement)
-    queue.add(replacement)
-    replacement.downstreamList.foreach(queue.add)
+    replacement +: replacement.downstreamList
   }
 }

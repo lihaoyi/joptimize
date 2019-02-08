@@ -309,34 +309,16 @@ class Walker() {
     }
   }
 
-  def simplifyPhiMerges(program: Program) = {
-    val queue = program.getAllVertices()
-      .collect{
-        case n: SSA.Merge => n
-        case n: SSA.Phi => n
-      }
-      .to[mutable.LinkedHashSet]
+  def simplifyPhiMerges(program: Program) = program.transform{
+    case phi: SSA.Phi if phi.getSize != 0 =>
+      val filteredValues = phi.incoming.filter(_._2 != phi)
 
-    while (queue.nonEmpty) {
-      val current = queue.head
-      queue.remove(current)
-      val replacementOpt = current match {
-        case phi: SSA.Phi if phi.getSize != 0 =>
-          val filteredValues = phi.incoming.filter(_._2 != phi)
+      if (filteredValues.map(_._2).size == 1) Util.replace(phi, filteredValues.head._2)
+      else Nil
 
-          if (filteredValues.map(_._2).size == 1) Some(filteredValues.head._2)
-          else None
-
-        case reg: SSA.Merge =>
-          if (reg.incoming.size == 1) Some(reg.incoming.head)
-          else None
-
-        case _ => None
-      }
-      for (replacement <- replacementOpt) {
-        Util.replace(current, replacement, queue)
-      }
-    }
+    case reg: SSA.Merge =>
+      if (reg.incoming.size == 1) Util.replace(reg, reg.incoming.head)
+      else Nil
   }
 }
 

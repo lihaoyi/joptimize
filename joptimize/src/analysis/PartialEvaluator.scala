@@ -8,97 +8,88 @@ import scala.collection.mutable
 object PartialEvaluator {
   def apply(program: Program) = {
     println("PartialEvaluator.apply")
-    val queue = program.getAllVertices()
-      .to[mutable.LinkedHashSet]
+    program.transform{
+      case phi: SSA.Phi if phi.getSize != 0 =>
+        //          b
+        //         /
+        // a -- phi -- c
+        //         \
+        //          d
+        //    b
+        //   /
+        // a -- c
+        //   \
+        //    d
+        val filteredValues = phi.incoming.filter(_._2 != phi)
 
-    while (queue.nonEmpty) {
-      val current = queue.head
-      queue.remove(current)
-      current match{
+        if (filteredValues.map(_._2).size == 1) Util.replace(phi, filteredValues.head._2)
+        else Nil
 
-        case phi: SSA.Phi if phi.getSize != 0 =>
-          //          b
-          //         /
-          // a -- phi -- c
-          //         \
-          //          d
-          //    b
-          //   /
-          // a -- c
-          //   \
-          //    d
-          val filteredValues = phi.incoming.filter(_._2 != phi)
+      case current: SSA.Val =>
+        val replacement = evaluateVal(current)
+        if (replacement eq current) Nil
+        else{
+          for (v <- current.upstream) v.downstreamRemoveAll(current)
+          val deltaDownstream = current.downstreamList.filter(_ != current)
+          deltaDownstream.foreach(replacement.downstreamAdd)
 
-          if (filteredValues.map(_._2).size == 1) {
-            Util.replace(current, filteredValues.head._2, queue)
+          for (down <- deltaDownstream) {
+            SSA.update(down, current, replacement)
+          }
+          deltaDownstream
+        }
+      case current: SSA.Jump =>
+        val directNextOpt = evaluateJump(current)
+
+        val next = mutable.Buffer.empty[SSA.Node]
+        for(directNext <- directNextOpt){
+          //                     c
+          //                    /
+          //       a        TRUE - d -
+          //        \      /    \      \
+          // block - branch      ----- phi
+          //        /      \          / |
+          //       b        false ----  |
+          //                     \      /
+          //       c              e ----
+          //      /
+          // block - d
+          //      \   \
+          //       --- phi
+          for(down <- directNext.downstreamList){
+            SSA.update(down, directNext, current.block)
+            current.block.downstreamAdd(down)
           }
 
-        case current: SSA.Val =>
-          val replacement = evaluateVal(current)
-          if (replacement ne current){
-            for (v <- current.upstream) v.downstreamRemoveAll(current)
-            val deltaDownstream = current.downstreamList.filter(_ != current)
-            deltaDownstream.foreach(replacement.downstreamAdd)
-
-            for (down <- deltaDownstream) {
-              SSA.update(down, current, replacement)
-              queue.add(down)
-            }
-          }
-        case current: SSA.Jump =>
-          val directNextOpt = evaluateJump(current)
-
-          for(directNext <- directNextOpt){
-            //                     c
-            //                    /
-            //       a        TRUE - d -
-            //        \      /    \      \
-            // block - branch      ----- phi
-            //        /      \          / |
-            //       b        false ----  |
-            //                     \      /
-            //       c              e ----
-            //      /
-            // block - d
-            //      \   \
-            //       --- phi
-            for(down <- directNext.downstreamList){
-              SSA.update(down, directNext, current.block)
-              current.block.downstreamAdd(down)
-            }
-
-            for(up <- current.upstream){
-              up.downstreamRemove(current)
-            }
-
-            val branchBlocks = current.downstreamList.toSet
-
-            branchBlocks.flatMap(_.downstreamList).foreach{
-              case phi: SSA.Phi =>
-                phi.incoming = phi.incoming.flatMap(x =>
-                  if (x._1 == directNext) Some(current.block -> x._2)
-                  else if (branchBlocks(x._1)) None
-                  else Some(x)
-                )
-                queue.add(phi)
-
-              case r: SSA.Merge =>
-                r.incoming = r.incoming.flatMap{ x =>
-                  if (x == directNext) Some(current.block)
-                  else if (branchBlocks(x)) None
-                  else Some(x)
-                }
-                queue.add(r)
-            }
+          for(up <- current.upstream){
+            up.downstreamRemove(current)
           }
 
-        case reg: SSA.Merge =>
-          if (reg.incoming.size == 1) {
-            Util.replace(current, reg.incoming.head, queue)
-          }
+          val branchBlocks = current.downstreamList.toSet
 
-        case _ =>
-      }
+          branchBlocks.flatMap(_.downstreamList).foreach{
+            case phi: SSA.Phi =>
+              phi.incoming = phi.incoming.flatMap(x =>
+                if (x._1 == directNext) Some(current.block -> x._2)
+                else if (branchBlocks(x._1)) None
+                else Some(x)
+              )
+              next.append(phi)
+
+            case r: SSA.Merge =>
+              r.incoming = r.incoming.flatMap{ x =>
+                if (x == directNext) Some(current.block)
+                else if (branchBlocks(x)) None
+                else Some(x)
+              }
+              next.append(r)
+          }
+        }
+        next
+
+      case reg: SSA.Merge =>
+        if (reg.incoming.size == 1) Util.replace(reg, reg.incoming.head)
+        else Nil
     }
   }
 
