@@ -29,8 +29,8 @@ object PartialEvaluator {
   def evaluateNode(s: SSA.Node): SSA.Node = s match {
     case n: SSA.BinOp =>
       (n.a, n.b) match {
-        case (a: SSA.PushI, b: SSA.PushI) =>
-          SSA.PushI(
+        case (a: SSA.ConstI, b: SSA.ConstI) =>
+          SSA.ConstI(
             n.opcode match {
               case SSA.BinOp.IADD => a.value + b.value
               case SSA.BinOp.ISUB => a.value - b.value
@@ -42,8 +42,8 @@ object PartialEvaluator {
               case SSA.BinOp.IUSHR => a.value >> b.value
             }
           )
-        case (a: SSA.PushJ, b: SSA.PushJ) =>
-          SSA.PushJ(
+        case (a: SSA.ConstJ, b: SSA.ConstJ) =>
+          SSA.ConstJ(
             n.opcode match {
               case SSA.BinOp.LADD => a.value + b.value
               case SSA.BinOp.LSUB => a.value - b.value
@@ -52,16 +52,16 @@ object PartialEvaluator {
               case SSA.BinOp.LREM => a.value % b.value
             }
           )
-        case (a: SSA.PushJ, b: SSA.PushI) =>
-          SSA.PushJ(
+        case (a: SSA.ConstJ, b: SSA.ConstI) =>
+          SSA.ConstJ(
             n.opcode match {
               case SSA.BinOp.LSHL => a.value << b.value
               case SSA.BinOp.LSHR => a.value >> b.value
               case SSA.BinOp.LUSHR => a.value >> b.value
             }
           )
-        case (a: SSA.PushF, b: SSA.PushF) =>
-          SSA.PushF(
+        case (a: SSA.ConstF, b: SSA.ConstF) =>
+          SSA.ConstF(
             n.opcode match {
               case SSA.BinOp.FADD => a.value + b.value
               case SSA.BinOp.FSUB => a.value - b.value
@@ -70,8 +70,8 @@ object PartialEvaluator {
               case SSA.BinOp.FREM => a.value % b.value
             }
           )
-        case (a: SSA.PushD, b: SSA.PushD) =>
-          SSA.PushD(
+        case (a: SSA.ConstD, b: SSA.ConstD) =>
+          SSA.ConstD(
             n.opcode match {
               case SSA.BinOp.DADD => a.value + b.value
               case SSA.BinOp.DSUB => a.value - b.value
@@ -85,36 +85,36 @@ object PartialEvaluator {
     case n: SSA.UnaOp =>
 
       n.a match {
-        case a: SSA.PushI =>
+        case a: SSA.ConstI =>
           n.opcode match {
-            case SSA.UnaOp.INEG => SSA.PushI(-a.value)
-            case SSA.UnaOp.I2B => SSA.PushI(a.value.toByte)
-            case SSA.UnaOp.I2C => SSA.PushI(a.value.toChar)
-            case SSA.UnaOp.I2S => SSA.PushI(a.value.toShort)
-            case SSA.UnaOp.I2L => SSA.PushJ(a.value)
-            case SSA.UnaOp.I2F => SSA.PushF(a.value.toFloat)
-            case SSA.UnaOp.I2D => SSA.PushD(a.value.toDouble)
+            case SSA.UnaOp.INEG => SSA.ConstI(-a.value)
+            case SSA.UnaOp.I2B => SSA.ConstI(a.value.toByte)
+            case SSA.UnaOp.I2C => SSA.ConstI(a.value.toChar)
+            case SSA.UnaOp.I2S => SSA.ConstI(a.value.toShort)
+            case SSA.UnaOp.I2L => SSA.ConstJ(a.value)
+            case SSA.UnaOp.I2F => SSA.ConstF(a.value.toFloat)
+            case SSA.UnaOp.I2D => SSA.ConstD(a.value.toDouble)
           }
-        case a: SSA.PushJ =>
+        case a: SSA.ConstJ =>
           n.opcode match {
-            case SSA.UnaOp.LNEG => SSA.PushJ(-a.value)
-            case SSA.UnaOp.L2I => SSA.PushI(a.value.toInt)
-            case SSA.UnaOp.L2F => SSA.PushF(a.value.toFloat)
-            case SSA.UnaOp.L2D => SSA.PushD(a.value.toDouble)
+            case SSA.UnaOp.LNEG => SSA.ConstJ(-a.value)
+            case SSA.UnaOp.L2I => SSA.ConstI(a.value.toInt)
+            case SSA.UnaOp.L2F => SSA.ConstF(a.value.toFloat)
+            case SSA.UnaOp.L2D => SSA.ConstD(a.value.toDouble)
           }
-        case a: SSA.PushF =>
+        case a: SSA.ConstF =>
           n.opcode match {
-            case SSA.UnaOp.FNEG => SSA.PushF(-a.value)
-            case SSA.UnaOp.F2I => SSA.PushI(a.value.toInt)
-            case SSA.UnaOp.F2L => SSA.PushJ(a.value.toLong)
-            case SSA.UnaOp.F2D => SSA.PushD(a.value)
+            case SSA.UnaOp.FNEG => SSA.ConstF(-a.value)
+            case SSA.UnaOp.F2I => SSA.ConstI(a.value.toInt)
+            case SSA.UnaOp.F2L => SSA.ConstJ(a.value.toLong)
+            case SSA.UnaOp.F2D => SSA.ConstD(a.value)
           }
-        case a: SSA.PushD =>
+        case a: SSA.ConstD =>
           n.opcode match {
-            case SSA.UnaOp.DNEG => SSA.PushD(-a.value)
-            case SSA.UnaOp.D2I => SSA.PushI(a.value.toInt)
-            case SSA.UnaOp.D2L => SSA.PushJ(a.value.toLong)
-            case SSA.UnaOp.D2F => SSA.PushF(a.value.toFloat)
+            case SSA.UnaOp.DNEG => SSA.ConstD(-a.value)
+            case SSA.UnaOp.D2I => SSA.ConstI(a.value.toInt)
+            case SSA.UnaOp.D2L => SSA.ConstJ(a.value.toLong)
+            case SSA.UnaOp.D2F => SSA.ConstF(a.value.toFloat)
           }
         case _ => s
       }

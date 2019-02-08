@@ -19,8 +19,8 @@ object RegisterAllocator {
         case phi: SSA.Phi if phi.getSize != 0 =>
           phi.incoming = phi.incoming.map{ case (k, v) =>
             v match{
-              case _: SSA.Arg | _: SSA.PushNull | _: SSA.PushF | _: SSA.PushD |
-                   _: SSA.PushI | _: SSA.PushJ | _: SSA.PushStr | _: SSA.PushCls =>
+              case _: SSA.Arg | _: SSA.ConstNull | _: SSA.ConstF | _: SSA.ConstD |
+                   _: SSA.ConstI | _: SSA.ConstJ | _: SSA.ConstStr | _: SSA.ConstCls =>
                 (k, v)
               case _ =>
                 val copy = SSA.Copy(v)

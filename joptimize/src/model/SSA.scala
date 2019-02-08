@@ -330,31 +330,32 @@ object SSA{
       src = swap(src)
     }
   }
-  case class PushI(var value: Int) extends Val(JType.Prim.I){
+
+  case class ConstI(var value: Int) extends Val(JType.Prim.I){
     def upstream = Nil
     def update(swap: Swapper): Unit = {}
   }
-  case class PushJ(var value: Long) extends Val(JType.Prim.J){
+  case class ConstJ(var value: Long) extends Val(JType.Prim.J){
     def upstream = Nil
     def update(swap: Swapper): Unit = {}
   }
-  case class PushF(var value: Float) extends Val(JType.Prim.F){
+  case class ConstF(var value: Float) extends Val(JType.Prim.F){
     def upstream = Nil
     def update(swap: Swapper): Unit = {}
   }
-  case class PushD(var value: Double) extends Val(JType.Prim.D){
+  case class ConstD(var value: Double) extends Val(JType.Prim.D){
     def upstream = Nil
     def update(swap: Swapper): Unit = {}
   }
-  case class PushStr(var value: String) extends Val(JType.Cls("java/lang/String")){
+  case class ConstStr(var value: String) extends Val(JType.Cls("java/lang/String")){
     def upstream = Nil
     def update(swap: Swapper): Unit = {}
   }
-  case class PushNull() extends Val(JType.Cls("java/lang/Object")){
+  case class ConstNull() extends Val(JType.Cls("java/lang/Object")){
     def upstream = Nil
     def update(swap: Swapper): Unit = {}
   }
-  case class PushCls(var value: JType.Cls) extends Val(value){
+  case class ConstCls(var value: JType.Cls) extends Val(value){
     def upstream = Nil
     def update(swap: Swapper): Unit = {}
   }
@@ -468,11 +469,11 @@ object SSA{
     def upstream = Nil
     def update(swap: Swapper): Unit = {}
   }
-  case class NewArray(var state: State, var src: Val, var typeRef: JType) extends Val(JType.Arr(typeRef)){
-    def upstream = Seq(state, src)
+  case class NewArray(var state: State, var size: Val, var typeRef: JType) extends Val(JType.Arr(typeRef)){
+    def upstream = Seq(state, size)
     def update(swap: Swapper): Unit = {
       state = swap(state)
-      src = swap(src)
+      size = swap(size)
     }
   }
   case class MultiANewArray(var state: State, var desc: JType, var dims: Seq[Val]) extends Val(desc){

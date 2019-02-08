@@ -30,32 +30,32 @@ class BytecodeToSSA(merges: mutable.LinkedHashSet[SSA.Phi],
     */
   def constOperation(insn: AbstractInsnNode): SSA.Val = {
     insn.getOpcode match {
-      case ACONST_NULL => new SSA.PushNull()
-      case ICONST_M1 => new SSA.PushI(-1)
-      case ICONST_0 => new SSA.PushI(0)
-      case ICONST_1 => new SSA.PushI(1)
-      case ICONST_2 => new SSA.PushI(2)
-      case ICONST_3 => new SSA.PushI(3)
-      case ICONST_4 => new SSA.PushI(4)
-      case ICONST_5 => new SSA.PushI(5)
-      case LCONST_0 => new SSA.PushJ(0)
-      case LCONST_1 => new SSA.PushJ(1)
-      case FCONST_0 => new SSA.PushF(0)
-      case FCONST_1 => new SSA.PushF(1)
-      case FCONST_2 => new SSA.PushF(2)
-      case DCONST_0 => new SSA.PushD(0)
-      case DCONST_1 => new SSA.PushD(1)
-      case BIPUSH | SIPUSH => new SSA.PushI(insn.asInstanceOf[IntInsnNode].operand)
+      case ACONST_NULL => new SSA.ConstNull()
+      case ICONST_M1 => new SSA.ConstI(-1)
+      case ICONST_0 => new SSA.ConstI(0)
+      case ICONST_1 => new SSA.ConstI(1)
+      case ICONST_2 => new SSA.ConstI(2)
+      case ICONST_3 => new SSA.ConstI(3)
+      case ICONST_4 => new SSA.ConstI(4)
+      case ICONST_5 => new SSA.ConstI(5)
+      case LCONST_0 => new SSA.ConstJ(0)
+      case LCONST_1 => new SSA.ConstJ(1)
+      case FCONST_0 => new SSA.ConstF(0)
+      case FCONST_1 => new SSA.ConstF(1)
+      case FCONST_2 => new SSA.ConstF(2)
+      case DCONST_0 => new SSA.ConstD(0)
+      case DCONST_1 => new SSA.ConstD(1)
+      case BIPUSH | SIPUSH => new SSA.ConstI(insn.asInstanceOf[IntInsnNode].operand)
       case LDC =>
         insn.asInstanceOf[LdcInsnNode].cst match {
-          case i: java.lang.Integer => new SSA.PushI(i)
-          case i: java.lang.Long => new SSA.PushJ(i)
-          case f: java.lang.Float => new SSA.PushF(f)
-          case d: java.lang.Double => new SSA.PushD(d)
-          case s: java.lang.String => new SSA.PushStr(s)
+          case i: java.lang.Integer => new SSA.ConstI(i)
+          case i: java.lang.Long => new SSA.ConstJ(i)
+          case f: java.lang.Float => new SSA.ConstF(f)
+          case d: java.lang.Double => new SSA.ConstD(d)
+          case s: java.lang.String => new SSA.ConstStr(s)
           case value: org.objectweb.asm.Type =>
             value.getSort match {
-              case OBJECT | ARRAY => new SSA.PushCls(JType.Cls(value.getClassName))
+              case OBJECT | ARRAY => new SSA.ConstCls(JType.Cls(value.getClassName))
               case METHOD => ???
             }
           case _: Handle => ???
@@ -88,7 +88,7 @@ class BytecodeToSSA(merges: mutable.LinkedHashSet[SSA.Phi],
     insn.getOpcode match {
       case IINC =>
         val n = insn.asInstanceOf[IincInsnNode].incr
-        val const = new SSA.PushI(n)
+        val const = new SSA.ConstI(n)
         new SSA.BinOp(None, const, value, SSA.BinOp.IADD)
 
       case INEG | L2I | F2I | D2I | I2B | I2C | I2S | FNEG | I2F | L2F |

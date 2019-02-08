@@ -186,7 +186,7 @@ object CodeGen{
         case SSA.CheckCast(state, src, desc) => Seq(new TypeInsnNode(CHECKCAST, desc.name))
         case SSA.ArrayLength(state, src) => Seq(new InsnNode(ARRAYLENGTH))
         case SSA.InstanceOf(src, desc) => Seq(new TypeInsnNode(INSTANCEOF, desc.name))
-        case SSA.PushI(value) => Seq(value match{
+        case SSA.ConstI(value) => Seq(value match{
           case -1 => new InsnNode(ICONST_M1)
           case 0 => new InsnNode(ICONST_0)
           case 1 => new InsnNode(ICONST_1)
@@ -199,25 +199,25 @@ object CodeGen{
             else if (-32768 <= value && value <= 32767) new IntInsnNode(SIPUSH, value)
             else new LdcInsnNode(value)
         })
-        case SSA.PushJ(value) => Seq(value match{
+        case SSA.ConstJ(value) => Seq(value match{
           case 0 => new InsnNode(LCONST_0)
           case 1 => new InsnNode(LCONST_1)
           case _ => new LdcInsnNode(value)
         })
-        case SSA.PushF(value) => Seq(value match{
+        case SSA.ConstF(value) => Seq(value match{
           case 0 => new InsnNode(FCONST_0)
           case 1 => new InsnNode(FCONST_1)
           case 2 => new InsnNode(FCONST_2)
           case _ => new LdcInsnNode(value)
         })
-        case SSA.PushD(value) => Seq(value match{
+        case SSA.ConstD(value) => Seq(value match{
           case 0 => new InsnNode(DCONST_0)
           case 1 => new InsnNode(DCONST_1)
           case _ => new LdcInsnNode(value)
         })
-        case SSA.PushStr(value) => Seq(new LdcInsnNode(value))
-        case SSA.PushNull() => Seq(new InsnNode(ACONST_NULL))
-        case SSA.PushCls(value) =>
+        case SSA.ConstStr(value) => Seq(new LdcInsnNode(value))
+        case SSA.ConstNull() => Seq(new InsnNode(ACONST_NULL))
+        case SSA.ConstCls(value) =>
           Seq(new LdcInsnNode(org.objectweb.asm.Type.getType(value.name)))
         case SSA.InvokeStatic(state, srcs, cls, name, desc) =>
           Seq(new MethodInsnNode(INVOKESTATIC, cls.name, name, desc.unparse))
@@ -269,8 +269,8 @@ object CodeGen{
         case SSA.CheckCast(state, src, desc) => Seq(new TypeInsnNode(CHECKCAST, desc.name), new InsnNode(POP))
         case SSA.ArrayLength(state, src) => Seq(new InsnNode(ARRAYLENGTH), new InsnNode(POP))
         case SSA.InstanceOf(src, desc) => Seq(new TypeInsnNode(INSTANCEOF, desc.name), new InsnNode(POP))
-        case _: SSA.PushI | _: SSA.PushJ | _: SSA.PushF | _: SSA.PushD |
-             _: SSA.PushStr | _: SSA.PushNull | _: SSA.PushCls  => Nil
+        case _: SSA.ConstI | _: SSA.ConstJ | _: SSA.ConstF | _: SSA.ConstD |
+             _: SSA.ConstStr | _: SSA.ConstNull | _: SSA.ConstCls  => Nil
 
         case SSA.InvokeStatic(state, srcs, cls, name, desc) =>
           Seq(new MethodInsnNode(INVOKESTATIC, cls.name, name, desc.unparse)) ++
