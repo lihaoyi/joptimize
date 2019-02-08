@@ -171,3 +171,43 @@ Finally, the last step is to emit the Java Bytecode. This is done in two layers:
 
 This final step gives us an executable Java program that when run should produce
 the same output.
+
+# Optimization Phase Ordering
+
+- Pessimistic constant folding, pessimistic branch elimination, method metadata
+  - Starts assuming every node is reachable, begins traversal from every node
+    - Unable to eliminate dead-but-circular control flow loops
+  - Starts assuming every phi node is opaque, narrows where possible
+    - Unable to eliminate circular phi chains which include a single value
+  - Performs SSA transformations concurrently with analysis
+    - This can be done because pessimistic analysis is always correct, if not
+      optimal, even when it is not yet complete
+  - Can only treat recursive methods pessimistically: impure, static-type-only,
+    etc.
+    - Only ever requires one pass over a method.
+
+- Optimistic constant folding, optimistic branch elimination, method metadata
+  - Starts assuming only block 0 is reachable
+    - Unreachable control flow loops will never get included
+  - Starts assuming every phi node is of type BOTTOM, widens on each jump
+    - Circular phi chains with a single value will remain typed as that value
+  - Must complete analysis before performing SSA transformations
+    - Optimistic analysis is incorrect, and cannot be used as a basis for SSA
+      transformation, up until the point of completion
+  - Can precisely infer properties of recursive methods: purity, precise types,
+      etc.
+    - May require multiple passes over a single method.
+
+What about method specialization?
+
+- Inherently needs to perform SSA transformations, more than once
+  - Each specialization allows the narrowing of the method's inferred facts
+  - How to square this with the need to finish analyses before any transformation?
+    - Repeating analyses after each specialization would be slow
+    - Skipping analyses after each specialization means we lose some precision
+      in analysis of the specialized code
+    - Performing incremental pessimistic optimizations after each transformation
+      is half-half
+    - Some kind of batching of multiple specializations together before
+      re-running the optimistic analyses
+      - Is it possible to update the optimistic analysis incrementally?
