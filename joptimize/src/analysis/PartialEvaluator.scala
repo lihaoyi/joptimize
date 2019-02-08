@@ -27,6 +27,7 @@ object PartialEvaluator {
     }
   }
   def evaluateNode(s: SSA.Node): SSA.Node = s match {
+
     case n: SSA.BinOp =>
       (n.a, n.b) match {
         case (a: SSA.ConstI, b: SSA.ConstI) =>
@@ -37,21 +38,31 @@ object PartialEvaluator {
               case SSA.BinOp.IMUL => a.value * b.value
               case SSA.BinOp.IDIV => a.value / b.value
               case SSA.BinOp.IREM => a.value % b.value
+
               case SSA.BinOp.ISHL => a.value << b.value
               case SSA.BinOp.ISHR => a.value >> b.value
               case SSA.BinOp.IUSHR => a.value >> b.value
+
+              case SSA.BinOp.IAND => a.value & b.value
+              case SSA.BinOp.IOR => a.value | b.value
+              case SSA.BinOp.IXOR => a.value ^ b.value
             }
           )
         case (a: SSA.ConstJ, b: SSA.ConstJ) =>
-          SSA.ConstJ(
-            n.opcode match {
-              case SSA.BinOp.LADD => a.value + b.value
-              case SSA.BinOp.LSUB => a.value - b.value
-              case SSA.BinOp.LMUL => a.value * b.value
-              case SSA.BinOp.LDIV => a.value / b.value
-              case SSA.BinOp.LREM => a.value % b.value
-            }
-          )
+
+          n.opcode match {
+            case SSA.BinOp.LADD => SSA.ConstJ(a.value + b.value)
+            case SSA.BinOp.LSUB => SSA.ConstJ(a.value - b.value)
+            case SSA.BinOp.LMUL => SSA.ConstJ(a.value * b.value)
+            case SSA.BinOp.LDIV => SSA.ConstJ(a.value / b.value)
+            case SSA.BinOp.LREM => SSA.ConstJ(a.value % b.value)
+
+            case SSA.BinOp.LAND => SSA.ConstJ(a.value & b.value)
+            case SSA.BinOp.LOR => SSA.ConstJ(a.value | b.value)
+            case SSA.BinOp.LXOR => SSA.ConstJ(a.value ^ b.value)
+
+            case SSA.BinOp.LCMP => SSA.ConstI(java.lang.Long.compare(a.value, b.value))
+          }
         case (a: SSA.ConstJ, b: SSA.ConstI) =>
           SSA.ConstJ(
             n.opcode match {
@@ -61,25 +72,42 @@ object PartialEvaluator {
             }
           )
         case (a: SSA.ConstF, b: SSA.ConstF) =>
-          SSA.ConstF(
-            n.opcode match {
-              case SSA.BinOp.FADD => a.value + b.value
-              case SSA.BinOp.FSUB => a.value - b.value
-              case SSA.BinOp.FMUL => a.value * b.value
-              case SSA.BinOp.FDIV => a.value / b.value
-              case SSA.BinOp.FREM => a.value % b.value
-            }
-          )
+
+          n.opcode match {
+            case SSA.BinOp.FADD => SSA.ConstF(a.value + b.value)
+            case SSA.BinOp.FSUB => SSA.ConstF(a.value - b.value)
+            case SSA.BinOp.FMUL => SSA.ConstF(a.value * b.value)
+            case SSA.BinOp.FDIV => SSA.ConstF(a.value / b.value)
+            case SSA.BinOp.FREM => SSA.ConstF(a.value % b.value)
+
+            case SSA.BinOp.FCMPL => SSA.ConstI(
+              if (java.lang.Float.isNaN(a.value) || java.lang.Float.isNaN(b.value)) -1
+              else java.lang.Float.compare(a.value, b.value)
+            )
+            case SSA.BinOp.FCMPG => SSA.ConstI(
+              if (java.lang.Float.isNaN(a.value) || java.lang.Float.isNaN(b.value)) 1
+              else java.lang.Float.compare(a.value, b.value)
+            )
+          }
+
         case (a: SSA.ConstD, b: SSA.ConstD) =>
-          SSA.ConstD(
-            n.opcode match {
-              case SSA.BinOp.DADD => a.value + b.value
-              case SSA.BinOp.DSUB => a.value - b.value
-              case SSA.BinOp.DMUL => a.value * b.value
-              case SSA.BinOp.DDIV => a.value / b.value
-              case SSA.BinOp.DREM => a.value % b.value
-            }
-          )
+
+          n.opcode match {
+            case SSA.BinOp.DADD => SSA.ConstD(a.value + b.value)
+            case SSA.BinOp.DSUB => SSA.ConstD(a.value - b.value)
+            case SSA.BinOp.DMUL => SSA.ConstD(a.value * b.value)
+            case SSA.BinOp.DDIV => SSA.ConstD(a.value / b.value)
+            case SSA.BinOp.DREM => SSA.ConstD(a.value % b.value)
+
+            case SSA.BinOp.DCMPL => SSA.ConstI(
+              if (java.lang.Double.isNaN(a.value) || java.lang.Double.isNaN(b.value)) -1
+              else java.lang.Double.compare(a.value, b.value)
+            )
+            case SSA.BinOp.DCMPG => SSA.ConstI(
+              if (java.lang.Double.isNaN(a.value) || java.lang.Double.isNaN(b.value)) 1
+              else java.lang.Double.compare(a.value, b.value)
+            )
+          }
         case _ => s
       }
     case n: SSA.UnaOp =>

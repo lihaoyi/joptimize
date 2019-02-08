@@ -14,5 +14,6 @@ public @interface Test {
     String[] checkClassRemoved() default {};
     String[] checkMangled() default {};
     String[] checkNotMangled() default {};
-    int[] numConst() default {};
+    int[] addedNumConst() default {};
+    int[] removedNumConst() default {};
 }

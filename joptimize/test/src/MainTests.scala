@@ -148,6 +148,9 @@ object MainTests extends TestSuite{
         'ishl  - annotatedTest
         'ishr  - annotatedTest
         'iushr  - annotatedTest
+        'iand - annotatedTest
+        'ior - annotatedTest
+        'ixor - annotatedTest
 
         'jadd - annotatedTest
         'jsub - annotatedTest
@@ -157,6 +160,9 @@ object MainTests extends TestSuite{
         'jshl  - annotatedTest
         'jshr  - annotatedTest
         'jushr  - annotatedTest
+        'jand  - annotatedTest
+        'jor  - annotatedTest
+        'jxor  - annotatedTest
 
         'fadd - annotatedTest
         'fsub - annotatedTest
@@ -169,6 +175,18 @@ object MainTests extends TestSuite{
         'dmul - annotatedTest
         'ddiv - annotatedTest
         'drem  - annotatedTest
+
+        'lcmp0 - annotatedTest
+        'lcmp1 - annotatedTest
+        'lcmp2 - annotatedTest
+
+        'fcmp0 - annotatedTest
+        'fcmp1 - annotatedTest
+        'fcmp2 - annotatedTest
+
+        'dcmp0 - annotatedTest
+        'dcmp1 - annotatedTest
+        'dcmp2 - annotatedTest
       }
     }
 //    'narrow - {
@@ -336,7 +354,8 @@ object MainTests extends TestSuite{
       }
     }
     checkWithClassloader { cl =>
-      testAnnot.numConst().foreach(checkNumConst(cl, _))
+      testAnnot.addedNumConst().foreach(checkAddedNumConst(cl, _))
+      testAnnot.removedNumConst().foreach(checkRemovedNumConst(cl, _))
       testAnnot.checkPresent().foreach(checkPresent(cl, _))
       testAnnot.checkRemoved().foreach(checkRemoved(cl, _))
       testAnnot.checkMangled().foreach(checkMangled(cl, _))
@@ -390,7 +409,17 @@ object MainTests extends TestSuite{
     (cls2, methodName)
   }
 
-  def checkNumConst(cl: ClassLoader, const: Int)(implicit tp: TestPath) = {
+  def checkAddedNumConst(cl: ClassLoader, const: Int)(implicit tp: TestPath) = {
+    val constants = checkNumConst0(cl)
+    assert(constants.contains(const))
+  }
+
+  def checkRemovedNumConst(cl: ClassLoader, const: Int)(implicit tp: TestPath) = {
+    val constants = checkNumConst0(cl)
+    assert(!constants.contains(const))
+  }
+
+  def checkNumConst0(cl: ClassLoader)(implicit tp: TestPath): Seq[Int] = {
 
     val clsName = tp.value(tp.value.length - 2)
     val bytestream = os.read.inputStream(
@@ -401,7 +430,7 @@ object MainTests extends TestSuite{
     cr.accept(cn, ClassReader.SKIP_FRAMES)
     import collection.JavaConverters._
     val allInsns = cn.methods.asScala.flatMap(_.instructions.iterator().asScala)
-    val constants = allInsns.map(x => (x.getOpcode, x)).flatMap{
+    allInsns.map(x => (x.getOpcode, x)).flatMap{
       case (Opcodes.ICONST_0, _) => Some(0)
       case (Opcodes.ICONST_1, _) => Some(1)
       case (Opcodes.ICONST_2, _) => Some(2)
@@ -432,7 +461,7 @@ object MainTests extends TestSuite{
         }
       case (k, i) => None
     }
-    assert(constants.contains(const))
+
   }
   def checkPresent(cl: ClassLoader, sigString: String)(implicit tp: TestPath) = {
     val (cls2, methodName) = resolveMethod(sigString, cl)
