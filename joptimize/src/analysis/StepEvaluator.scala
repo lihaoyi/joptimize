@@ -156,6 +156,7 @@ class StepEvaluator(merges: mutable.LinkedHashSet[SSA.Phi],
       case IRETURN | LRETURN | FRETURN | DRETURN | ARETURN =>
       case MONITORENTER =>
       case MONITOREXIT =>
+      case ATHROW =>
     }
   }
 

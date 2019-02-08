@@ -215,7 +215,7 @@ object Renderer {
         val rhs = apply(name + reg.insnIndex, reg.upstream.iterator.map(x => atom(fansi.Color.Magenta(naming.savedLocals(x)._2).toString)).toSeq:_*)
         (fansi.Color.Magenta(naming.savedLocals(reg)._2), rhs)
 
-      case n: SSA.AThrow => ???
+      case n: SSA.AThrow => (renderBlock(n), apply("throw", rec(n.src)))
       case n: SSA.TableSwitch => (renderBlock(n), apply("tableswitch", rec(n.src)))
       case n: SSA.LookupSwitch => (renderBlock(n), apply("lookupswitch", rec(n.src)))
       case n: SSA.Case => (renderBlock(n), apply("case", rec(n.branch)))
