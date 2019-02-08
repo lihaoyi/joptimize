@@ -13,20 +13,25 @@ object PartialEvaluator {
     while (queue.nonEmpty) {
       val current = queue.head
       queue.remove(current)
-      val replacement = evaluateNode(current)
-      if (replacement ne current){
-        for (v <- current.upstream) v.downstreamRemoveAll(current)
-        val deltaDownstream = current.downstreamList.filter(_ != current)
-        deltaDownstream.foreach(replacement.downstreamAdd)
+      current match{
+        case current: SSA.Val =>
+          val replacement = evaluateVal(current)
+          if (replacement ne current){
+            for (v <- current.upstream) v.downstreamRemoveAll(current)
+            val deltaDownstream = current.downstreamList.filter(_ != current)
+            deltaDownstream.foreach(replacement.downstreamAdd)
 
-        for (down <- deltaDownstream) {
-          SSA.update(down, current, replacement)
-          queue.add(down)
-        }
+            for (down <- deltaDownstream) {
+              SSA.update(down, current, replacement)
+              queue.add(down)
+            }
+          }
+        case current: SSA.Jump => // do nothing so far
+        case current: SSA.Block =>
       }
     }
   }
-  def evaluateNode(s: SSA.Node): SSA.Node = s match {
+  def evaluateVal(s: SSA.Val): SSA.Val = s match {
 
     case n: SSA.BinOp =>
       (n.a, n.b) match {
