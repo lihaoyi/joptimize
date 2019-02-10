@@ -191,9 +191,14 @@ the same output.
     - Unreachable control flow loops will never get included
   - Starts assuming every phi node is of type BOTTOM, widens on each jump
     - Circular phi chains with a single value will remain typed as that value
+  - Starts inferring that recursive method calls are PURE, unless proven wrong
+    - If proven wrong, all methods that called the recursive method need to be
+      re-analyzed
   - Must complete analysis before performing SSA transformations
     - Optimistic analysis is incorrect, and cannot be used as a basis for SSA
       transformation, up until the point of completion
+    - At the very least, need transformations to be *reversible* so they can be
+      partially/fully undone once the
   - Can precisely infer properties of recursive methods: purity, precise types,
       etc.
     - May require multiple passes over a single method.
@@ -213,3 +218,30 @@ What about method specialization?
     - Some kind of batching of multiple specializations together before
       re-running the optimistic analyses
       - Is it possible to update the optimistic analysis incrementally?
+
+Possible phase order:
+
+- OPTIONAL Pessimistic constant folding (possibly fused with construction)
+
+- Optimistic inferencing
+  - Needs to apply across method boundaries
+  - May narrow inferences around recursive/circular dependency graphs
+  - Infers the following properties:
+    - Purity
+    - Types (at the narrowest, concrete values)
+    - Specializations of called method implementations
+      - If other properties are later widened, may need to re-specialize method
+        to wider properties
+      - Reverted specializations are kept around, may be re-used at a later
+        callsite or DCEd if unused after optimistic inferencing is complete
+
+- Inlining
+  - Needs to happen after optimistic inferencing is complete, as it is
+    irreversible (or at least, very messy to revert)
+  - Necessary to allow further stack-allocation of any mutable variables, as JVM
+    does not allow ref/out parameters that can mutate locals in the surrounding
+    scope
+    - Effectively-final variables which are not mutated can be simply passed in
+      as additional arguments, but no way to return additional return values.
+  - Should not further narrow inferences, as method specialization during
+    optimistic inferencing should already infer everything possible
