@@ -1,5 +1,6 @@
 package joptimize.analysis
 
+import joptimize.Util
 import joptimize.model._
 
 import scala.collection.mutable
@@ -147,47 +148,58 @@ case class ITypeLattice(merge: (IType, IType) => IType) extends Lattice[IType]{
   }
 }
 object OptimisticAnalyze {
+  /**
+    * Performs an optimistic analysis on the given method body.
+    *
+    * Walks the method body block-by-block, evaluating all phi nodes each time
+    * a block transition is made. The current evaluation environment is kept as
+    * a global mapping of phi nodes to [[T]], which is updated as evaluation
+    * occurs. Evaluation of non-phi nodes are cached, unless invalidated by a
+    * change in the value assigned to an upstream phi node.
+    *
+    * The phi-inference mapping can be shared by all blocks being evaluated, as
+    * the inferences monotonically widen as time goes on, and we never have two
+    * blocks which treat a single phi node as having multiple, incompatible
+    * inferences. If a block is re-visited with a set of phi-inferences
+    * different from what it was assigned earlier, the conflicting inferences
+    * are merged via [[Lattice.join]] and the block re-visited using the new
+    * inferences.
+    *
+    * As long as new blocks are being discovered, or phi node inferences are
+    * modified, the respective blocks are added to the worklist for processing.
+    * When the worklist is empty, inference is complete and the algorithm exits
+    */
   def apply[T](program: Program,
                initialValues: Map[SSA.Val, T],
                initialBlock: SSA.Block,
                lattice: Lattice[T],
-               naming: Namer.Result): (Map[SSA.Val, T], Map[SSA.Block, Boolean]) = {
-    val inferredBlocks = mutable.Map(initialBlock -> Map.empty[SSA.Phi, T])
-    val inferredValues = mutable.Map(initialValues.toSeq:_*)
-    val workList = mutable.LinkedHashSet(initialBlock -> Map.empty[SSA.Phi, T])
+               naming: Namer.Result): (Map[SSA.Val, T], Set[SSA.Block]) = {
+    var inferredPhis = Map.empty[SSA.Phi, T]
+    val inferredBlocks = mutable.Set(initialBlock)
+    val workList = mutable.LinkedHashSet(initialBlock)
 
-    val evaluated = mutable.Map.empty[(Map[SSA.Phi, T], SSA.Val), T]
+    val evaluated = mutable.Map.empty[SSA.Val, T]
 
-    def evaluate(env: Map[SSA.Phi, T], v: SSA.Val): T = {
-      pprint.log(naming(v))
+    def evaluate(v: SSA.Val): T = {
       evaluated.getOrElseUpdate(
-        (env, v),
+        v,
         v match{
-          case phi: SSA.Phi =>
-
-            if (!env.contains(phi)) {
-              pprint.log(naming(phi))
-              pprint.log(phi.incoming)
-            }
-            env(phi)
-          case _ => lattice.transferValue(v, evaluate(env, _))
+          case phi: SSA.Phi => inferredPhis(phi)
+          case _ => lattice.transferValue(v, evaluate)
         }
       )
     }
 
     while(workList.nonEmpty){
-      val current = workList.head
-      val (currentBlock, currentEnv) = current
-      pprint.log(naming(currentBlock))
-      workList.remove(current)
+      val currentBlock = workList.head
+      workList.remove(currentBlock)
 
       val Array(nextControl) = currentBlock.downstreamList.collect{case n: SSA.Control => n}
-      pprint.log(naming(nextControl))
 
       def queueNextBlock(nextBlock: SSA.Block) = {
 
         val phis = nextBlock.downstreamList.collect{case p: SSA.Phi => p}
-        val phiMapping = currentEnv ++ phis
+        val newPhiMapping = phis
           .flatMap{phi =>
             val exprs = phi
               .incoming
@@ -195,35 +207,47 @@ object OptimisticAnalyze {
               .toSeq
             exprs match{
               case Nil => None
-              case Seq(expr) => Some((phi, evaluate(currentEnv, expr)))
+              case Seq(expr) => Some((phi, evaluate(expr)))
             }
           }
           .toMap
 
-        pprint.log(phiMapping.map{case (k, v) => (naming(k), v)})
+        var continueNextBlock = !inferredBlocks(nextBlock)
 
-        pprint.log(inferredBlocks)
-        pprint.log(nextBlock)
-        inferredBlocks.get(nextBlock) match{
-          case Some(existingMapping) =>
-            if (phiMapping != existingMapping){
-              assert(phiMapping.keySet == existingMapping.keySet)
+        val invalidatedPhis = mutable.Set.empty[SSA.Phi]
 
-              pprint.log(phiMapping)
-              pprint.log(existingMapping)
-              val widenedMapping =
-                for((k, v) <- existingMapping)
-                  yield (k, lattice.join(v, phiMapping(k)))
+        val mergedPhiMapping = for(k <- inferredPhis.keySet ++ newPhiMapping.keysIterator) yield {
+          (inferredPhis.get(k), newPhiMapping.get(k)) match{
+            case (Some(v), None) => (k, v)
+            case (None, Some(v)) =>
+              continueNextBlock = true
+              (k, v)
+            case (Some(v1), Some(v2)) =>
+              if (v1 == v2) (k, v1)
+              else{
+                continueNextBlock = true
+                invalidatedPhis.add(k)
+                (k, lattice.join(v1, v2))
+              }
+          }
+        }
 
-              inferredBlocks(nextBlock) = widenedMapping
-              workList.add(nextBlock -> widenedMapping)
-            }
-          case None =>
+        inferredPhis = mergedPhiMapping.toMap
 
-            inferredBlocks(nextBlock) = phiMapping
-            workList.add(nextBlock -> phiMapping)
+        if (continueNextBlock) {
+          inferredBlocks.add(nextBlock)
+          workList.add(nextBlock)
+        }
+
+        val (seen, terminals, backEdges) =
+          Util.breadthFirstAggregation[SSA.Node](invalidatedPhis.toSet)(_.downstreamList)
+
+        seen.foreach{
+          case n: SSA.Val => evaluated.remove(n)
+          case _ => // do nothing
         }
       }
+
       nextControl match{
         case nextBlock: SSA.Block => queueNextBlock(nextBlock)
 
@@ -231,10 +255,9 @@ object OptimisticAnalyze {
           n match{
             case r: SSA.Return =>
 
-            case r: SSA.ReturnVal =>
-
+            case r: SSA.ReturnVal => evaluate(r.src)
             case n: SSA.UnaBranch =>
-              val valueA = evaluate(currentEnv, n.a)
+              val valueA = evaluate(n.a)
               val doBranch = (valueA, n.opcode) match{
                 case (CType.I(v), SSA.UnaBranch.IFNE) => Some(v != 0)
                 case (CType.I(v), SSA.UnaBranch.IFNE) => Some(v == 0)
@@ -255,21 +278,37 @@ object OptimisticAnalyze {
                   if (bool) queueNextBlock(n.downstreamList.collect{ case t: SSA.True => t}.head)
                   else queueNextBlock(n.downstreamList.collect{ case t: SSA.False => t}.head)
               }
-            case n: SSA.BinBranch => ???
+            case n: SSA.BinBranch =>
+              val valueA = evaluate(n.a)
+              val valueB = evaluate(n.b)
+              val doBranch = (valueA, valueB, n.opcode) match{
+                case (CType.I(v1), CType.I(v2), SSA.BinBranch.IF_ICMPEQ) => Some(v1 == v2)
+                case (CType.I(v1), CType.I(v2), SSA.BinBranch.IF_ICMPNE) => Some(v1 != v2)
+                case (CType.I(v1), CType.I(v2), SSA.BinBranch.IF_ICMPLT) => Some(v1 < v2)
+                case (CType.I(v1), CType.I(v2), SSA.BinBranch.IF_ICMPGE) => Some(v1 >= v2)
+                case (CType.I(v1), CType.I(v2), SSA.BinBranch.IF_ICMPGT) => Some(v1 > v2)
+                case (CType.I(v1), CType.I(v2), SSA.BinBranch.IF_ICMPLE) => Some(v1 <= v2)
+                case _ => None
+              }
+              doBranch match{
+                case None =>
+                  queueNextBlock(n.downstreamList.collect{ case t: SSA.True => t}.head)
+                  queueNextBlock(n.downstreamList.collect{ case t: SSA.False => t}.head)
+
+                case Some(bool) =>
+                  if (bool) queueNextBlock(n.downstreamList.collect{ case t: SSA.True => t}.head)
+                  else queueNextBlock(n.downstreamList.collect{ case t: SSA.False => t}.head)
+              }
             case n: SSA.TableSwitch => ???
             case n: SSA.LookupSwitch => ???
           }
       }
-//      val newInference = lattice.transferValue(current, inferredValues)
-//      if (!inferredValues.get(current).contains(newInference)){
-//        current.downstreamList.foreach(workList.add)
-//      }
     }
 
-    pprint.log(inferredValues)
     pprint.log(evaluated)
-
+    pprint.log(evaluated.flatMap{case (k, v) => naming(k).map((_, v))})
 
     ???
+    (evaluated.toMap, inferredBlocks.toSet)
   }
 }

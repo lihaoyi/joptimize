@@ -19,14 +19,14 @@ class SimpleDce {
         return y;
     }
 
-    @joptimize.Test(inputs = {1, 2, 3}, removedNumConst = {26})
+    @joptimize.Test(inputs = {1, 2, 3}, removedNumConst = {26}, addedNumConst = {20})
     static int test(int x) {
         int z = 13;
         while(x > 0){
             z = 26 - z;
             x -= 1;
         }
-        return z;
+        return z + 7;
     }
 //
 //    @joptimize.Test(

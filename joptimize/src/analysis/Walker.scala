@@ -47,23 +47,23 @@ class Walker(merge: (IType, IType) => IType) {
 
     val dominators = Dominator.findDominators(blockEdges, allBlocks)
 
-    { // Just for debugging
-      val nodesToBlocks = Scheduler.apply(
-        loopTree, dominators, startBlock,
-        preScheduleNaming.savedLocals.mapValues(_._2), program.getAllVertices()
-      )
+   // Just for debugging
+    val nodesToBlocks2 = Scheduler.apply(
+      loopTree, dominators, startBlock,
+      preScheduleNaming.savedLocals.mapValues(_._2), program.getAllVertices()
+    )
 
-      val postScheduleNaming = Namer.apply(program, nodesToBlocks, program.getAllVertices())
+    val postScheduleNaming = Namer.apply(program, nodesToBlocks2, program.getAllVertices())
 
 //        pprint.log(preScheduleNaming.savedLocals.collect{case (k: SSA.Block, (v1, v2)) => (k, v2)}, height=9999)
 //        pprint.log(preScheduleNaming.saveable)
 //        pprint.log(nodesToBlocks, height=9999)
 //
-      println()
-      println(Renderer.renderSSA(program, postScheduleNaming, nodesToBlocks))
+    println()
+    println(Renderer.renderSSA(program, postScheduleNaming, nodesToBlocks2))
 
 //      ???
-    }
+
 
     PartialEvaluator.apply(program)
 
@@ -78,7 +78,7 @@ class Walker(merge: (IType, IType) => IType) {
       Map.empty,
       program.getAllVertices().collect{case b: SSA.Block if b.upstream.isEmpty => b}.head,
       ITypeLattice(merge),
-      preScheduleNaming
+      postScheduleNaming
     )
 
     val dominators2 = Dominator.findDominators(blockEdges, allBlocks)
