@@ -283,7 +283,12 @@ class BytecodeToSSA(merges: mutable.LinkedHashSet[SSA.Phi],
   def merge[N <: SSA.Val](v1: N, v2: N, insnIndex: Int, targetInsnIndex: Int) = {
     if (v1 == v2) v1
     else{
+      pprint.log(v1)
+      pprint.log(v2)
+      pprint.log(insnIndex)
+      pprint.log(targetInsnIndex)
       if (findBlockDest(targetInsnIndex).isDefined && insnIndex != targetInsnIndex) {
+        pprint.log(findBlockStart(insnIndex))
         v1.asInstanceOf[SSA.Phi].incoming += (findBlockStart(insnIndex) -> v2)
         findBlockStart(insnIndex).downstreamAdd(v1)
         v2.downstreamAdd(v1)

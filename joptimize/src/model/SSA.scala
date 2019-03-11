@@ -99,6 +99,15 @@ object SSA{
       block = swap(block)
       incoming = incoming.map(x => (swap(x._1), swap(x._2)))
     }
+    override def checkLinks() = {
+      super.checkLinks()
+      val phiIncomingBlocks = incoming.map(_._1)
+      val blockIncomingBlocks = block.upstream.collect{case b: SSA.Block => b}
+//      assert(
+//        phiIncomingBlocks == blockIncomingBlocks,
+//        s"$phiIncomingBlocks != $blockIncomingBlocks"
+//      )
+    }
   }
 
   class Merge(var insnIndex: Int, var incoming: Set[Control]) extends Block() {

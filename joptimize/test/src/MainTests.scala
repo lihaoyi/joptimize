@@ -202,7 +202,11 @@ object MainTests extends TestSuite{
 //        'main - annotatedTest
         'deadLoopVariable - annotatedTest
         'deadLocal - annotatedTest
-        'test - annotatedTest
+      }
+      'Optimistic - {
+        'trivial - annotatedTest
+        'loopConstant - annotatedTest
+        'branchConstant - annotatedTest
       }
 
     }

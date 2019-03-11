@@ -184,7 +184,8 @@ object OptimisticAnalyze {
       evaluated.getOrElseUpdate(
         v,
         v match{
-          case phi: SSA.Phi => inferredPhis(phi)
+          case phi: SSA.Phi =>
+            inferredPhis(phi)
           case _ => lattice.transferValue(v, evaluate)
         }
       )
@@ -200,13 +201,14 @@ object OptimisticAnalyze {
 
         val phis = nextBlock.downstreamList.collect{case p: SSA.Phi => p}
         val newPhiMapping = phis
+          .filter(_.getSize != 0)
           .flatMap{phi =>
             val exprs = phi
               .incoming
               .collect{case (k, v) if k == currentBlock && !v.isInstanceOf[SSA.State] => v}
               .toSeq
             exprs match{
-              case Nil => None
+              case Nil => ???
               case Seq(expr) => Some((phi, evaluate(expr)))
             }
           }

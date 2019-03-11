@@ -19,6 +19,7 @@ class Walker(merge: (IType, IType) => IType) {
     println("+" * 20 + sig + "+" * 20)
     val printer = new Textifier
     val methodPrinter = new TraceMethodVisitor(printer)
+    println("================ BYTECODE ================")
     println(Renderer.renderInsns(mn.instructions, printer, methodPrinter))
 
     val program = constructSSAProgram(sig, mn)
@@ -26,12 +27,13 @@ class Walker(merge: (IType, IType) => IType) {
     removeDeadNodes(program)
     program.checkLinks()
 
-    simplifyPhiMerges(program)
-    program.checkLinks()
+//    simplifyPhiMerges(program)
+//    program.checkLinks()
+
+    println("================ INITIAL ================")
 
     val preScheduleNaming = Namer.apply(program, Map.empty, program.getAllVertices())
 
-    println()
     println(Renderer.renderSSA(program, preScheduleNaming))
 
     val (controlFlowEdges, startBlock, allBlocks, blockEdges) =
@@ -45,6 +47,8 @@ class Walker(merge: (IType, IType) => IType) {
     println()
     println(Renderer.renderLoopTree(loopTree, preScheduleNaming.savedLocals))
 
+    println("================ SCHEDULED ================")
+
     val dominators = Dominator.findDominators(blockEdges, allBlocks)
 
    // Just for debugging
@@ -55,23 +59,26 @@ class Walker(merge: (IType, IType) => IType) {
 
     val postScheduleNaming = Namer.apply(program, nodesToBlocks2, program.getAllVertices())
 
-//        pprint.log(preScheduleNaming.savedLocals.collect{case (k: SSA.Block, (v1, v2)) => (k, v2)}, height=9999)
-//        pprint.log(preScheduleNaming.saveable)
-//        pprint.log(nodesToBlocks, height=9999)
-//
-    println()
     println(Renderer.renderSSA(program, postScheduleNaming, nodesToBlocks2))
 
-//      ???
-
+    println("================ PESSIMISTIC ================")
 
     PartialEvaluator.apply(program)
 
     removeDeadNodes(program)
+
+    program.checkLinks()
+
+    val postPessimisticNaming = Namer.apply(program, Map.empty, program.getAllVertices())
+
+    println(Renderer.renderSSA(program, postPessimisticNaming))
+
     val loopTree2 = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)
 
     println()
     println(Renderer.renderLoopTree(loopTree2, preScheduleNaming.savedLocals))
+
+    println("================ OPTIMISTIC ================")
 
     OptimisticAnalyze.apply(
       program,
