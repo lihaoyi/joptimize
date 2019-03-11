@@ -12,7 +12,9 @@ import scala.collection.mutable
 object Namer {
   case class Result(finalOrderingMap: Map[SSA.Node, Int],
                     saveable: Set[SSA.Node],
-                    savedLocals: Map[SSA.Node, (Int, String)])
+                    savedLocals: Map[SSA.Node, (Int, String)]){
+    def apply(n: SSA.Node) = savedLocals.get(n).map(_._2)
+  }
 
   def apply(program: Program,
             scheduledVals: Map[SSA.Val, SSA.Control],

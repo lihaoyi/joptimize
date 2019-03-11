@@ -99,7 +99,7 @@ case class ITypeLattice(merge: (IType, IType) => IType) extends Lattice[IType]{
               else java.lang.Double.compare(a.value, b.value)
             )
           }
-        case _ => ???
+        case _ => n.opcode.tpe
       }
     case n: SSA.UnaOp =>
 
@@ -135,12 +135,16 @@ case class ITypeLattice(merge: (IType, IType) => IType) extends Lattice[IType]{
             case SSA.UnaOp.D2L => CType.J(a.value.toLong)
             case SSA.UnaOp.D2F => CType.F(a.value.toFloat)
           }
-        case _ => ???
+        case _ => n.opcode.tpe
       }
 
   }
 
-  override def join(lhs: IType, rhs: IType) = merge(lhs, rhs)
+  override def join(lhs: IType, rhs: IType) = {
+    val res = merge(lhs, rhs)
+    pprint.log((lhs, rhs, res))
+    res
+  }
 }
 object OptimisticAnalyze {
   def apply[T](program: Program,
@@ -155,30 +159,35 @@ object OptimisticAnalyze {
     val evaluated = mutable.Map.empty[(Map[SSA.Phi, T], SSA.Val), T]
 
     def evaluate(env: Map[SSA.Phi, T], v: SSA.Val): T = {
-      evaluated.get((env, v)) match{
-        case Some(res) => res
-        case None => v match{
+      pprint.log(naming(v))
+      evaluated.getOrElseUpdate(
+        (env, v),
+        v match{
           case phi: SSA.Phi =>
-            if (!env.contains(phi)) pprint.log(phi.incoming)
+
+            if (!env.contains(phi)) {
+              pprint.log(naming(phi))
+              pprint.log(phi.incoming)
+            }
             env(phi)
           case _ => lattice.transferValue(v, evaluate(env, _))
         }
-      }
+      )
     }
 
     while(workList.nonEmpty){
       val current = workList.head
       val (currentBlock, currentEnv) = current
-      pprint.log(naming.savedLocals(currentBlock)._2)
+      pprint.log(naming(currentBlock))
       workList.remove(current)
 
       val Array(nextControl) = currentBlock.downstreamList.collect{case n: SSA.Control => n}
-      pprint.log(naming.savedLocals(nextControl)._2)
+      pprint.log(naming(nextControl))
 
       def queueNextBlock(nextBlock: SSA.Block) = {
 
         val phis = nextBlock.downstreamList.collect{case p: SSA.Phi => p}
-        val phiMapping = phis
+        val phiMapping = currentEnv ++ phis
           .flatMap{phi =>
             val exprs = phi
               .incoming
@@ -186,19 +195,22 @@ object OptimisticAnalyze {
               .toSeq
             exprs match{
               case Nil => None
-              case Seq(expr) =>
-                Some((phi, evaluate(currentEnv, expr)))
+              case Seq(expr) => Some((phi, evaluate(currentEnv, expr)))
             }
           }
           .toMap
 
-        pprint.log(phiMapping)
+        pprint.log(phiMapping.map{case (k, v) => (naming(k), v)})
 
+        pprint.log(inferredBlocks)
+        pprint.log(nextBlock)
         inferredBlocks.get(nextBlock) match{
           case Some(existingMapping) =>
             if (phiMapping != existingMapping){
               assert(phiMapping.keySet == existingMapping.keySet)
 
+              pprint.log(phiMapping)
+              pprint.log(existingMapping)
               val widenedMapping =
                 for((k, v) <- existingMapping)
                   yield (k, lattice.join(v, phiMapping(k)))
@@ -207,6 +219,7 @@ object OptimisticAnalyze {
               workList.add(nextBlock -> widenedMapping)
             }
           case None =>
+
             inferredBlocks(nextBlock) = phiMapping
             workList.add(nextBlock -> phiMapping)
         }
@@ -242,12 +255,9 @@ object OptimisticAnalyze {
                   if (bool) queueNextBlock(n.downstreamList.collect{ case t: SSA.True => t}.head)
                   else queueNextBlock(n.downstreamList.collect{ case t: SSA.False => t}.head)
               }
-            case n: SSA.BinBranch =>
-              val valueA = evaluate(currentEnv, n.a)
-              val valueB = evaluate(currentEnv, n.b)
-
-            case n: SSA.TableSwitch =>
-            case n: SSA.LookupSwitch =>
+            case n: SSA.BinBranch => ???
+            case n: SSA.TableSwitch => ???
+            case n: SSA.LookupSwitch => ???
           }
       }
 //      val newInference = lattice.transferValue(current, inferredValues)
@@ -257,6 +267,7 @@ object OptimisticAnalyze {
     }
 
     pprint.log(inferredValues)
+    pprint.log(evaluated)
 
 
     ???
