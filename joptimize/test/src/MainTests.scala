@@ -198,6 +198,13 @@ object MainTests extends TestSuite{
         'switch2 - annotatedTest
         'switch3 - annotatedTest
       }
+      'SimpleDce - {
+//        'main - annotatedTest
+        'deadLoopVariable - annotatedTest
+        'deadLocal - annotatedTest
+        'test - annotatedTest
+      }
+
     }
 //    'narrow - {
 //      'Supertype - {
@@ -222,9 +229,6 @@ object MainTests extends TestSuite{
 //      }
 //    }
 //    'opt - {
-//      'SimpleDce - {
-//        'main - annotatedTest
-//      }
 //      'BooleanJumpFlatten - {
 //        'simpleTrue - annotatedTest
 //        'simpleFalse - annotatedTest

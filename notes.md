@@ -221,7 +221,9 @@ What about method specialization?
 
 Possible phase order:
 
-- OPTIONAL Pessimistic constant folding (possibly fused with construction)
+- OPTIONAL Pessimistic constant folding (possibly fused with construction). This
+  greatly simplifies the graph that gets to optimistic inferencing, making it
+  both faster to run and easier to debug.
 
 - Optimistic inferencing
   - Needs to apply across method boundaries
