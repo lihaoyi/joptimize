@@ -13,7 +13,7 @@ import org.objectweb.asm.util.{Textifier, TraceMethodVisitor}
 
 import scala.collection.{immutable, mutable}
 
-class Walker() {
+class Walker(merge: (IType, IType) => IType) {
 
   def walkMethod(sig: MethodSig, mn: MethodNode): (Walker.MethodResult, Set[MethodSig], Set[JType.Cls]) = {
     println("+" * 20 + sig + "+" * 20)
@@ -72,6 +72,14 @@ class Walker() {
 
     println()
     println(Renderer.renderLoopTree(loopTree2, preScheduleNaming.savedLocals))
+
+    OptimisticAnalyze.apply(
+      program,
+      Map.empty,
+      program.getAllVertices().collect{case b: SSA.Block if b.upstream.isEmpty => b}.head,
+      ITypeLattice(merge),
+      preScheduleNaming
+    )
 
     val dominators2 = Dominator.findDominators(blockEdges, allBlocks)
 

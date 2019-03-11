@@ -21,11 +21,10 @@ class SimpleDce {
 
     @joptimize.Test(inputs = {1, 2, 3}, removedNumConst = {26})
     static int test(int x) {
-        int y = 1;
         int z = 13;
-        while(y < x){
-            y += 1;
+        while(x > 0){
             z = 26 - z;
+            x -= 1;
         }
         return z;
     }

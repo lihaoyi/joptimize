@@ -24,15 +24,15 @@ object CType{
   }
   trait ConstantCompanion[T] {
     def apply(value: T): Constant[T]
-    def unapply(value: IType): Option[T]
+//    def unapply(value: IType): Option[T]
     def wide: JType
   }
   object I extends ConstantCompanion[Int]{
     def apply(value: Int) = new I(value)
-    def unapply(value: IType) = value match{
-      case x: I => Some(x.value)
-      case _ => None
-    }
+//    def unapply(value: IType) = value match{
+//      case x: I => Some(x.value)
+//      case _ => None
+//    }
     def wide = JType.Prim.I
   }
   case class I(value: Int) extends Constant[Int]{
@@ -44,10 +44,10 @@ object CType{
   }
   object J extends ConstantCompanion[Long]{
     def apply(value: Long) = new J(value)
-    def unapply(value: IType) = value match{
-      case x: J => Some(x.value)
-      case _ => None
-    }
+//    def unapply(value: IType) = value match{
+//      case x: J => Some(x.value)
+//      case _ => None
+//    }
     def wide = JType.Prim.J
   }
   case class J(value: Long) extends Constant[Long]{

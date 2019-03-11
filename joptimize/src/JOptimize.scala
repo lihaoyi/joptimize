@@ -77,7 +77,7 @@ object JOptimize{
       output
     }
     val visitedClasses = mutable.LinkedHashSet.empty[JType.Cls]
-    val walker = new Walker()
+    val walker = new Walker((lhs, rhs) => merge(Seq(lhs, rhs)))
 
     val visitedMethods = mutable.Buffer.empty[(MethodSig, Walker.MethodResult)]
 
