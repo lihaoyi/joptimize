@@ -101,11 +101,11 @@ object SSA{
     }
     override def checkLinks() = {
       super.checkLinks()
-      val phiIncomingBlocks = incoming.map(_._1)
-      val blockIncomingBlocks = block.upstream.collect{case b: SSA.Block => b}
+//      val phiIncomingBlocks = incoming.map(_._1)
+//      val blockIncomingBlocks = block.upstream.collect{case b: SSA.Block => b}.toSet
 //      assert(
 //        phiIncomingBlocks == blockIncomingBlocks,
-//        s"$phiIncomingBlocks != $blockIncomingBlocks"
+//        s"Phi node $this incoming blocks doesn't match block $block incoming blocks, $phiIncomingBlocks != $blockIncomingBlocks"
 //      )
     }
   }
