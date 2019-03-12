@@ -26,7 +26,8 @@ object Renderer {
   def renderInsns(insns: InsnList,
                   printer: Textifier,
                   methodPrinter: TraceMethodVisitor,
-                  target: AbstractInsnNode = null): fansi.Str = {
+                  target: AbstractInsnNode = null,
+                  decorate: AbstractInsnNode => fansi.Str = _ => ""): fansi.Str = {
     import collection.JavaConverters._
     val listing = if (target == null) insns.iterator.asScala else Iterator(target)
     val indices = insns.iterator().asScala.zipWithIndex.toMap
@@ -44,7 +45,8 @@ object Renderer {
             "\n",
             fansi.Color.Magenta("#" + indices(k).toString.padTo(3, ' ')),
             fansi.Color.Yellow(opcode),
-            fansi.Color.Green(rest)
+            fansi.Color.Green(rest),
+            decorate(k)
           )
         }
         .toSeq

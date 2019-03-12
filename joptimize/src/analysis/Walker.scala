@@ -185,7 +185,11 @@ class Walker(merge: (IType, IType) => IType) {
     val insnIndices = insns.zipWithIndex.toMap
 
     val regionStarts = findRegionStarts(insns)
-
+    val decoration = insns.zip(regionStarts).toMap
+    val printer = new Textifier
+    val methodPrinter = new TraceMethodVisitor(printer)
+    println("================ DECORATED ================")
+    println(Renderer.renderInsns(mn.instructions, printer, methodPrinter, decorate = i => " " + pprint.apply(decoration(i))))
     val startRegionLookup = findStartRegionLookup(insns, regionStarts)
     val program = extractControlFlow(
       insns,
@@ -240,12 +244,10 @@ class Walker(merge: (IType, IType) => IType) {
     def frameTop(i: Int, n: Int) = frames(i).getStack(frames(i).getStackSize - 1 - n)
 
     def mergeBlocks(lhs0: AbstractInsnNode, rhs: SSA.Control, rhsInsn: Option[AbstractInsnNode] = None): Unit = {
-      val lhs = regionStarts(lhs0).get
-      (lhs, rhs) match {
-        case (l: SSA.Merge, r) =>
-          l.incoming += r
-          r.downstreamAdd(l)
-      }
+      val lhs = regionStarts(lhs0).get.asInstanceOf[SSA.Merge]
+      pprint.log((lhs, rhs))
+      lhs.incoming += rhs
+      rhs.downstreamAdd(lhs)
     }
 
     val terminals = insns.zipWithIndex.flatMap{case (insn, i) =>
