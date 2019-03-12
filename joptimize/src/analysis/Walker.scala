@@ -25,17 +25,18 @@ class Walker(merge: (IType, IType) => IType) {
     val program = constructSSAProgram(sig, mn)
 
     removeDeadNodes(program)
-    program.checkLinks()
-
-    simplifyPhiMerges(program)
-    program.checkLinks()
+//    program.checkLinks()
+//
+//    simplifyPhiMerges(program)
+//    program.checkLinks()
 
     println("================ INITIAL ================")
 
     val preScheduleNaming = Namer.apply(program, Map.empty, program.getAllVertices())
 
     println(Renderer.renderSSA(program, preScheduleNaming))
-
+    pprint.log(preScheduleNaming.savedLocals.mapValues(_._2))
+    program.checkLinks()
     val (controlFlowEdges, startBlock, allBlocks, blockEdges) =
       analyzeBlockStructure(program)
 
@@ -335,11 +336,12 @@ class Walker(merge: (IType, IType) => IType) {
         case (k, v) =>
           if (k == startReg) {
             destBlock.downstreamAdd(phi)
+            startReg.downstreamRemove(phi)
             (destBlock, v)
           }
           else (k, v)
       }
-      startReg.downstreamRemove(phi)
+
     }
   }
 
