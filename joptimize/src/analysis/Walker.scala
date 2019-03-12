@@ -25,10 +25,10 @@ class Walker(merge: (IType, IType) => IType) {
     val program = constructSSAProgram(sig, mn)
 
     removeDeadNodes(program)
-//    program.checkLinks()
-//
-//    simplifyPhiMerges(program)
-//    program.checkLinks()
+    program.checkLinks()
+
+    simplifyPhiMerges(program)
+    program.checkLinks()
 
     println("================ INITIAL ================")
 
@@ -64,11 +64,11 @@ class Walker(merge: (IType, IType) => IType) {
 
     println("================ PESSIMISTIC ================")
 
-//    PartialEvaluator.apply(program)
-//
-//    removeDeadNodes(program)
-//
-//    program.checkLinks()
+    PartialEvaluator.apply(program)
+
+    removeDeadNodes(program)
+
+    program.checkLinks()
 
     val postPessimisticNaming = Namer.apply(program, Map.empty, program.getAllVertices())
 

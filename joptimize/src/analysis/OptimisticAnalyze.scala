@@ -207,6 +207,8 @@ object OptimisticAnalyze {
           .collect{case p: SSA.Phi => p}
           .filter(phi => phi.getSize != 0 && phi.block == nextBlock)
           .map{phi =>
+            pprint.log(phi.incoming)
+            pprint.log(phi.getSize)
             val Seq(expr) = phi
               .incoming
               .collect{case (k, v) if k == currentBlock && !v.isInstanceOf[SSA.State] => v}
