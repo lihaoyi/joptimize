@@ -293,7 +293,6 @@ class BytecodeToSSA(merges: mutable.LinkedHashSet[SSA.Phi],
         findBlockStart(insnIndex).downstreamAdd(v1)
         v2.downstreamAdd(v1)
       }
-      v1.checkLinks()
       v1
     }
   }

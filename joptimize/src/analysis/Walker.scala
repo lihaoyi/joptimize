@@ -63,11 +63,11 @@ class Walker(merge: (IType, IType) => IType) {
 
     println("================ PESSIMISTIC ================")
 
-    PartialEvaluator.apply(program)
-
-    removeDeadNodes(program)
-
-    program.checkLinks()
+//    PartialEvaluator.apply(program)
+//
+//    removeDeadNodes(program)
+//
+//    program.checkLinks()
 
     val postPessimisticNaming = Namer.apply(program, Map.empty, program.getAllVertices())
 
@@ -85,7 +85,7 @@ class Walker(merge: (IType, IType) => IType) {
       Map.empty,
       program.getAllVertices().collect{case b: SSA.Block if b.upstream.isEmpty => b}.head,
       ITypeLattice(merge),
-      postScheduleNaming
+      postPessimisticNaming
     )
 
     val dominators2 = Dominator.findDominators(blockEdges, allBlocks)

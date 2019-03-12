@@ -20,7 +20,7 @@ class Optimistic {
 
     @joptimize.Test(inputs = {1, 2, 3}, removedNumConst = {26}, addedNumConst = {20})
     static int branchConstant(int x) {
-        int z = 13;
+        int z = 9;
         if (z > 10){
             z = z + x;
         }
