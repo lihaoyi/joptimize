@@ -110,7 +110,7 @@ object SSA{
     }
   }
 
-  class Merge(var insnIndex: Int, var incoming: Set[Control]) extends Block() {
+  class Merge(var insnIndex: Int, var incoming: Set[Block]) extends Block() {
     def controls = upstream
     def upstream = incoming.toSeq
 

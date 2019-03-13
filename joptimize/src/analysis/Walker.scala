@@ -62,36 +62,64 @@ class Walker(merge: (IType, IType) => IType) {
 
     println(Renderer.renderSSA(program, postScheduleNaming, nodesToBlocks2))
 
-    println("================ PESSIMISTIC ================")
-
-    PartialEvaluator.apply(program)
-
-    removeDeadNodes(program)
-
-    program.checkLinks()
-
-    val postPessimisticNaming = Namer.apply(program, Map.empty, program.getAllVertices())
-
-    println(Renderer.renderSSA(program, postPessimisticNaming))
-
-    val loopTree2 = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)
-
-    println()
-    println(Renderer.renderLoopTree(loopTree2, preScheduleNaming.savedLocals))
+//    println("================ PESSIMISTIC ================")
+//
+//    PartialEvaluator.apply(program)
+//
+//    removeDeadNodes(program)
+//
+//    program.checkLinks()
+//
+//    val postPessimisticNaming = Namer.apply(program, Map.empty, program.getAllVertices())
+//
+//    println(Renderer.renderSSA(program, postPessimisticNaming))
+//
+//    val loopTree2 = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)
+//
+//    println()
+//    println(Renderer.renderLoopTree(loopTree2, preScheduleNaming.savedLocals))
 
     println("================ OPTIMISTIC ================")
 
-    OptimisticAnalyze.apply(
+    val (inferred, liveBlocks) = OptimisticAnalyze.apply(
       program,
       Map.empty,
       program.getAllVertices().collect{case b: SSA.Block if b.upstream.isEmpty => b}.head,
       ITypeLattice(merge),
-      postPessimisticNaming
+      postScheduleNaming
     )
+    program.getAllVertices().foreach{
+      case n: SSA.Val =>
+        val replacement = inferred.get(n) match{
+          case Some(CType.I(v)) => Some(SSA.ConstI(v))
+          case Some(CType.J(v)) => Some(SSA.ConstJ(v))
+          case Some(CType.F(v)) => Some(SSA.ConstF(v))
+          case Some(CType.D(v)) => Some(SSA.ConstD(v))
+          case _ => None
+        }
+        replacement.foreach{r =>
+          n.upstream.foreach(_.downstreamRemoveAll(n))
+          n.downstreamList.foreach(_.replaceUpstream(n, r))
+        }
+      case j: SSA.Jump =>
+        val allTargets = j.downstreamList.collect{case b: SSA.Block => b}
+        val liveTargets = allTargets.filter(liveBlocks)
+        if (liveTargets.size == 1){
+          PartialEvaluator.replaceJump(j, liveTargets.head)
+        }else if (liveTargets.size <= allTargets.size){
+//          for(t <- allTargets if !liveTargets.contains(t)){
+//            j.downstreamRemove(t)
+//          }
+        }
+      case p: SSA.Phi => p.incoming = p.incoming.filter(t => liveBlocks(t._1))
+      case m: SSA.Merge => m.incoming = m.incoming.filter(liveBlocks)
+      case _ => // do nothing
+    }
+    removeDeadNodes(program)
+    val loopTree2 = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)
 
     val dominators2 = Dominator.findDominators(blockEdges, allBlocks)
 
-    pprint.log(startBlock)
 
     { // Just for debugging
       val nodesToBlocks = Scheduler.apply(
@@ -101,16 +129,11 @@ class Walker(merge: (IType, IType) => IType) {
 
       val postScheduleNaming = Namer.apply(program, nodesToBlocks, program.getAllVertices())
 
-//        pprint.log(preScheduleNaming.savedLocals.collect{case (k: SSA.Block, (v1, v2)) => (k, v2)}, height=9999)
-//        pprint.log(preScheduleNaming.saveable)
-//        pprint.log(nodesToBlocks, height=9999)
-//
       println()
       println(Renderer.renderSSA(program, postScheduleNaming, nodesToBlocks))
-
-//      ???
     }
 
+    println("================ REGISTERS ALLOCATED ================")
     RegisterAllocator.apply(program, dominators2.immediateDominators)
 
     val allVertices2 = Util.breadthFirstAggregation[SSA.Node](program.allTerminals.toSet)(_.upstream)._1
@@ -133,6 +156,7 @@ class Walker(merge: (IType, IType) => IType) {
       postRegisterAllocNaming
     )
 
+    println("================ OUTPUT BYTECODE ================")
     println(Renderer.renderBlockCode(blockCode, finalInsns))
 
     val called = allVertices2.collect{
@@ -244,7 +268,7 @@ class Walker(merge: (IType, IType) => IType) {
                          findStartRegion: Int => SSA.Block) = {
     def frameTop(i: Int, n: Int) = frames(i).getStack(frames(i).getStackSize - 1 - n)
 
-    def mergeBlocks(lhs0: AbstractInsnNode, rhs: SSA.Control): Unit = {
+    def mergeBlocks(lhs0: AbstractInsnNode, rhs: SSA.Block): Unit = {
       val lhs = regionStarts(lhs0).get.asInstanceOf[SSA.Merge]
       pprint.log((lhs, rhs))
       lhs.incoming += rhs
@@ -326,7 +350,7 @@ class Walker(merge: (IType, IType) => IType) {
   def mergeJumpTarget(destBlock: SSA.Block,
                       destInsn: AbstractInsnNode,
                       regionStarts: AbstractInsnNode => Option[SSA.Block],
-                      mergeBlocks: (AbstractInsnNode, SSA.Control) => Unit,
+                      mergeBlocks: (AbstractInsnNode, SSA.Block) => Unit,
                       startReg: SSA.Block) = {
 
     mergeBlocks(destInsn, destBlock)

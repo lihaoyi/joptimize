@@ -19,68 +19,73 @@ object PartialEvaluator {
       val directNextOpt = evaluateJump(current)
 
       val next = for(directNext <- directNextOpt) yield {
-        //                     c
-        //                    /
-        //       a        TRUE -- d
-        //        \      /    \     \
-        // block - branch      ---- phi
-        //        /      \          / |
-        //       b        false ---  |
-        //                     \     /
-        //                      e----
-        Util.replace(directNext, current.block)
-        //       --------------------
-        //      /      a        TRUE \--- d
-        //     /        \      /      \    \
-        // block ------- branch        --- phi
-        //     \        /      \          / |
-        //      c      b        false ----  |
-        //                           \      /
-        //                            e ----
-        current.block.downstreamRemove(current)
-        //       --------------------
-        //      /      a        TRUE \--- d
-        //     /        \      /      \    \
-        // block         branch        -- phi
-        //     \        /      \          / |
-        //      c      b        false ----  |
-        //                           \      /
-        //                            e ----
-        val branchBlocks = current.downstreamList.toSet
-
-        branchBlocks.flatMap(_.downstreamList).collect{
-          case phi: SSA.Phi =>
-            phi.incoming = phi.incoming.flatMap(x =>
-              if (x._1 == directNext) Some(current.block -> x._2)
-              else if (branchBlocks(x._1)) None
-              else Some(x)
-            )
-            phi
-
-          case r: SSA.Merge =>
-            r.incoming = r.incoming.flatMap{ x =>
-              if (x == directNext) Some(current.block)
-              else if (branchBlocks(x)) None
-              else Some(x)
-            }
-            r
-        }
-        //       ---------------------
-        //      /      a        TRUE  \-- d
-        //     /        \      /       \    \
-        // block         branch         --- phi
-        //     \        /      \
-        //      c      b        false - e
-        //
-        //      d --- phi
-        //     /     /
-        // block -----
-        //     \
-        //      c
+        replaceJump(current, directNext)
 
       }
       next.toSeq.flatten
   }
+
+  def replaceJump(current: SSA.Jump, directNext: SSA.Block) = {
+    //                     c
+    //                    /
+    //       a        TRUE -- d
+    //        \      /    \     \
+    // block - branch      ---- phi
+    //        /      \          / |
+    //       b        false ---  |
+    //                     \     /
+    //                      e----
+    Util.replace(directNext, current.block)
+    //       --------------------
+    //      /      a        TRUE \--- d
+    //     /        \      /      \    \
+    // block ------- branch        --- phi
+    //     \        /      \          / |
+    //      c      b        false ----  |
+    //                           \      /
+    //                            e ----
+    current.block.downstreamRemove(current)
+    //       --------------------
+    //      /      a        TRUE \--- d
+    //     /        \      /      \    \
+    // block         branch        -- phi
+    //     \        /      \          / |
+    //      c      b        false ----  |
+    //                           \      /
+    //                            e ----
+    val branchBlocks = current.downstreamList.toSet
+
+    branchBlocks.flatMap(_.downstreamList).collect {
+      case phi: SSA.Phi =>
+        phi.incoming = phi.incoming.flatMap(x =>
+          if (x._1 == directNext) Some(current.block -> x._2)
+          else if (branchBlocks(x._1)) None
+          else Some(x)
+        )
+        phi
+
+      case r: SSA.Merge =>
+        r.incoming = r.incoming.flatMap { x =>
+          if (x == directNext) Some(current.block)
+          else if (branchBlocks(x)) None
+          else Some(x)
+        }
+        r
+    }
+    //       ---------------------
+    //      /      a        TRUE  \-- d
+    //     /        \      /       \    \
+    // block         branch         --- phi
+    //     \        /      \
+    //      c      b        false - e
+    //
+    //      d --- phi
+    //     /     /
+    // block -----
+    //     \
+    //      c
+  }
+
   def apply(program: Program) = {
     program.transform(Simplifier.transform.orElse(PartialEvaluator.transform))
   }

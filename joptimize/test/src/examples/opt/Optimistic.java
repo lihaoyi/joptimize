@@ -2,10 +2,10 @@ package joptimize.examples.opt;
 
 class Optimistic {
 
-    @joptimize.Test(inputs = {1, 2, 3}, removedNumConst = {26}, addedNumConst = {20})
+    @joptimize.Test(inputs = {1, 2, 3}, removedNumConst = {13}, addedNumConst = {14})
     static int trivial(int x) {
         int z = 13;
-        return z + x;
+        return z + 1 + x ;
     }
 
     @joptimize.Test(inputs = {1, 2, 3}, removedNumConst = {26}, addedNumConst = {20})
@@ -18,13 +18,13 @@ class Optimistic {
         return z + 7;
     }
 
-    @joptimize.Test(inputs = {1, 2, 3}, removedNumConst = {26}, addedNumConst = {20})
+    @joptimize.Test(inputs = {1, 2, 3}, removedNumConst = {10}, addedNumConst = {8})
     static int branchConstant(int x) {
         int z = 9;
         if (z > 10){
             z = z + x;
         }
-        return z;
+        return z - 1;
     }
 //
 //    @joptimize.Test(

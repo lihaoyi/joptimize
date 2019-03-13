@@ -317,7 +317,6 @@ object OptimisticAnalyze {
     pprint.log(evaluated)
     pprint.log(evaluated.flatMap{case (k, v) => naming(k).map((_, v))})
 
-    ???
     (evaluated.toMap, inferredBlocks.toSet)
   }
 }
