@@ -48,15 +48,18 @@ case class Program(args: Seq[SSA.Arg], allTerminals: Seq[SSA.Control]){
 
     val live = Util.breadthFirstSeen[SSA.Node](allTerminals.toSet)(_.upstream)
 
-    val (seen, terminals, allEdges) = Util.breadthFirstAggregation0[SSA.Node](allTerminals.toSet)(
-      x => x.upstream ++ x.downstreamList
+    val (seen, terminals, allEdges) = Util.breadthFirstAggregation0[SSA.Node, Boolean](allTerminals.toSet)(
+      x => x.upstream.map(_ -> true) ++ x.downstreamList.map(_ -> false)
     )
 
     val allGraphvizNodes = seen.keys.map(x => x -> node(x.toString + " " + name(x))).toMap
     val (liveNodes, deadNodes) = allGraphvizNodes.toSeq.partition(t => live(t._1))
     val directedEdges: Map[SSA.Node, Seq[(SSA.Node, String)]] = allEdges
-      .flatMap{case (a, b) =>
-        (a.downstreamList.contains(b), b.upstream.contains(a)) match{
+      .flatMap{case (a, b, isUpstream) =>
+        pprint.log((a, b, isUpstream))
+        pprint.log((a.downstreamList.contains(b), b.upstream.contains(a)))
+        if (!isUpstream) Nil
+        else (a.downstreamList.contains(b), b.upstream.contains(a)) match{
           case (true, true) => Seq((a, b, "bidi"))
           case (false, true) => Seq((a, b, "up"))
           case (true, false) => Seq((a, b, "down"))

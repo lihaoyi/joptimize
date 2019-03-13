@@ -93,7 +93,7 @@ class Walker(merge: (IType, IType) => IType) {
 
     pprint.log(program.getAllVertices().collect{case p: SSA.Phi => p})
 
-    pprint.log(Util.breadthFirstAggregation0[SSA.Node](program.allTerminals.toSet)(_.upstream)._1, height=999)
+    pprint.log(Util.breadthFirstSeen[SSA.Node](program.allTerminals.toSet)(_.upstream), height=999)
 
     program.getAllVertices().foreach{
 
@@ -145,13 +145,13 @@ class Walker(merge: (IType, IType) => IType) {
       case _ => // do nothing
     }
 
-    pprint.log(Util.breadthFirstAggregation0[SSA.Node](program.allTerminals.toSet)(_.upstream)._1)
+    pprint.log(Util.breadthFirstSeen[SSA.Node](program.allTerminals.toSet)(_.upstream))
     pprint.log(program.getAllVertices().collect{case s: SSA.State => s})
-
 
     program.dump("post-optimistic.svg")
     program.checkLinks(checkDead = false)
     removeDeadNodes(program)
+    program.dump("post-optimistic-cleanup.svg")
     program.checkLinks()
 
     val loopTree2 = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)

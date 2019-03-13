@@ -37,7 +37,7 @@ object Util{
   def leastUpperBound[T](starts: Set[T])(edges: T => Seq[T]) = {
     // Walk up the graph from all starting locations
     val (seens, terminalss, backEdgess) =
-      starts.map(start => breadthFirstAggregation0(Set(start))(edges)).unzip3
+      starts.map(start => breadthFirstAggregation0(Set(start))(edges(_).map(_ -> ()))).unzip3
 
     // Find the set of nodes which overlap all the transitive closures
     val overlap = seens.map(_.keySet).reduce(_.intersect(_))
@@ -49,41 +49,41 @@ object Util{
     val backMap = mutable.LinkedHashMap.empty[T, List[T]]
     for {
       backEdges <- backEdgess
-      (src, dest) <- backEdges
+      (src, dest, _) <- backEdges
       if overlap.contains(dest)
     } backMap(src) = dest :: backMap.getOrElse(src, Nil)
 
     breadthFirstTerminals[T](overlapTerminals)(backMap.getOrElse(_, Nil))
   }
   def breadthFirstSeen[T](start: Set[T])(edges: T => Seq[T]): Set[T] = {
-    val (seen, terminals, backEdges) = breadthFirstAggregation0(start, trackBackEdges = false, trackTerminals = false)(edges)
+    val (seen, terminals, backEdges) = breadthFirstAggregation0(start, trackBackEdges = false, trackTerminals = false)(edges(_).map(_ -> ()))
     seen.keySet
   }
   def breadthFirstTerminals[T](start: Set[T])(edges: T => Seq[T]): Set[T] = {
-    val (seen, terminals, backEdges) = breadthFirstAggregation0(start, trackBackEdges = false)(edges)
+    val (seen, terminals, backEdges) = breadthFirstAggregation0(start, trackBackEdges = false)(edges(_).map(_ -> ()))
     terminals
   }
-  def breadthFirstBackEges[T](start: Set[T])(edges: T => Seq[T]): Seq[(T, T)] = {
-    val (seen, terminals, backEdges) = breadthFirstAggregation0(start, trackTerminals = false)(edges)
-    backEdges
+  def breadthFirstBackEdges[T](start: Set[T])(edges: T => Seq[T]): Seq[(T, T)] = {
+    val (seen, terminals, backEdges) = breadthFirstAggregation0(start, trackTerminals = false)(edges(_).map(_ -> ()))
+    backEdges.map{case (a, b, c) => (a, b)}
   }
-  def breadthFirstAggregation0[T](start: Set[T],
-                                  trackBackEdges: Boolean = true,
-                                  trackTerminals: Boolean = true)
-                                 (edges: T => Seq[T]): (Map[T, List[T]], Set[T], Seq[(T, T)]) = {
+  def breadthFirstAggregation0[T, V](start: Set[T],
+                                     trackBackEdges: Boolean = true,
+                                     trackTerminals: Boolean = true)
+                                    (edges: T => Seq[(T, V)]): (Map[T, List[T]], Set[T], Seq[(T, T, V)]) = {
     val queue = start.to[mutable.Queue].map((_, List.empty[T]))
     val seen = mutable.LinkedHashMap.empty[T, List[T]]
     val terminals = if (trackTerminals) mutable.LinkedHashSet.empty[T] else null
-    val backEdges = if (trackBackEdges) mutable.Buffer.empty[(T, T)] else null
+    val backEdges = if (trackBackEdges) mutable.Buffer.empty[(T, T, V)] else null
     while(queue.nonEmpty){
       val (current, path) = queue.dequeue()
       if (!seen.contains(current)){
         seen(current) = path
         val next = edges(current)
         if (trackTerminals && next.isEmpty) terminals.add(current)
-        for(n <- next){
+        for((n, metadata) <- next){
           queue.enqueue((n, current :: path))
-          if (trackBackEdges) backEdges.append((n, current))
+          if (trackBackEdges) backEdges.append((n, current, metadata))
         }
       }
     }
