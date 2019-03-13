@@ -91,17 +91,27 @@ class Walker(merge: (IType, IType) => IType) {
 
     pprint.log(program.getAllVertices().collect{case p: SSA.Phi => p})
 
+    pprint.log(Util.breadthFirstAggregation0[SSA.Node](program.allTerminals.toSet)(_.upstream)._1, height=999)
+
     program.getAllVertices().foreach{
 
       case p: SSA.ChangedState => // do nothing
 
       case p: SSA.Phi =>
         p.incoming = p.incoming.filter{t =>
-          pprint.log((t, liveBlocks(t._1)))
-          liveBlocks(t._1)
+          val live = liveBlocks(t._1)
+          if (!live) {
+            t._1.downstreamRemove(p)
+            t._2.downstreamRemove(p)
+          }
+          live
         }
       case m: SSA.Merge =>
-        m.incoming = m.incoming.filter(liveBlocks)
+        m.incoming = m.incoming.filter{ t =>
+          val live = liveBlocks(t)
+          if (!live) t.downstreamRemove(m)
+          live
+        }
 
       case n: SSA.Val =>
         val replacement = inferred.get(n) match{
@@ -126,9 +136,9 @@ class Walker(merge: (IType, IType) => IType) {
           println("ELIMINATING JUMP " + j)
           PartialEvaluator.replaceJump(j, liveTargets.head)
         }else if (liveTargets.size <= allTargets.size){
-//          for(t <- allTargets if !liveTargets.contains(t)){
-//            j.downstreamRemove(t)
-//          }
+          for(t <- allTargets if !liveTargets.contains(t)){
+            j.downstreamRemove(t)
+          }
         }
       case _ => // do nothing
     }
@@ -136,8 +146,8 @@ class Walker(merge: (IType, IType) => IType) {
     pprint.log(Util.breadthFirstAggregation0[SSA.Node](program.allTerminals.toSet)(_.upstream)._1)
     pprint.log(program.getAllVertices().collect{case s: SSA.State => s})
 
-    program.checkLinks()
     removeDeadNodes(program)
+    program.checkLinks()
 
     val loopTree2 = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)
 
