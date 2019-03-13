@@ -420,7 +420,7 @@ class Walker(merge: (IType, IType) => IType) {
   }
 
   def simplifyPhiMerges(program: Program) = program.transform{
-    case phi: SSA.Phi if phi.getSize != 0 =>
+    case phi: SSA.Phi =>
       val filteredValues = phi.incoming.filter(_._2 != phi)
 
       if (filteredValues.map(_._2).size == 1) Util.replace(phi, filteredValues.head._2)

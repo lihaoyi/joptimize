@@ -174,7 +174,6 @@ object OptimisticAnalyze {
                initialBlock: SSA.Block,
                lattice: Lattice[T],
                naming: Namer.Result): (Map[SSA.Val, T], Set[SSA.Block]) = {
-    pprint.log(naming.savedLocals.mapValues(_._2))
     var inferredPhis = Map.empty[SSA.Phi, T]
     val inferredBlocks = mutable.Set(initialBlock)
     val workList = mutable.LinkedHashSet(initialBlock)
@@ -198,24 +197,17 @@ object OptimisticAnalyze {
 
       val Array(nextControl) = currentBlock.downstreamList.collect{case n: SSA.Control => n}
 
-      pprint.log(currentBlock)
-      pprint.log(evaluated)
       def queueNextBlock(nextBlock: SSA.Block) = {
-        pprint.log(nextBlock)
         val newPhiMapping = nextBlock
           .downstreamList
           .collect{case p: SSA.Phi => p}
           .filter(phi => phi.getSize != 0 && phi.block == nextBlock)
           .map{phi =>
-            pprint.log(phi.incoming)
-            pprint.log(phi.getSize)
             val Seq(expr) = phi
               .incoming
               .collect{case (k, v) if k == currentBlock && !v.isInstanceOf[SSA.State] => v}
               .toSeq
-            pprint.log(expr)
             val res = evaluate(expr)
-            pprint.log(res)
             (phi, res)
           }
           .toMap
@@ -303,7 +295,6 @@ object OptimisticAnalyze {
                   queueNextBlock(n.downstreamList.collect{ case t: SSA.False => t}.head)
 
                 case Some(bool) =>
-                  pprint.log(bool)
                   if (bool) queueNextBlock(n.downstreamList.collect{ case t: SSA.True => t}.head)
                   else queueNextBlock(n.downstreamList.collect{ case t: SSA.False => t}.head)
               }
@@ -313,8 +304,6 @@ object OptimisticAnalyze {
       }
     }
 
-    pprint.log(evaluated)
-    pprint.log(evaluated.flatMap{case (k, v) => naming(k).map((_, v))})
 
     (evaluated.toMap, inferredBlocks.toSet)
   }
