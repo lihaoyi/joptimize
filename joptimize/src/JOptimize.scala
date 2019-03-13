@@ -81,7 +81,7 @@ object JOptimize{
 
     val visitedMethods = mutable.Buffer.empty[(MethodSig, Walker.MethodResult)]
 
-    Util.breadthFirstAggregation(entrypoints.toSet){ sig =>
+    Util.breadthFirstSeen(entrypoints.toSet){ sig =>
       val subSigs =
         if (sig.static){
           for(sub <- findSupertypes(sig.cls))

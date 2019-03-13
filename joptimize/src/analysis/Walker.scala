@@ -88,7 +88,21 @@ class Walker(merge: (IType, IType) => IType) {
       ITypeLattice(merge),
       postScheduleNaming
     )
+
+    pprint.log(program.getAllVertices().collect{case p: SSA.Phi => p})
+
     program.getAllVertices().foreach{
+
+      case p: SSA.ChangedState => // do nothing
+
+      case p: SSA.Phi =>
+        p.incoming = p.incoming.filter{t =>
+          pprint.log((t, liveBlocks(t._1)))
+          liveBlocks(t._1)
+        }
+      case m: SSA.Merge =>
+        m.incoming = m.incoming.filter(liveBlocks)
+
       case n: SSA.Val =>
         val replacement = inferred.get(n) match{
           case Some(CType.I(v)) => Some(SSA.ConstI(v))
@@ -99,23 +113,32 @@ class Walker(merge: (IType, IType) => IType) {
         }
         replacement.foreach{r =>
           n.upstream.foreach(_.downstreamRemoveAll(n))
-          n.downstreamList.foreach(_.replaceUpstream(n, r))
+          for(d <- n.downstreamList) {
+            r.downstreamAdd(d)
+            d.replaceUpstream(n, r)
+          }
         }
+
       case j: SSA.Jump =>
         val allTargets = j.downstreamList.collect{case b: SSA.Block => b}
         val liveTargets = allTargets.filter(liveBlocks)
         if (liveTargets.size == 1){
+          println("ELIMINATING JUMP " + j)
           PartialEvaluator.replaceJump(j, liveTargets.head)
         }else if (liveTargets.size <= allTargets.size){
 //          for(t <- allTargets if !liveTargets.contains(t)){
 //            j.downstreamRemove(t)
 //          }
         }
-      case p: SSA.Phi => p.incoming = p.incoming.filter(t => liveBlocks(t._1))
-      case m: SSA.Merge => m.incoming = m.incoming.filter(liveBlocks)
       case _ => // do nothing
     }
+
+    pprint.log(Util.breadthFirstAggregation0[SSA.Node](program.allTerminals.toSet)(_.upstream)._1)
+    pprint.log(program.getAllVertices().collect{case s: SSA.State => s})
+
+    program.checkLinks()
     removeDeadNodes(program)
+
     val loopTree2 = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)
 
     val dominators2 = Dominator.findDominators(blockEdges, allBlocks)
@@ -136,7 +159,7 @@ class Walker(merge: (IType, IType) => IType) {
     println("================ REGISTERS ALLOCATED ================")
     RegisterAllocator.apply(program, dominators2.immediateDominators)
 
-    val allVertices2 = Util.breadthFirstAggregation[SSA.Node](program.allTerminals.toSet)(_.upstream)._1
+    val allVertices2 = Util.breadthFirstSeen[SSA.Node](program.allTerminals.toSet)(_.upstream)
 
     val nodesToBlocks = Scheduler.apply(
       loopTree2, dominators2, startBlock,

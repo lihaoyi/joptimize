@@ -9,9 +9,8 @@ import scala.collection.mutable
   * Represents the combined control/data-flow graph of a SSA program.
   */
 case class Program(args: Seq[SSA.Arg], allTerminals: Seq[SSA.Control]){
-  def getAllVertices() = {
-    Util.breadthFirstAggregation[SSA.Node](allTerminals.toSet)(_.upstream)._1
-  }
+  def getAllVertices() = Util.breadthFirstSeen[SSA.Node](allTerminals.toSet)(_.upstream)
+
   def checkLinks() = {
     val allVertices = getAllVertices()
     allVertices.foreach(_.checkLinks())

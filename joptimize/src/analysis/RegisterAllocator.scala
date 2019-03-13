@@ -8,8 +8,7 @@ import scala.collection.mutable
 object RegisterAllocator {
   def apply(program: Program,
             immediateDominators: Map[SSA.Block, SSA.Block]): Unit /*Map[SSA.Val, Int]*/ = {
-    val (allVertices, _, _) =
-      Util.breadthFirstAggregation[SSA.Node](program.allTerminals.toSet)(_.upstream)
+    val allVertices = Util.breadthFirstSeen[SSA.Node](program.allTerminals.toSet)(_.upstream)
 
     val copies = mutable.Set.empty[SSA.Copy]
     val eqClses = mutable.Set.empty[Set[SSA.Val]]

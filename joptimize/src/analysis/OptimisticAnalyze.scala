@@ -247,8 +247,7 @@ object OptimisticAnalyze {
           workList.add(nextBlock)
         }
 
-        val (seen, terminals, backEdges) =
-          Util.breadthFirstAggregation[SSA.Node](invalidatedPhis.toSet)(_.downstreamList)
+        val seen = Util.breadthFirstSeen[SSA.Node](invalidatedPhis.toSet)(_.downstreamList)
 
         seen.foreach{
           case n: SSA.Val => evaluated.remove(n)
