@@ -24,6 +24,7 @@ class Walker(merge: (IType, IType) => IType) {
 
     val program = constructSSAProgram(sig, mn)
 
+    program.dump("initial.svg")
     removeDeadNodes(program)
     program.checkLinks()
 
@@ -79,6 +80,7 @@ class Walker(merge: (IType, IType) => IType) {
 //    println()
 //    println(Renderer.renderLoopTree(loopTree2, preScheduleNaming.savedLocals))
 
+    program.dump("pre-optimistic.svg", postScheduleNaming)
     println("================ OPTIMISTIC ================")
 
     val (inferred, liveBlocks) = OptimisticAnalyze.apply(
@@ -146,6 +148,9 @@ class Walker(merge: (IType, IType) => IType) {
     pprint.log(Util.breadthFirstAggregation0[SSA.Node](program.allTerminals.toSet)(_.upstream)._1)
     pprint.log(program.getAllVertices().collect{case s: SSA.State => s})
 
+
+    program.dump("post-optimistic.svg")
+    program.checkLinks(checkDead = false)
     removeDeadNodes(program)
     program.checkLinks()
 
@@ -160,10 +165,10 @@ class Walker(merge: (IType, IType) => IType) {
         preScheduleNaming.savedLocals.mapValues(_._2), program.getAllVertices()
       )
 
-      val postScheduleNaming = Namer.apply(program, nodesToBlocks, program.getAllVertices())
+      val postOptimisticNaming = Namer.apply(program, nodesToBlocks, program.getAllVertices())
 
       println()
-      println(Renderer.renderSSA(program, postScheduleNaming, nodesToBlocks))
+      println(Renderer.renderSSA(program, postOptimisticNaming, nodesToBlocks))
     }
 
     println("================ REGISTERS ALLOCATED ================")

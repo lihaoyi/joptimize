@@ -46,6 +46,7 @@ object SSA{
 
     override def hashCode = System.identityHashCode(this)
     override def equals(other: Any) = this eq other.asInstanceOf[AnyRef]
+    override def toString(): String = s"${getClass.getSimpleName}@${Integer.toHexString(hashCode())}"
     update()
   }
 
