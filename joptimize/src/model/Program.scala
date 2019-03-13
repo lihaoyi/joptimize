@@ -54,20 +54,12 @@ case class Program(args: Seq[SSA.Arg], allTerminals: Seq[SSA.Control]){
 
     val allGraphvizNodes = seen.keys.map(x => x -> node(x.toString + " " + name(x))).toMap
     val (liveNodes, deadNodes) = allGraphvizNodes.toSeq.partition(t => live(t._1))
-    val directedEdges: Map[SSA.Node, Seq[(SSA.Node, String)]] = allEdges
-      .flatMap{case (a, b, isUpstream) =>
-        pprint.log((a, b, isUpstream))
-        pprint.log((a.downstreamList.contains(b), b.upstream.contains(a)))
-        if (!isUpstream) Nil
-        else (a.downstreamList.contains(b), b.upstream.contains(a)) match{
-          case (true, true) => Seq((a, b, "bidi"))
-          case (false, true) => Seq((a, b, "up"))
-          case (true, false) => Seq((a, b, "down"))
-          case (false, false) => Nil
-        }
-      }
+    val directedEdges: Map[SSA.Node, Seq[(SSA.Node, Int, Int)]] = allEdges
+      .map{case (a0, b0, isUpstream) => if (isUpstream) (a0, b0) else (b0, a0)}
+      .distinct
+      .map{case (a, b) => (a, b, a.downstreamList.count(_ == b), b.upstream.count(_ == a))}
       .groupBy(_._1)
-      .map{case (k, vs) => (k, vs.map(v => (v._2, v._3)))}
+      .map{case (k, vs) => (k, vs.map(v => (v._2, v._3, v._4)))}
 
 
     def colorNodes(nodes: Seq[(SSA.Node, Node)]) = {
@@ -89,14 +81,23 @@ case class Program(args: Seq[SSA.Arg], allTerminals: Seq[SSA.Control]){
       .`with`(
         directedEdges.map{ case (x, ys) =>
           allGraphvizNodes(x).link(
-            ys.map { case (y, kind) =>
-              to(allGraphvizNodes(y)).`with`(
-                kind match{
-                  case "bidi" => Style.SOLID
-                  case "up" => Style.DOTTED
-                  case "down" => Style.DOTTED
+            ys.flatMap { case (y, downs, ups) =>
+              val default = Arrow.INV.tail()
+              val styles =
+                if (downs == ups) Seq.fill(downs)(
+                  Seq(default.dir(Arrow.DirType.FORWARD))
+                )
+                else if (downs < ups) {
+                  Seq.fill(downs)(Seq(default.dir(Arrow.DirType.FORWARD))) ++
+                  Seq.fill(ups - downs)(Seq(default.dir(Arrow.DirType.FORWARD), Style.DASHED))
                 }
-              )
+                else if (downs > ups) {
+                  Seq.fill(ups)(Seq(default.dir(Arrow.DirType.FORWARD))) ++
+                  Seq.fill(downs - ups)(Seq(default.dir(Arrow.DirType.BACK), Style.DASHED))
+                }
+                else ???
+
+              styles.map(to(allGraphvizNodes(y)).`with`(_:_*))
             }
             :_*
          )
