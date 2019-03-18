@@ -102,6 +102,7 @@ object JOptimize{
         (sig, args),
         {
           val (res, newVisitedClasses) = walker.walkMethod(sig.cls.name, originalMethods(sig), computeMethodSig)
+          newVisitedClasses.foreach(visitedClasses.add)
           res
         }
       ).inferredReturn
@@ -157,6 +158,8 @@ object JOptimize{
       cn.methods.addAll(mns.asJava)
     }
 
+    pprint.log(entrypoints)
+    pprint.log(grouped.keys.map(_.name))
     val outClasses = PostLivenessDCE(
       entrypoints,
       grouped.keys.toSeq,

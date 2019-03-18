@@ -38,7 +38,7 @@ class Walker(merge: (IType, IType) => IType) {
     val preScheduleNaming = Namer.apply(program, Map.empty, program.getAllVertices())
 
     println(Renderer.renderSSA(program, preScheduleNaming))
-    pprint.log(preScheduleNaming.savedLocals.mapValues(_._2))
+
     program.checkLinks()
     val (controlFlowEdges, startBlock, allBlocks, blockEdges) =
       analyzeBlockStructure(program)
@@ -93,10 +93,6 @@ class Walker(merge: (IType, IType) => IType) {
       postScheduleNaming
     )
 
-    pprint.log(program.getAllVertices().collect{case p: SSA.Phi => p})
-
-    pprint.log(Util.breadthFirstSeen[SSA.Node](program.allTerminals.toSet)(_.upstream), height=999)
-
     program.getAllVertices().foreach{
 
       case p: SSA.ChangedState => // do nothing
@@ -146,9 +142,6 @@ class Walker(merge: (IType, IType) => IType) {
         }
       case _ => // do nothing
     }
-
-    pprint.log(Util.breadthFirstSeen[SSA.Node](program.allTerminals.toSet)(_.upstream))
-    pprint.log(program.getAllVertices().collect{case s: SSA.State => s})
 
     Renderer.dumpSvg(program, "post-optimistic.svg")
     program.checkLinks(checkDead = false)
@@ -308,7 +301,6 @@ class Walker(merge: (IType, IType) => IType) {
 
     def mergeBlocks(lhs0: AbstractInsnNode, rhs: SSA.Block): Unit = {
       val lhs = regionStarts(lhs0).get.asInstanceOf[SSA.Merge]
-      pprint.log((lhs, rhs))
       lhs.incoming += rhs
       rhs.downstreamAdd(lhs)
     }
