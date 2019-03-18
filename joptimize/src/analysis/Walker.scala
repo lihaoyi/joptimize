@@ -15,16 +15,18 @@ import scala.collection.{immutable, mutable}
 
 class Walker(merge: (IType, IType) => IType) {
 
-  def walkMethod(sig: MethodSig, mn: MethodNode): (Walker.MethodResult, Set[MethodSig], Set[JType.Cls]) = {
-    println("+" * 20 + sig + "+" * 20)
+  def walkMethod(clsName: String,
+                 mn: MethodNode,
+                 computeMethodSig: (SSA.Invoke, Seq[IType]) => IType): (Walker.MethodResult, Set[JType.Cls]) = {
+    println("+" * 20 + clsName + "+" * 20)
     val printer = new Textifier
     val methodPrinter = new TraceMethodVisitor(printer)
     println("================ BYTECODE ================")
     println(Renderer.renderInsns(mn.instructions, printer, methodPrinter))
 
-    val program = constructSSAProgram(sig, mn)
+    val program = constructSSAProgram(clsName, mn)
 
-    program.dump("initial.svg")
+    Renderer.dumpSvg(program, "initial.svg")
     removeDeadNodes(program)
     program.checkLinks()
 
@@ -80,14 +82,14 @@ class Walker(merge: (IType, IType) => IType) {
 //    println()
 //    println(Renderer.renderLoopTree(loopTree2, preScheduleNaming.savedLocals))
 
-    program.dump("pre-optimistic.svg", postScheduleNaming)
+    Renderer.dumpSvg(program, "pre-optimistic.svg", postScheduleNaming)
     println("================ OPTIMISTIC ================")
 
     val (inferred, liveBlocks) = OptimisticAnalyze.apply(
       program,
       Map.empty,
       program.getAllVertices().collect{case b: SSA.Block if b.upstream.isEmpty => b}.head,
-      ITypeLattice(merge),
+      new ITypeLattice(merge, computeMethodSig),
       postScheduleNaming
     )
 
@@ -148,10 +150,10 @@ class Walker(merge: (IType, IType) => IType) {
     pprint.log(Util.breadthFirstSeen[SSA.Node](program.allTerminals.toSet)(_.upstream))
     pprint.log(program.getAllVertices().collect{case s: SSA.State => s})
 
-    program.dump("post-optimistic.svg")
+    Renderer.dumpSvg(program, "post-optimistic.svg")
     program.checkLinks(checkDead = false)
     removeDeadNodes(program)
-    program.dump("post-optimistic-cleanup.svg")
+    Renderer.dumpSvg(program, "post-optimistic-cleanup.svg")
     program.checkLinks()
 
     val loopTree2 = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)
@@ -197,22 +199,6 @@ class Walker(merge: (IType, IType) => IType) {
     println("================ OUTPUT BYTECODE ================")
     println(Renderer.renderBlockCode(blockCode, finalInsns))
 
-    val called = allVertices2.collect{
-      case SSA.InvokeStatic(state, srcs, cls, name, desc) => MethodSig(cls, name, desc, true)
-      case SSA.InvokeVirtual(state, srcs, cls, name, desc) => MethodSig(cls, name, desc, false)
-      case SSA.InvokeSpecial(state, srcs, cls, name, desc) => MethodSig(cls, name, desc, false)
-      case SSA.InvokeInterface(state, srcs, cls, name, desc) => MethodSig(cls, name, desc, false)
-      case SSA.InvokeDynamic(name, desc, bootstrap, bsArgs, srcs)
-        if bootstrap == Util.metafactory || bootstrap == Util.altMetafactory =>
-        val target = bsArgs(1).asInstanceOf[SSA.InvokeDynamic.HandleArg]
-        MethodSig(
-          target.cls,
-          target.name,
-          target.desc,
-          target.tag == Opcodes.H_INVOKESTATIC
-        )
-    }
-
     val classes = allVertices2.collect{
       case n: SSA.GetField => n.owner
       case n: SSA.PutField => n.owner
@@ -220,9 +206,23 @@ class Walker(merge: (IType, IType) => IType) {
       case n: SSA.PutStatic => n.cls
     }
 
-    val result = Walker.MethodResult(Nil, sig.desc.ret, finalInsns, false, Nil)
 
-    (result, called, classes)
+    val result = Walker.MethodResult(
+      Nil,
+      allVertices2
+        .collect{case r: SSA.ReturnVal => r.src}
+        .map{
+          case n: SSA.Copy => inferred(n.src)
+          case n => inferred(n)
+        }
+        .reduceLeftOption(merge)
+        .getOrElse(JType.Prim.V),
+      finalInsns,
+      false,
+      Nil
+    )
+
+    (result, classes)
   }
 
   def analyzeBlockStructure(program: Program) = {
@@ -241,7 +241,7 @@ class Walker(merge: (IType, IType) => IType) {
     (controlFlowEdges, startBlock, allBlocks, blockEdges)
   }
 
-  def constructSSAProgram(sig: MethodSig, mn: MethodNode) = {
+  def constructSSAProgram(clsName: String, mn: MethodNode) = {
     val phiMerges0 = mutable.LinkedHashSet.empty[SSA.Phi]
 
     val insns = mn.instructions.iterator().asScala.toVector
@@ -258,7 +258,7 @@ class Walker(merge: (IType, IType) => IType) {
       insns,
       i => regionStarts(insnIndices(i)),
       joptimize.bytecode.Analyzer.analyze(
-        sig.cls.name, mn,
+        clsName, mn,
         new BytecodeToSSA(phiMerges0, startRegionLookup, regionStarts),
         new SSA.ChangedState(null)
       ),

@@ -209,7 +209,7 @@ object MainTests extends TestSuite{
         'branchConstant - annotatedTest
       }
 
-    }
+
 //    'narrow - {
 //      'Supertype - {
 //        'main - annotatedTest
@@ -266,11 +266,11 @@ object MainTests extends TestSuite{
 //        'shallow - annotatedTest
 //        'deep - annotatedTest
 //      }
-//      'ConstantMethod - {
-//        'intMain - annotatedTest
-//        'boolMain - annotatedTest
-//        'impureMain - annotatedTest
-//      }
+      'ConstantMethod - {
+        'intMain - annotatedTest
+        'boolMain - annotatedTest
+        'impureMain - annotatedTest
+      }
 //
 //      'Liveness - {
 //        'simple - annotatedTest
@@ -282,6 +282,7 @@ object MainTests extends TestSuite{
 //        'chained2b - annotatedTest
 //      }
 //    }
+    }
   }
 
   val classesRoot = os.Path("out/joptimize/test/compile/dest/classes", os.pwd)

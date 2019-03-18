@@ -93,7 +93,7 @@ object SSA{
     def lookup(i: Int) = lookup0(i)
   }
 
-  class Phi(var block: Block, var incoming: Set[(SSA.Block, SSA.Val)], var tpe: JType) extends Val(tpe) {
+  class Phi(var block: Block, var incoming: Set[(SSA.Block, SSA.Val)], var tpe: JType) extends Val(tpe) with SSA.State{
     override def upstream: Seq[SSA.Node] = Seq(block) ++ incoming.flatMap(x => Seq(x._1, x._2)).toArray[SSA.Node]
     override def toString = s"Phi@${Integer.toHexString(System.identityHashCode(this))}(${incoming.size})"
     def replaceUpstream(swap: Swapper): Unit = {
@@ -366,11 +366,16 @@ object SSA{
     def replaceUpstream(swap: Swapper): Unit = {}
   }
 
+  trait Invoke extends Val{
+    def cls: JType.Cls
+    def name: String
+    def desc: Desc
+  }
   case class InvokeStatic(var state: State,
                           var srcs: Seq[Val],
                           var cls: JType.Cls,
                           var name: String,
-                          var desc: Desc) extends Val(desc.ret){
+                          var desc: Desc) extends Val(desc.ret) with Invoke{
     def upstream = state +: srcs
     def replaceUpstream(swap: Swapper): Unit = {
       state = swap(state)
@@ -382,7 +387,7 @@ object SSA{
                            var srcs: Seq[Val],
                            var cls: JType.Cls,
                            var name: String,
-                           var desc: Desc) extends Val(desc.ret){
+                           var desc: Desc) extends Val(desc.ret) with Invoke{
     def upstream = state +: srcs
     def replaceUpstream(swap: Swapper): Unit = {
       state = swap(state)
@@ -394,7 +399,7 @@ object SSA{
                            var srcs: Seq[Val],
                            var cls: JType.Cls,
                            var name: String,
-                           var desc: Desc) extends Val(desc.ret){
+                           var desc: Desc) extends Val(desc.ret) with Invoke{
     def upstream = state +: srcs
     def replaceUpstream(swap: Swapper): Unit = {
       state = swap(state)
@@ -407,7 +412,7 @@ object SSA{
                              var srcs: Seq[Val],
                              var cls: JType.Cls,
                              var name: String,
-                             var desc: Desc) extends Val(desc.ret){
+                             var desc: Desc) extends Val(desc.ret) with Invoke{
     def upstream = state +: srcs
     def replaceUpstream(swap: Swapper): Unit = {
       state = swap(state)
@@ -419,7 +424,7 @@ object SSA{
                            var desc: Desc,
                            var bootstrap: InvokeDynamic.Bootstrap,
                            var bootstrapArgs: Seq[InvokeDynamic.Arg],
-                           var srcs: Seq[Val]) extends Val(desc.ret){
+                           var srcs: Seq[Val]) extends Val(desc.ret) {
     def upstream = srcs
     def replaceUpstream(swap: Swapper): Unit = {
       srcs = srcs.map(swap(_))

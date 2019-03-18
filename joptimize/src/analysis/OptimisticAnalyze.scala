@@ -10,7 +10,8 @@ trait Lattice[T]{
 }
 
 
-case class ITypeLattice(merge: (IType, IType) => IType) extends Lattice[IType]{
+class ITypeLattice(merge: (IType, IType) => IType,
+                   computeMethodSig: (SSA.Invoke, Seq[IType]) => IType) extends Lattice[IType]{
   def transferValue(node: SSA.Val, inferences: SSA.Val => IType) = node match{
     case n: SSA.Arg => n.tpe
 
@@ -141,10 +142,11 @@ case class ITypeLattice(merge: (IType, IType) => IType) extends Lattice[IType]{
         case _ => n.opcode.tpe
       }
 
-    case n: SSA.InvokeStatic => n.desc.ret
-    case n: SSA.InvokeSpecial => n.desc.ret
-    case n: SSA.InvokeVirtual => n.desc.ret
-    case n: SSA.InvokeInterface => n.desc.ret
+    case n: SSA.InvokeStatic => computeMethodSig(n, n.srcs.map(inferences))
+    case n: SSA.InvokeSpecial => computeMethodSig(n, n.srcs.map(inferences))
+    case n: SSA.InvokeVirtual => computeMethodSig(n, n.srcs.map(inferences))
+    case n: SSA.InvokeInterface => computeMethodSig(n, n.srcs.map(inferences))
+//    case n: SSA.InvokeDynamic => computeMethodSig(n, n.srcs.map(inferences))
 
 
   }

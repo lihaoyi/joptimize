@@ -79,39 +79,42 @@ object JOptimize{
     val visitedClasses = mutable.LinkedHashSet.empty[JType.Cls]
     val walker = new Walker((lhs, rhs) => merge(Seq(lhs, rhs)))
 
-    val visitedMethods = mutable.Buffer.empty[(MethodSig, Walker.MethodResult)]
+    val visitedMethods = mutable.LinkedHashMap.empty[(MethodSig, Seq[IType]), Walker.MethodResult]
 
-    Util.breadthFirstSeen(entrypoints.toSet){ sig =>
-      val subSigs =
-        if (sig.static){
-          for(sub <- findSupertypes(sig.cls))
-          yield sig.copy(cls = sub)
-        } else{
-          for(sub <- subtypeMap.getOrElse(sig.cls, Nil))
-          yield sig.copy(cls = sub)
+    def computeMethodSig(invoke: SSA.Invoke, args: Seq[IType]): IType = {
+
+      val sig = {
+        if (invoke.isInstanceOf[SSA.InvokeStatic]){
+          def rec(currentCls: JType.Cls): MethodSig = {
+            val sig = MethodSig(invoke.cls, invoke.name, invoke.desc, true)
+            if (originalMethods.contains(sig)) sig
+            else rec(JType.Cls(classNodeMap(currentCls).superName))
+          }
+          rec(invoke.cls)
+        }else{
+//          for(sub <- subtypeMap.getOrElse(sig.cls, Nil))
+//            yield sig.copy(cls = sub)
+          MethodSig(invoke.cls, invoke.name, invoke.desc, false)
         }
-
-      originalMethods.get(sig) match{
-        case None => if (sig.name == "<init>") Nil else subSigs
-        case Some(mn) =>
-          val (result, called, classes) =
-            if (mn.instructions.size != 0) walker.walkMethod(sig, mn)
-            else {
-
-              (Walker.MethodResult(Nil, sig.desc.ret, mn.instructions, false, Nil), Nil, Nil)
-            }
-          visitedMethods.append((sig, result))
-
-          classes.filter(classNodeMap.contains).foreach(visitedClasses.add)
-          val clinits = classes.map(cls => MethodSig(cls, "<clinit>", Desc.read("()V"), true))
-          (called ++ subSigs ++ clinits).toSeq
       }
+      pprint.log(sig)
+      visitedMethods.getOrElseUpdate(
+        (sig, args),
+        {
+          val (res, newVisitedClasses) = walker.walkMethod(sig.cls.name, originalMethods(sig), computeMethodSig)
+          res
+        }
+      ).inferredReturn
+    }
+
+    for(ep <- entrypoints){
+      walker.walkMethod(ep.cls.name, originalMethods(ep), computeMethodSig)
     }
 
     val newMethods = visitedMethods.toList.collect{
       case (sig, Walker.MethodResult(liveArgs, returnType, insns, pure, seenTryCatchBlocks)) =>
 
-        val originalNode = originalMethods(sig)
+        val originalNode = originalMethods(sig._1)
 
         val (mangledName, mangledDesc) = (originalNode.name, Desc.read(originalNode.desc))
 
@@ -129,7 +132,7 @@ object JOptimize{
         newNode.desc = mangledDesc.unparse
         newNode.tryCatchBlocks = seenTryCatchBlocks.asJava
 
-        classNodeMap(sig.cls) -> newNode
+        classNodeMap(sig._1.cls) -> newNode
     }
 
     if (eliminateOldMethods) {
