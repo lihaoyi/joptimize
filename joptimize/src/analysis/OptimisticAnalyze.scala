@@ -13,6 +13,7 @@ trait Lattice[T]{
 case class ITypeLattice(merge: (IType, IType) => IType) extends Lattice[IType]{
   def transferValue(node: SSA.Val, inferences: SSA.Val => IType) = node match{
     case n: SSA.Arg => n.tpe
+
     case n: SSA.ConstI => CType.I(n.value)
     case n: SSA.ConstJ => CType.J(n.value)
     case n: SSA.ConstF => CType.F(n.value)
@@ -20,6 +21,7 @@ case class ITypeLattice(merge: (IType, IType) => IType) extends Lattice[IType]{
     case n: SSA.ConstStr => JType.Cls("java/lang/String")
     case n: SSA.ConstNull => JType.Null
     case n: SSA.ConstCls => JType.Cls("java/lang/Class")
+
     case n: SSA.BinOp =>
       (inferences(n.a), inferences(n.b)) match {
         case (a: CType.I, b: CType.I) =>
@@ -138,6 +140,12 @@ case class ITypeLattice(merge: (IType, IType) => IType) extends Lattice[IType]{
           }
         case _ => n.opcode.tpe
       }
+
+    case n: SSA.InvokeStatic => n.desc.ret
+    case n: SSA.InvokeSpecial => n.desc.ret
+    case n: SSA.InvokeVirtual => n.desc.ret
+    case n: SSA.InvokeInterface => n.desc.ret
+
 
   }
 

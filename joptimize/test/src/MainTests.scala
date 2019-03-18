@@ -199,7 +199,7 @@ object MainTests extends TestSuite{
         'switch3 - annotatedTest
       }
       'SimpleDce - {
-//        'main - annotatedTest
+        'main - annotatedTest
         'deadLoopVariable - annotatedTest
         'deadLocal - annotatedTest
       }
