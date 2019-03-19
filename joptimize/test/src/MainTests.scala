@@ -488,18 +488,20 @@ object MainTests extends TestSuite{
     assert(cls2.getDeclaredMethods.exists(_.getName == methodName))
   }
 
+  def mangledMethodCount(cls2: Class[_], methodName: String) = cls2.getDeclaredMethods.count(_.getName.startsWith(methodName + "__"))
+
   def checkMangled(cl: ClassLoader, sigString: String)(implicit tp: TestPath) = {
     val (cls2, methodName) = resolveMethod(sigString, cl)
     // That the previously-existing method has been removed
     // And the n>=2 duplicate methods are in place (presumably being used)
-    assert(cls2.getDeclaredMethods.count(_.getName.startsWith(methodName + "__")) >= 2)
+    assert(mangledMethodCount(cls2, methodName) >= 2)
   }
 
   def checkNotMangled(cl: ClassLoader, sigString: String)(implicit tp: TestPath) = {
     val (cls2, methodName) = resolveMethod(sigString, cl)
     // That the previously-existing method has been removed
     // And the n>=2 duplicate methods are in place (presumably being used)
-    assert(cls2.getDeclaredMethods.count(_.getName.startsWith(methodName + "__")) == 0)
+    assert(mangledMethodCount(cls2, methodName) == 0)
   }
 
   def checkRemoved(cl: ClassLoader, sigString: String)(implicit tp: TestPath) = {

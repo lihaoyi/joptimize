@@ -56,14 +56,14 @@ object JOptimize{
           case many => CType.Intersect(many)
         }
       }
-      else if(flattened.forall(x => x.widen == JType.Prim.Z || x.getClass == classOf[CType.I])) JType.Prim.Z
-      else if(flattened.forall(x => x.widen == JType.Prim.B || x.getClass == classOf[CType.I])) JType.Prim.B
-      else if(flattened.forall(x => x.widen == JType.Prim.C || x.getClass == classOf[CType.I])) JType.Prim.C
-      else if(flattened.forall(x => x.widen == JType.Prim.S || x.getClass == classOf[CType.I])) JType.Prim.S
       else if(flattened.forall(_.widen == JType.Prim.I)) JType.Prim.I
       else if(flattened.forall(_.widen == JType.Prim.F)) JType.Prim.F
       else if(flattened.forall(_.widen == JType.Prim.J)) JType.Prim.J
       else if(flattened.forall(_.widen == JType.Prim.D)) JType.Prim.D
+      else if(flattened.forall(x => x.widen == JType.Prim.Z || x.getClass == classOf[CType.I])) JType.Prim.Z
+      else if(flattened.forall(x => x.widen == JType.Prim.B || x.getClass == classOf[CType.I])) JType.Prim.B
+      else if(flattened.forall(x => x.widen == JType.Prim.C || x.getClass == classOf[CType.I])) JType.Prim.C
+      else if(flattened.forall(x => x.widen == JType.Prim.S || x.getClass == classOf[CType.I])) JType.Prim.S
       else throw new Exception(flattened.toString)
     }
 
@@ -113,6 +113,7 @@ object JOptimize{
       visitedMethods((ep, ep.desc.args)) = res
       seenClasses.foreach(visitedClasses.add)
     }
+    pprint.log(visitedMethods)
 
     val newMethods = visitedMethods.toList.collect{
       case ((sig, inferredArgs), Walker.MethodResult(liveArgs, returnType, insns, pure, seenTryCatchBlocks)) =>
@@ -138,8 +139,7 @@ object JOptimize{
 
         classNodeMap(sig.cls) -> newNode
     }
-    pprint.log(newMethods)
-    pprint.log(newMethods.map{case (c, m) => (c.name, m.name)})
+
 
     if (eliminateOldMethods) {
       for ((k, cn) <- classFileMap) {

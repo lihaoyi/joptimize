@@ -93,6 +93,10 @@ class Walker(merge: (IType, IType) => IType) {
       postScheduleNaming
     )
 
+    pprint.log(inferred)
+    pprint.log(program.getAllVertices().collect{case r: SSA.ReturnVal => r})
+    pprint.log(program.getAllVertices().collect{case r: SSA.ReturnVal => r.src}.collect{case p: SSA.Phi => p.incoming})
+
     program.getAllVertices().foreach{
 
       case p: SSA.ChangedState => // do nothing
@@ -205,16 +209,22 @@ class Walker(merge: (IType, IType) => IType) {
     }
 
 
+    val allInferredReturns = allVertices2
+      .collect{case r: SSA.ReturnVal => r.src}
+      .map{
+        case n: SSA.Copy => inferred(n.src)
+        case n => inferred(n)
+      }
+
+    pprint.log(allInferredReturns)
+    val inferredReturn = allInferredReturns
+      .reduceLeftOption(merge)
+      .getOrElse(JType.Prim.V)
+
+    pprint.log(inferredReturn)
     val result = Walker.MethodResult(
       Nil,
-      allVertices2
-        .collect{case r: SSA.ReturnVal => r.src}
-        .map{
-          case n: SSA.Copy => inferred(n.src)
-          case n => inferred(n)
-        }
-        .reduceLeftOption(merge)
-        .getOrElse(JType.Prim.V),
+      inferredReturn,
       finalInsns,
       false,
       Nil
