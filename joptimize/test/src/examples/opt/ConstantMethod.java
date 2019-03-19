@@ -3,6 +3,16 @@ package joptimize.examples.opt;
 class ConstantMethod {
     @joptimize.Test(
         inputs = {0, 1},
+        checkPresent = {"ConstantMethod.intMain0"},
+        checkRemoved = {"ConstantMethod.callInt"},
+        checkNotMangled = {"ConstantMethod.callInt"}
+    )
+    static int intMain0(int b) {
+        return callInt(true);
+    }
+
+    @joptimize.Test(
+        inputs = {0, 1},
         checkPresent = {"ConstantMethod.intMain"},
         checkRemoved = {"ConstantMethod.callInt"},
         checkNotMangled = {"ConstantMethod.callInt"}

@@ -267,6 +267,7 @@ object MainTests extends TestSuite{
 //        'deep - annotatedTest
 //      }
       'ConstantMethod - {
+        'intMain0 - annotatedTest
         'intMain - annotatedTest
         'boolMain - annotatedTest
         'impureMain - annotatedTest

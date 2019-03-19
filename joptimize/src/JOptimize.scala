@@ -83,7 +83,7 @@ object JOptimize{
 
     val visitedMethods = mutable.LinkedHashMap.empty[(MethodSig, Seq[IType]), Walker.MethodResult]
 
-    def computeMethodSig(invoke: SSA.Invoke, args: Seq[IType]): IType = {
+    def computeMethodSig(invoke: SSA.Invoke, inferredArgs: Seq[IType]): IType = {
 
       val sig = {
         if (invoke.isInstanceOf[SSA.InvokeStatic]){
@@ -99,9 +99,9 @@ object JOptimize{
       }
       pprint.log(sig)
       visitedMethods.getOrElseUpdate(
-        (sig, args),
+        (sig, inferredArgs),
         {
-          val (res, newVisitedClasses) = walker.walkMethod(sig.cls.name, originalMethods(sig), computeMethodSig)
+          val (res, newVisitedClasses) = walker.walkMethod(sig.cls.name, originalMethods(sig), computeMethodSig, inferredArgs)
           newVisitedClasses.foreach(visitedClasses.add)
           res
         }
@@ -109,7 +109,7 @@ object JOptimize{
     }
 
     for(ep <- entrypoints){
-      val (res, seenClasses) = walker.walkMethod(ep.cls.name, originalMethods(ep), computeMethodSig)
+      val (res, seenClasses) = walker.walkMethod(ep.cls.name, originalMethods(ep), computeMethodSig, ep.desc.args)
       visitedMethods((ep, ep.desc.args)) = res
       seenClasses.foreach(visitedClasses.add)
     }

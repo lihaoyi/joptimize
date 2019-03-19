@@ -17,7 +17,8 @@ class Walker(merge: (IType, IType) => IType) {
 
   def walkMethod(clsName: String,
                  mn: MethodNode,
-                 computeMethodSig: (SSA.Invoke, Seq[IType]) => IType): (Walker.MethodResult, Set[JType.Cls]) = {
+                 computeMethodSig: (SSA.Invoke, Seq[IType]) => IType,
+                 inferredArgs: Seq[IType]): (Walker.MethodResult, Set[JType.Cls]) = {
     println("+" * 20 + clsName + "+" * 20)
     val printer = new Textifier
     val methodPrinter = new TraceMethodVisitor(printer)
@@ -89,14 +90,13 @@ class Walker(merge: (IType, IType) => IType) {
       program,
       Map.empty,
       program.getAllVertices().collect{case b: SSA.Block if b.upstream.isEmpty => b}.head,
-      new ITypeLattice(merge, computeMethodSig),
+      new ITypeLattice(merge, computeMethodSig, inferredArgs),
       postScheduleNaming
     )
 
     pprint.log(inferred)
-    pprint.log(program.getAllVertices().collect{case r: SSA.ReturnVal => r})
-    pprint.log(program.getAllVertices().collect{case r: SSA.ReturnVal => r.src}.collect{case p: SSA.Phi => p.incoming})
 
+    program.checkLinks()
     program.getAllVertices().foreach{
 
       case p: SSA.ChangedState => // do nothing
@@ -139,8 +139,13 @@ class Walker(merge: (IType, IType) => IType) {
         }
 
       case j: SSA.Jump =>
+        pprint.log(j)
         val allTargets = j.downstreamList.collect{case b: SSA.Block => b}
+        pprint.log(j.downstreamList)
+        pprint.log(allTargets)
+        pprint.log(liveBlocks)
         val liveTargets = allTargets.filter(liveBlocks)
+        pprint.log(liveTargets)
         if (liveTargets.size == 1){
           println("ELIMINATING JUMP " + j)
           PartialEvaluator.replaceJump(j, liveTargets.head)

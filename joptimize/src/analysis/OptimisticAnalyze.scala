@@ -11,9 +11,10 @@ trait Lattice[T]{
 
 
 class ITypeLattice(merge: (IType, IType) => IType,
-                   computeMethodSig: (SSA.Invoke, Seq[IType]) => IType) extends Lattice[IType]{
+                   computeMethodSig: (SSA.Invoke, Seq[IType]) => IType,
+                   inferredArgs: Seq[IType]) extends Lattice[IType]{
   def transferValue(node: SSA.Val, inferences: SSA.Val => IType) = node match{
-    case n: SSA.Arg => n.tpe
+    case n: SSA.Arg => inferredArgs(n.index)
 
     case n: SSA.ConstI => CType.I(n.value)
     case n: SSA.ConstJ => CType.J(n.value)
@@ -267,9 +268,10 @@ object OptimisticAnalyze {
             case r: SSA.ReturnVal => evaluate(r.src)
             case n: SSA.UnaBranch =>
               val valueA = evaluate(n.a)
+              pprint.log(valueA)
               val doBranch = (valueA, n.opcode) match{
                 case (CType.I(v), SSA.UnaBranch.IFNE) => Some(v != 0)
-                case (CType.I(v), SSA.UnaBranch.IFNE) => Some(v == 0)
+                case (CType.I(v), SSA.UnaBranch.IFEQ) => Some(v == 0)
                 case (CType.I(v), SSA.UnaBranch.IFLE) => Some(v <= 0)
                 case (CType.I(v), SSA.UnaBranch.IFLT) => Some(v < 0)
                 case (CType.I(v), SSA.UnaBranch.IFGE) => Some(v >= 0)
@@ -278,6 +280,8 @@ object OptimisticAnalyze {
                 case (JType.Null, SSA.UnaBranch.IFNONNULL) => Some(false)
                 case _ => None
               }
+
+              pprint.log(doBranch)
               doBranch match{
                 case None =>
                   queueNextBlock(n.downstreamList.collect{ case t: SSA.True => t}.head)
