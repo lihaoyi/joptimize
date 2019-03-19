@@ -109,7 +109,9 @@ object JOptimize{
     }
 
     for(ep <- entrypoints){
-      walker.walkMethod(ep.cls.name, originalMethods(ep), computeMethodSig)
+      val (res, seenClasses) = walker.walkMethod(ep.cls.name, originalMethods(ep), computeMethodSig)
+      visitedMethods((ep, ep.desc.args)) = res
+      seenClasses.foreach(visitedClasses.add)
     }
 
     val newMethods = visitedMethods.toList.collect{

@@ -43,10 +43,17 @@ object PostLivenessDCE {
         val mn = methodSigMap(
           if (!current.static) current
           else {
-            findSupertypes(current.cls)
+            val x =
+              findSupertypes(current.cls)
+            pprint.log(x)
+            val y = x
               .iterator
               .map(MethodSig(_, current.name, current.desc, current.static))
               .filter(methodSigMap.contains)
+
+            pprint.log(y.hasNext)
+
+            y
               .take(1)
               .toSeq
               .head

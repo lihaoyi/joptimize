@@ -27,11 +27,14 @@ object Util{
              originalTypes: Seq[JType],
              narrowReturnType: IType,
              originalReturnType: JType) = {
-    val mangledName = name + "__" + inferredTypes.map(_.name).mkString("__").replace('/', '_')
-    val jTypeArgs = inferredTypes.zip(originalTypes).map(t => CType.toJType(t._1, t._2))
-    val jTypeRet = CType.toJType(narrowReturnType, originalReturnType)
-    val mangledJTypeDesc = Desc(jTypeArgs, jTypeRet)
-    (mangledName, mangledJTypeDesc)
+    if (inferredTypes == originalTypes) (name, Desc(originalTypes, originalReturnType))
+    else{
+      val mangledName = name + "__" + inferredTypes.map(_.name).mkString("__").replace('/', '_')
+      val jTypeArgs = inferredTypes.zip(originalTypes).map(t => CType.toJType(t._1, t._2))
+      val jTypeRet = CType.toJType(narrowReturnType, originalReturnType)
+      val mangledJTypeDesc = Desc(jTypeArgs, jTypeRet)
+      (mangledName, mangledJTypeDesc)
+    }
   }
 
   def leastUpperBound[T](starts: Set[T])(edges: T => Seq[T]) = {
