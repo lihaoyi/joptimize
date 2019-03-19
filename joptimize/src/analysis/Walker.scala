@@ -100,12 +100,15 @@ class Walker(merge: (IType, IType) => IType) {
     program.checkLinks()
 
     var aggregateSideEffects: SideEffects = SideEffects.Pure
+    pprint.log(postScheduleNaming, height=999999)
     program.getAllVertices().foreach{
 
       case p: SSA.ChangedState => // do nothing
       case n: SSA.Invoke =>
+        pprint.log(n)
+        pprint.log(n.srcs)
         val (mangledName, mangledDesc) =
-          Util.mangle(n.name, n.srcs.map(inferred), n.desc.args, inferred(n), n.desc.ret)
+          Util.mangle(n.name, n.srcs.map(inferred), n.desc.args, inferred.getOrElseUpdate(n, n.desc.ret), n.desc.ret)
         val sideEffects = checkSideEffects(
           MethodSig(n.cls, n.name, n.desc, n.isInstanceOf[SSA.InvokeStatic]),
           n.srcs.map(inferred)

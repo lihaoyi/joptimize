@@ -83,6 +83,12 @@ object JOptimize{
 
     val visitedMethods = mutable.LinkedHashMap.empty[(MethodSig, Seq[IType]), Walker.MethodResult]
 
+    def computeSideEffects(sig: MethodSig, args: Seq[IType]) = {
+      visitedMethods.get((sig, args)) match{
+        case None => SideEffects.Global
+        case Some(x) => x.sideEffects
+      }
+    }
     def computeMethodSig(invoke: SSA.Invoke, inferredArgs: Seq[IType]): IType = {
 
       val sig = {
@@ -106,7 +112,7 @@ object JOptimize{
             originalMethods(sig),
             computeMethodSig,
             inferredArgs,
-            (sig, args) => visitedMethods((sig, args)).sideEffects
+            computeSideEffects
           )
           newVisitedClasses.foreach(visitedClasses.add)
           res
@@ -120,7 +126,7 @@ object JOptimize{
         originalMethods(ep),
         computeMethodSig,
         ep.desc.args,
-        (sig, args) => visitedMethods((sig, args)).sideEffects
+        computeSideEffects
       )
 
       visitedMethods((ep, ep.desc.args)) = res
