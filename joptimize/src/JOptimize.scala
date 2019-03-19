@@ -101,7 +101,13 @@ object JOptimize{
       visitedMethods.getOrElseUpdate(
         (sig, inferredArgs),
         {
-          val (res, newVisitedClasses) = walker.walkMethod(sig.cls.name, originalMethods(sig), computeMethodSig, inferredArgs)
+          val (res, newVisitedClasses) = walker.walkMethod(
+            sig.cls.name,
+            originalMethods(sig),
+            computeMethodSig,
+            inferredArgs,
+            (sig, args) => visitedMethods((sig, args)).sideEffects
+          )
           newVisitedClasses.foreach(visitedClasses.add)
           res
         }
@@ -109,7 +115,14 @@ object JOptimize{
     }
 
     for(ep <- entrypoints){
-      val (res, seenClasses) = walker.walkMethod(ep.cls.name, originalMethods(ep), computeMethodSig, ep.desc.args)
+      val (res, seenClasses) = walker.walkMethod(
+        ep.cls.name,
+        originalMethods(ep),
+        computeMethodSig,
+        ep.desc.args,
+        (sig, args) => visitedMethods((sig, args)).sideEffects
+      )
+
       visitedMethods((ep, ep.desc.args)) = res
       seenClasses.foreach(visitedClasses.add)
     }

@@ -18,7 +18,8 @@ class Walker(merge: (IType, IType) => IType) {
   def walkMethod(clsName: String,
                  mn: MethodNode,
                  computeMethodSig: (SSA.Invoke, Seq[IType]) => IType,
-                 inferredArgs: Seq[IType]): (Walker.MethodResult, Set[JType.Cls]) = {
+                 inferredArgs: Seq[IType],
+                 checkSideEffects: (MethodSig, Seq[IType]) => SideEffects): (Walker.MethodResult, Set[JType.Cls]) = {
     println("+" * 20 + clsName + "+" * 20)
     val printer = new Textifier
     val methodPrinter = new TraceMethodVisitor(printer)
@@ -97,14 +98,46 @@ class Walker(merge: (IType, IType) => IType) {
     pprint.log(inferred)
 
     program.checkLinks()
+
+    var aggregateSideEffects: SideEffects = SideEffects.Pure
     program.getAllVertices().foreach{
 
       case p: SSA.ChangedState => // do nothing
       case n: SSA.Invoke =>
         val (mangledName, mangledDesc) =
           Util.mangle(n.name, n.srcs.map(inferred), n.desc.args, inferred(n), n.desc.ret)
-        n.name = mangledName
-        n.desc = mangledDesc
+        val sideEffects = checkSideEffects(
+          MethodSig(n.cls, n.name, n.desc, n.isInstanceOf[SSA.InvokeStatic]),
+          n.srcs.map(inferred)
+        )
+        aggregateSideEffects = (aggregateSideEffects, sideEffects) match{
+          case (SideEffects.Pure, SideEffects.Pure) => SideEffects.Pure
+          case _ => SideEffects.Global
+        }
+        if (sideEffects == SideEffects.Pure){
+          val replacement = inferred.get(n) match{
+            case Some(CType.I(v)) => Some(SSA.ConstI(v))
+            case Some(CType.J(v)) => Some(SSA.ConstJ(v))
+            case Some(CType.F(v)) => Some(SSA.ConstF(v))
+            case Some(CType.D(v)) => Some(SSA.ConstD(v))
+            case _ => None
+          }
+          replacement match{
+            case Some(r) =>
+              inferred(r) = inferred(n)
+              n.upstream.foreach(_.downstreamRemoveAll(n))
+              for(d <- n.downstreamList) {
+                r.downstreamAdd(d)
+                d.replaceUpstream(n, r)
+              }
+            case None =>
+              n.name = mangledName
+              n.desc = mangledDesc
+          }
+        }else{
+          n.name = mangledName
+          n.desc = mangledDesc
+        }
       case p: SSA.Phi =>
         p.incoming = p.incoming.filter{t =>
           val live = liveBlocks(t._1)
@@ -227,11 +260,12 @@ class Walker(merge: (IType, IType) => IType) {
       .getOrElse(JType.Prim.V)
 
     pprint.log(inferredReturn)
+
     val result = Walker.MethodResult(
       Nil,
       inferredReturn,
       finalInsns,
-      SideEffects.Global,
+      aggregateSideEffects,
       Nil
     )
 
