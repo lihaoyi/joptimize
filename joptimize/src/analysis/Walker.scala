@@ -231,7 +231,7 @@ class Walker(merge: (IType, IType) => IType) {
       Nil,
       inferredReturn,
       finalInsns,
-      false,
+      SideEffects.Global,
       Nil
     )
 
@@ -467,6 +467,6 @@ object Walker{
   case class MethodResult(liveArgs: Seq[Boolean],
                           inferredReturn: IType,
                           methodBody: InsnList,
-                          pure: Boolean,
+                          sideEffects: SideEffects,
                           seenTryCatchBlocks: Seq[TryCatchBlockNode])
 }
