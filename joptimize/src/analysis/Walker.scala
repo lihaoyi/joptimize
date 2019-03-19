@@ -96,7 +96,11 @@ class Walker(merge: (IType, IType) => IType) {
     program.getAllVertices().foreach{
 
       case p: SSA.ChangedState => // do nothing
-
+      case n: SSA.Invoke =>
+        val (mangledName, mangledDesc) =
+          Util.mangle(n.name, n.srcs.map(inferred), n.desc.args, inferred(n), n.desc.ret)
+        n.name = mangledName
+        n.desc = mangledDesc
       case p: SSA.Phi =>
         p.incoming = p.incoming.filter{t =>
           val live = liveBlocks(t._1)
@@ -122,6 +126,7 @@ class Walker(merge: (IType, IType) => IType) {
           case _ => None
         }
         replacement.foreach{r =>
+          inferred(r) = inferred(n)
           n.upstream.foreach(_.downstreamRemoveAll(n))
           for(d <- n.downstreamList) {
             r.downstreamAdd(d)

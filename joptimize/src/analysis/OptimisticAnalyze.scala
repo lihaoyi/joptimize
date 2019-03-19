@@ -183,12 +183,12 @@ object OptimisticAnalyze {
                initialValues: Map[SSA.Val, T],
                initialBlock: SSA.Block,
                lattice: Lattice[T],
-               naming: Namer.Result): (Map[SSA.Val, T], Set[SSA.Block]) = {
+               naming: Namer.Result): (mutable.LinkedHashMap[SSA.Val, T], Set[SSA.Block]) = {
     var inferredPhis = Map.empty[SSA.Phi, T]
     val inferredBlocks = mutable.Set(initialBlock)
     val workList = mutable.LinkedHashSet(initialBlock)
 
-    val evaluated = mutable.Map.empty[SSA.Val, T]
+    val evaluated = mutable.LinkedHashMap.empty[SSA.Val, T]
 
     def evaluate(v: SSA.Val): T = {
       evaluated.getOrElseUpdate(
@@ -315,6 +315,6 @@ object OptimisticAnalyze {
     }
 
 
-    (evaluated.toMap, inferredBlocks.toSet)
+    (evaluated, inferredBlocks.toSet)
   }
 }

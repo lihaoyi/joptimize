@@ -367,9 +367,14 @@ object SSA{
   }
 
   trait Invoke extends Val{
+    def srcs: Seq[Val]
+    def srcs_=(v: Seq[Val]): Unit
     def cls: JType.Cls
+    def cls_=(v: JType.Cls): Unit
     def name: String
+    def name_=(v: String): Unit
     def desc: Desc
+    def desc_=(v: Desc): Unit
   }
   case class InvokeStatic(var state: State,
                           var srcs: Seq[Val],

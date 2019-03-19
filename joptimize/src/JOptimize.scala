@@ -70,10 +70,12 @@ object JOptimize{
     def ignore(s: String) = s.startsWith("java/") || s.startsWith("scala/")
 
     def findSupertypes(cls: JType.Cls) = {
+      pprint.log(cls)
       val output = mutable.Buffer(cls)
       while(classNodeMap.contains(output.last) && classNodeMap(output.last).superName != null && !ignore(classNodeMap(output.last).superName)){
         output.append(JType.Cls(classNodeMap(output.last).superName))
       }
+      pprint.log(output)
       output
     }
     val visitedClasses = mutable.LinkedHashSet.empty[JType.Cls]
@@ -92,8 +94,6 @@ object JOptimize{
           }
           rec(invoke.cls)
         }else{
-//          for(sub <- subtypeMap.getOrElse(sig.cls, Nil))
-//            yield sig.copy(cls = sub)
           MethodSig(invoke.cls, invoke.name, invoke.desc, false)
         }
       }
@@ -113,11 +113,12 @@ object JOptimize{
     }
 
     val newMethods = visitedMethods.toList.collect{
-      case (sig, Walker.MethodResult(liveArgs, returnType, insns, pure, seenTryCatchBlocks)) =>
+      case ((sig, inferredArgs), Walker.MethodResult(liveArgs, returnType, insns, pure, seenTryCatchBlocks)) =>
 
-        val originalNode = originalMethods(sig._1)
+        val originalNode = originalMethods(sig)
 
-        val (mangledName, mangledDesc) = (originalNode.name, Desc.read(originalNode.desc))
+        val (mangledName, mangledDesc) =
+          Util.mangle(originalNode.name, inferredArgs, sig.desc.args, returnType, sig.desc.ret)
 
         val newNode = new MethodNode(
           Opcodes.ASM6,
@@ -133,8 +134,10 @@ object JOptimize{
         newNode.desc = mangledDesc.unparse
         newNode.tryCatchBlocks = seenTryCatchBlocks.asJava
 
-        classNodeMap(sig._1.cls) -> newNode
+        classNodeMap(sig.cls) -> newNode
     }
+    pprint.log(newMethods)
+    pprint.log(newMethods.map{case (c, m) => (c.name, m.name)})
 
     if (eliminateOldMethods) {
       for ((k, cn) <- classFileMap) {
@@ -155,6 +158,8 @@ object JOptimize{
         Util.removeFromJavaList(cn.visibleAnnotations )(_.desc == "Lscala/reflect/ScalaSignature;")
       }
 
+      pprint.log(cn.name)
+      pprint.log(mns.map(_.name))
       cn.methods.addAll(mns.asJava)
     }
 
