@@ -21,6 +21,17 @@ class ConstantMethod {
         return b != 0 ? callInt(true) : callInt(false);
     }
 
+    @joptimize.Test(
+        inputs = {0, 1},
+        checkPresent = {"ConstantMethod.nonFoldedIntMain", "ConstantMethod.callInt"},
+        checkNotMangled = {"ConstantMethod.callInt"}
+    )
+
+    static int nonFoldedIntMain(int b) {
+        boolean bool = b != 0 ? true : false;
+        return callInt(bool);
+    }
+
     static int callInt(boolean b) {
         return b ? 1 : 2;
     }

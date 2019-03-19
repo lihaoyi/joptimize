@@ -27,7 +27,8 @@ object Util{
              originalTypes: Seq[JType],
              narrowReturnType: IType,
              originalReturnType: JType) = {
-    if (inferredTypes == originalTypes) (name, Desc(originalTypes, originalReturnType))
+
+    if (Util.isCompatible(inferredTypes, originalTypes)) (name, Desc(originalTypes, originalReturnType))
     else{
       val mangledName = name + "__" + inferredTypes.map(_.name).mkString("__").replace('/', '_')
       val jTypeArgs = inferredTypes.zip(originalTypes).map(t => CType.toJType(t._1, t._2))
