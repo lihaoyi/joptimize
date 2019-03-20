@@ -28,7 +28,7 @@ object Util{
              narrowReturnType: IType,
              originalReturnType: JType) = {
 
-    if (Util.isCompatible(inferredTypes, originalTypes)) (name, Desc(originalTypes, originalReturnType))
+    if (isManglingCompatible(inferredTypes, originalTypes)) (name, Desc(originalTypes, originalReturnType))
     else{
       val mangledName = name + "__" + inferredTypes.map(_.name).mkString("__").replace('/', '_')
       val jTypeArgs = inferredTypes.zip(originalTypes).map(t => CType.toJType(t._1, t._2))
@@ -94,19 +94,29 @@ object Util{
     (seen.toMap, if (terminals != null) terminals.toSet else null, backEdges)
   }
 
-  def isCompatible(inferredTypes: Seq[IType], originalTypes: Seq[JType]): Boolean = {
+  def isValidationCompatible(inferredTypes: Seq[IType], originalTypes: Seq[JType]): Boolean = {
     inferredTypes.length == originalTypes.length &&
-    inferredTypes.iterator.zip(originalTypes.iterator).forall(x => isCompatible0(x._1, x._2))
+    inferredTypes.iterator.zip(originalTypes.iterator).forall(x => isValidationCompatible0(x._1, x._2))
   }
-  def isCompatible0(inferredType: IType, originalType: JType): Boolean = (inferredType, originalType) match{
-    case (JType.Prim.I, JType.Prim.Z | JType.Prim.B | JType.Prim.S) => true
-    case (CType.I(_), x) => x == JType.Prim.I
-    case (CType.J(_), x) => x == JType.Prim.J
-    case (CType.F(_), x) => x == JType.Prim.F
-    case (CType.D(_), x) => x == JType.Prim.D
+  def isValidationCompatible0(inferredType: IType, originalType: JType): Boolean = (inferredType, originalType) match{
+    case (CType.I(_) | JType.Prim.I, JType.Prim.Z | JType.Prim.B | JType.Prim.S | JType.Prim.I) => true
+    case (CType.J(_), JType.Prim.J) => true
+    case (CType.F(_), JType.Prim.F) => true
+    case (CType.D(_), JType.Prim.D) => true
     case (inf: JType, orig: JType) => inf == orig
-    case (CType.Intersect(classes), orig: JType) => ???
+    case _ => false
   }
+
+  def isManglingCompatible(inferredTypes: Seq[IType], originalTypes: Seq[JType]): Boolean = {
+    inferredTypes.length == originalTypes.length &&
+    inferredTypes.iterator.zip(originalTypes.iterator).forall(x => isManglingCompatible0(x._1, x._2))
+  }
+  def isManglingCompatible0(inferredType: IType, originalType: JType): Boolean = (inferredType, originalType) match{
+    case (JType.Prim.I, JType.Prim.Z | JType.Prim.B | JType.Prim.S | JType.Prim.I) => true
+    case (inf: JType, orig: JType) => inf == orig
+    case _ => false
+  }
+
   def clone(input: AbstractInsnNode, labelMapping: mutable.LinkedHashMap[AbstractInsnNode, AbstractInsnNode]) = {
     labelMapping.getOrElseUpdate(input,
       input match{

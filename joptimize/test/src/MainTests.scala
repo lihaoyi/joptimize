@@ -40,90 +40,89 @@ object MainTests extends TestSuite{
       }
       'Loops - {
         'basicFor - annotatedTest
-        'liftableFor - annotatedTest
-        'unliftableFor - annotatedTest
-        'mixedLiftableFor - annotatedTest
-        'nestedLiftableFor - annotatedTest
-        'nestedLiftableFor2 - annotatedTest
-        'nestedUnliftableFor - annotatedTest
-        'nestedMixedLiftableFor - annotatedTest
-        'nestedFor - annotatedTest
-        'nestedFor2 - annotatedTest
-        'basicWhile - annotatedTest
-        'alternatingWhile - annotatedTest
-        'loopReturn1 - annotatedTest
-        'loopReturn2 - annotatedTest
-        'loopReturn3 - annotatedTest
-        'sqrtFinder - annotatedTest
-
+//        'liftableFor - annotatedTest
+//        'unliftableFor - annotatedTest
+//        'mixedLiftableFor - annotatedTest
+//        'nestedLiftableFor - annotatedTest
+//        'nestedLiftableFor2 - annotatedTest
+//        'nestedUnliftableFor - annotatedTest
+//        'nestedMixedLiftableFor - annotatedTest
+//        'nestedFor - annotatedTest
+//        'nestedFor2 - annotatedTest
+//        'basicWhile - annotatedTest
+//        'alternatingWhile - annotatedTest
+//        'loopReturn1 - annotatedTest
+//        'loopReturn2 - annotatedTest
+//        'loopReturn3 - annotatedTest
+//        'sqrtFinder - annotatedTest
       }
-
-      'Switches - {
-        'smallSwitch - annotatedTest
-        'bigDenseSwitch - annotatedTest
-        'bigSparseSwitch - annotatedTest
-        'charSwitch - annotatedTest
-        'byteSwitch - annotatedTest
-        'stringSwitch - annotatedTest
-//        'stringSwitchTwo - annotatedTest
-      }
-      'Statics - {
-        'helloWorld - annotatedTest
-        'timesTwo - annotatedTest
-        'helloWorld2 - annotatedTest
-        'timesTwo2 - annotatedTest
-        'call - annotatedTest
-        'callAtPhiBoundary - annotatedTest
-        'voidCall - annotatedTest
-        'tailFactorial - annotatedTest
-        'tailFactorialLong - annotatedTest
-        'tailFactorialVoid - annotatedTest
-        'fibonacci - annotatedTest
-
-      }
-      'Arrays - {
-        'length - annotatedTest
-        'get1 - annotatedTest
-        'get2 - annotatedTest
-        'get3 - annotatedTest
-        'get4 - annotatedTest
-        'get5 - annotatedTest
-        'set1 - annotatedTest
-        'set2 - annotatedTest
-        'set3 - annotatedTest
-        'setIf - annotatedTest
-        'getAndSet1 - annotatedTest
-        'getAndSet2 - annotatedTest
-        'getAndSet3 - annotatedTest
-        'getAndSetLoop1 - annotatedTest
-        'getAndSetLoop2 - annotatedTest
-        'getAndSetLoop3 - annotatedTest
-      }
-      'InvokeDynamic - {
-        'lambda - annotatedTest
-        'lambdaArg - annotatedTest
-        'lambdaBoxed - annotatedTest
-        'lambdaBoxedArgs - annotatedTest
-        'concat - annotatedTest
-      }
-      'ScalaInvokeDynamic - {
-        'hello - annotatedTest
-        'hello2 - annotatedTest
-        'lambda - annotatedTest
-        'lambdaBoxed - annotatedTest
-        'concat - annotatedTest
-      }
-      'Inheritance - {
-        'hello - annotatedTest
-        'strings - annotatedTest
-        'implement - annotatedTest
-        'abstractClass - annotatedTest
-        'shadowedInheritedGet - annotatedTest
-        'shadowedInheritedSet - annotatedTest
-        'superMethod - annotatedTest
-        'staticInheritance - annotatedTest
-        'staticInheritanceMethod - annotatedTest
-      }
+//
+//      'Switches - {
+//        'smallSwitch - annotatedTest
+//        'bigDenseSwitch - annotatedTest
+//        'bigSparseSwitch - annotatedTest
+//        'charSwitch - annotatedTest
+//        'byteSwitch - annotatedTest
+//        'stringSwitch - annotatedTest
+////        'stringSwitchTwo - annotatedTest
+//      }
+//      'Statics - {
+//        'helloWorld - annotatedTest
+//        'timesTwo - annotatedTest
+//        'helloWorld2 - annotatedTest
+//        'timesTwo2 - annotatedTest
+//        'call - annotatedTest
+//        'callAtPhiBoundary - annotatedTest
+//        'voidCall - annotatedTest
+//        'tailFactorial - annotatedTest
+//        'tailFactorialLong - annotatedTest
+//        'tailFactorialVoid - annotatedTest
+//        'fibonacci - annotatedTest
+//
+//      }
+//      'Arrays - {
+//        'length - annotatedTest
+//        'get1 - annotatedTest
+//        'get2 - annotatedTest
+//        'get3 - annotatedTest
+//        'get4 - annotatedTest
+//        'get5 - annotatedTest
+//        'set1 - annotatedTest
+//        'set2 - annotatedTest
+//        'set3 - annotatedTest
+//        'setIf - annotatedTest
+//        'getAndSet1 - annotatedTest
+//        'getAndSet2 - annotatedTest
+//        'getAndSet3 - annotatedTest
+//        'getAndSetLoop1 - annotatedTest
+//        'getAndSetLoop2 - annotatedTest
+//        'getAndSetLoop3 - annotatedTest
+//      }
+//      'InvokeDynamic - {
+//        'lambda - annotatedTest
+//        'lambdaArg - annotatedTest
+//        'lambdaBoxed - annotatedTest
+//        'lambdaBoxedArgs - annotatedTest
+//        'concat - annotatedTest
+//      }
+//      'ScalaInvokeDynamic - {
+//        'hello - annotatedTest
+//        'hello2 - annotatedTest
+//        'lambda - annotatedTest
+//        'lambdaBoxed - annotatedTest
+//        'concat - annotatedTest
+//      }
+//      'Inheritance - {
+//        'hello - annotatedTest
+//        'strings - annotatedTest
+//        'implement - annotatedTest
+//        'abstractClass - annotatedTest
+//        'shadowedInheritedGet - annotatedTest
+//        'shadowedInheritedSet - annotatedTest
+//        'superMethod - annotatedTest
+//        'staticInheritance - annotatedTest
+//        'staticInheritanceMethod - annotatedTest
+//      }
 //      'Exceptions - {
 //        'throwCatch0 - annotatedTest
 //        'throwCatch1 - annotatedTest
@@ -134,9 +133,9 @@ object MainTests extends TestSuite{
 //        'nullPointer - annotatedTest
 //        'arrayIndexOutOfBounds - annotatedTest
 //      }
-      'Sudoku - {
-        'run - annotatedTest
-      }
+//      'Sudoku - {
+//        'run - annotatedTest
+//      }
     }
     'opt - {
       'Folding - {
@@ -193,10 +192,10 @@ object MainTests extends TestSuite{
         'jump2 - annotatedTest
         'jump3 - annotatedTest
 
-        'switch0 - annotatedTest
-        'switch1 - annotatedTest
-        'switch2 - annotatedTest
-        'switch3 - annotatedTest
+//        'switch0 - annotatedTest
+//        'switch1 - annotatedTest
+//        'switch2 - annotatedTest
+//        'switch3 - annotatedTest
       }
       'SimpleDce - {
         'main - annotatedTest

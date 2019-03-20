@@ -70,12 +70,10 @@ object JOptimize{
     def ignore(s: String) = s.startsWith("java/") || s.startsWith("scala/")
 
     def findSupertypes(cls: JType.Cls) = {
-      pprint.log(cls)
       val output = mutable.Buffer(cls)
       while(classNodeMap.contains(output.last) && classNodeMap(output.last).superName != null && !ignore(classNodeMap(output.last).superName)){
         output.append(JType.Cls(classNodeMap(output.last).superName))
       }
-      pprint.log(output)
       output
     }
     val visitedClasses = mutable.LinkedHashSet.empty[JType.Cls]
@@ -103,7 +101,6 @@ object JOptimize{
           MethodSig(invoke.cls, invoke.name, invoke.desc, false)
         }
       }
-      pprint.log(sig)
       visitedMethods.getOrElseUpdate(
         (sig, inferredArgs),
         {
@@ -179,13 +176,9 @@ object JOptimize{
         Util.removeFromJavaList(cn.visibleAnnotations )(_.desc == "Lscala/reflect/ScalaSignature;")
       }
 
-      pprint.log(cn.name)
-      pprint.log(mns.map(_.name))
       cn.methods.addAll(mns.asJava)
     }
 
-    pprint.log(entrypoints)
-    pprint.log(grouped.keys.map(_.name))
     val outClasses = PostLivenessDCE(
       entrypoints,
       grouped.keys.toSeq,

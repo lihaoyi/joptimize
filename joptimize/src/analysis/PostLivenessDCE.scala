@@ -28,7 +28,6 @@ object PostLivenessDCE {
       mn <- cn.methods.iterator().asScala
     } yield (MethodSig(cn.name, mn.name, Desc.read(mn.desc), (mn.access & Opcodes.ACC_STATIC) != 0), mn)
     val methodSigMap = allMethodSigs.toMap
-    pprint.log(methodSigMap.mapValues(_.name))
 
     val queue = entrypoints.to[mutable.Queue]
     val seenMethods = mutable.LinkedHashSet.empty[MethodSig]
@@ -39,19 +38,15 @@ object PostLivenessDCE {
       if (!ignore(current.cls.name) && !seenMethods(current)){
         seenMethods.add(current)
         seenClasses.add(current.cls)
-        pprint.log(current)
         val mn = methodSigMap(
           if (!current.static) current
           else {
             val x =
               findSupertypes(current.cls)
-            pprint.log(x)
             val y = x
               .iterator
               .map(MethodSig(_, current.name, current.desc, current.static))
               .filter(methodSigMap.contains)
-
-            pprint.log(y.hasNext)
 
             y
               .take(1)

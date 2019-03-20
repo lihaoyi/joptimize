@@ -22,7 +22,7 @@ class Walker(merge: (IType, IType) => IType) {
                  checkSideEffects: (MethodSig, Seq[IType]) => SideEffects): (Walker.MethodResult, Set[JType.Cls]) = {
     println("+" * 20 + originalSig.cls + "+" * 20)
     assert(
-      Util.isCompatible(inferredArgs, originalSig.desc.args),
+      Util.isValidationCompatible(inferredArgs, originalSig.desc.args),
       s"Inferred param types [${inferredArgs.mkString(", ")}] is not compatible " +
       s"with declared param types [${originalSig.desc.args.mkString(", ")}]"
     )
@@ -268,7 +268,7 @@ class Walker(merge: (IType, IType) => IType) {
       .getOrElse(JType.Prim.V)
 
     assert(
-      Util.isCompatible0(inferredReturn, originalSig.desc.ret),
+      Util.isValidationCompatible0(inferredReturn, originalSig.desc.ret),
       s"Inferred return type [$inferredReturn] is not compatible " +
       s"with declared return type [${originalSig.desc.ret}]"
     )
