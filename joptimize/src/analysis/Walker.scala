@@ -15,18 +15,23 @@ import scala.collection.{immutable, mutable}
 
 class Walker(merge: (IType, IType) => IType) {
 
-  def walkMethod(clsName: String,
+  def walkMethod(originalSig: MethodSig,
                  mn: MethodNode,
                  computeMethodSig: (SSA.Invoke, Seq[IType]) => IType,
                  inferredArgs: Seq[IType],
                  checkSideEffects: (MethodSig, Seq[IType]) => SideEffects): (Walker.MethodResult, Set[JType.Cls]) = {
-    println("+" * 20 + clsName + "+" * 20)
+    println("+" * 20 + originalSig.cls + "+" * 20)
+    assert(
+      Util.isCompatible(inferredArgs, originalSig.desc.args),
+      s"Inferred param types [${inferredArgs.mkString(", ")}] is not compatible " +
+      s"with declared param types [${originalSig.desc.args.mkString(", ")}]"
+    )
     val printer = new Textifier
     val methodPrinter = new TraceMethodVisitor(printer)
     println("================ BYTECODE ================")
     println(Renderer.renderInsns(mn.instructions, printer, methodPrinter))
 
-    val program = constructSSAProgram(clsName, mn)
+    val program = constructSSAProgram(originalSig.cls.name, mn)
 
     Renderer.dumpSvg(program, "initial.svg")
     removeDeadNodes(program)
@@ -261,6 +266,12 @@ class Walker(merge: (IType, IType) => IType) {
     val inferredReturn = allInferredReturns
       .reduceLeftOption(merge)
       .getOrElse(JType.Prim.V)
+
+    assert(
+      Util.isCompatible0(inferredReturn, originalSig.desc.ret),
+      s"Inferred return type [$inferredReturn] is not compatible " +
+      s"with declared return type [${originalSig.desc.ret}]"
+    )
 
     pprint.log(inferredReturn)
 

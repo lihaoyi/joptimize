@@ -96,15 +96,16 @@ object Util{
 
   def isCompatible(inferredTypes: Seq[IType], originalTypes: Seq[JType]): Boolean = {
     inferredTypes.length == originalTypes.length &&
-    inferredTypes.iterator.zip(originalTypes.iterator).forall{
-      case (JType.Prim.I, JType.Prim.Z | JType.Prim.B | JType.Prim.S) => true
-      case (CType.I(_), x) => x == JType.Prim.I
-      case (CType.J(_), x) => x == JType.Prim.J
-      case (CType.F(_), x) => x == JType.Prim.F
-      case (CType.D(_), x) => x == JType.Prim.D
-      case (inf: JType, orig: JType) => inf == orig
-      case (CType.Intersect(classes), orig: JType) => ???
-    }
+    inferredTypes.iterator.zip(originalTypes.iterator).forall(x => isCompatible0(x._1, x._2))
+  }
+  def isCompatible0(inferredType: IType, originalType: JType): Boolean = (inferredType, originalType) match{
+    case (JType.Prim.I, JType.Prim.Z | JType.Prim.B | JType.Prim.S) => true
+    case (CType.I(_), x) => x == JType.Prim.I
+    case (CType.J(_), x) => x == JType.Prim.J
+    case (CType.F(_), x) => x == JType.Prim.F
+    case (CType.D(_), x) => x == JType.Prim.D
+    case (inf: JType, orig: JType) => inf == orig
+    case (CType.Intersect(classes), orig: JType) => ???
   }
   def clone(input: AbstractInsnNode, labelMapping: mutable.LinkedHashMap[AbstractInsnNode, AbstractInsnNode]) = {
     labelMapping.getOrElseUpdate(input,

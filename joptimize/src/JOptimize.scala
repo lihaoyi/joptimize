@@ -108,7 +108,7 @@ object JOptimize{
         (sig, inferredArgs),
         {
           val (res, newVisitedClasses) = walker.walkMethod(
-            sig.cls.name,
+            sig,
             originalMethods(sig),
             computeMethodSig,
             inferredArgs,
@@ -122,7 +122,7 @@ object JOptimize{
 
     for(ep <- entrypoints){
       val (res, seenClasses) = walker.walkMethod(
-        ep.cls.name,
+        ep,
         originalMethods(ep),
         computeMethodSig,
         ep.desc.args,
