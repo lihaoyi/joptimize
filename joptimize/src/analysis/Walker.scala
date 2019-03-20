@@ -91,7 +91,7 @@ class Walker(merge: (IType, IType) => IType) {
       program,
       Map.empty,
       program.getAllVertices().collect{case b: SSA.Block if b.upstream.isEmpty => b}.head,
-      new ITypeLattice(merge, computeMethodSig, inferredArgs),
+      new ITypeLattice(merge, computeMethodSig, inferredArgs.flatMap{i => Seq.fill(i.getSize)(i)}),
       postScheduleNaming
     )
 
@@ -252,9 +252,9 @@ class Walker(merge: (IType, IType) => IType) {
 
     val allInferredReturns = allVertices2
       .collect{case r: SSA.ReturnVal => r.src}
-      .map{
-        case n: SSA.Copy => inferred(n.src)
-        case n => inferred(n)
+      .flatMap{
+        case n: SSA.Copy => inferred.get(n.src)
+        case n => inferred.get(n)
       }
 
     pprint.log(allInferredReturns)
