@@ -43,10 +43,10 @@ object MainTests extends TestSuite{
         'liftableFor - annotatedTest
         'unliftableFor - annotatedTest
         'mixedLiftableFor - annotatedTest
-//        'nestedLiftableFor - annotatedTest
-//        'nestedLiftableFor2 - annotatedTest
-//        'nestedUnliftableFor - annotatedTest
-//        'nestedMixedLiftableFor - annotatedTest
+        'nestedLiftableFor - annotatedTest
+        'nestedLiftableFor2 - annotatedTest
+        'nestedUnliftableFor - annotatedTest
+        'nestedMixedLiftableFor - annotatedTest
         'nestedFor - annotatedTest
         'nestedFor2 - annotatedTest
         'basicWhile - annotatedTest
@@ -54,7 +54,7 @@ object MainTests extends TestSuite{
         'loopReturn1 - annotatedTest
         'loopReturn2 - annotatedTest
         'loopReturn3 - annotatedTest
-//        'sqrtFinder - annotatedTest
+        'sqrtFinder - annotatedTest
       }
 //
 //      'Switches - {
