@@ -80,24 +80,24 @@ object MainTests extends TestSuite{
 //        'fibonacci - annotatedTest
 
       }
-//      'Arrays - {
-//        'length - annotatedTest
-//        'get1 - annotatedTest
-//        'get2 - annotatedTest
-//        'get3 - annotatedTest
-//        'get4 - annotatedTest
-//        'get5 - annotatedTest
-//        'set1 - annotatedTest
-//        'set2 - annotatedTest
-//        'set3 - annotatedTest
+      'Arrays - {
+        'length - annotatedTest
+        'get1 - annotatedTest
+        'get2 - annotatedTest
+        'get3 - annotatedTest
+        'get4 - annotatedTest
+        'get5 - annotatedTest
+        'set1 - annotatedTest
+        'set2 - annotatedTest
+        'set3 - annotatedTest
 //        'setIf - annotatedTest
-//        'getAndSet1 - annotatedTest
-//        'getAndSet2 - annotatedTest
-//        'getAndSet3 - annotatedTest
-//        'getAndSetLoop1 - annotatedTest
-//        'getAndSetLoop2 - annotatedTest
-//        'getAndSetLoop3 - annotatedTest
-//      }
+        'getAndSet1 - annotatedTest
+        'getAndSet2 - annotatedTest
+        'getAndSet3 - annotatedTest
+        'getAndSetLoop1 - annotatedTest
+        'getAndSetLoop2 - annotatedTest
+        'getAndSetLoop3 - annotatedTest
+      }
 //      'InvokeDynamic - {
 //        'lambda - annotatedTest
 //        'lambdaArg - annotatedTest

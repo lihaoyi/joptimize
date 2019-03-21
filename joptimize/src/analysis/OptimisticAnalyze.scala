@@ -24,6 +24,13 @@ class ITypeLattice(merge: (IType, IType) => IType,
     case n: SSA.ConstNull => JType.Null
     case n: SSA.ConstCls => JType.Cls("java/lang/Class")
 
+    case n: SSA.ArrayLength => JType.Prim.I
+
+    case n: SSA.GetArray => n.tpe
+
+    case n: SSA.NewArray => JType.Arr(n.typeRef)
+    case n: SSA.MultiANewArray => n.desc
+
     case n: SSA.BinOp =>
       (inferences(n.a), inferences(n.b)) match {
         case (a: CType.I, b: CType.I) =>
