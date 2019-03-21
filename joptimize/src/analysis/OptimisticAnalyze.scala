@@ -203,10 +203,7 @@ object OptimisticAnalyze {
         v,
         v match {
           case phi: SSA.Phi => evaluated(phi)
-          case _ =>
-            val res = lattice.transferValue(v, evaluate)
-            pprint.log((v, res))
-            res
+          case _ => lattice.transferValue(v, evaluate)
         }
       )
     }
@@ -216,20 +213,12 @@ object OptimisticAnalyze {
       val currentBlock = workList.head
       workList.remove(currentBlock)
       val Array(nextControl) = currentBlock.downstreamList.collect{case n: SSA.Control => n}
-      println()
-      println()
-      println()
-      pprint.log(currentBlock)
-      pprint.log(nextControl)
       def queueNextBlock(nextBlock: SSA.Block) = {
-        pprint.log(nextBlock)
         val nextPhis = nextBlock
           .downstreamList
           .collect{case p: SSA.Phi => p}
           .filter(phi => phi.getSize != 0 && phi.block == nextBlock)
 
-        pprint.log(nextPhis)
-        pprint.log(evaluated.filterKeys(_.isInstanceOf[SSA.Phi]))
         val newPhiMapping = nextPhis
           .map{phi =>
             val Seq(expr) = phi
@@ -237,7 +226,6 @@ object OptimisticAnalyze {
               .collect{case (k, v) if k == currentBlock && !v.isInstanceOf[SSA.ChangedState] => v}
               .toSeq
             val res = evaluate(expr)
-            pprint.log((currentBlock, phi, expr, res))
             (phi, res)
           }
           .toMap
@@ -246,7 +234,6 @@ object OptimisticAnalyze {
 
         val invalidatedPhis = mutable.Set.empty[SSA.Phi]
 
-        pprint.log(newPhiMapping)
         for((k, v) <- newPhiMapping) {
           evaluated.get(k) match{
             case None =>
@@ -259,7 +246,6 @@ object OptimisticAnalyze {
                 if (merged != old){
                   continueNextBlock = true
                   invalidatedPhis.add(k)
-                  pprint.log((k, merged))
                   evaluated(k) = merged
                 }
               }
@@ -272,7 +258,6 @@ object OptimisticAnalyze {
           val invalidated = Util.breadthFirstSeen[SSA.Node](invalidatedPhis.toSet)(_.downstreamList)
             .filter(!_.isInstanceOf[SSA.Phi])
 
-          //        pprint.log(invalidated)
           invalidated.foreach{
             case b: SSA.Block =>
               inferredBlocks.remove(b)
@@ -330,7 +315,6 @@ object OptimisticAnalyze {
                 case (CType.I(v1), CType.I(v2), SSA.BinBranch.IF_ICMPLE) => Some(v1 <= v2)
                 case _ => None
               }
-              pprint.log((valueA, valueB, doBranch))
               doBranch match{
                 case None =>
                   queueNextBlock(n.downstreamList.collect{ case t: SSA.True => t}.head)
@@ -346,10 +330,6 @@ object OptimisticAnalyze {
       }
     }
 
-    println()
-    println()
-    println()
-    pprint.log(evaluated)
     (evaluated, inferredBlocks.toSet)
   }
 }

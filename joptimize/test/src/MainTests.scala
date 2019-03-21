@@ -73,7 +73,7 @@ object MainTests extends TestSuite{
         'timesTwo2 - annotatedTest
         'call - annotatedTest
         'callAtPhiBoundary - annotatedTest
-//        'voidCall - annotatedTest
+        'voidCall - annotatedTest
 //        'tailFactorial - annotatedTest
 //        'tailFactorialLong - annotatedTest
 //        'tailFactorialVoid - annotatedTest
