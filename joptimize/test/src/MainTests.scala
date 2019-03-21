@@ -40,10 +40,10 @@ object MainTests extends TestSuite{
       }
       'Loops - {
         'basicFor - annotatedTest
-//        'liftableFor - annotatedTest
-//        'unliftableFor - annotatedTest
-//        'mixedLiftableFor - annotatedTest
-//        'nestedLiftableFor - annotatedTest
+        'liftableFor - annotatedTest
+        'unliftableFor - annotatedTest
+        'mixedLiftableFor - annotatedTest
+        'nestedLiftableFor - annotatedTest
 //        'nestedLiftableFor2 - annotatedTest
 //        'nestedUnliftableFor - annotatedTest
 //        'nestedMixedLiftableFor - annotatedTest

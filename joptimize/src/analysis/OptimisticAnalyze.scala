@@ -152,7 +152,11 @@ class ITypeLattice(merge: (IType, IType) => IType,
 
   }
 
-  override def join(lhs: IType, rhs: IType) = merge(lhs, rhs)
+  override def join(lhs: IType, rhs: IType) = {
+    val res = merge(lhs, rhs)
+    pprint.log((lhs, rhs, res))
+    res
+  }
 }
 object OptimisticAnalyze {
   /**
@@ -192,27 +196,41 @@ object OptimisticAnalyze {
         v,
         v match {
           case phi: SSA.Phi => evaluated(phi)
-          case _ => lattice.transferValue(v, evaluate)
+          case _ =>
+            val res = lattice.transferValue(v, evaluate)
+            pprint.log((v, res))
+            res
         }
       )
     }
 
     while(workList.nonEmpty){
+
       val currentBlock = workList.head
       workList.remove(currentBlock)
       val Array(nextControl) = currentBlock.downstreamList.collect{case n: SSA.Control => n}
-
+      println()
+      println()
+      println()
+      pprint.log(currentBlock)
+      pprint.log(nextControl)
       def queueNextBlock(nextBlock: SSA.Block) = {
-        val newPhiMapping = nextBlock
+        pprint.log(nextBlock)
+        val nextPhis = nextBlock
           .downstreamList
           .collect{case p: SSA.Phi => p}
           .filter(phi => phi.getSize != 0 && phi.block == nextBlock)
+
+        pprint.log(nextPhis)
+        pprint.log(evaluated.filterKeys(_.isInstanceOf[SSA.Phi]))
+        val newPhiMapping = nextPhis
           .map{phi =>
             val Seq(expr) = phi
               .incoming
               .collect{case (k, v) if k == currentBlock && !v.isInstanceOf[SSA.State] => v}
               .toSeq
             val res = evaluate(expr)
+            pprint.log((currentBlock, phi, expr, res))
             (phi, res)
           }
           .toMap
@@ -221,24 +239,21 @@ object OptimisticAnalyze {
 
         val invalidatedPhis = mutable.Set.empty[SSA.Phi]
 
-        val mergedPhiMapping = for(k <- evaluated.keySet.collect{case p: SSA.Phi => p} ++ newPhiMapping.keysIterator) yield {
-          (evaluated.get(k), newPhiMapping.get(k)) match{
-            case (Some(v), None) => (k, v)
-            case (None, Some(v)) =>
+        pprint.log(newPhiMapping)
+        for((k, v) <- newPhiMapping) {
+          evaluated.get(k) match{
+            case None =>
               continueNextBlock = true
-              (k, v)
-            case (Some(v1), Some(v2)) =>
-              if (v1 == v2) (k, v1)
-              else{
+              evaluated(k) = v
+            case Some(old) =>
+              if (old != v){
                 continueNextBlock = true
                 invalidatedPhis.add(k)
-                (k, lattice.join(v1, v2))
+                val merged = lattice.join(old, v)
+                pprint.log((k, merged))
+                evaluated(k) = merged
               }
           }
-        }
-
-        for((k, v) <- mergedPhiMapping){
-          evaluated(k) = v
         }
 
         if (continueNextBlock) {
@@ -246,13 +261,16 @@ object OptimisticAnalyze {
           workList.add(nextBlock)
         }
 
-        val invalidated = Util.breadthFirstSeen[SSA.Node](invalidatedPhis.toSet)(_.downstreamList.filter(!_.isInstanceOf[SSA.Phi]))
+        val invalidated = Util.breadthFirstSeen[SSA.Node](invalidatedPhis.toSet)(_.downstreamList)
             .filter(!_.isInstanceOf[SSA.Phi])
 
+//        pprint.log(invalidated)
         invalidated.foreach{
-          case p: SSA.Phi =>
+          case b: SSA.Block =>
+            inferredBlocks.remove(b)
+          case p: SSA.Jump =>
             inferredBlocks.remove(p.block)
-            evaluated.remove(p)
+            workList.add(p.block)
           case n: SSA.Val =>
             evaluated.remove(n)
           case _ => // do nothing
@@ -302,6 +320,7 @@ object OptimisticAnalyze {
                 case (CType.I(v1), CType.I(v2), SSA.BinBranch.IF_ICMPLE) => Some(v1 <= v2)
                 case _ => None
               }
+              pprint.log((valueA, valueB, doBranch))
               doBranch match{
                 case None =>
                   queueNextBlock(n.downstreamList.collect{ case t: SSA.True => t}.head)
@@ -317,6 +336,10 @@ object OptimisticAnalyze {
       }
     }
 
+    println()
+    println()
+    println()
+    pprint.log(evaluated)
     (evaluated, inferredBlocks.toSet)
   }
 }
