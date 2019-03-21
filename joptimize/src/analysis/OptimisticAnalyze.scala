@@ -227,7 +227,7 @@ object OptimisticAnalyze {
           .map{phi =>
             val Seq(expr) = phi
               .incoming
-              .collect{case (k, v) if k == currentBlock && !v.isInstanceOf[SSA.State] => v}
+              .collect{case (k, v) if k == currentBlock && !v.isInstanceOf[SSA.ChangedState] => v}
               .toSeq
             val res = evaluate(expr)
             pprint.log((currentBlock, phi, expr, res))
