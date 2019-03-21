@@ -152,11 +152,7 @@ class ITypeLattice(merge: (IType, IType) => IType,
 
   }
 
-  override def join(lhs: IType, rhs: IType) = {
-    val res = merge(lhs, rhs)
-    pprint.log((lhs, rhs, res))
-    res
-  }
+  override def join(lhs: IType, rhs: IType) = merge(lhs, rhs)
 }
 object OptimisticAnalyze {
   /**
@@ -185,7 +181,7 @@ object OptimisticAnalyze {
                initialBlock: SSA.Block,
                lattice: Lattice[T],
                naming: Namer.Result): (mutable.LinkedHashMap[SSA.Val, T], Set[SSA.Block]) = {
-    var inferredPhis = Map.empty[SSA.Phi, T]
+
     val inferredBlocks = mutable.Set(initialBlock)
     val workList = mutable.LinkedHashSet(initialBlock)
 
@@ -194,9 +190,8 @@ object OptimisticAnalyze {
     def evaluate(v: SSA.Val): T = {
       evaluated.getOrElseUpdate(
         v,
-        v match{
-          case phi: SSA.Phi =>
-            inferredPhis(phi)
+        v match {
+          case phi: SSA.Phi => evaluated(phi)
           case _ => lattice.transferValue(v, evaluate)
         }
       )
@@ -205,7 +200,6 @@ object OptimisticAnalyze {
     while(workList.nonEmpty){
       val currentBlock = workList.head
       workList.remove(currentBlock)
-
       val Array(nextControl) = currentBlock.downstreamList.collect{case n: SSA.Control => n}
 
       def queueNextBlock(nextBlock: SSA.Block) = {
@@ -227,8 +221,8 @@ object OptimisticAnalyze {
 
         val invalidatedPhis = mutable.Set.empty[SSA.Phi]
 
-        val mergedPhiMapping = for(k <- inferredPhis.keySet ++ newPhiMapping.keysIterator) yield {
-          (inferredPhis.get(k), newPhiMapping.get(k)) match{
+        val mergedPhiMapping = for(k <- evaluated.keySet.collect{case p: SSA.Phi => p} ++ newPhiMapping.keysIterator) yield {
+          (evaluated.get(k), newPhiMapping.get(k)) match{
             case (Some(v), None) => (k, v)
             case (None, Some(v)) =>
               continueNextBlock = true
@@ -243,17 +237,24 @@ object OptimisticAnalyze {
           }
         }
 
-        inferredPhis = mergedPhiMapping.toMap
+        for((k, v) <- mergedPhiMapping){
+          evaluated(k) = v
+        }
 
         if (continueNextBlock) {
           inferredBlocks.add(nextBlock)
           workList.add(nextBlock)
         }
 
-        val seen = Util.breadthFirstSeen[SSA.Node](invalidatedPhis.toSet)(_.downstreamList)
+        val invalidated = Util.breadthFirstSeen[SSA.Node](invalidatedPhis.toSet)(_.downstreamList.filter(!_.isInstanceOf[SSA.Phi]))
+            .filter(!_.isInstanceOf[SSA.Phi])
 
-        seen.foreach{
-          case n: SSA.Val => evaluated.remove(n)
+        invalidated.foreach{
+          case p: SSA.Phi =>
+            inferredBlocks.remove(p.block)
+            evaluated.remove(p)
+          case n: SSA.Val =>
+            evaluated.remove(n)
           case _ => // do nothing
         }
       }
@@ -268,7 +269,6 @@ object OptimisticAnalyze {
             case r: SSA.ReturnVal => evaluate(r.src)
             case n: SSA.UnaBranch =>
               val valueA = evaluate(n.a)
-              pprint.log(valueA)
               val doBranch = (valueA, n.opcode) match{
                 case (CType.I(v), SSA.UnaBranch.IFNE) => Some(v != 0)
                 case (CType.I(v), SSA.UnaBranch.IFEQ) => Some(v == 0)
@@ -281,7 +281,6 @@ object OptimisticAnalyze {
                 case _ => None
               }
 
-              pprint.log(doBranch)
               doBranch match{
                 case None =>
                   queueNextBlock(n.downstreamList.collect{ case t: SSA.True => t}.head)
@@ -317,7 +316,6 @@ object OptimisticAnalyze {
           }
       }
     }
-
 
     (evaluated, inferredBlocks.toSet)
   }

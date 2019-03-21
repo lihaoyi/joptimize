@@ -105,13 +105,11 @@ class Walker(merge: (IType, IType) => IType) {
     program.checkLinks()
 
     var aggregateSideEffects: SideEffects = SideEffects.Pure
-    pprint.log(postScheduleNaming, height=999999)
+
     program.getAllVertices().foreach{
 
       case p: SSA.ChangedState => // do nothing
       case n: SSA.Invoke =>
-        pprint.log(n)
-        pprint.log(n.srcs)
         val (mangledName, mangledDesc) =
           Util.mangle(n.name, n.srcs.map(inferred), n.desc.args, inferred.getOrElseUpdate(n, n.desc.ret), n.desc.ret)
         val sideEffects = checkSideEffects(
@@ -180,13 +178,8 @@ class Walker(merge: (IType, IType) => IType) {
         }
 
       case j: SSA.Jump =>
-        pprint.log(j)
         val allTargets = j.downstreamList.collect{case b: SSA.Block => b}
-        pprint.log(j.downstreamList)
-        pprint.log(allTargets)
-        pprint.log(liveBlocks)
         val liveTargets = allTargets.filter(liveBlocks)
-        pprint.log(liveTargets)
         if (liveTargets.size == 1){
           println("ELIMINATING JUMP " + j)
           PartialEvaluator.replaceJump(j, liveTargets.head)
@@ -262,7 +255,6 @@ class Walker(merge: (IType, IType) => IType) {
         case n => inferred.get(n)
       }
 
-    pprint.log(allInferredReturns)
     val inferredReturn = allInferredReturns
       .reduceLeftOption(merge)
       .getOrElse(JType.Prim.V)
@@ -272,8 +264,6 @@ class Walker(merge: (IType, IType) => IType) {
       s"Inferred return type [$inferredReturn] is not compatible " +
       s"with declared return type [${originalSig.desc.ret}]"
     )
-
-    pprint.log(inferredReturn)
 
     val result = Walker.MethodResult(
       Nil,

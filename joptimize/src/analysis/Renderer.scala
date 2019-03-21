@@ -405,8 +405,9 @@ object Renderer {
       nodes.map { case (x, n) =>
         n.`with`(
           x match {
-            case n: SSA.Val => if (n.getSize == 0) Color.RED else Color.CYAN
-            case c: SSA.Control => Color.MAGENTA
+            case n: SSA.Val => if (n.getSize == 0) Color.BLUE else Color.CYAN
+            case c: SSA.Block => Color.MAGENTA
+            case c: SSA.Control => Color.RED
           },
           Style.FILLED
         )
