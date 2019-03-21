@@ -47,8 +47,8 @@ object MainTests extends TestSuite{
 //        'nestedLiftableFor2 - annotatedTest
 //        'nestedUnliftableFor - annotatedTest
 //        'nestedMixedLiftableFor - annotatedTest
-//        'nestedFor - annotatedTest
-//        'nestedFor2 - annotatedTest
+        'nestedFor - annotatedTest
+        'nestedFor2 - annotatedTest
         'basicWhile - annotatedTest
         'alternatingWhile - annotatedTest
         'loopReturn1 - annotatedTest

@@ -247,11 +247,14 @@ object OptimisticAnalyze {
               evaluated(k) = v
             case Some(old) =>
               if (old != v){
-                continueNextBlock = true
-                invalidatedPhis.add(k)
+
                 val merged = lattice.join(old, v)
-                pprint.log((k, merged))
-                evaluated(k) = merged
+                if (merged != old){
+                  continueNextBlock = true
+                  invalidatedPhis.add(k)
+                  pprint.log((k, merged))
+                  evaluated(k) = merged
+                }
               }
           }
         }
@@ -259,22 +262,22 @@ object OptimisticAnalyze {
         if (continueNextBlock) {
           inferredBlocks.add(nextBlock)
           workList.add(nextBlock)
-        }
-
-        val invalidated = Util.breadthFirstSeen[SSA.Node](invalidatedPhis.toSet)(_.downstreamList)
+          val invalidated = Util.breadthFirstSeen[SSA.Node](invalidatedPhis.toSet)(_.downstreamList)
             .filter(!_.isInstanceOf[SSA.Phi])
 
-//        pprint.log(invalidated)
-        invalidated.foreach{
-          case b: SSA.Block =>
-            inferredBlocks.remove(b)
-          case p: SSA.Jump =>
-            inferredBlocks.remove(p.block)
-            workList.add(p.block)
-          case n: SSA.Val =>
-            evaluated.remove(n)
-          case _ => // do nothing
+          //        pprint.log(invalidated)
+          invalidated.foreach{
+            case b: SSA.Block =>
+              inferredBlocks.remove(b)
+            case p: SSA.Jump =>
+              inferredBlocks.remove(p.block)
+              workList.add(p.block)
+            case n: SSA.Val =>
+              evaluated.remove(n)
+            case _ => // do nothing
+          }
         }
+
       }
 
       nextControl match{
