@@ -66,20 +66,20 @@ object MainTests extends TestSuite{
 //        'stringSwitch - annotatedTest
 ////        'stringSwitchTwo - annotatedTest
 //      }
-//      'Statics - {
-//        'helloWorld - annotatedTest
-//        'timesTwo - annotatedTest
-//        'helloWorld2 - annotatedTest
-//        'timesTwo2 - annotatedTest
-//        'call - annotatedTest
-//        'callAtPhiBoundary - annotatedTest
+      'Statics - {
+        'helloWorld - annotatedTest
+        'timesTwo - annotatedTest
+        'helloWorld2 - annotatedTest
+        'timesTwo2 - annotatedTest
+        'call - annotatedTest
+        'callAtPhiBoundary - annotatedTest
 //        'voidCall - annotatedTest
 //        'tailFactorial - annotatedTest
 //        'tailFactorialLong - annotatedTest
 //        'tailFactorialVoid - annotatedTest
 //        'fibonacci - annotatedTest
-//
-//      }
+
+      }
 //      'Arrays - {
 //        'length - annotatedTest
 //        'get1 - annotatedTest
