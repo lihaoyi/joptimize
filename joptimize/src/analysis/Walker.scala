@@ -113,8 +113,10 @@ class Walker(merge: (IType, IType) => IType) {
         val (mangledName, mangledDesc) =
           Util.mangle(
             n.name,
+            n.isInstanceOf[SSA.InvokeStatic],
+            n.cls,
             n.srcs.map(inferred),
-            (if (!n.isInstanceOf[SSA.InvokeStatic]) Seq(n.cls) else Nil) ++ n.desc.args,
+            n.desc.args,
             inferred.getOrElseUpdate(n, n.desc.ret),
             n.desc.ret
           )
@@ -319,7 +321,6 @@ class Walker(merge: (IType, IType) => IType) {
         new BytecodeToSSA(phiMerges0, startRegionLookup, regionStarts),
         new SSA.ChangedState(regionStarts(0).get),
         i => regionStarts(i).map{ b =>
-          pprint.log(b)
           new SSA.ChangedState(b)
         }
       ),

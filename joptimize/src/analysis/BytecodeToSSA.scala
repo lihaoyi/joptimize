@@ -139,7 +139,6 @@ class BytecodeToSSA(merges: mutable.LinkedHashSet[SSA.Phi],
     */
   def getFieldOp(insn: AbstractInsnNode, value: SSA.Val, state: SSA.State): (SSA.Val, SSA.State) = {
     val insn2 = insn.asInstanceOf[FieldInsnNode]
-    pprint.log(state)
     val op = new SSA.GetField(state, value, insn2.owner, insn2.name, JType.read(insn2.desc))
     (op, new SSA.ChangedState(op))
   }

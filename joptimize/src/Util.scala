@@ -23,12 +23,15 @@ object Util{
   }
 
   def mangle(name: String,
+             isStatic: Boolean,
+             selfType: JType,
              inferredTypes: Seq[IType],
              originalTypes: Seq[JType],
              narrowReturnType: IType,
              originalReturnType: JType) = {
 
-    if (isManglingCompatible(inferredTypes, originalTypes)) (name, Desc(originalTypes, originalReturnType))
+    val selfArg = (if (!isStatic) Seq(selfType) else Nil)
+    if (isManglingCompatible(inferredTypes, selfArg ++ originalTypes)) (name, Desc(originalTypes, originalReturnType))
     else{
       val mangledName = name + "__" + inferredTypes.map(_.name).mkString("__").replace('/', '_')
       val jTypeArgs = inferredTypes.zip(originalTypes).map(t => CType.toJType(t._1, t._2))

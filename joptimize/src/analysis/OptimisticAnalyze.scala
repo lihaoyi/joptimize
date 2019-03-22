@@ -167,7 +167,6 @@ class ITypeLattice(merge: (IType, IType) => IType,
 
   override def join(lhs: IType, rhs: IType) = {
     val res = merge(lhs, rhs)
-    pprint.log((lhs, rhs, res))
     res
   }
 }
@@ -219,10 +218,6 @@ object OptimisticAnalyze {
       val currentBlock = workList.head
       workList.remove(currentBlock)
       val Array(nextControl) = currentBlock.downstreamList.collect{case n: SSA.Control => n}
-      println()
-      pprint.log(currentBlock)
-      pprint.log(nextControl)
-      println()
       def queueNextBlock(nextBlock: SSA.Block) = {
         val nextPhis = nextBlock
           .downstreamList

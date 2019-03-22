@@ -143,8 +143,10 @@ object JOptimize{
 
         val (mangledName, mangledDesc) = Util.mangle(
           originalNode.name,
+          sig.static,
+          sig.cls,
           inferredArgs,
-          (if (!sig.static) Seq(sig.cls) else Nil) ++ sig.desc.args,
+          sig.desc.args,
           returnType,
           sig.desc.ret
         )
