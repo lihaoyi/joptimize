@@ -93,17 +93,24 @@ object Util{
     (seen.toMap, if (terminals != null) terminals.toSet else null, backEdges)
   }
 
-  def isValidationCompatible(inferredTypes: Seq[IType], originalTypes: Seq[JType]): Boolean = {
-    inferredTypes.length == originalTypes.length &&
-    inferredTypes.iterator.zip(originalTypes.iterator).forall(x => isValidationCompatible0(x._1, x._2))
+  def isValidationCompatible(inferredTypes: Seq[IType],
+                             originalSig: MethodSig,
+                             checkSubclass: (JType.Cls, JType.Cls) => Boolean): Boolean = {
+    val originalTypes = (if (originalSig.static) Nil else Seq(originalSig.cls)) ++ originalSig.desc.args
+    val sameLength = inferredTypes.length == originalTypes.length
+
+    val sameItems = inferredTypes.iterator.zip(originalTypes.iterator).forall(x => isValidationCompatible0(x._1, x._2, checkSubclass))
+    sameLength && sameItems
   }
-  def isValidationCompatible0(inferredType: IType, originalType: JType): Boolean = (inferredType, originalType) match{
+  def isValidationCompatible0(inferredType: IType,
+                              originalType: JType,
+                              checkSubclass: (JType.Cls, JType.Cls) => Boolean): Boolean = (inferredType, originalType) match{
     case (CType.I(_) | JType.Prim.I, JType.Prim.Z | JType.Prim.B | JType.Prim.S | JType.Prim.I | JType.Prim.C) => true
     case (JType.Prim.Z | JType.Prim.B | JType.Prim.S | JType.Prim.I | JType.Prim.C, JType.Prim.I) => true
     case (CType.J(_), JType.Prim.J) => true
     case (CType.F(_), JType.Prim.F) => true
     case (CType.D(_), JType.Prim.D) => true
-    case (inf: JType, orig: JType) => inf == orig
+    case (inf: JType.Cls, orig: JType.Cls) => checkSubclass(inf, orig)
     case _ => false
   }
 

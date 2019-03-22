@@ -110,7 +110,8 @@ object JOptimize{
                 original,
                 computeMethodSig,
                 inferredArgs,
-                computeSideEffects
+                computeSideEffects,
+                (inf, orig) => leastUpperBound(Seq(inf, orig)) == Seq(orig)
               )
               newVisitedClasses.foreach(visitedClasses.add)
               res
@@ -127,7 +128,8 @@ object JOptimize{
         originalMethods(ep),
         computeMethodSig,
         ep.desc.args,
-        computeSideEffects
+        computeSideEffects,
+        (inf, orig) => leastUpperBound(Seq(inf, orig)) == Seq(orig)
       )
 
       visitedMethods((ep, ep.desc.args)) = res

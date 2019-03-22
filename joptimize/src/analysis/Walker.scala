@@ -19,10 +19,11 @@ class Walker(merge: (IType, IType) => IType) {
                  mn: MethodNode,
                  computeMethodSig: (SSA.Invoke, Seq[IType]) => IType,
                  inferredArgs: Seq[IType],
-                 checkSideEffects: (MethodSig, Seq[IType]) => SideEffects): (Walker.MethodResult, Set[JType.Cls]) = {
-    println("+" * 20 + originalSig.cls + "+" * 20)
+                 checkSideEffects: (MethodSig, Seq[IType]) => SideEffects,
+                 checkSubclass: (JType.Cls, JType.Cls) => Boolean): (Walker.MethodResult, Set[JType.Cls]) = {
+    println("+" * 20 + originalSig + "+" * 20)
     assert(
-      Util.isValidationCompatible(inferredArgs, originalSig.desc.args),
+      Util.isValidationCompatible(inferredArgs, originalSig, checkSubclass),
       s"Inferred param types [${inferredArgs.mkString(", ")}] is not compatible " +
       s"with declared param types [${originalSig.desc.args.mkString(", ")}]"
     )
@@ -257,7 +258,7 @@ class Walker(merge: (IType, IType) => IType) {
       .getOrElse(JType.Prim.V)
 
     assert(
-      Util.isValidationCompatible0(inferredReturn, originalSig.desc.ret),
+      Util.isValidationCompatible0(inferredReturn, originalSig.desc.ret, checkSubclass),
       s"Inferred return type [$inferredReturn] is not compatible " +
       s"with declared return type [${originalSig.desc.ret}]"
     )
