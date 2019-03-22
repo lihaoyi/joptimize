@@ -90,7 +90,7 @@ object MainTests extends TestSuite{
         'set1 - annotatedTest
         'set2 - annotatedTest
         'set3 - annotatedTest
-//        'setIf - annotatedTest
+        'setIf - annotatedTest
         'getAndSet1 - annotatedTest
         'getAndSet2 - annotatedTest
         'getAndSet3 - annotatedTest
