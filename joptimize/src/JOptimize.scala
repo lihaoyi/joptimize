@@ -90,15 +90,14 @@ object JOptimize{
     def computeMethodSig(invoke: SSA.Invoke, inferredArgs: Seq[IType]): IType = {
 
       val sig = {
-        if (invoke.isInstanceOf[SSA.InvokeStatic]){
+        if (!invoke.isInstanceOf[SSA.InvokeStatic]) invoke.sig
+        else {
           def rec(currentCls: JType.Cls): MethodSig = {
-            val sig = MethodSig(invoke.cls, invoke.name, invoke.desc, true)
+            val sig = invoke.sig
             if (originalMethods.contains(sig)) sig
             else rec(JType.Cls(classNodeMap(currentCls).superName))
           }
           rec(invoke.cls)
-        }else{
-          MethodSig(invoke.cls, invoke.name, invoke.desc, false)
         }
       }
       originalMethods.get(sig) match{
@@ -141,15 +140,7 @@ object JOptimize{
 
         val originalNode = originalMethods(sig)
 
-        val (mangledName, mangledDesc) = Util.mangle(
-          originalNode.name,
-          sig.static,
-          sig.cls,
-          inferredArgs,
-          sig.desc.args,
-          returnType,
-          sig.desc.ret
-        )
+        val (mangledName, mangledDesc) = Util.mangle(sig, inferredArgs, returnType)
 
         val newNode = new MethodNode(
           Opcodes.ASM6,

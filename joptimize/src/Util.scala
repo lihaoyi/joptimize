@@ -22,20 +22,16 @@ object Util{
     }
   }
 
-  def mangle(name: String,
-             isStatic: Boolean,
-             selfType: JType,
+  def mangle(originalSig: MethodSig,
              inferredTypes: Seq[IType],
-             originalTypes: Seq[JType],
-             narrowReturnType: IType,
-             originalReturnType: JType) = {
+             narrowReturnType: IType) = {
 
-    val selfArg = (if (!isStatic) Seq(selfType) else Nil)
-    if (isManglingCompatible(inferredTypes, selfArg ++ originalTypes)) (name, Desc(originalTypes, originalReturnType))
+    val selfArg = if (!originalSig.static) Seq(originalSig.cls) else Nil
+    if (isManglingCompatible(inferredTypes, selfArg ++ originalSig.desc.args)) (originalSig.name, originalSig.desc)
     else{
-      val mangledName = name + "__" + inferredTypes.map(_.name).mkString("__").replace('/', '_')
-      val jTypeArgs = inferredTypes.zip(originalTypes).map(t => CType.toJType(t._1, t._2))
-      val jTypeRet = CType.toJType(narrowReturnType, originalReturnType)
+      val mangledName = originalSig.name + "__" + inferredTypes.map(_.name).mkString("__").replace('/', '_')
+      val jTypeArgs = inferredTypes.zip(originalSig.desc.args).map(t => CType.toJType(t._1, t._2))
+      val jTypeRet = CType.toJType(narrowReturnType, originalSig.desc.ret)
       val mangledJTypeDesc = Desc(jTypeArgs, jTypeRet)
       (mangledName, mangledJTypeDesc)
     }

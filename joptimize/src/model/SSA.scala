@@ -375,6 +375,8 @@ object SSA{
     def name_=(v: String): Unit
     def desc: Desc
     def desc_=(v: Desc): Unit
+
+    def sig = MethodSig(cls, name, desc, this.isInstanceOf[InvokeStatic])
   }
   case class InvokeStatic(var state: State,
                           var srcs: Seq[Val],
