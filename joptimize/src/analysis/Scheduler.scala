@@ -37,7 +37,11 @@ object Scheduler {
     allVertices.collect{
       case c: SSA.Phi => scheduler.block(c) = c.block
       case c: SSA.Val if c.upstream.isEmpty => scheduler.block(c) = startBlock
-      case c: SSA.ChangedState if c.parent.isInstanceOf[SSA.Block] => scheduler.block(c) = c.parent.asInstanceOf[SSA.Block]
+      case c: SSA.ChangedState =>
+        c.parent match{
+          case b: SSA.Block => scheduler.block(c) = b
+          case _ =>
+        }
     }
 
     allVertices.collect{

@@ -15,9 +15,8 @@ class ITypeLattice(merge: (IType, IType) => IType,
                    inferredArgs: Seq[IType]) extends Lattice[IType]{
   def transferValue(node: SSA.Val, inferences: SSA.Val => IType) = node match{
     case n: SSA.ChangedState =>
-
-      Option(n.parent) match{
-        case Some(v: SSA.Val) => inferences(v)
+      n.parent match{
+        case v: SSA.Val => inferences(v)
         case _ =>
       }
       JType.Prim.V

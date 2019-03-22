@@ -311,7 +311,7 @@ class Walker(merge: (IType, IType) => IType) {
       joptimize.bytecode.Analyzer.analyze(
         clsName, mn,
         new BytecodeToSSA(phiMerges0, startRegionLookup, regionStarts),
-        new SSA.ChangedState(null),
+        new SSA.ChangedState(regionStarts(0).get),
         i => regionStarts(i).map{ b =>
           pprint.log(b)
           new SSA.ChangedState(b)

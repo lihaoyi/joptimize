@@ -241,10 +241,8 @@ class BytecodeToSSA(merges: mutable.LinkedHashSet[SSA.Phi],
     insn.getOpcode match{
       case MULTIANEWARRAY =>
         val insn2 = insn.asInstanceOf[MultiANewArrayInsnNode]
-        pprint.log(insn2.desc)
-        pprint.log(insn2.dims)
-        pprint.log(vs)
-        (new SSA.MultiANewArray(state, JType.read(insn2.desc), vs), state)
+        val op = new SSA.MultiANewArray(state, JType.read(insn2.desc), vs)
+        (op, new SSA.ChangedState(op))
 
       case INVOKEDYNAMIC =>
         val insn2 = insn.asInstanceOf[InvokeDynamicInsnNode]
