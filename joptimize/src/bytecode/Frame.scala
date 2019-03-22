@@ -173,7 +173,8 @@ class Frame[V <: Value, S <: V] (var numLocals: Int, val numStack0: Int){
     *                           POP on an empty operand stack).
     */
   @throws[AnalyzerException]
-  def execute(insn: AbstractInsnNode, interpreter: Interpreter[V, S]): Unit = {
+  def execute(insn: AbstractInsnNode, interpreter: Interpreter[V, S], newState: Option[S]): Unit = {
+    state = newState.getOrElse(state)
     var value1: V = null.asInstanceOf[V]
     var value2: V = null.asInstanceOf[V]
     var value3: V = null.asInstanceOf[V]

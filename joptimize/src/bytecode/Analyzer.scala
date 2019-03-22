@@ -25,7 +25,8 @@ object Analyzer{
   def analyze[V <: Value, S <: V](owner: String,
                                   method: MethodNode,
                                   interpreter: Interpreter[V, S],
-                                  initialState: S): Array[Frame[V, S]] = {
+                                  initialState: S,
+                                  freshStates: Int => Option[S]): Array[Frame[V, S]] = {
     /** The instructions of the currently analyzed method. */
     val insnList = method.instructions
     /** The size of {@link #insnList}. */
@@ -94,7 +95,7 @@ object Analyzer{
           case AbstractInsnNode.LABEL | AbstractInsnNode.LINE | AbstractInsnNode.FRAME =>
             merge(insnIndex, insnIndex + 1, oldFrame)
           case _ =>
-            currentFrame.init(oldFrame).execute(insnNode, interpreter)
+            currentFrame.init(oldFrame).execute(insnNode, interpreter, freshStates(insnIndex))
             insnNode match {
               case jumpInsn: JumpInsnNode =>
                 if (insnOpcode != Opcodes.GOTO) merge(insnIndex, insnIndex + 1, currentFrame)

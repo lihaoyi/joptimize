@@ -60,7 +60,7 @@ object SSA{
   }
 
   sealed trait State extends Val
-  class ChangedState(var parent: Val) extends Val(JType.Prim.V) with State{
+  class ChangedState(var parent: Node) extends Val(JType.Prim.V) with State{
     override def upstream = Option(parent).toSeq
     def replaceUpstream(swap: Swapper): Unit = {
       parent = swap(parent)

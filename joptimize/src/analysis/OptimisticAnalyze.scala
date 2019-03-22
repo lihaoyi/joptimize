@@ -14,6 +14,13 @@ class ITypeLattice(merge: (IType, IType) => IType,
                    computeMethodSig: (SSA.Invoke, Seq[IType]) => IType,
                    inferredArgs: Seq[IType]) extends Lattice[IType]{
   def transferValue(node: SSA.Val, inferences: SSA.Val => IType) = node match{
+    case n: SSA.ChangedState =>
+
+      Option(n.parent) match{
+        case Some(v: SSA.Val) => inferences(v)
+        case _ =>
+      }
+      JType.Prim.V
     case n: SSA.Arg => inferredArgs(n.index)
 
     case n: SSA.ConstI => CType.I(n.value)
@@ -27,6 +34,7 @@ class ITypeLattice(merge: (IType, IType) => IType,
     case n: SSA.ArrayLength => JType.Prim.I
 
     case n: SSA.GetArray => n.tpe
+    case n: SSA.PutArray => JType.Prim.V
 
     case n: SSA.NewArray => JType.Arr(n.typeRef)
     case n: SSA.MultiANewArray => n.desc
@@ -154,9 +162,7 @@ class ITypeLattice(merge: (IType, IType) => IType,
     case n: SSA.InvokeSpecial => computeMethodSig(n, n.srcs.map(inferences))
     case n: SSA.InvokeVirtual => computeMethodSig(n, n.srcs.map(inferences))
     case n: SSA.InvokeInterface => computeMethodSig(n, n.srcs.map(inferences))
-//    case n: SSA.InvokeDynamic => computeMethodSig(n, n.srcs.map(inferences))
-
-
+    //    case n: SSA.InvokeDynamic => computeMethodSig(n, n.srcs.map(inferences))
   }
 
   override def join(lhs: IType, rhs: IType) = {
@@ -213,17 +219,21 @@ object OptimisticAnalyze {
       val currentBlock = workList.head
       workList.remove(currentBlock)
       val Array(nextControl) = currentBlock.downstreamList.collect{case n: SSA.Control => n}
+      println()
+      pprint.log(currentBlock)
+      pprint.log(nextControl)
+      println()
       def queueNextBlock(nextBlock: SSA.Block) = {
         val nextPhis = nextBlock
           .downstreamList
           .collect{case p: SSA.Phi => p}
-          .filter(phi => phi.getSize != 0 && phi.block == nextBlock)
+          .filter(phi => phi.block == nextBlock)
 
         val newPhiMapping = nextPhis
           .map{phi =>
             val Seq(expr) = phi
               .incoming
-              .collect{case (k, v) if k == currentBlock && !v.isInstanceOf[SSA.ChangedState] => v}
+              .collect{case (k, v) if k == currentBlock => v}
               .toSeq
             val res = evaluate(expr)
             (phi, res)
@@ -329,6 +339,8 @@ object OptimisticAnalyze {
           }
       }
     }
+
+    pprint.log(evaluated)
 
     (evaluated, inferredBlocks.toSet)
   }

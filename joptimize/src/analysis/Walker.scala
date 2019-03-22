@@ -39,7 +39,7 @@ class Walker(merge: (IType, IType) => IType) {
 
     simplifyPhiMerges(program)
     program.checkLinks()
-
+    Renderer.dumpSvg(program, "simplified.svg")
     println("================ INITIAL ================")
 
     val preScheduleNaming = Namer.apply(program, Map.empty, program.getAllVertices())
@@ -311,7 +311,11 @@ class Walker(merge: (IType, IType) => IType) {
       joptimize.bytecode.Analyzer.analyze(
         clsName, mn,
         new BytecodeToSSA(phiMerges0, startRegionLookup, regionStarts),
-        new SSA.ChangedState(null)
+        new SSA.ChangedState(null),
+        i => regionStarts(i).map{ b =>
+          pprint.log(b)
+          new SSA.ChangedState(b)
+        }
       ),
       startRegionLookup
     )

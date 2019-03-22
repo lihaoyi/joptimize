@@ -1,6 +1,6 @@
 package joptimize.analysis
 
-import algorithms.ClickScheduler
+import joptimize.algorithms.ClickScheduler
 import joptimize.graph.HavlakLoopTree
 import joptimize.model.{Program, SSA}
 
@@ -37,6 +37,7 @@ object Scheduler {
     allVertices.collect{
       case c: SSA.Phi => scheduler.block(c) = c.block
       case c: SSA.Val if c.upstream.isEmpty => scheduler.block(c) = startBlock
+      case c: SSA.ChangedState if c.parent.isInstanceOf[SSA.Block] => scheduler.block(c) = c.parent.asInstanceOf[SSA.Block]
     }
 
     allVertices.collect{
