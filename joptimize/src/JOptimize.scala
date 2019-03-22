@@ -101,20 +101,25 @@ object JOptimize{
           MethodSig(invoke.cls, invoke.name, invoke.desc, false)
         }
       }
-      visitedMethods.getOrElseUpdate(
-        (sig, inferredArgs),
-        {
-          val (res, newVisitedClasses) = walker.walkMethod(
-            sig,
-            originalMethods(sig),
-            computeMethodSig,
-            inferredArgs,
-            computeSideEffects
-          )
-          newVisitedClasses.foreach(visitedClasses.add)
-          res
-        }
-      ).inferredReturn
+      originalMethods.get(sig) match{
+        case Some(original) =>
+          visitedMethods.getOrElseUpdate(
+            (sig, inferredArgs),
+            {
+              val (res, newVisitedClasses) = walker.walkMethod(
+                sig,
+                original,
+                computeMethodSig,
+                inferredArgs,
+                computeSideEffects
+              )
+              newVisitedClasses.foreach(visitedClasses.add)
+              res
+            }
+          ).inferredReturn
+        case None =>
+          invoke.desc.ret
+      }
     }
 
     for(ep <- entrypoints){
@@ -136,8 +141,13 @@ object JOptimize{
 
         val originalNode = originalMethods(sig)
 
-        val (mangledName, mangledDesc) =
-          Util.mangle(originalNode.name, inferredArgs, sig.desc.args, returnType, sig.desc.ret)
+        val (mangledName, mangledDesc) = Util.mangle(
+          originalNode.name,
+          inferredArgs,
+          (if (!sig.static) Seq(sig.cls) else Nil) ++ sig.desc.args,
+          returnType,
+          sig.desc.ret
+        )
 
         val newNode = new MethodNode(
           Opcodes.ASM6,

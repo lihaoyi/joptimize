@@ -4,7 +4,7 @@ public class Inheritance {
     @joptimize.Test(inputs = {1, 2, 4, 8})
     public static int hello(int n) {
         Object b = new Object();
-        return b.getClass().getName().length() + n;
+        return b.toString().charAt(n);
     }
 
     @joptimize.Test(inputs = {1, 2, 4, 8})

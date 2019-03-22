@@ -112,8 +112,8 @@ object MainTests extends TestSuite{
 //        'lambdaBoxed - annotatedTest
 //        'concat - annotatedTest
 //      }
-//      'Inheritance - {
-//        'hello - annotatedTest
+      'Inheritance - {
+        'hello - annotatedTest
 //        'strings - annotatedTest
 //        'implement - annotatedTest
 //        'abstractClass - annotatedTest
@@ -122,7 +122,7 @@ object MainTests extends TestSuite{
 //        'superMethod - annotatedTest
 //        'staticInheritance - annotatedTest
 //        'staticInheritanceMethod - annotatedTest
-//      }
+      }
 //      'Exceptions - {
 //        'throwCatch0 - annotatedTest
 //        'throwCatch1 - annotatedTest

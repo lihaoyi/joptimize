@@ -99,7 +99,8 @@ object Util{
     inferredTypes.iterator.zip(originalTypes.iterator).forall(x => isValidationCompatible0(x._1, x._2))
   }
   def isValidationCompatible0(inferredType: IType, originalType: JType): Boolean = (inferredType, originalType) match{
-    case (CType.I(_) | JType.Prim.I, JType.Prim.Z | JType.Prim.B | JType.Prim.S | JType.Prim.I) => true
+    case (CType.I(_) | JType.Prim.I, JType.Prim.Z | JType.Prim.B | JType.Prim.S | JType.Prim.I | JType.Prim.C) => true
+    case (JType.Prim.Z | JType.Prim.B | JType.Prim.S | JType.Prim.I | JType.Prim.C, JType.Prim.I) => true
     case (CType.J(_), JType.Prim.J) => true
     case (CType.F(_), JType.Prim.F) => true
     case (CType.D(_), JType.Prim.D) => true
@@ -112,7 +113,8 @@ object Util{
     inferredTypes.iterator.zip(originalTypes.iterator).forall(x => isManglingCompatible0(x._1, x._2))
   }
   def isManglingCompatible0(inferredType: IType, originalType: JType): Boolean = (inferredType, originalType) match{
-    case (JType.Prim.I, JType.Prim.Z | JType.Prim.B | JType.Prim.S | JType.Prim.I) => true
+    case (JType.Prim.I, JType.Prim.Z | JType.Prim.B | JType.Prim.S | JType.Prim.I | JType.Prim.C) => true
+    case (JType.Prim.Z | JType.Prim.B | JType.Prim.S | JType.Prim.I | JType.Prim.C, JType.Prim.I) => true
     case (inf: JType, orig: JType) => inf == orig
     case _ => false
   }

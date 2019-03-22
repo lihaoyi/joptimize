@@ -111,7 +111,13 @@ class Walker(merge: (IType, IType) => IType) {
       case p: SSA.ChangedState => // do nothing
       case n: SSA.Invoke =>
         val (mangledName, mangledDesc) =
-          Util.mangle(n.name, n.srcs.map(inferred), n.desc.args, inferred.getOrElseUpdate(n, n.desc.ret), n.desc.ret)
+          Util.mangle(
+            n.name,
+            n.srcs.map(inferred),
+            (if (!n.isInstanceOf[SSA.InvokeStatic]) Seq(n.cls) else Nil) ++ n.desc.args,
+            inferred.getOrElseUpdate(n, n.desc.ret),
+            n.desc.ret
+          )
         val sideEffects = checkSideEffects(
           MethodSig(n.cls, n.name, n.desc, n.isInstanceOf[SSA.InvokeStatic]),
           n.srcs.map(inferred)
