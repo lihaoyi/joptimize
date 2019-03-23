@@ -98,49 +98,56 @@ object JOptimize{
         (sig.static, invokeSpecial) match{
           case (true, false) =>
             pprint.log(sig)
-            def rec(currentCls: JType.Cls): MethodSig = {
-              if (originalMethods.contains(sig.copy(cls = currentCls))) sig.copy(cls = currentCls)
+            def rec(currentCls: JType.Cls): Option[MethodSig] = {
+              val currentSig = sig.copy(cls = currentCls)
+              pprint.log(currentSig)
+              if (originalMethods.contains(currentSig)) Some(currentSig)
+              else if (!classNodeMap.contains(currentCls)) None
               else rec(JType.Cls(classNodeMap(currentCls).superName))
             }
-            if (sig.name == "<clinit>") Seq(sig)
-            else Seq(rec(sig.cls))
-          case (false, true) => Seq(sig)
+            if (sig.name == "<clinit>") Some(Seq(sig))
+            else rec(sig.cls).map(Seq(_))
+          case (false, true) => Some(Seq(sig))
           case (false, false) =>
             val subTypes = subtypeMap
               .getOrElse(sig.cls, Nil)
               .filter(c => leastUpperBound(Seq(c, inferredArgs(0).asInstanceOf[JType.Cls])) == Seq(inferredArgs(0)))
               .map(c => sig.copy(cls = c))
 
-            sig :: subTypes
+            Some(sig :: subTypes)
         }
       }
 
-      val rets = for(subSig <- subSigs) yield originalMethods.get(subSig) match{
-        case Some(original) =>
-          visitedMethods.getOrElseUpdate(
-            (subSig, inferredArgs),
-            {
-              val (res, newVisitedClasses, calledMethods) = walker.walkMethod(
-                subSig,
-                original,
-                computeMethodSig,
-                inferredArgs,
-                computeSideEffects,
-                (inf, orig) => leastUpperBound(Seq(inf, orig)) == Seq(orig),
-                callStack
-              )
-              newVisitedClasses.foreach(visitedClasses.add)
-              for(m <- calledMethods){
-                callerGraph.getOrElseUpdate(m, mutable.LinkedHashSet.empty).add(subSig)
-              }
-              res
-            }
-          ).inferredReturn
-        case None =>
-          sig.desc.ret
-      }
+      subSigs match{
+        case None => sig.desc.ret
+        case Some(subSigs) =>
+          val rets = for(subSig <- subSigs) yield originalMethods.get(subSig) match{
+            case Some(original) =>
+              visitedMethods.getOrElseUpdate(
+                (subSig, inferredArgs),
+                {
+                  val (res, newVisitedClasses, calledMethods) = walker.walkMethod(
+                    subSig,
+                    original,
+                    computeMethodSig,
+                    inferredArgs,
+                    computeSideEffects,
+                    (inf, orig) => leastUpperBound(Seq(inf, orig)) == Seq(orig),
+                    callStack
+                  )
+                  newVisitedClasses.foreach(visitedClasses.add)
+                  for(m <- calledMethods){
+                    callerGraph.getOrElseUpdate(m, mutable.LinkedHashSet.empty).add(subSig)
+                  }
+                  res
+                }
+              ).inferredReturn
+            case None =>
+              sig.desc.ret
+          }
 
-      merge(rets)
+          merge(rets)
+      }
     }
 
     for(ep <- entrypoints){
