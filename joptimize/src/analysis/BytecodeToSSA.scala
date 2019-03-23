@@ -89,7 +89,7 @@ class BytecodeToSSA(merges: mutable.LinkedHashSet[SSA.Phi],
       case IINC =>
         val n = insn.asInstanceOf[IincInsnNode].incr
         val const = new SSA.ConstI(n)
-        new SSA.BinOp(None, const, value, SSA.BinOp.IADD)
+        new SSA.BinOp(null, const, value, SSA.BinOp.IADD)
 
       case INEG | L2I | F2I | D2I | I2B | I2C | I2S | FNEG | I2F | L2F |
            D2F | LNEG | I2L | F2L | D2L | DNEG | I2D | L2D | F2D =>
@@ -179,7 +179,7 @@ class BytecodeToSSA(merges: mutable.LinkedHashSet[SSA.Phi],
            FADD | FSUB | FMUL | FDIV | FREM | LCMP | FCMPL | FCMPG | DCMPL | DCMPG |
            LADD | LSUB | LMUL | LDIV | LREM | LSHL | LSHR | LUSHR | LAND | LOR | LXOR |
            DADD | DSUB | DMUL | DDIV | DREM =>
-        new SSA.BinOp(None, v1, v2, SSA.BinOp.lookup(insn.getOpcode))
+        new SSA.BinOp(null, v1, v2, SSA.BinOp.lookup(insn.getOpcode))
     }
   }
 
@@ -199,7 +199,7 @@ class BytecodeToSSA(merges: mutable.LinkedHashSet[SSA.Phi],
       case DALOAD => new SSA.GetArray(state, v1, v2, JType.Prim.D)
 
       case IDIV | IREM | FDIV | FREM | LDIV | LREM | DDIV | DREM =>
-        new SSA.BinOp(Some(state), v1, v2, SSA.BinOp.lookup(insn.getOpcode))
+        new SSA.BinOp(state, v1, v2, SSA.BinOp.lookup(insn.getOpcode))
     }
     (op, new SSA.ChangedState(op))
   }
