@@ -75,9 +75,9 @@ object MainTests extends TestSuite{
         'callAtPhiBoundary - annotatedTest
         'voidCall - annotatedTest
         'tailFactorial - annotatedTest
-//        'tailFactorialLong - annotatedTest
+        'tailFactorialLong - annotatedTest
 //        'tailFactorialVoid - annotatedTest
-//        'fibonacci - annotatedTest
+        'fibonacci - annotatedTest
 
       }
       'Arrays - {
