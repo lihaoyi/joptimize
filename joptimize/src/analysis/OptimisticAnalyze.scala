@@ -30,6 +30,12 @@ class ITypeLattice(merge: (IType, IType) => IType,
 
       case n: SSA.ArrayLength => JType.Prim.I
 
+      case n: SSA.GetField => n.desc
+      case n: SSA.PutField => JType.Prim.V
+
+      case n: SSA.GetStatic => n.desc
+      case n: SSA.PutStatic => JType.Prim.V
+
       case n: SSA.GetArray => n.tpe
       case n: SSA.PutArray => JType.Prim.V
 
@@ -202,7 +208,6 @@ object OptimisticAnalyze {
     val evaluated = mutable.LinkedHashMap.empty[SSA.Val, T]
 
     def evaluate(v: SSA.Val): T = {
-      pprint.log(v)
       evaluated.getOrElseUpdate(
         v,
         v match {
@@ -217,9 +222,9 @@ object OptimisticAnalyze {
       val currentBlock = workList.head
       workList.remove(currentBlock)
       val Array(nextControl) = currentBlock.downstreamList.collect{case n: SSA.Control => n}
-      println()
-      pprint.log(currentBlock)
-      pprint.log(nextControl)
+//      println()
+//      pprint.log(currentBlock)
+//      pprint.log(nextControl)
       def queueNextBlock(nextBlock: SSA.Block) = {
         val nextPhis = nextBlock
           .downstreamList

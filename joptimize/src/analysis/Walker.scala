@@ -137,10 +137,6 @@ class Walker(merge: (IType, IType) => IType) {
           val (mangledName, mangledDesc) =
             if (n.name == "<init>") (n.name, n.desc)
             else Util.mangle(n.sig, n.srcs.map(inferred), inferred.getOrElseUpdate(n, n.desc.ret))
-          pprint.log(n)
-          pprint.log(n)
-          pprint.log(mangledName)
-          pprint.log(mangledDesc)
           val sideEffects = checkSideEffects(n.sig, n.srcs.map(inferred))
           calledMethodSigs.add(n.sig)
           aggregateSideEffects = (aggregateSideEffects, sideEffects) match{

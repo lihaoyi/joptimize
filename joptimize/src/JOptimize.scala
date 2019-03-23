@@ -104,9 +104,15 @@ object JOptimize{
             Seq(rec(invoke.cls))
           case _: SSA.InvokeSpecial => Seq(invoke.sig)
           case _: SSA.InvokeVirtual | _: SSA.InvokeInterface =>
-            invoke.sig :: subtypeMap.getOrElse(invoke.cls, Nil).map(c => invoke.sig.copy(cls = c))
+            val subTypes = subtypeMap
+              .getOrElse(invoke.cls, Nil)
+              .filter(c => leastUpperBound(Seq(c, inferredArgs(0).asInstanceOf[JType.Cls])) == Seq(inferredArgs(0)))
+              .map(c => invoke.sig.copy(cls = c))
+
+            invoke.sig :: subTypes
         }
       }
+
       val rets = for(subSig <- subSigs) yield originalMethods.get(subSig) match{
         case Some(original) =>
           visitedMethods.getOrElseUpdate(

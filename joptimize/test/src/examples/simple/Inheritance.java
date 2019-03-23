@@ -135,7 +135,11 @@ class Honda extends Car {
     public int cc = 5;
 
     public String vStart() {
-        return "v".concat(String.valueOf(cc)).concat("r").concat(String.valueOf(((Car) this).cc)).concat("r").concat(String.valueOf(super.cc));
+        return "v".concat(String.valueOf(cc))
+                .concat("r")
+                .concat(String.valueOf(((Car) this).cc))
+                .concat("r")
+                .concat(String.valueOf(super.cc));
     }
 }
 

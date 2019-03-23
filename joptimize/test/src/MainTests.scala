@@ -116,7 +116,7 @@ object MainTests extends TestSuite{
         'hello - annotatedTest
         'strings - annotatedTest
         'implement - annotatedTest
-//        'abstractClass - annotatedTest
+        'abstractClass - annotatedTest
 //        'shadowedInheritedGet - annotatedTest
 //        'shadowedInheritedSet - annotatedTest
 //        'superMethod - annotatedTest
