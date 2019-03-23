@@ -37,6 +37,7 @@ class Walker(merge: (IType, IType) => IType) {
       )
     }else{
       println("+" * 20 + originalSig + "+" * 20)
+      pprint.log(callStack)
       pprint.log(inferredArgs)
       assert(
         Util.isValidationCompatible(inferredArgs, originalSig, checkSubclass),

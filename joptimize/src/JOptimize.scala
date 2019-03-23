@@ -93,24 +93,27 @@ object JOptimize{
                          inferredArgs: Seq[IType],
                          callStack: List[(MethodSig, Seq[IType])]): IType = {
 
-      val sig = {
-        if (!invoke.isInstanceOf[SSA.InvokeStatic]) invoke.sig
-        else {
-          def rec(currentCls: JType.Cls): MethodSig = {
-            val sig = invoke.sig
-            if (originalMethods.contains(sig)) sig
-            else rec(JType.Cls(classNodeMap(currentCls).superName))
-          }
-          rec(invoke.cls)
+      val subSigs = {
+        invoke match{
+          case _: SSA.InvokeStatic =>
+            def rec(currentCls: JType.Cls): MethodSig = {
+              val sig = invoke.sig
+              if (originalMethods.contains(sig)) sig
+              else rec(JType.Cls(classNodeMap(currentCls).superName))
+            }
+            Seq(rec(invoke.cls))
+          case _: SSA.InvokeSpecial => Seq(invoke.sig)
+          case _: SSA.InvokeVirtual | _: SSA.InvokeInterface =>
+            invoke.sig :: subtypeMap.getOrElse(invoke.cls, Nil).map(c => invoke.sig.copy(cls = c))
         }
       }
-      originalMethods.get(sig) match{
+      val rets = for(subSig <- subSigs) yield originalMethods.get(subSig) match{
         case Some(original) =>
           visitedMethods.getOrElseUpdate(
-            (sig, inferredArgs),
+            (subSig, inferredArgs),
             {
               val (res, newVisitedClasses, calledMethods) = walker.walkMethod(
-                sig,
+                subSig,
                 original,
                 computeMethodSig,
                 inferredArgs,
@@ -120,7 +123,7 @@ object JOptimize{
               )
               newVisitedClasses.foreach(visitedClasses.add)
               for(m <- calledMethods){
-                callerGraph.getOrElseUpdate(m, mutable.LinkedHashSet.empty).add(sig)
+                callerGraph.getOrElseUpdate(m, mutable.LinkedHashSet.empty).add(subSig)
               }
               res
             }
@@ -128,6 +131,8 @@ object JOptimize{
         case None =>
           invoke.desc.ret
       }
+
+      merge(rets)
     }
 
     for(ep <- entrypoints){
@@ -147,7 +152,7 @@ object JOptimize{
       visitedMethods((ep, ep.desc.args)) = res
       seenClasses.foreach(visitedClasses.add)
     }
-    pprint.log(visitedMethods)
+    pprint.log(visitedMethods, height=9999)
 
     val newMethods = visitedMethods.toList.collect{
       case ((sig, inferredArgs), Walker.MethodResult(liveArgs, returnType, insns, pure, seenTryCatchBlocks)) =>
