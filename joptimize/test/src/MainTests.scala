@@ -74,7 +74,7 @@ object MainTests extends TestSuite{
         'call - annotatedTest
         'callAtPhiBoundary - annotatedTest
         'voidCall - annotatedTest
-//        'tailFactorial - annotatedTest
+        'tailFactorial - annotatedTest
 //        'tailFactorialLong - annotatedTest
 //        'tailFactorialVoid - annotatedTest
 //        'fibonacci - annotatedTest
@@ -115,7 +115,7 @@ object MainTests extends TestSuite{
       'Inheritance - {
         'hello - annotatedTest
         'strings - annotatedTest
-        'implement - annotatedTest
+//        'implement - annotatedTest
 //        'abstractClass - annotatedTest
 //        'shadowedInheritedGet - annotatedTest
 //        'shadowedInheritedSet - annotatedTest

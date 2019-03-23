@@ -100,6 +100,7 @@ object Util{
     val sameLength = inferredTypes.length == originalTypes.length
 
     val sameItems = inferredTypes.iterator.zip(originalTypes.iterator).forall(x => isValidationCompatible0(x._1, x._2, checkSubclass))
+
     sameLength && sameItems
   }
   def isValidationCompatible0(inferredType: IType,
@@ -111,7 +112,7 @@ object Util{
     case (CType.F(_), JType.Prim.F) => true
     case (CType.D(_), JType.Prim.D) => true
     case (inf: JType.Cls, orig: JType.Cls) => checkSubclass(inf, orig)
-    case _ => false
+    case (lhs, rhs) => lhs == rhs
   }
 
   def isManglingCompatible(inferredTypes: Seq[IType], originalTypes: Seq[JType]): Boolean = {
@@ -122,7 +123,7 @@ object Util{
     case (JType.Prim.I, JType.Prim.Z | JType.Prim.B | JType.Prim.S | JType.Prim.I | JType.Prim.C) => true
     case (JType.Prim.Z | JType.Prim.B | JType.Prim.S | JType.Prim.I | JType.Prim.C, JType.Prim.I) => true
     case (inf: JType, orig: JType) => inf == orig
-    case _ => false
+    case (lhs, rhs) => lhs == rhs
   }
 
   def clone(input: AbstractInsnNode, labelMapping: mutable.LinkedHashMap[AbstractInsnNode, AbstractInsnNode]) = {

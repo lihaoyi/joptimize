@@ -4,121 +4,184 @@ import joptimize.Util
 import joptimize.bytecode.Frame
 import joptimize.graph.HavlakLoopTree
 import joptimize.model._
-import org.objectweb.asm.Opcodes
 
 import collection.JavaConverters._
 import org.objectweb.asm.Opcodes._
 import org.objectweb.asm.tree._
 import org.objectweb.asm.util.{Textifier, TraceMethodVisitor}
 
-import scala.collection.{immutable, mutable}
+import scala.collection.mutable
 
 class Walker(merge: (IType, IType) => IType) {
 
   def walkMethod(originalSig: MethodSig,
                  mn: MethodNode,
-                 computeMethodSig: (SSA.Invoke, Seq[IType]) => IType,
+                 computeMethodSig: (SSA.Invoke, Seq[IType], List[(MethodSig, Seq[IType])]) => IType,
                  inferredArgs: Seq[IType],
                  checkSideEffects: (MethodSig, Seq[IType]) => SideEffects,
-                 checkSubclass: (JType.Cls, JType.Cls) => Boolean): (Walker.MethodResult, Set[JType.Cls]) = {
-    println("+" * 20 + originalSig + "+" * 20)
-    assert(
-      Util.isValidationCompatible(inferredArgs, originalSig, checkSubclass),
-      s"Inferred param types [${inferredArgs.mkString(", ")}] is not compatible " +
-      s"with declared param types [${originalSig.desc.args.mkString(", ")}]"
-    )
-    val printer = new Textifier
-    val methodPrinter = new TraceMethodVisitor(printer)
-    println("================ BYTECODE ================")
-    println(Renderer.renderInsns(mn.instructions, printer, methodPrinter))
+                 checkSubclass: (JType.Cls, JType.Cls) => Boolean,
+                 callStack: List[(MethodSig, Seq[IType])])
+      : (Walker.MethodResult, Set[JType.Cls], Set[MethodSig]) = {
 
-    val program = constructSSAProgram(originalSig.cls.name, mn)
+    if (callStack.contains(originalSig -> inferredArgs)){
+      Tuple3(
+        Walker.MethodResult(
+          liveArgs = Nil,
+          inferredReturn = originalSig.desc.ret,
+          methodBody = new InsnList(),
+          sideEffects = SideEffects.Pure,
+          seenTryCatchBlocks = Nil
+        ),
+        Set.empty,
+        Set.empty
+      )
+    }else{
+      println("+" * 20 + originalSig + "+" * 20)
+      pprint.log(inferredArgs)
+      assert(
+        Util.isValidationCompatible(inferredArgs, originalSig, checkSubclass),
+        s"Inferred param types [${inferredArgs.mkString(", ")}] is not compatible " +
+          s"with declared param types [${originalSig.desc.args.mkString(", ")}]"
+      )
+      val printer = new Textifier
+      val methodPrinter = new TraceMethodVisitor(printer)
+      println("================ BYTECODE ================")
+      println(Renderer.renderInsns(mn.instructions, printer, methodPrinter))
 
-    Renderer.dumpSvg(program, "initial.svg")
-    removeDeadNodes(program)
-    program.checkLinks()
+      val program = constructSSAProgram(originalSig.cls.name, mn)
 
-    simplifyPhiMerges(program)
-    program.checkLinks()
-    Renderer.dumpSvg(program, "simplified.svg")
-    println("================ INITIAL ================")
+      Renderer.dumpSvg(program, "initial.svg")
+      removeDeadNodes(program)
+      program.checkLinks()
 
-    val preScheduleNaming = Namer.apply(program, Map.empty, program.getAllVertices())
+      simplifyPhiMerges(program)
+      program.checkLinks()
+      Renderer.dumpSvg(program, "simplified.svg")
+      println("================ INITIAL ================")
 
-    println(Renderer.renderSSA(program, preScheduleNaming))
+      val preScheduleNaming = Namer.apply(program, Map.empty, program.getAllVertices())
 
-    program.checkLinks()
-    val (controlFlowEdges, startBlock, allBlocks, blockEdges) =
-      analyzeBlockStructure(program)
+      println(Renderer.renderSSA(program, preScheduleNaming))
 
-    println()
-    println(Renderer.renderControlFlowGraph(controlFlowEdges, preScheduleNaming.savedLocals))
+      program.checkLinks()
+      val (controlFlowEdges, startBlock, allBlocks, blockEdges) =
+        analyzeBlockStructure(program)
 
-    val loopTree = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)
+      println()
+      println(Renderer.renderControlFlowGraph(controlFlowEdges, preScheduleNaming.savedLocals))
 
-    println()
-    println(Renderer.renderLoopTree(loopTree, preScheduleNaming.savedLocals))
+      val loopTree = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)
 
-    println("================ SCHEDULED ================")
+      println()
+      println(Renderer.renderLoopTree(loopTree, preScheduleNaming.savedLocals))
 
-    val dominators = Dominator.findDominators(blockEdges, allBlocks)
+      println("================ SCHEDULED ================")
 
-   // Just for debugging
-    val nodesToBlocks2 = Scheduler.apply(
-      loopTree, dominators, startBlock,
-      preScheduleNaming.savedLocals.mapValues(_._2), program.getAllVertices()
-    )
+      val dominators = Dominator.findDominators(blockEdges, allBlocks)
 
-    val postScheduleNaming = Namer.apply(program, nodesToBlocks2, program.getAllVertices())
+      // Just for debugging
+      val nodesToBlocks2 = Scheduler.apply(
+        loopTree, dominators, startBlock,
+        preScheduleNaming.savedLocals.mapValues(_._2), program.getAllVertices()
+      )
 
-    println(Renderer.renderSSA(program, postScheduleNaming, nodesToBlocks2))
+      val postScheduleNaming = Namer.apply(program, nodesToBlocks2, program.getAllVertices())
 
-//    println("================ PESSIMISTIC ================")
-//
-//    PartialEvaluator.apply(program)
-//
-//    removeDeadNodes(program)
-//
-//    program.checkLinks()
-//
-//    val postPessimisticNaming = Namer.apply(program, Map.empty, program.getAllVertices())
-//
-//    println(Renderer.renderSSA(program, postPessimisticNaming))
-//
-//    val loopTree2 = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)
-//
-//    println()
-//    println(Renderer.renderLoopTree(loopTree2, preScheduleNaming.savedLocals))
+      println(Renderer.renderSSA(program, postScheduleNaming, nodesToBlocks2))
 
-    Renderer.dumpSvg(program, "pre-optimistic.svg", postScheduleNaming)
-    println("================ OPTIMISTIC ================")
+      //    println("================ PESSIMISTIC ================")
+      //
+      //    PartialEvaluator.apply(program)
+      //
+      //    removeDeadNodes(program)
+      //
+      //    program.checkLinks()
+      //
+      //    val postPessimisticNaming = Namer.apply(program, Map.empty, program.getAllVertices())
+      //
+      //    println(Renderer.renderSSA(program, postPessimisticNaming))
+      //
+      //    val loopTree2 = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)
+      //
+      //    println()
+      //    println(Renderer.renderLoopTree(loopTree2, preScheduleNaming.savedLocals))
 
-    val (inferred, liveBlocks) = OptimisticAnalyze.apply(
-      program,
-      Map.empty,
-      program.getAllVertices().collect{case b: SSA.Block if b.upstream.isEmpty => b}.head,
-      new ITypeLattice(merge, computeMethodSig, inferredArgs.flatMap{i => Seq.fill(i.getSize)(i)}),
-      postScheduleNaming
-    )
+      Renderer.dumpSvg(program, "pre-optimistic.svg", postScheduleNaming)
+      println("================ OPTIMISTIC ================")
 
-    pprint.log(inferred)
+      val (inferred, liveBlocks) = OptimisticAnalyze.apply(
+        program,
+        Map.empty,
+        program.getAllVertices().collect{case b: SSA.Block if b.upstream.isEmpty => b}.head,
+        new ITypeLattice(
+          merge,
+          computeMethodSig(_, _, (originalSig -> inferredArgs) :: callStack),
+          inferredArgs.flatMap{i => Seq.fill(i.getSize)(i)}
+        ),
+        postScheduleNaming
+      )
 
-    program.checkLinks()
+      pprint.log(inferred)
 
-    var aggregateSideEffects: SideEffects = SideEffects.Pure
+      program.checkLinks()
 
-    program.getAllVertices().foreach{
+      var aggregateSideEffects: SideEffects = SideEffects.Pure
 
-      case p: SSA.ChangedState => // do nothing
-      case n: SSA.Invoke =>
-        val (mangledName, mangledDesc) =
-          Util.mangle(n.sig, n.srcs.map(inferred), inferred.getOrElseUpdate(n, n.desc.ret))
-        val sideEffects = checkSideEffects(n.sig, n.srcs.map(inferred))
-        aggregateSideEffects = (aggregateSideEffects, sideEffects) match{
-          case (SideEffects.Pure, SideEffects.Pure) => SideEffects.Pure
-          case _ => SideEffects.Global
-        }
-        if (sideEffects == SideEffects.Pure){
+      val calledMethodSigs = mutable.Set.empty[MethodSig]
+
+      program.getAllVertices().foreach{
+
+        case p: SSA.ChangedState => // do nothing
+        case n: SSA.Invoke =>
+          val (mangledName, mangledDesc) =
+            Util.mangle(n.sig, n.srcs.map(inferred), inferred.getOrElseUpdate(n, n.desc.ret))
+          val sideEffects = checkSideEffects(n.sig, n.srcs.map(inferred))
+          calledMethodSigs.add(n.sig)
+          aggregateSideEffects = (aggregateSideEffects, sideEffects) match{
+            case (SideEffects.Pure, SideEffects.Pure) => SideEffects.Pure
+            case _ => SideEffects.Global
+          }
+          if (sideEffects == SideEffects.Pure){
+            val replacement = inferred.get(n) match{
+              case Some(CType.I(v)) => Some(SSA.ConstI(v))
+              case Some(CType.J(v)) => Some(SSA.ConstJ(v))
+              case Some(CType.F(v)) => Some(SSA.ConstF(v))
+              case Some(CType.D(v)) => Some(SSA.ConstD(v))
+              case _ => None
+            }
+            replacement match{
+              case Some(r) =>
+                inferred(r) = inferred(n)
+                n.upstream.foreach(_.downstreamRemoveAll(n))
+                for(d <- n.downstreamList) {
+                  r.downstreamAdd(d)
+                  d.replaceUpstream(n, r)
+                }
+              case None =>
+                n.name = mangledName
+                n.desc = mangledDesc
+            }
+          }else{
+            n.name = mangledName
+            n.desc = mangledDesc
+          }
+        case p: SSA.Phi =>
+          p.incoming = p.incoming.filter{t =>
+            val live = liveBlocks(t._1)
+            if (!live) {
+              t._1.downstreamRemove(p)
+              t._2.downstreamRemove(p)
+            }
+            live
+          }
+        case m: SSA.Merge =>
+          m.incoming = m.incoming.filter{ t =>
+            val live = liveBlocks(t)
+            if (!live) t.downstreamRemove(m)
+            live
+          }
+
+        case n: SSA.Val =>
           val replacement = inferred.get(n) match{
             case Some(CType.I(v)) => Some(SSA.ConstI(v))
             case Some(CType.J(v)) => Some(SSA.ConstJ(v))
@@ -126,152 +189,113 @@ class Walker(merge: (IType, IType) => IType) {
             case Some(CType.D(v)) => Some(SSA.ConstD(v))
             case _ => None
           }
-          replacement match{
-            case Some(r) =>
-              inferred(r) = inferred(n)
-              n.upstream.foreach(_.downstreamRemoveAll(n))
-              for(d <- n.downstreamList) {
-                r.downstreamAdd(d)
-                d.replaceUpstream(n, r)
-              }
-            case None =>
-              n.name = mangledName
-              n.desc = mangledDesc
+          replacement.foreach{r =>
+            inferred(r) = inferred(n)
+            n.upstream.foreach(_.downstreamRemoveAll(n))
+            for(d <- n.downstreamList) {
+              r.downstreamAdd(d)
+              d.replaceUpstream(n, r)
+            }
           }
-        }else{
-          n.name = mangledName
-          n.desc = mangledDesc
-        }
-      case p: SSA.Phi =>
-        p.incoming = p.incoming.filter{t =>
-          val live = liveBlocks(t._1)
-          if (!live) {
-            t._1.downstreamRemove(p)
-            t._2.downstreamRemove(p)
+
+        case j: SSA.Jump =>
+          val allTargets = j.downstreamList.collect{case b: SSA.Block => b}
+          val liveTargets = allTargets.filter(liveBlocks)
+          if (liveTargets.size == 1){
+            println("ELIMINATING JUMP " + j)
+            PartialEvaluator.replaceJump(j, liveTargets.head)
+          }else if (liveTargets.size <= allTargets.size){
+            for(t <- allTargets if !liveTargets.contains(t)){
+              j.downstreamRemove(t)
+            }
           }
-          live
-        }
-      case m: SSA.Merge =>
-        m.incoming = m.incoming.filter{ t =>
-          val live = liveBlocks(t)
-          if (!live) t.downstreamRemove(m)
-          live
-        }
-
-      case n: SSA.Val =>
-        val replacement = inferred.get(n) match{
-          case Some(CType.I(v)) => Some(SSA.ConstI(v))
-          case Some(CType.J(v)) => Some(SSA.ConstJ(v))
-          case Some(CType.F(v)) => Some(SSA.ConstF(v))
-          case Some(CType.D(v)) => Some(SSA.ConstD(v))
-          case _ => None
-        }
-        replacement.foreach{r =>
-          inferred(r) = inferred(n)
-          n.upstream.foreach(_.downstreamRemoveAll(n))
-          for(d <- n.downstreamList) {
-            r.downstreamAdd(d)
-            d.replaceUpstream(n, r)
-          }
-        }
-
-      case j: SSA.Jump =>
-        val allTargets = j.downstreamList.collect{case b: SSA.Block => b}
-        val liveTargets = allTargets.filter(liveBlocks)
-        if (liveTargets.size == 1){
-          println("ELIMINATING JUMP " + j)
-          PartialEvaluator.replaceJump(j, liveTargets.head)
-        }else if (liveTargets.size <= allTargets.size){
-          for(t <- allTargets if !liveTargets.contains(t)){
-            j.downstreamRemove(t)
-          }
-        }
-      case _ => // do nothing
-    }
-
-    Renderer.dumpSvg(program, "post-optimistic.svg")
-    program.checkLinks(checkDead = false)
-    removeDeadNodes(program)
-    Renderer.dumpSvg(program, "post-optimistic-cleanup.svg")
-    program.checkLinks()
-
-    val loopTree2 = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)
-
-    val dominators2 = Dominator.findDominators(blockEdges, allBlocks)
-
-
-    { // Just for debugging
-      val nodesToBlocks = Scheduler.apply(
-        loopTree2, dominators2, startBlock,
-        preScheduleNaming.savedLocals.mapValues(_._2), program.getAllVertices()
-      )
-
-      val postOptimisticNaming = Namer.apply(program, nodesToBlocks, program.getAllVertices())
-
-      println()
-      println(Renderer.renderSSA(program, postOptimisticNaming, nodesToBlocks))
-    }
-
-    println("================ REGISTERS ALLOCATED ================")
-    RegisterAllocator.apply(program, dominators2.immediateDominators)
-
-    val allVertices2 = Util.breadthFirstSeen[SSA.Node](program.allTerminals.toSet)(_.upstream)
-
-    val nodesToBlocks = Scheduler.apply(
-      loopTree2, dominators2, startBlock,
-      preScheduleNaming.savedLocals.mapValues(_._2), allVertices2
-    )
-
-    val postRegisterAllocNaming = Namer.apply(program, nodesToBlocks, allVertices2)
-
-    println()
-    println(Renderer.renderSSA(program, postRegisterAllocNaming, nodesToBlocks))
-
-    val (blockCode, finalInsns) = CodeGen(
-      program,
-      allVertices2,
-      nodesToBlocks,
-      analyzeBlockStructure(program)._1,
-      postRegisterAllocNaming
-    )
-
-    println("================ OUTPUT BYTECODE ================")
-    println(Renderer.renderBlockCode(blockCode, finalInsns))
-
-    val classes = allVertices2.collect{
-      case n: SSA.GetField => n.owner
-      case n: SSA.PutField => n.owner
-      case n: SSA.GetStatic => n.cls
-      case n: SSA.PutStatic => n.cls
-    }
-
-
-    val allInferredReturns = allVertices2
-      .collect{case r: SSA.ReturnVal => r.src}
-      .flatMap{
-        case n: SSA.Copy => inferred.get(n.src)
-        case n => inferred.get(n)
+        case _ => // do nothing
       }
 
-    val inferredReturn = allInferredReturns
-      .reduceLeftOption(merge)
-      .getOrElse(JType.Prim.V)
+      Renderer.dumpSvg(program, "post-optimistic.svg")
+      program.checkLinks(checkDead = false)
+      removeDeadNodes(program)
+      Renderer.dumpSvg(program, "post-optimistic-cleanup.svg")
+      program.checkLinks()
 
-    assert(
-      Util.isValidationCompatible0(inferredReturn, originalSig.desc.ret, checkSubclass),
-      s"Inferred return type [$inferredReturn] is not compatible " +
-      s"with declared return type [${originalSig.desc.ret}]"
-    )
+      val loopTree2 = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)
 
-    val result = Walker.MethodResult(
-      Nil,
-      inferredReturn,
-      finalInsns,
-      aggregateSideEffects,
-      Nil
-    )
+      val dominators2 = Dominator.findDominators(blockEdges, allBlocks)
 
-    (result, classes)
+
+      { // Just for debugging
+        val nodesToBlocks = Scheduler.apply(
+          loopTree2, dominators2, startBlock,
+          preScheduleNaming.savedLocals.mapValues(_._2), program.getAllVertices()
+        )
+
+        val postOptimisticNaming = Namer.apply(program, nodesToBlocks, program.getAllVertices())
+
+        println()
+        println(Renderer.renderSSA(program, postOptimisticNaming, nodesToBlocks))
+      }
+
+      println("================ REGISTERS ALLOCATED ================")
+      RegisterAllocator.apply(program, dominators2.immediateDominators)
+
+      val allVertices2 = Util.breadthFirstSeen[SSA.Node](program.allTerminals.toSet)(_.upstream)
+
+      val nodesToBlocks = Scheduler.apply(
+        loopTree2, dominators2, startBlock,
+        preScheduleNaming.savedLocals.mapValues(_._2), allVertices2
+      )
+
+      val postRegisterAllocNaming = Namer.apply(program, nodesToBlocks, allVertices2)
+
+      println()
+      println(Renderer.renderSSA(program, postRegisterAllocNaming, nodesToBlocks))
+
+      val (blockCode, finalInsns) = CodeGen(
+        program,
+        allVertices2,
+        nodesToBlocks,
+        analyzeBlockStructure(program)._1,
+        postRegisterAllocNaming
+      )
+
+      println("================ OUTPUT BYTECODE ================")
+      println(Renderer.renderBlockCode(blockCode, finalInsns))
+
+      val classes = allVertices2.collect{
+        case n: SSA.GetField => n.owner
+        case n: SSA.PutField => n.owner
+        case n: SSA.GetStatic => n.cls
+        case n: SSA.PutStatic => n.cls
+      }
+
+
+      val allInferredReturns = allVertices2
+        .collect{case r: SSA.ReturnVal => r.src}
+        .flatMap{
+          case n: SSA.Copy => inferred.get(n.src)
+          case n => inferred.get(n)
+        }
+
+      val inferredReturn = allInferredReturns
+        .reduceLeftOption(merge)
+        .getOrElse(JType.Prim.V)
+
+      assert(
+        Util.isValidationCompatible0(inferredReturn, originalSig.desc.ret, checkSubclass),
+        s"Inferred return type [$inferredReturn] is not compatible " +
+          s"with declared return type [${originalSig.desc.ret}]"
+      )
+
+      val result = Walker.MethodResult(
+        Nil,
+        inferredReturn,
+        finalInsns,
+        aggregateSideEffects,
+        Nil
+      )
+
+      (result, classes, calledMethodSigs.toSet)
+    }
   }
 
   def analyzeBlockStructure(program: Program) = {

@@ -87,7 +87,11 @@ object JOptimize{
         case Some(x) => x.sideEffects
       }
     }
-    def computeMethodSig(invoke: SSA.Invoke, inferredArgs: Seq[IType]): IType = {
+
+    val callerGraph = mutable.LinkedHashMap[MethodSig, mutable.LinkedHashSet[MethodSig]]()
+    def computeMethodSig(invoke: SSA.Invoke,
+                         inferredArgs: Seq[IType],
+                         callStack: List[(MethodSig, Seq[IType])]): IType = {
 
       val sig = {
         if (!invoke.isInstanceOf[SSA.InvokeStatic]) invoke.sig
@@ -105,15 +109,19 @@ object JOptimize{
           visitedMethods.getOrElseUpdate(
             (sig, inferredArgs),
             {
-              val (res, newVisitedClasses) = walker.walkMethod(
+              val (res, newVisitedClasses, calledMethods) = walker.walkMethod(
                 sig,
                 original,
                 computeMethodSig,
                 inferredArgs,
                 computeSideEffects,
-                (inf, orig) => leastUpperBound(Seq(inf, orig)) == Seq(orig)
+                (inf, orig) => leastUpperBound(Seq(inf, orig)) == Seq(orig),
+                callStack
               )
               newVisitedClasses.foreach(visitedClasses.add)
+              for(m <- calledMethods){
+                callerGraph.getOrElseUpdate(m, mutable.LinkedHashSet.empty).add(sig)
+              }
               res
             }
           ).inferredReturn
@@ -123,14 +131,18 @@ object JOptimize{
     }
 
     for(ep <- entrypoints){
-      val (res, seenClasses) = walker.walkMethod(
+      val (res, seenClasses, calledMethods) = walker.walkMethod(
         ep,
         originalMethods(ep),
         computeMethodSig,
         ep.desc.args,
         computeSideEffects,
-        (inf, orig) => leastUpperBound(Seq(inf, orig)) == Seq(orig)
+        (inf, orig) => leastUpperBound(Seq(inf, orig)) == Seq(orig),
+        Nil
       )
+      for(m <- calledMethods){
+        callerGraph.getOrElseUpdate(m, mutable.LinkedHashSet.empty).add(ep)
+      }
 
       visitedMethods((ep, ep.desc.args)) = res
       seenClasses.foreach(visitedClasses.add)
