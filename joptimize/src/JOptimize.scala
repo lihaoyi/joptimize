@@ -89,27 +89,29 @@ object JOptimize{
     }
 
     val callerGraph = mutable.LinkedHashMap[MethodSig, mutable.LinkedHashSet[MethodSig]]()
-    def computeMethodSig(invoke: SSA.Invoke,
+    def computeMethodSig(sig: MethodSig,
+                         invokeSpecial: Boolean,
                          inferredArgs: Seq[IType],
                          callStack: List[(MethodSig, Seq[IType])]): IType = {
 
       val subSigs = {
-        invoke match{
-          case _: SSA.InvokeStatic =>
+        (sig.static, invokeSpecial) match{
+          case (true, false) =>
+            pprint.log(sig)
             def rec(currentCls: JType.Cls): MethodSig = {
-              val sig = invoke.sig
-              if (originalMethods.contains(sig)) sig
+              if (originalMethods.contains(sig.copy(cls = currentCls))) sig.copy(cls = currentCls)
               else rec(JType.Cls(classNodeMap(currentCls).superName))
             }
-            Seq(rec(invoke.cls))
-          case _: SSA.InvokeSpecial => Seq(invoke.sig)
-          case _: SSA.InvokeVirtual | _: SSA.InvokeInterface =>
+            if (sig.name == "<clinit>") Seq(sig)
+            else Seq(rec(sig.cls))
+          case (false, true) => Seq(sig)
+          case (false, false) =>
             val subTypes = subtypeMap
-              .getOrElse(invoke.cls, Nil)
+              .getOrElse(sig.cls, Nil)
               .filter(c => leastUpperBound(Seq(c, inferredArgs(0).asInstanceOf[JType.Cls])) == Seq(inferredArgs(0)))
-              .map(c => invoke.sig.copy(cls = c))
+              .map(c => sig.copy(cls = c))
 
-            invoke.sig :: subTypes
+            sig :: subTypes
         }
       }
 
@@ -135,7 +137,7 @@ object JOptimize{
             }
           ).inferredReturn
         case None =>
-          invoke.desc.ret
+          sig.desc.ret
       }
 
       merge(rets)

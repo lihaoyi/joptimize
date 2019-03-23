@@ -16,7 +16,7 @@ class Walker(merge: (IType, IType) => IType) {
 
   def walkMethod(originalSig: MethodSig,
                  mn: MethodNode,
-                 computeMethodSig: (SSA.Invoke, Seq[IType], List[(MethodSig, Seq[IType])]) => IType,
+                 computeMethodSig: (MethodSig, Boolean, Seq[IType], List[(MethodSig, Seq[IType])]) => IType,
                  inferredArgs: Seq[IType],
                  checkSideEffects: (MethodSig, Seq[IType]) => SideEffects,
                  checkSubclass: (JType.Cls, JType.Cls) => Boolean,
@@ -116,7 +116,7 @@ class Walker(merge: (IType, IType) => IType) {
         program.getAllVertices().collect{case b: SSA.Block if b.upstream.isEmpty => b}.head,
         new ITypeLattice(
           merge,
-          computeMethodSig(_, _, (originalSig -> inferredArgs) :: callStack),
+          computeMethodSig(_, _, _, (originalSig -> inferredArgs) :: callStack),
           inferredArgs.flatMap{i => Seq.fill(i.getSize)(i)}
         ),
         postScheduleNaming
@@ -268,6 +268,15 @@ class Walker(merge: (IType, IType) => IType) {
         case n: SSA.PutField => n.owner
         case n: SSA.GetStatic => n.cls
         case n: SSA.PutStatic => n.cls
+      }
+
+      for(cls <- Seq(originalSig.cls) ++ classes){
+        computeMethodSig(
+          MethodSig(cls, "<clinit>", Desc(Nil, JType.Prim.V), true),
+          false,
+          Nil,
+          (originalSig -> inferredArgs) :: callStack
+        )
       }
 
 
