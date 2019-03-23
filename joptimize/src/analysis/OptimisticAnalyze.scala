@@ -14,18 +14,10 @@ class ITypeLattice(merge: (IType, IType) => IType,
                    computeMethodSig: (SSA.Invoke, Seq[IType]) => IType,
                    inferredArgs: Seq[IType]) extends Lattice[IType]{
   def transferValue(node: SSA.Val, inferences: SSA.Val => IType) = {
-    node match{
-      case s: SSA.Stateful => Option(s.state).foreach(inferences)
-      case _ => //donothing
-    }
+    node.upstream.collect{case v: SSA.Val => inferences(v)}
     node match{
       case n: SSA.New => n.cls
-      case n: SSA.ChangedState =>
-        n.parent match{
-          case v: SSA.Val => inferences(v)
-          case _ =>
-        }
-        JType.Prim.V
+      case n: SSA.ChangedState => JType.Prim.V
       case n: SSA.Arg => inferredArgs(n.index)
 
       case n: SSA.ConstI => CType.I(n.value)
@@ -287,6 +279,8 @@ object OptimisticAnalyze {
 
       }
 
+
+      nextControl.upstream.collect{case v: SSA.Val => evaluate(v)}
       nextControl match{
         case nextBlock: SSA.Block => queueNextBlock(nextBlock)
 
@@ -294,7 +288,7 @@ object OptimisticAnalyze {
           n match{
             case r: SSA.Return =>
 
-            case r: SSA.ReturnVal => evaluate(r.src)
+            case r: SSA.ReturnVal =>
             case n: SSA.UnaBranch =>
               val valueA = evaluate(n.a)
               val doBranch = (valueA, n.opcode) match{
