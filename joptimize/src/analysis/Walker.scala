@@ -23,7 +23,7 @@ class Walker(merge: (IType, IType) => IType) {
                  callStack: List[(MethodSig, Seq[IType])])
       : (Walker.MethodResult, Set[JType.Cls], Set[MethodSig]) = {
 
-    if (callStack.contains(originalSig -> inferredArgs)){
+    if (callStack.contains(originalSig -> inferredArgs) || mn.instructions.size() == 0){
       Tuple3(
         Walker.MethodResult(
           liveArgs = Nil,
@@ -134,7 +134,12 @@ class Walker(merge: (IType, IType) => IType) {
         case p: SSA.ChangedState => // do nothing
         case n: SSA.Invoke =>
           val (mangledName, mangledDesc) =
-            Util.mangle(n.sig, n.srcs.map(inferred), inferred.getOrElseUpdate(n, n.desc.ret))
+            if (n.name == "<init>") (n.name, n.desc)
+            else Util.mangle(n.sig, n.srcs.map(inferred), inferred.getOrElseUpdate(n, n.desc.ret))
+          pprint.log(n)
+          pprint.log(n)
+          pprint.log(mangledName)
+          pprint.log(mangledDesc)
           val sideEffects = checkSideEffects(n.sig, n.srcs.map(inferred))
           calledMethodSigs.add(n.sig)
           aggregateSideEffects = (aggregateSideEffects, sideEffects) match{

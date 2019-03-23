@@ -23,14 +23,17 @@ object Util{
   }
 
   def mangle(originalSig: MethodSig,
-             inferredTypes: Seq[IType],
+             inferredTypes0: Seq[IType],
              narrowReturnType: IType) = {
 
-    val selfArg = if (!originalSig.static) Seq(originalSig.cls) else Nil
-    if (isManglingCompatible(inferredTypes, selfArg ++ originalSig.desc.args)) (originalSig.name, originalSig.desc)
+    val inferredTypes = inferredTypes0.drop(if(originalSig.static) 0 else 1)
+    if (isManglingCompatible(inferredTypes, originalSig.desc.args)) (originalSig.name, originalSig.desc)
     else{
       val mangledName = originalSig.name + "__" + inferredTypes.map(_.name).mkString("__").replace('/', '_')
-      val jTypeArgs = inferredTypes.zip(originalSig.desc.args).map(t => CType.toJType(t._1, t._2))
+      val jTypeArgs = inferredTypes
+        .zip(originalSig.desc.args)
+        .map(t => CType.toJType(t._1, t._2))
+
       val jTypeRet = CType.toJType(narrowReturnType, originalSig.desc.ret)
       val mangledJTypeDesc = Desc(jTypeArgs, jTypeRet)
       (mangledName, mangledJTypeDesc)
@@ -116,8 +119,9 @@ object Util{
   }
 
   def isManglingCompatible(inferredTypes: Seq[IType], originalTypes: Seq[JType]): Boolean = {
-    inferredTypes.length == originalTypes.length &&
-    inferredTypes.iterator.zip(originalTypes.iterator).forall(x => isManglingCompatible0(x._1, x._2))
+    val sameLength = inferredTypes.length == originalTypes.length
+    val sameItems = inferredTypes.iterator.zip(originalTypes.iterator).forall(x => isManglingCompatible0(x._1, x._2))
+    sameLength && sameItems
   }
   def isManglingCompatible0(inferredType: IType, originalType: JType): Boolean = (inferredType, originalType) match{
     case (JType.Prim.I, JType.Prim.Z | JType.Prim.B | JType.Prim.S | JType.Prim.I | JType.Prim.C) => true

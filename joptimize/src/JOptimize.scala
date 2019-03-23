@@ -154,7 +154,9 @@ object JOptimize{
 
         val originalNode = originalMethods(sig)
 
-        val (mangledName, mangledDesc) = Util.mangle(sig, inferredArgs, returnType)
+        val (mangledName, mangledDesc) =
+          if (sig.name == "<init>") (sig.name, sig.desc)
+          else Util.mangle(sig, inferredArgs, returnType)
 
         val newNode = new MethodNode(
           Opcodes.ASM6,
