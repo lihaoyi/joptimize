@@ -1,14 +1,11 @@
 package joptimize
 
-import java.io.PrintWriter
-import java.io.StringWriter
 
 import joptimize.graph.TarjansStronglyConnectedComponents
 import joptimize.model._
 import org.objectweb.asm.{Handle, Opcodes}
 import org.objectweb.asm.Opcodes._
 import org.objectweb.asm.tree._
-import org.objectweb.asm.util.{Textifier, TraceMethodVisitor}
 
 import scala.collection.mutable
 import collection.JavaConverters._
@@ -98,7 +95,7 @@ object Util{
   def isValidationCompatible(inferredTypes: Seq[IType],
                              originalSig: MethodSig,
                              checkSubclass: (JType.Cls, JType.Cls) => Boolean): Boolean = {
-    val originalTypes = (if (originalSig.static) Nil else Seq(originalSig.cls)) ++ originalSig.desc.args
+    val originalTypes = originalSig.desc.args
     val sameLength = inferredTypes.length == originalTypes.length
 
     val sameItems = inferredTypes.iterator.zip(originalTypes.iterator).forall(x => isValidationCompatible0(x._1, x._2, checkSubclass))

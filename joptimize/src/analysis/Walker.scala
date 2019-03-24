@@ -40,7 +40,7 @@ class Walker(merge: (IType, IType) => IType) {
       pprint.log(callStack)
       pprint.log(inferredArgs)
       assert(
-        Util.isValidationCompatible(inferredArgs, originalSig, checkSubclass),
+        Util.isValidationCompatible(inferredArgs.drop(if(originalSig.static) 0 else 1), originalSig, checkSubclass),
         s"Inferred param types [${inferredArgs.mkString(", ")}] is not compatible " +
           s"with declared param types [${originalSig.desc.args.mkString(", ")}]"
       )

@@ -234,9 +234,9 @@ object MainTests extends TestSuite{
 //      'IntersectionReturn - {
 //        'main - annotatedTest
 //      }
-//      'ForceWide - {
-//        'main - annotatedTest
-//      }
+      'ForceWide - {
+        'main - annotatedTest
+      }
     }
 //    'opt - {
 //      'BooleanJumpFlatten - {
