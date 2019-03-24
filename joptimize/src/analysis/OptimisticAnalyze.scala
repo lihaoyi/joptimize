@@ -222,6 +222,7 @@ object OptimisticAnalyze {
     while(workList.nonEmpty){
 
       val currentBlock = workList.head
+      inferredBlocks.add(currentBlock)
       workList.remove(currentBlock)
       val Array(nextControl) = currentBlock.downstreamList.collect{case n: SSA.Control => n}
 //      println()
@@ -267,7 +268,7 @@ object OptimisticAnalyze {
         }
 
         if (continueNextBlock) {
-          inferredBlocks.add(nextBlock)
+
           workList.add(nextBlock)
           val invalidated = Util.breadthFirstSeen[SSA.Node](invalidatedPhis.toSet)(_.downstreamList)
             .filter(!_.isInstanceOf[SSA.Phi])
@@ -345,8 +346,6 @@ object OptimisticAnalyze {
           }
       }
     }
-
-    pprint.log(evaluated)
 
     (evaluated, inferredBlocks.toSet)
   }

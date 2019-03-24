@@ -62,6 +62,6 @@ class ConstantMethod {
 
     static boolean callImpure(boolean b) {
         System.currentTimeMillis();
-        return b ? !b : !b;
+        return !b;
     }
 }

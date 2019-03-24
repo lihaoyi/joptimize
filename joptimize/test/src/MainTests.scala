@@ -214,6 +214,51 @@ object MainTests extends TestSuite{
         'boolMain - annotatedTest
         'impureMain - annotatedTest
       }
+      'BooleanJumpFlatten - {
+        'simpleTrue - annotatedTest
+        'simpleFalse - annotatedTest
+      }
+
+      //      'InstanceofJumpFlatten - {
+      //        'simpleBar - annotatedTest
+      //        'simpleBaz - annotatedTest
+      //        'simpleQux - annotatedTest
+      //        'simpleBarMatch - annotatedTest
+      //        'simpleBazMatch - annotatedTest
+      //        'simpleQuxMatch - annotatedTest
+      //      }
+      //      'BooleanWidening - {
+      //        'simple - annotatedTest
+      //      }
+      //      'InstanceDce - {
+      //        'simple1 - annotatedTest
+      //        'simple2 - annotatedTest
+      //        'simple3 - annotatedTest
+      //
+      //        'single1 - annotatedTest
+      //        'single2 - annotatedTest
+      //        'single3 - annotatedTest
+      //        'single4 - annotatedTest
+      //
+      //        'unknown1 - annotatedTest
+      //        'unknown2 - annotatedTest
+      //        'unknown3 - annotatedTest
+      //      }
+      //      'InterfacePreservation - {
+      //        'shallow - annotatedTest
+      //        'deep - annotatedTest
+      //      }
+
+      //
+      //      'Liveness - {
+      //        'simple - annotatedTest
+      //        'simple2a - annotatedTest
+      //        'simple2b - annotatedTest
+      //
+      //        'chained - annotatedTest
+      //        'chained2a - annotatedTest
+      //        'chained2b - annotatedTest
+      //      }
     }
 
     'narrow - {
@@ -238,53 +283,6 @@ object MainTests extends TestSuite{
         'main - annotatedTest
       }
     }
-//    'opt - {
-//      'BooleanJumpFlatten - {
-//        'simpleTrue - annotatedTest
-//        'simpleFalse - annotatedTest
-//      }
-//      'InstanceofJumpFlatten - {
-//        'simpleBar - annotatedTest
-//        'simpleBaz - annotatedTest
-//        'simpleQux - annotatedTest
-//        'simpleBarMatch - annotatedTest
-//        'simpleBazMatch - annotatedTest
-//        'simpleQuxMatch - annotatedTest
-//      }
-//      'BooleanWidening - {
-//        'simple - annotatedTest
-//      }
-//      'InstanceDce - {
-//        'simple1 - annotatedTest
-//        'simple2 - annotatedTest
-//        'simple3 - annotatedTest
-//
-//        'single1 - annotatedTest
-//        'single2 - annotatedTest
-//        'single3 - annotatedTest
-//        'single4 - annotatedTest
-//
-//        'unknown1 - annotatedTest
-//        'unknown2 - annotatedTest
-//        'unknown3 - annotatedTest
-//      }
-//      'InterfacePreservation - {
-//        'shallow - annotatedTest
-//        'deep - annotatedTest
-//      }
-
-//
-//      'Liveness - {
-//        'simple - annotatedTest
-//        'simple2a - annotatedTest
-//        'simple2b - annotatedTest
-//
-//        'chained - annotatedTest
-//        'chained2a - annotatedTest
-//        'chained2b - annotatedTest
-//      }
-//    }
-//    }
   }
 
   val classesRoot = os.Path("out/joptimize/test/compile/dest/classes", os.pwd)
