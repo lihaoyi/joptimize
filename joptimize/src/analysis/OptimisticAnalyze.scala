@@ -18,6 +18,7 @@ class ITypeLattice(merge: (IType, IType) => IType,
     node match{
       case n: SSA.New => n.cls
       case n: SSA.CheckCast => n.desc
+      case n: SSA.InstanceOf => JType.Prim.Z
       case n: SSA.ChangedState => JType.Prim.V
       case n: SSA.Arg => inferredArgs(n.index)
 

@@ -228,9 +228,9 @@ object MainTests extends TestSuite{
       'NarrowReturn - {
         'main - annotatedTest
       }
-//      'MergeReturn - {
-//        'main - annotatedTest
-//      }
+      'MergeReturn - {
+        'main - annotatedTest
+      }
 //      'IntersectionReturn - {
 //        'main - annotatedTest
 //      }
