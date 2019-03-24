@@ -143,10 +143,10 @@ object MainTests extends TestSuite{
         'isub - annotatedTest
         'imul - annotatedTest
         'idiv - annotatedTest
-        'irem  - annotatedTest
-        'ishl  - annotatedTest
-        'ishr  - annotatedTest
-        'iushr  - annotatedTest
+        'irem - annotatedTest
+        'ishl - annotatedTest
+        'ishr - annotatedTest
+        'iushr - annotatedTest
         'iand - annotatedTest
         'ior - annotatedTest
         'ixor - annotatedTest
@@ -155,25 +155,25 @@ object MainTests extends TestSuite{
         'jsub - annotatedTest
         'jmul - annotatedTest
         'jdiv - annotatedTest
-        'jrem  - annotatedTest
-        'jshl  - annotatedTest
-        'jshr  - annotatedTest
-        'jushr  - annotatedTest
-        'jand  - annotatedTest
-        'jor  - annotatedTest
-        'jxor  - annotatedTest
+        'jrem - annotatedTest
+        'jshl - annotatedTest
+        'jshr - annotatedTest
+        'jushr - annotatedTest
+        'jand - annotatedTest
+        'jor - annotatedTest
+        'jxor - annotatedTest
 
         'fadd - annotatedTest
         'fsub - annotatedTest
         'fmul - annotatedTest
         'fdiv - annotatedTest
-        'frem  - annotatedTest
+        'frem - annotatedTest
 
         'dadd - annotatedTest
         'dsub - annotatedTest
         'dmul - annotatedTest
         'ddiv - annotatedTest
-        'drem  - annotatedTest
+        'drem - annotatedTest
 
         'lcmp0 - annotatedTest
         'lcmp1 - annotatedTest
@@ -192,10 +192,10 @@ object MainTests extends TestSuite{
         'jump2 - annotatedTest
         'jump3 - annotatedTest
 
-//        'switch0 - annotatedTest
-//        'switch1 - annotatedTest
-//        'switch2 - annotatedTest
-//        'switch3 - annotatedTest
+        //        'switch0 - annotatedTest
+        //        'switch1 - annotatedTest
+        //        'switch2 - annotatedTest
+        //        'switch3 - annotatedTest
       }
       'SimpleDce - {
         'main - annotatedTest
@@ -207,20 +207,27 @@ object MainTests extends TestSuite{
         'loopConstant - annotatedTest
         'branchConstant - annotatedTest
       }
+      'ConstantMethod - {
+        'intMain0 - annotatedTest
+        'intMain - annotatedTest
+        'nonFoldedIntMain - annotatedTest
+        'boolMain - annotatedTest
+        'impureMain - annotatedTest
+      }
+    }
 
-
-//    'narrow - {
-//      'Supertype - {
-//        'main - annotatedTest
-//        'mainDeep - annotatedTest
-//      }
-//      'Parametric - {
-//        'main - annotatedTest
-//        'mainDeep - annotatedTest
-//      }
-//      'NarrowReturn - {
-//        'main - annotatedTest
-//      }
+    'narrow - {
+      'Supertype - {
+        'main - annotatedTest
+        'mainDeep - annotatedTest
+      }
+      'Parametric - {
+        'main - annotatedTest
+        'mainDeep - annotatedTest
+      }
+      'NarrowReturn - {
+        'main - annotatedTest
+      }
 //      'MergeReturn - {
 //        'main - annotatedTest
 //      }
@@ -230,7 +237,7 @@ object MainTests extends TestSuite{
 //      'ForceWide - {
 //        'main - annotatedTest
 //      }
-//    }
+    }
 //    'opt - {
 //      'BooleanJumpFlatten - {
 //        'simpleTrue - annotatedTest
@@ -265,13 +272,7 @@ object MainTests extends TestSuite{
 //        'shallow - annotatedTest
 //        'deep - annotatedTest
 //      }
-      'ConstantMethod - {
-        'intMain0 - annotatedTest
-        'intMain - annotatedTest
-        'nonFoldedIntMain - annotatedTest
-        'boolMain - annotatedTest
-        'impureMain - annotatedTest
-      }
+
 //
 //      'Liveness - {
 //        'simple - annotatedTest
@@ -283,7 +284,7 @@ object MainTests extends TestSuite{
 //        'chained2b - annotatedTest
 //      }
 //    }
-    }
+//    }
   }
 
   val classesRoot = os.Path("out/joptimize/test/compile/dest/classes", os.pwd)

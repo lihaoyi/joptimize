@@ -124,7 +124,7 @@ object JOptimize{
           val rets = for(subSig <- subSigs) yield originalMethods.get(subSig) match{
             case Some(original) =>
               visitedMethods.getOrElseUpdate(
-                (subSig, inferredArgs),
+                (subSig, inferredArgs.drop(if (sig.static) 0 else 1)),
                 {
                   val (res, newVisitedClasses, calledMethods) = walker.walkMethod(
                     subSig,

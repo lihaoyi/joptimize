@@ -136,7 +136,11 @@ class Walker(merge: (IType, IType) => IType) {
         case n: SSA.Invoke =>
           val (mangledName, mangledDesc) =
             if (n.name == "<init>") (n.name, n.desc)
-            else Util.mangle(n.sig, n.srcs.map(inferred), inferred.getOrElseUpdate(n, n.desc.ret))
+            else Util.mangle(
+              n.sig,
+              n.srcs.map(inferred).drop(if(n.sig.static) 0 else 1),
+              inferred.getOrElseUpdate(n, n.desc.ret)
+            )
           val sideEffects = checkSideEffects(n.sig, n.srcs.map(inferred))
           calledMethodSigs.add(n.sig)
           aggregateSideEffects = (aggregateSideEffects, sideEffects) match{

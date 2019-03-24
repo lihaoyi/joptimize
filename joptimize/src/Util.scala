@@ -23,10 +23,9 @@ object Util{
   }
 
   def mangle(originalSig: MethodSig,
-             inferredTypes0: Seq[IType],
+             inferredTypes: Seq[IType],
              narrowReturnType: IType) = {
 
-    val inferredTypes = inferredTypes0.drop(if(originalSig.static) 0 else 1)
     if (isManglingCompatible(inferredTypes, originalSig.desc.args)) (originalSig.name, originalSig.desc)
     else{
       val mangledName = originalSig.name + "__" + inferredTypes.map(_.name).mkString("__").replace('/', '_')
