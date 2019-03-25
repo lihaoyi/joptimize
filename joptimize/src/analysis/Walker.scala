@@ -430,7 +430,7 @@ class Walker(merge: (IType, IType) => IType) {
           val startRegion = findStartRegion(i)
           val keys = insn.keys.asScala.map(_.toInt)
           val labels = insn.labels.asScala
-          val n = new SSA.LookupSwitch(startRegion, frameTop(i, 0), keys)
+          val n = new SSA.LookupSwitch(frames(i).state, startRegion, frameTop(i, 0), keys)
           for((k, l) <- keys.zip(labels)){
             mergeJumpTarget(new SSA.Case(n, k), l, regionStarts, mergeBlocks, startRegion)
           }
@@ -441,7 +441,7 @@ class Walker(merge: (IType, IType) => IType) {
           val startRegion = findStartRegion(i)
           val keys = Range.inclusive(insn.min, insn.max)
           val labels = insn.labels.asScala
-          val n = new SSA.TableSwitch(startRegion, frameTop(i, 0), insn.min, insn.max)
+          val n = new SSA.TableSwitch(frames(i).state, startRegion, frameTop(i, 0), insn.min, insn.max)
           for((k, l) <- keys.zip(labels)){
             mergeJumpTarget(new SSA.Case(n, k), l, regionStarts, mergeBlocks, startRegion)
           }
@@ -450,14 +450,14 @@ class Walker(merge: (IType, IType) => IType) {
 
         case (IFEQ | IFNE | IFLT | IFGE | IFGT | IFLE, insn: JumpInsnNode) =>
           val startRegion = findStartRegion(i)
-          val n = new SSA.UnaBranch(startRegion, frameTop(i, 0), SSA.UnaBranch.lookup(insn.getOpcode))
+          val n = new SSA.UnaBranch(frames(i).state, startRegion, frameTop(i, 0), SSA.UnaBranch.lookup(insn.getOpcode))
           mergeJumpTarget(new SSA.True(n), insn.label, regionStarts, mergeBlocks, startRegion)
           mergeJumpTarget(new SSA.False(n), insn.getNext, regionStarts, mergeBlocks, startRegion)
           Nil
 
         case (IF_ICMPEQ | IF_ICMPNE | IF_ICMPLT | IF_ICMPGE | IF_ICMPGT | IF_ICMPLE | IF_ACMPEQ | IF_ACMPNE, insn: JumpInsnNode) =>
           val startRegion = findStartRegion(i)
-          val n = new SSA.BinBranch(startRegion, frameTop(i, 1), frameTop(i, 0), SSA.BinBranch.lookup(insn.getOpcode))
+          val n = new SSA.BinBranch(frames(i).state, startRegion, frameTop(i, 1), frameTop(i, 0), SSA.BinBranch.lookup(insn.getOpcode))
           mergeJumpTarget(new SSA.True(n), insn.label, regionStarts, mergeBlocks, startRegion)
           mergeJumpTarget(new SSA.False(n), insn.getNext, regionStarts, mergeBlocks, startRegion)
           Nil

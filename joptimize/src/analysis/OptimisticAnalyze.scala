@@ -225,9 +225,10 @@ object OptimisticAnalyze {
       inferredBlocks.add(currentBlock)
       workList.remove(currentBlock)
       val Array(nextControl) = currentBlock.downstreamList.collect{case n: SSA.Control => n}
-//      println()
-//      pprint.log(currentBlock)
-//      pprint.log(nextControl)
+      println()
+      pprint.log(currentBlock)
+      pprint.log(nextControl)
+      pprint.log(evaluated)
       def queueNextBlock(nextBlock: SSA.Block) = {
         val nextPhis = nextBlock
           .downstreamList
@@ -298,6 +299,7 @@ object OptimisticAnalyze {
 
             case r: SSA.ReturnVal =>
             case n: SSA.UnaBranch =>
+              pprint.log("UNA BRANCH")
               val valueA = evaluate(n.a)
               val doBranch = (valueA, n.opcode) match{
                 case (CType.I(v), SSA.UnaBranch.IFNE) => Some(v != 0)
@@ -311,6 +313,7 @@ object OptimisticAnalyze {
                 case _ => None
               }
 
+              pprint.log(doBranch)
               doBranch match{
                 case None =>
                   queueNextBlock(n.downstreamList.collect{ case t: SSA.True => t}.head)
@@ -321,6 +324,7 @@ object OptimisticAnalyze {
                   else queueNextBlock(n.downstreamList.collect{ case t: SSA.False => t}.head)
               }
             case n: SSA.BinBranch =>
+              pprint.log("BIN BRANCH")
               val valueA = evaluate(n.a)
               val valueB = evaluate(n.b)
               val doBranch = (valueA, valueB, n.opcode) match{

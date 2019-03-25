@@ -218,9 +218,10 @@ object SSA{
     val F2D = new Code(Opcodes.F2D, JType.Prim.D)
   }
 
-  case class UnaBranch(var block: Block, var a: Val, var opcode: UnaBranch.Code) extends Jump(){
-    def upstream = Seq(block, a)
+  case class UnaBranch(var state: State, var block: Block, var a: Val, var opcode: UnaBranch.Code) extends Jump(){
+    def upstream = Seq(state, block, a)
     def replaceUpstream(swap: Swapper): Unit = {
+      state = swap(state)
       block = swap(block)
       a = swap(a)
     }
@@ -235,9 +236,10 @@ object SSA{
     val IFNULL = new Code(Opcodes.IFNULL)
     val IFNONNULL = new Code(Opcodes.IFNONNULL)
   }
-  case class BinBranch(var block: Block, var a: Val, var b: Val, var opcode: BinBranch.Code) extends Jump(){
-    def upstream = Seq(block, a, b)
+  case class BinBranch(var state: State, var block: Block, var a: Val, var b: Val, var opcode: BinBranch.Code) extends Jump(){
+    def upstream = Seq(state, block, a, b)
     def replaceUpstream(swap: Swapper): Unit = {
+      state = swap(state)
       block = swap(block)
       a = swap(a)
       b = swap(b)
@@ -256,7 +258,6 @@ object SSA{
   }
   case class ReturnVal(var state: State, var block: Block, var src: Val) extends Jump() with Stateful{
     def upstream = Seq(state, block, src)
-    override def upstreamVals = Seq(src)
     def replaceUpstream(swap: Swapper): Unit = {
       state = swap(state)
       block = swap(block)
@@ -265,7 +266,6 @@ object SSA{
   }
   case class Return(var state: State, var block: Block) extends Jump() with Stateful{
     def upstream = Seq(state, block)
-    override def upstreamVals = Seq()
     def replaceUpstream(swap: Swapper): Unit = {
       state = swap(state)
       block = swap(block)
@@ -273,25 +273,24 @@ object SSA{
   }
   case class AThrow(var state: State, var block: Block, var src: Val) extends Jump() with Stateful{
     def upstream = Seq(state, block, src)
-    override def upstreamVals = Seq(src)
     def replaceUpstream(swap: Swapper): Unit = {
       state = swap(state)
       block = swap(block)
       src = swap(src)
     }
   }
-  case class TableSwitch(var block: Block, var src: Val, min: Int, max: Int) extends Jump() {
-    def upstream = Seq(block, src)
-    override def upstreamVals = Seq(src)
+  case class TableSwitch(var state: State, var block: Block, var src: Val, min: Int, max: Int) extends Jump() {
+    def upstream = Seq(state, block, src)
     def replaceUpstream(swap: Swapper): Unit = {
+      state = swap(state)
       block = swap(block)
       src = swap(src)
     }
   }
-  case class LookupSwitch(var block: Block, var src: Val, var keys: Seq[Int]) extends Jump(){
-    def upstream = Seq(block, src)
-    override def upstreamVals = Seq(src)
+  case class LookupSwitch(var state: State, var block: Block, var src: Val, var keys: Seq[Int]) extends Jump(){
+    def upstream = Seq(state, block, src)
     def replaceUpstream(swap: Swapper): Unit = {
+      state = swap(state)
       block = swap(block)
       src = swap(src)
     }

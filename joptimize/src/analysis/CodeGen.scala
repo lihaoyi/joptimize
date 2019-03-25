@@ -148,12 +148,12 @@ object CodeGen{
                            fallthroughLabel: SSA.Control => Option[LabelNode]): Seq[AbstractInsnNode] = {
     val upstreams = ssa.upstreamVals.flatMap(rec(_, savedLocals))
     val current: Seq[AbstractInsnNode] = ssa match{
-      case n @ SSA.UnaBranch(block, a, opcode) =>
+      case n @ SSA.UnaBranch(state, block, a, opcode) =>
         val goto = fallthroughLabel(n).map(new JumpInsnNode(GOTO, _))
         val jump = Seq(new JumpInsnNode(opcode.i, jumpLabel(n)))
         jump ++ goto
 
-      case n @ SSA.BinBranch(block, a, b, opcode) =>
+      case n @ SSA.BinBranch(state, block, a, b, opcode) =>
         val goto = fallthroughLabel(n).map(new JumpInsnNode(GOTO, _))
         val jump = Seq(new JumpInsnNode(opcode.i, jumpLabel(n)))
         jump ++ goto
@@ -161,10 +161,10 @@ object CodeGen{
 
       case SSA.Return(state, block) => Seq(new InsnNode(RETURN))
       case SSA.AThrow(state, _, src) => Seq(new InsnNode(ATHROW))
-      case n @ SSA.TableSwitch(_, src, min, max) =>
+      case n @ SSA.TableSwitch(state, _, src, min, max) =>
         val (default, labels) = switchLabels(n)
         Seq(new TableSwitchInsnNode(min, max, default, labels.toArray:_*))
-      case n @ SSA.LookupSwitch(_, src, keys) =>
+      case n @ SSA.LookupSwitch(state, _, src, keys) =>
         val (default, labels) = switchLabels(n)
         Seq(new LookupSwitchInsnNode(default, keys.toArray, labels.toArray))
     }

@@ -54,7 +54,6 @@ class ConstantMethod {
         inputs = {0, 1},
         checkPresent = {"ConstantMethod.impureMain"},
         checkMangled = {"ConstantMethod.callImpure"}
-
     )
     static boolean impureMain(int b) {
         return b != 0 ? callImpure(true) : callImpure(false);
