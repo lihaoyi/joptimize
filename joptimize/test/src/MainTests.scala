@@ -227,27 +227,27 @@ object MainTests extends TestSuite{
         'simpleBazMatch - annotatedTest
         'simpleQuxMatch - annotatedTest
       }
-      //      'BooleanWidening - {
-      //        'simple - annotatedTest
-      //      }
-      //      'InstanceDce - {
-      //        'simple1 - annotatedTest
-      //        'simple2 - annotatedTest
-      //        'simple3 - annotatedTest
-      //
-      //        'single1 - annotatedTest
-      //        'single2 - annotatedTest
-      //        'single3 - annotatedTest
-      //        'single4 - annotatedTest
-      //
-      //        'unknown1 - annotatedTest
-      //        'unknown2 - annotatedTest
-      //        'unknown3 - annotatedTest
-      //      }
-      //      'InterfacePreservation - {
-      //        'shallow - annotatedTest
-      //        'deep - annotatedTest
-      //      }
+      'BooleanWidening - {
+        'simple - annotatedTest
+      }
+      'InstanceDce - {
+        'simple1 - annotatedTest
+        'simple2 - annotatedTest
+        'simple3 - annotatedTest
+
+        'single1 - annotatedTest
+        'single2 - annotatedTest
+        'single3 - annotatedTest
+        'single4 - annotatedTest
+
+        'unknown1 - annotatedTest
+        'unknown2 - annotatedTest
+        'unknown3 - annotatedTest
+      }
+      'InterfacePreservation - {
+        'shallow - annotatedTest
+        'deep - annotatedTest
+      }
 
       //
       //      'Liveness - {
