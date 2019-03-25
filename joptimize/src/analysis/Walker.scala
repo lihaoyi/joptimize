@@ -352,16 +352,14 @@ class Walker(merge: (IType, IType) => IType) {
     println("================ DECORATED ================")
     println(Renderer.renderInsns(mn.instructions, printer, methodPrinter, decorate = i => " " + pprint.apply(decoration(i))))
     val startRegionLookup = findStartRegionLookup(insns, regionStarts)
+
     val program = extractControlFlow(
       insns,
       i => regionStarts(insnIndices(i)),
       joptimize.bytecode.Analyzer.analyze(
         clsName, mn,
         new BytecodeToSSA(phiMerges0, startRegionLookup, regionStarts),
-        new SSA.ChangedState(regionStarts(0).get),
-        i => regionStarts(i).map{ b =>
-          new SSA.ChangedState(b)
-        }
+        new SSA.ChangedState(regionStarts(0).get)
       ),
       startRegionLookup
     )
