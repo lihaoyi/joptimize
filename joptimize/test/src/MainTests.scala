@@ -219,14 +219,14 @@ object MainTests extends TestSuite{
         'simpleFalse - annotatedTest
       }
 
-      //      'InstanceofJumpFlatten - {
-      //        'simpleBar - annotatedTest
-      //        'simpleBaz - annotatedTest
-      //        'simpleQux - annotatedTest
-      //        'simpleBarMatch - annotatedTest
-      //        'simpleBazMatch - annotatedTest
-      //        'simpleQuxMatch - annotatedTest
-      //      }
+      'InstanceofJumpFlatten - {
+        'simpleBar - annotatedTest
+        'simpleBaz - annotatedTest
+        'simpleQux - annotatedTest
+        'simpleBarMatch - annotatedTest
+        'simpleBazMatch - annotatedTest
+        'simpleQuxMatch - annotatedTest
+      }
       //      'BooleanWidening - {
       //        'simple - annotatedTest
       //      }
