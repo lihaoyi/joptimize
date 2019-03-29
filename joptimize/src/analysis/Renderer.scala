@@ -1,5 +1,5 @@
 package joptimize.analysis
-import java.io.{PrintWriter, StringWriter}
+import java.io.{PrintWriter, StringReader, StringWriter}
 
 import fansi.Str
 import joptimize.Util
@@ -7,6 +7,8 @@ import joptimize.graph.HavlakLoopTree
 import joptimize.model.{Desc, JType, Program, SSA}
 import org.objectweb.asm.tree.{AbstractInsnNode, InsnList}
 import org.objectweb.asm.util.{Textifier, TraceMethodVisitor}
+import org.xml.sax.InputSource
+import org.xml.sax.helpers.{AttributesImpl, XMLFilterImpl, XMLReaderFactory}
 import pprint.Tree
 
 import collection.mutable
@@ -378,74 +380,116 @@ object Renderer {
     controlFlowEdges
   }
 
-  def dumpSvg(program: Program, fileName: String, naming: Namer.Result = null) = {
-//    def name(x: SSA.Node) = if (naming == null) "" else naming(x).getOrElse("")
-//    import guru.nidi.graphviz.model.Factory._
-//    import guru.nidi.graphviz.attribute._
-//    import guru.nidi.graphviz.engine._
-//    import guru.nidi.graphviz.model._
-//
-//    val live = Util.breadthFirstSeen[SSA.Node](program.allTerminals.toSet)(_.upstream)
-//
-//    val (seen, terminals, allEdges) = Util.breadthFirstAggregation0[SSA.Node, Boolean](program.allTerminals.toSet)(
-//      x => x.upstream.map(_ -> true) ++ x.downstreamList.map(_ -> false)
-//    )
-//
-//    val allGraphvizNodes = seen.keys.map(x => x -> node(x.toString + " " + name(x))).toMap
-//    val (liveNodes, deadNodes) = allGraphvizNodes.toSeq.partition(t => live(t._1))
-//    val directedEdges: Map[SSA.Node, Seq[(SSA.Node, Int, Int)]] = allEdges
-//      .map{case (a0, b0, isUpstream) => if (isUpstream) (a0, b0) else (b0, a0)}
-//      .distinct
-//      .map{case (a, b) => (a, b, a.downstreamList.count(_ == b), b.upstream.count(_ == a))}
-//      .groupBy(_._1)
-//      .map{case (k, vs) => (k, vs.map(v => (v._2, v._3, v._4)))}
-//
-//
-//    def colorNodes(nodes: Seq[(SSA.Node, Node)]) = {
-//      nodes.map { case (x, n) =>
-//        n.`with`(
-//          x match {
-//            case n: SSA.Val => if (n.getSize == 0) Color.BLUE else Color.CYAN
-//            case c: SSA.Block => Color.MAGENTA
-//            case c: SSA.Control => Color.RED
-//          },
-//          Style.FILLED
-//        )
-//      }
-//    }
-//
-//    val g = graph("Program")
-//      .directed()
-//      .graphAttr()
-//      .`with`(RankDir.TOP_TO_BOTTOM)
-//      .`with`(
-//        directedEdges.map{ case (x, ys) =>
-//          allGraphvizNodes(x).link(
-//            ys.flatMap { case (y, downs, ups) =>
-//              val default = Arrow.INV.tail()
-//              val styles =
-//                if (downs == ups) Seq.fill(downs)(
-//                  Seq(default.dir(Arrow.DirType.FORWARD))
-//                )
-//                else if (downs < ups) {
-//                  Seq.fill(downs)(Seq(default.dir(Arrow.DirType.FORWARD))) ++
-//                    Seq.fill(ups - downs)(Seq(default.dir(Arrow.DirType.FORWARD), Style.DASHED))
-//                }
-//                else if (downs > ups) {
-//                  Seq.fill(ups)(Seq(default.dir(Arrow.DirType.FORWARD))) ++
-//                    Seq.fill(downs - ups)(Seq(default.dir(Arrow.DirType.BACK), Style.DASHED))
-//                }
-//                else ???
-//
-//              styles.map(to(allGraphvizNodes(y)).`with`(_:_*))
-//            }
-//              :_*
-//          )
-//        }.toSeq:_*
-//      )
-//      .`with`(colorNodes(deadNodes):_*)
-//      .`with`(graph.cluster().named("Live").`with`(colorNodes(liveNodes):_*))
-//    Graphviz.fromGraph(g).render(Format.SVG).toFile(new java.io.File("out/" + fileName))
+  def dumpSvg(program: Program, naming: Namer.Result = null) = {
+    def name(x: SSA.Node) = if (naming == null) "" else naming(x).getOrElse("")
+    import guru.nidi.graphviz.model.Factory._
+    import guru.nidi.graphviz.attribute._
+    import guru.nidi.graphviz.engine._
+    import guru.nidi.graphviz.model._
+
+    val live = Util.breadthFirstSeen[SSA.Node](program.allTerminals.toSet)(_.upstream)
+
+    val (seen, terminals, allEdges) = Util.breadthFirstAggregation0[SSA.Node, Boolean](program.allTerminals.toSet)(
+      x => x.upstream.map(_ -> true) ++ x.downstreamList.map(_ -> false)
+    )
+
+    val allGraphvizNodes = seen.keys.map(x => x -> node(x.toString + " " + name(x))).toMap
+    val (liveNodes, deadNodes) = allGraphvizNodes.toSeq.partition(t => live(t._1))
+    val directedEdges: Map[SSA.Node, Seq[(SSA.Node, Int, Int)]] = allEdges
+      .map{case (a0, b0, isUpstream) => if (isUpstream) (a0, b0) else (b0, a0)}
+      .distinct
+      .map{case (a, b) => (a, b, a.downstreamList.count(_ == b), b.upstream.count(_ == a))}
+      .groupBy(_._1)
+      .map{case (k, vs) => (k, vs.map(v => (v._2, v._3, v._4)))}
+
+
+    def colorNodes(nodes: Seq[(SSA.Node, Node)]) = {
+      nodes.map { case (x, n) =>
+        n.`with`(
+          x match {
+            case n: SSA.Val => if (n.getSize == 0) Color.BLUE else Color.CYAN
+            case c: SSA.Block => Color.MAGENTA
+            case c: SSA.Control => Color.RED
+          },
+          Style.FILLED,
+          Font.name("courier"),
+          Font.size(13),
+          Shape.RECTANGLE
+        )
+      }
+    }
+
+    val g = graph("Program")
+      .directed()
+      .graphAttr()
+      .`with`(RankDir.TOP_TO_BOTTOM)
+      .`with`(
+        directedEdges.map{ case (x, ys) =>
+          allGraphvizNodes(x).link(
+            ys.flatMap { case (y, downs, ups) =>
+              val default = Arrow.INV.tail()
+              val styles =
+                if (downs == ups) Seq.fill(downs)(
+                  Seq(default.dir(Arrow.DirType.FORWARD))
+                )
+                else if (downs < ups) {
+                  Seq.fill(downs)(Seq(default.dir(Arrow.DirType.FORWARD))) ++
+                    Seq.fill(ups - downs)(Seq(default.dir(Arrow.DirType.FORWARD), Style.DASHED))
+                }
+                else if (downs > ups) {
+                  Seq.fill(ups)(Seq(default.dir(Arrow.DirType.FORWARD))) ++
+                    Seq.fill(downs - ups)(Seq(default.dir(Arrow.DirType.BACK), Style.DASHED))
+                }
+                else ???
+
+              styles.map(to(allGraphvizNodes(y)).`with`(_:_*))
+            }
+              :_*
+          )
+        }.toSeq:_*
+      )
+      .`with`(colorNodes(deadNodes):_*)
+      .`with`(graph.cluster().named("Live").`with`(colorNodes(liveNodes):_*))
+    val dotString = Graphviz.fromGraph(g).render(Format.SVG).toString
+    import javax.xml.transform.OutputKeys
+    import javax.xml.transform.TransformerFactory
+    import javax.xml.transform.sax.SAXSource
+    import javax.xml.transform.stream.StreamResult
+    import java.io.StringWriter
+
+    val stringWriter = new StringWriter
+    val transformer = TransformerFactory.newInstance.newTransformer
+    transformer.setOutputProperty(OutputKeys.INDENT, "yes")
+    transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes")
+    transformer.transform(
+      new SAXSource(
+        new XMLFilterImpl(XMLReaderFactory.createXMLReader()) {
+          override def startElement(uri: String, localName: String, qName: String,
+                                    attrs: org.xml.sax.Attributes): Unit = {
+            val newAttributes =
+              if (localName != "svg") attrs
+              else {
+                val newAttrs = new AttributesImpl(attrs)
+                newAttrs.setValue(
+                  newAttrs.getIndex("width"),
+                  newAttrs.getValue("width").stripSuffix("pt")
+                )
+                newAttrs.setValue(
+                  newAttrs.getIndex("height"),
+                  newAttrs.getValue("height").stripSuffix("pt")
+                )
+                newAttrs
+              }
+            super.startElement(uri, localName, qName, newAttributes)
+
+          }
+        },
+        new InputSource(new StringReader(dotString))
+      ),
+      new StreamResult(stringWriter)
+    )
+
+    scalatags.Text.all.pre(scalatags.Text.all.raw(stringWriter.toString))
   }
 
 }

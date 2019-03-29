@@ -54,13 +54,13 @@ class Walker(merge: (IType, IType) => IType) {
 
       val program = constructSSAProgram(originalSig.cls.name, mn, log)
 
-      Renderer.dumpSvg(program, s"${originalSig.name}-initial.svg")
+//      log.html(Renderer.dumpSvg(program))
       removeDeadNodes(program)
       program.checkLinks()
 
       simplifyPhiMerges(program)
       program.checkLinks()
-      Renderer.dumpSvg(program, s"${originalSig.name}-simplified.svg")
+      log.html(Renderer.dumpSvg(program))
       log.println("================ INITIAL ================")
 
       val preScheduleNaming = Namer.apply(program, Map.empty, program.getAllVertices())
@@ -93,24 +93,7 @@ class Walker(merge: (IType, IType) => IType) {
 
       log(Renderer.renderSSA(program, postScheduleNaming, nodesToBlocks2))
 
-      //    println("================ PESSIMISTIC ================")
-      //
-      //    PartialEvaluator.apply(program)
-      //
-      //    removeDeadNodes(program)
-      //
-      //    program.checkLinks()
-      //
-      //    val postPessimisticNaming = Namer.apply(program, Map.empty, program.getAllVertices())
-      //
-      //    println(Renderer.renderSSA(program, postPessimisticNaming))
-      //
-      //    val loopTree2 = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)
-      //
-      //    println()
-      //    println(Renderer.renderLoopTree(loopTree2, preScheduleNaming.savedLocals))
-
-      Renderer.dumpSvg(program, s"${originalSig.name}-pre-optimistic.svg", postScheduleNaming)
+      log.html(Renderer.dumpSvg(program, postScheduleNaming))
       log.println("================ OPTIMISTIC ================")
 
       val (inferred, liveBlocks) = OptimisticAnalyze.apply(
@@ -230,10 +213,10 @@ class Walker(merge: (IType, IType) => IType) {
       log.pprint(liveBlocks)
       log.pprint(program.allTerminals)
 
-      Renderer.dumpSvg(program, s"${originalSig.name}-post-optimistic.svg")
+      log.html(Renderer.dumpSvg(program))
       program.checkLinks(checkDead = false)
       removeDeadNodes(program)
-      Renderer.dumpSvg(program, s"${originalSig.name}-post-optimistic-cleanup.svg")
+      log.html(Renderer.dumpSvg(program))
       program.checkLinks()
 
       val loopTree2 = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)

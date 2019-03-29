@@ -13,33 +13,39 @@ class Logger(logRoot: os.Path, originalSig: MethodSig, inferredArgs: Seq[IType])
     createFolders = true
   )
 
-  def renderLine(labelOpt: Option[String],
-                 printed: fansi.Str)(implicit file: sourcecode.File, line: sourcecode.Line) = {
+  def renderLine(printed: Frag)(implicit file: sourcecode.File, line: sourcecode.Line) = {
+    os.write.append(destFile, printed.render)
+  }
+
+  def renderAnsiLine(labelOpt: Option[String],
+                     printed: fansi.Str)(implicit file: sourcecode.File, line: sourcecode.Line) = {
     val prefix =
       fansi.Color.Green(file.value.split('/').last) ++
-      fansi.Str(":") ++
-      fansi.Color.Green(line.value.toString) ++
-      labelOpt.fold(fansi.Str(""))(label =>
-        fansi.Str(" ") ++
-        fansi.Color.Cyan(label)
-      ) ++
-      fansi.Str(": ")
+        fansi.Str(":") ++
+        fansi.Color.Green(line.value.toString) ++
+        labelOpt.fold(fansi.Str(""))(label =>
+          fansi.Str(" ") ++
+            fansi.Color.Cyan(label)
+        ) ++
+        fansi.Str(": ")
 
-    os.write.append(
-      destFile,
-      pre(ansiToHtml((prefix ++ printed).render)).render
-    )
+    renderLine(pre(ansiToHtml((prefix ++ printed).render)))
   }
 
   def pprint(value0: sourcecode.Text[Any])
             (implicit f: sourcecode.File, line: sourcecode.Line)= {
-    renderLine(Some(value0.source), _root_.pprint.apply(value0.value))
+    renderAnsiLine(Some(value0.source), _root_.pprint.apply(value0.value))
+  }
+
+  def html(value: Frag)
+          (implicit f: sourcecode.File, line: sourcecode.Line)= {
+    renderLine(value)
   }
   def apply(value0: sourcecode.Text[fansi.Str])(implicit f: sourcecode.File, line: sourcecode.Line)= {
-    renderLine(Some(value0.source), value0.value)
+    renderAnsiLine(Some(value0.source), value0.value)
   }
   def println(value: String)(implicit f: sourcecode.File, line: sourcecode.Line)= {
-    renderLine(None, value)
+    renderAnsiLine(None, value)
   }
 
   // http://flatuicolors.com/
