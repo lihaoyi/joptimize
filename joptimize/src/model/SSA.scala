@@ -44,6 +44,7 @@ object SSA{
       this
     }
 
+    override def toString(): String = s"${getClass.getSimpleName}@${Integer.toHexString(hashCode())}"
     update()
   }
 
@@ -138,6 +139,7 @@ object SSA{
   class Arg(var index: Int, var tpe: JType) extends Val(tpe){
     def upstream = Nil
     def replaceUpstream(swap: Swapper): Unit = {}
+    override def toString = s"${super.toString()}($index, $tpe)"
   }
   class BinOp(var state: State, var a: Val, var b: Val, var opcode: BinOp.Code)
     extends Val(opcode.tpe) with Stateful{
@@ -147,6 +149,7 @@ object SSA{
       a = swap(a)
       b = swap(b)
     }
+    override def toString = s"${super.toString()}($opcode)"
   }
   object BinOp extends Codes{
     val IADD = new Code(Opcodes.IADD, JType.Prim.I)
@@ -192,6 +195,7 @@ object SSA{
     def replaceUpstream(swap: Swapper): Unit = {
       a = swap(a)
     }
+    override def toString = s"${super.toString()}($opcode)"
   }
   object UnaOp extends Codes{
     val INEG = new Code(Opcodes.INEG, JType.Prim.I)
@@ -222,6 +226,7 @@ object SSA{
       block = swap(block)
       a = swap(a)
     }
+    override def toString = s"${super.toString()}($opcode)"
   }
   object UnaBranch  extends Codes{
     val IFEQ = new Code(Opcodes.IFEQ)
@@ -241,6 +246,7 @@ object SSA{
       a = swap(a)
       b = swap(b)
     }
+    override def toString = s"${super.toString()}($opcode)"
   }
 
   object BinBranch  extends Codes{
@@ -300,6 +306,7 @@ object SSA{
     def replaceUpstream(swap: Swapper): Unit = {
       branch = swap(branch)
     }
+    override def toString = s"${super.toString()}($n)"
   }
   class Default(var branch: Jump) extends SimpleBlock(){
     def controls = Seq(branch)
@@ -321,6 +328,7 @@ object SSA{
       state = swap(state)
       src = swap(src)
     }
+    override def toString = s"${super.toString()}($desc)"
   }
   class ArrayLength(var state: State, var src: Val) extends Val(JType.Prim.I) with Stateful{
     def upstream = Seq(state, src)
@@ -334,27 +342,33 @@ object SSA{
     def replaceUpstream(swap: Swapper): Unit = {
       src = swap(src)
     }
+    override def toString = s"${super.toString()}($desc)"
   }
 
   class ConstI(var value: Int) extends Val(JType.Prim.I){
     def upstream = Nil
     def replaceUpstream(swap: Swapper): Unit = {}
+    override def toString = s"${super.toString()}($value)"
   }
   class ConstJ(var value: Long) extends Val(JType.Prim.J){
     def upstream = Nil
     def replaceUpstream(swap: Swapper): Unit = {}
+    override def toString = s"${super.toString()}($value)"
   }
   class ConstF(var value: Float) extends Val(JType.Prim.F){
     def upstream = Nil
     def replaceUpstream(swap: Swapper): Unit = {}
+    override def toString = s"${super.toString()}($value)"
   }
   class ConstD(var value: Double) extends Val(JType.Prim.D){
     def upstream = Nil
     def replaceUpstream(swap: Swapper): Unit = {}
+    override def toString = s"${super.toString()}($value)"
   }
   class ConstStr(var value: String) extends Val(JType.Cls("java/lang/String")){
     def upstream = Nil
     def replaceUpstream(swap: Swapper): Unit = {}
+    override def toString = s"${super.toString()}($value)"
   }
   class ConstNull() extends Val(JType.Cls("java/lang/Object")){
     def upstream = Nil
@@ -363,6 +377,7 @@ object SSA{
   class ConstCls(var value: JType.Cls) extends Val(value){
     def upstream = Nil
     def replaceUpstream(swap: Swapper): Unit = {}
+    override def toString = s"${super.toString()}(${value.name})"
   }
 
   trait Invoke extends Val with Stateful{
@@ -387,6 +402,7 @@ object SSA{
       state = swap(state)
       srcs = srcs.map(swap(_))
     }
+    override def toString = s"${super.toString()}(${cls.name}, $name, $desc)"
   }
 
   class InvokeSpecial(var state: State,
@@ -399,6 +415,7 @@ object SSA{
       state = swap(state)
       srcs = srcs.map(swap(_))
     }
+    override def toString = s"${super.toString()}(${cls.name}, $name, $desc)"
   }
 
   class InvokeVirtual(var state: State,
@@ -411,6 +428,7 @@ object SSA{
       state = swap(state)
       srcs = srcs.map(swap(_))
     }
+    override def toString = s"${super.toString()}(${cls.name}, $name, $desc)"
   }
 
 
@@ -424,6 +442,7 @@ object SSA{
       state = swap(state)
       srcs = srcs.map(swap(_))
     }
+    override def toString = s"${super.toString()}(${cls.name}, $name, $desc)"
   }
 
   class InvokeDynamic(var name: String,
@@ -485,6 +504,7 @@ object SSA{
   class New(var cls: JType.Cls) extends Val(cls){
     def upstream = Nil
     def replaceUpstream(swap: Swapper): Unit = {}
+    override def toString = s"${super.toString()}($cls)"
   }
   class NewArray(var state: State, var size: Val, var typeRef: JType)
     extends Val(JType.Arr(typeRef)) with Stateful{
@@ -493,6 +513,7 @@ object SSA{
       state = swap(state)
       size = swap(size)
     }
+    override def toString = s"${super.toString()}($typeRef)"
   }
   class MultiANewArray(var state: State, var desc: JType, var dims: Seq[Val])
     extends Val(desc) with Stateful{
@@ -501,6 +522,7 @@ object SSA{
       state = swap(state)
       dims = dims.map(swap(_))
     }
+    override def toString = s"${super.toString()}($desc)"
   }
   class PutStatic(var state: State, var src: Val, var cls: JType.Cls, var name: String, var desc: JType)
     extends Val(JType.Prim.V) with Stateful{
@@ -509,6 +531,7 @@ object SSA{
       state = swap(state)
       src = swap(src)
     }
+    override def toString = s"${super.toString()}(${cls.name}, $name, $desc)"
   }
   class GetStatic(var state: State, var cls: JType.Cls, var name: String, var desc: JType)
     extends Val(desc) with Stateful{
@@ -516,6 +539,7 @@ object SSA{
     def replaceUpstream(swap: Swapper): Unit = {
       state = swap(state)
     }
+    override def toString = s"${super.toString()}(${cls.name}, $name, $desc)"
   }
   class PutField(var state: State, var src: Val, var obj: Val, var owner: JType.Cls, var name: String, var desc: JType)
     extends Val(JType.Prim.V) with Stateful{
@@ -525,6 +549,7 @@ object SSA{
       src = swap(src)
       obj = swap(obj)
     }
+    override def toString = s"${super.toString()}(${owner.name}, $name, $desc)"
   }
   class GetField(var state: State, var obj: Val, var owner: JType.Cls, var name: String, var desc: JType)
     extends Val(desc) with Stateful{
@@ -533,6 +558,7 @@ object SSA{
       state = swap(state)
       obj = swap(obj)
     }
+    override def toString = s"${super.toString()}(${owner.name}, $name, $desc)"
   }
   class PutArray(var state: State, var array: Val, var indexSrc: Val, var src: Val)
     extends Val(JType.Prim.V) with Stateful{
