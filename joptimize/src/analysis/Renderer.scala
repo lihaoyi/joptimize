@@ -63,7 +63,7 @@ object Renderer {
       for(insn <- insns ++ footer) output.append(Renderer.renderInsns(finalInsns, printer, methodPrinter, insn))
       output.append("")
     }
-    output.mkString("\n")
+    fansi.Str(output.mkString("\n"))
   }
 
   def renderLoopTree(loopTree: HavlakLoopTree.Loop[SSA.Block],
@@ -82,7 +82,7 @@ object Renderer {
 
     rec(loopTree, 0, Nil)
 
-    out.mkString("\n")
+    fansi.Str(out.mkString("\n"))
   }
 
   def renderControlFlowGraph(controlFlowEdges: Seq[(SSA.Control, SSA.Control)],

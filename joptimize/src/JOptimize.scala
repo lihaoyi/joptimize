@@ -10,7 +10,8 @@ import scala.collection.mutable
 object JOptimize{
   def run(classFiles: Map[String, Array[Byte]],
           entrypoints: Seq[MethodSig],
-          eliminateOldMethods: Boolean): Map[String, Array[Byte]] = {
+          eliminateOldMethods: Boolean,
+          logRoot: os.Path): Map[String, Array[Byte]] = {
 
     val classFileMap = for((k, v) <- classFiles) yield {
       val cr = new ClassReader(v)
@@ -97,10 +98,8 @@ object JOptimize{
       val subSigs = {
         (sig.static, invokeSpecial) match{
           case (true, false) =>
-            pprint.log(sig)
             def rec(currentCls: JType.Cls): Option[MethodSig] = {
               val currentSig = sig.copy(cls = currentCls)
-              pprint.log(currentSig)
               if (originalMethods.contains(currentSig)) Some(currentSig)
               else if (!classNodeMap.contains(currentCls)) None
               else rec(JType.Cls(classNodeMap(currentCls).superName))
@@ -133,7 +132,8 @@ object JOptimize{
                     inferredArgs,
                     computeSideEffects,
                     (inf, orig) => leastUpperBound(Seq(inf, orig)) == Seq(orig),
-                    callStack
+                    callStack,
+                    new Logger(logRoot, subSig, inferredArgs.drop(if (sig.static) 0 else 1))
                   )
                   newVisitedClasses.foreach(visitedClasses.add)
                   for(m <- calledMethods){
@@ -158,7 +158,8 @@ object JOptimize{
         ep.desc.args,
         computeSideEffects,
         (inf, orig) => leastUpperBound(Seq(inf, orig)) == Seq(orig),
-        Nil
+        Nil,
+        new Logger(logRoot, ep, ep.desc.args.drop(if (ep.static) 0 else 1))
       )
       for(m <- calledMethods){
         callerGraph.getOrElseUpdate(m, mutable.LinkedHashSet.empty).add(ep)

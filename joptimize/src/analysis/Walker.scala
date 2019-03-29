@@ -1,6 +1,6 @@
 package joptimize.analysis
 
-import joptimize.Util
+import joptimize.{Logger, Util}
 import joptimize.bytecode.Frame
 import joptimize.graph.HavlakLoopTree
 import joptimize.model._
@@ -20,8 +20,8 @@ class Walker(merge: (IType, IType) => IType) {
                  inferredArgs: Seq[IType],
                  checkSideEffects: (MethodSig, Seq[IType]) => SideEffects,
                  checkSubclass: (JType.Cls, JType.Cls) => Boolean,
-                 callStack: List[(MethodSig, Seq[IType])])
-      : (Walker.MethodResult, Set[JType.Cls], Set[MethodSig]) = {
+                 callStack: List[(MethodSig, Seq[IType])],
+                 log: Logger): (Walker.MethodResult, Set[JType.Cls], Set[MethodSig]) = {
 
     if (callStack.contains(originalSig -> inferredArgs) || mn.instructions.size() == 0){
       Tuple3(
@@ -36,9 +36,12 @@ class Walker(merge: (IType, IType) => IType) {
         Set.empty
       )
     }else{
-      println("+" * 20 + originalSig + "+" * 20)
-      pprint.log(callStack)
-      pprint.log(inferredArgs)
+      println(
+        "  " * callStack.length +
+        "+" + Util.mangleName(originalSig, inferredArgs.drop(if(originalSig.static) 0 else 1))
+      )
+      log.pprint(callStack)
+      log.pprint(inferredArgs)
       assert(
         Util.isValidationCompatible(inferredArgs.drop(if(originalSig.static) 0 else 1), originalSig, checkSubclass),
         s"Inferred param types [${inferredArgs.mkString(", ")}] is not compatible " +
@@ -46,10 +49,10 @@ class Walker(merge: (IType, IType) => IType) {
       )
       val printer = new Textifier
       val methodPrinter = new TraceMethodVisitor(printer)
-      println("================ BYTECODE ================")
-      println(Renderer.renderInsns(mn.instructions, printer, methodPrinter))
+      log.println("================ BYTECODE ================")
+      log(Renderer.renderInsns(mn.instructions, printer, methodPrinter))
 
-      val program = constructSSAProgram(originalSig.cls.name, mn)
+      val program = constructSSAProgram(originalSig.cls.name, mn, log)
 
       Renderer.dumpSvg(program, s"${originalSig.name}-initial.svg")
       removeDeadNodes(program)
@@ -58,25 +61,25 @@ class Walker(merge: (IType, IType) => IType) {
       simplifyPhiMerges(program)
       program.checkLinks()
       Renderer.dumpSvg(program, s"${originalSig.name}-simplified.svg")
-      println("================ INITIAL ================")
+      log.println("================ INITIAL ================")
 
       val preScheduleNaming = Namer.apply(program, Map.empty, program.getAllVertices())
 
-      println(Renderer.renderSSA(program, preScheduleNaming))
+      log(Renderer.renderSSA(program, preScheduleNaming))
 
       program.checkLinks()
       val (controlFlowEdges, startBlock, allBlocks, blockEdges) =
         analyzeBlockStructure(program)
 
-      println()
-      println(Renderer.renderControlFlowGraph(controlFlowEdges, preScheduleNaming.savedLocals))
+      log.println("")
+      log(Renderer.renderControlFlowGraph(controlFlowEdges, preScheduleNaming.savedLocals))
 
       val loopTree = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)
 
-      println()
-      println(Renderer.renderLoopTree(loopTree, preScheduleNaming.savedLocals))
+      log.println("")
+      log(Renderer.renderLoopTree(loopTree, preScheduleNaming.savedLocals))
 
-      println("================ SCHEDULED ================")
+      log.println("================ SCHEDULED ================")
 
       val dominators = Dominator.findDominators(blockEdges, allBlocks)
 
@@ -88,7 +91,7 @@ class Walker(merge: (IType, IType) => IType) {
 
       val postScheduleNaming = Namer.apply(program, nodesToBlocks2, program.getAllVertices())
 
-      println(Renderer.renderSSA(program, postScheduleNaming, nodesToBlocks2))
+      log(Renderer.renderSSA(program, postScheduleNaming, nodesToBlocks2))
 
       //    println("================ PESSIMISTIC ================")
       //
@@ -108,7 +111,7 @@ class Walker(merge: (IType, IType) => IType) {
       //    println(Renderer.renderLoopTree(loopTree2, preScheduleNaming.savedLocals))
 
       Renderer.dumpSvg(program, s"${originalSig.name}-pre-optimistic.svg", postScheduleNaming)
-      println("================ OPTIMISTIC ================")
+      log.println("================ OPTIMISTIC ================")
 
       val (inferred, liveBlocks) = OptimisticAnalyze.apply(
         program,
@@ -122,7 +125,7 @@ class Walker(merge: (IType, IType) => IType) {
         postScheduleNaming
       )
 
-      pprint.log(inferred)
+      log.pprint(inferred)
 
       program.checkLinks()
 
@@ -132,7 +135,7 @@ class Walker(merge: (IType, IType) => IType) {
 
       program.getAllVertices().foreach{
         case unInferred: SSA.Val if !inferred.contains(unInferred) =>
-          pprint.log(unInferred)
+          log.pprint(unInferred)
         // do nothing
         case p: SSA.ChangedState => // do nothing
         case n: SSA.Invoke =>
@@ -210,7 +213,6 @@ class Walker(merge: (IType, IType) => IType) {
           val allTargets = j.downstreamList.collect{case b: SSA.Block => b}
           val liveTargets = allTargets.filter(liveBlocks)
           if (liveTargets.size == 1){
-            println("ELIMINATING JUMP " + j)
             PartialEvaluator.replaceJump(j, liveTargets.head)
           }else if (liveTargets.size <= allTargets.size){
             for(t <- allTargets if !liveTargets.contains(t)){
@@ -220,13 +222,13 @@ class Walker(merge: (IType, IType) => IType) {
         case _ => // do nothing
       }
 
-      pprint.log(program.allTerminals)
+      log.pprint(program.allTerminals)
       program.allTerminals = program.allTerminals.filter{
         case j: SSA.Jump => liveBlocks.contains(j.block)
         case t: SSA.AThrow => liveBlocks.contains(t.block)
       }
-      pprint.log(liveBlocks)
-      pprint.log(program.allTerminals)
+      log.pprint(liveBlocks)
+      log.pprint(program.allTerminals)
 
       Renderer.dumpSvg(program, s"${originalSig.name}-post-optimistic.svg")
       program.checkLinks(checkDead = false)
@@ -247,11 +249,10 @@ class Walker(merge: (IType, IType) => IType) {
 
         val postOptimisticNaming = Namer.apply(program, nodesToBlocks, program.getAllVertices())
 
-        println()
-        println(Renderer.renderSSA(program, postOptimisticNaming, nodesToBlocks))
+        log(Renderer.renderSSA(program, postOptimisticNaming, nodesToBlocks))
       }
 
-      println("================ REGISTERS ALLOCATED ================")
+      log.println("================ REGISTERS ALLOCATED ================")
       RegisterAllocator.apply(program, dominators2.immediateDominators)
 
       val allVertices2 = Util.breadthFirstSeen[SSA.Node](program.allTerminals.toSet)(_.upstream)
@@ -263,8 +264,7 @@ class Walker(merge: (IType, IType) => IType) {
 
       val postRegisterAllocNaming = Namer.apply(program, nodesToBlocks, allVertices2)
 
-      println()
-      println(Renderer.renderSSA(program, postRegisterAllocNaming, nodesToBlocks))
+      log(Renderer.renderSSA(program, postRegisterAllocNaming, nodesToBlocks))
 
       val (blockCode, finalInsns) = CodeGen(
         program,
@@ -274,8 +274,8 @@ class Walker(merge: (IType, IType) => IType) {
         postRegisterAllocNaming
       )
 
-      println("================ OUTPUT BYTECODE ================")
-      println(Renderer.renderBlockCode(blockCode, finalInsns))
+      log.println("================ OUTPUT BYTECODE ================")
+      log(Renderer.renderBlockCode(blockCode, finalInsns))
 
       val classes = allVertices2.collect{
         case n: SSA.GetField => n.owner
@@ -318,7 +318,10 @@ class Walker(merge: (IType, IType) => IType) {
         aggregateSideEffects,
         Nil
       )
-
+      println(
+        "  " * callStack.length +
+        "-" + Util.mangleName(originalSig, inferredArgs.drop(if(originalSig.static) 0 else 1))
+      )
       (result, classes, calledMethodSigs.toSet)
     }
   }
@@ -339,7 +342,7 @@ class Walker(merge: (IType, IType) => IType) {
     (controlFlowEdges, startBlock, allBlocks, blockEdges)
   }
 
-  def constructSSAProgram(clsName: String, mn: MethodNode) = {
+  def constructSSAProgram(clsName: String, mn: MethodNode, log: Logger) = {
     val phiMerges0 = mutable.LinkedHashSet.empty[SSA.Phi]
 
     val insns = mn.instructions.iterator().asScala.toVector
@@ -349,8 +352,8 @@ class Walker(merge: (IType, IType) => IType) {
     val decoration = insns.zip(regionStarts).toMap
     val printer = new Textifier
     val methodPrinter = new TraceMethodVisitor(printer)
-    println("================ DECORATED ================")
-    println(Renderer.renderInsns(mn.instructions, printer, methodPrinter, decorate = i => " " + pprint.apply(decoration(i))))
+
+    log(Renderer.renderInsns(mn.instructions, printer, methodPrinter, decorate = i => " " + pprint.apply(decoration(i))))
     val startRegionLookup = findStartRegionLookup(insns, regionStarts)
 
     val program = extractControlFlow(

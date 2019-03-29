@@ -133,9 +133,9 @@ object MainTests extends TestSuite{
 //        'nullPointer - annotatedTest
 //        'arrayIndexOutOfBounds - annotatedTest
 //      }
-//      'Sudoku - {
-//        'run - annotatedTest
-//      }
+      'Sudoku - {
+        'run - annotatedTest
+      }
     }
     'opt - {
       'Folding - {
@@ -311,7 +311,8 @@ object MainTests extends TestSuite{
     val outputFileMap = JOptimize.run(
       inputFileMap,
       Seq(MethodSig(s"joptimize/examples/${tp.value.dropRight(1).mkString("/")}", tp.value.last, methodDesc, static = true)),
-      eliminateOldMethods = true
+      eliminateOldMethods = true,
+      logRoot = outRoot / tp.value
     )
 
     os.remove.all(outRoot / tp.value)

@@ -22,18 +22,25 @@ object Util{
   def mangle(originalSig: MethodSig,
              inferredTypes: Seq[IType],
              narrowReturnType: IType) = {
-
     if (isManglingCompatible(inferredTypes, originalSig.desc.args)) (originalSig.name, originalSig.desc)
     else{
-      val mangledName = originalSig.name + "__" + inferredTypes.map(_.name).mkString("__").replace('/', '_')
+      val mangledName = mangleName0(originalSig, inferredTypes)
+      val jTypeRet = CType.toJType(narrowReturnType, originalSig.desc.ret)
       val jTypeArgs = inferredTypes
         .zip(originalSig.desc.args)
         .map(t => CType.toJType(t._1, t._2))
-
-      val jTypeRet = CType.toJType(narrowReturnType, originalSig.desc.ret)
       val mangledJTypeDesc = Desc(jTypeArgs, jTypeRet)
       (mangledName, mangledJTypeDesc)
     }
+  }
+
+  def mangleName(originalSig: MethodSig, inferredTypes: Seq[IType]) = {
+    if (isManglingCompatible(inferredTypes, originalSig.desc.args)) originalSig.name
+    else mangleName0(originalSig, inferredTypes)
+  }
+
+  def mangleName0(originalSig: MethodSig, inferredTypes: Seq[IType]) = {
+    originalSig.name + "__" + inferredTypes.map(_.name).mkString("__").replace('/', '_')
   }
 
   def leastUpperBound[T](starts: Set[T])(edges: T => Seq[T]) = {
