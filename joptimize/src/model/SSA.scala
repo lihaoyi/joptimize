@@ -44,9 +44,6 @@ object SSA{
       this
     }
 
-    override def hashCode = System.identityHashCode(this)
-    override def equals(other: Any) = this eq other.asInstanceOf[AnyRef]
-    override def toString(): String = s"${getClass.getSimpleName}@${Integer.toHexString(hashCode())}"
     update()
   }
 
@@ -122,7 +119,7 @@ object SSA{
       incoming = incoming.map(swap(_))
     }
   }
-  case class True(var branch: Jump) extends SimpleBlock(){
+  class True(var branch: Jump) extends SimpleBlock(){
     def controls = Seq(branch)
     def block = branch.block
     def upstream = Seq(branch)
@@ -130,7 +127,7 @@ object SSA{
       branch = swap(branch)
     }
   }
-  case class False(var branch: Jump) extends SimpleBlock(){
+  class False(var branch: Jump) extends SimpleBlock(){
     def controls = Seq(branch)
     def block = branch.block
     def upstream = Seq(branch)
@@ -138,11 +135,11 @@ object SSA{
       branch = swap(branch)
     }
   }
-  case class Arg(var index: Int, var tpe: JType) extends Val(tpe){
+  class Arg(var index: Int, var tpe: JType) extends Val(tpe){
     def upstream = Nil
     def replaceUpstream(swap: Swapper): Unit = {}
   }
-  case class BinOp(var state: State, var a: Val, var b: Val, var opcode: BinOp.Code)
+  class BinOp(var state: State, var a: Val, var b: Val, var opcode: BinOp.Code)
     extends Val(opcode.tpe) with Stateful{
     def upstream = Option(state).toSeq ++ Seq(a, b)
     def replaceUpstream(swap: Swapper): Unit = {
@@ -190,7 +187,7 @@ object SSA{
     val DDIV = new Code(Opcodes.DDIV, JType.Prim.D)
     val DREM = new Code(Opcodes.DREM, JType.Prim.D)
   }
-  case class UnaOp(var a: Val, var opcode: UnaOp.Code) extends Val(opcode.tpe){
+  class UnaOp(var a: Val, var opcode: UnaOp.Code) extends Val(opcode.tpe){
     def upstream = Seq(a)
     def replaceUpstream(swap: Swapper): Unit = {
       a = swap(a)
@@ -218,7 +215,7 @@ object SSA{
     val F2D = new Code(Opcodes.F2D, JType.Prim.D)
   }
 
-  case class UnaBranch(var state: State, var block: Block, var a: Val, var opcode: UnaBranch.Code) extends Jump(){
+  class UnaBranch(var state: State, var block: Block, var a: Val, var opcode: UnaBranch.Code) extends Jump(){
     def upstream = Seq(state, block, a)
     def replaceUpstream(swap: Swapper): Unit = {
       state = swap(state)
@@ -236,7 +233,7 @@ object SSA{
     val IFNULL = new Code(Opcodes.IFNULL)
     val IFNONNULL = new Code(Opcodes.IFNONNULL)
   }
-  case class BinBranch(var state: State, var block: Block, var a: Val, var b: Val, var opcode: BinBranch.Code) extends Jump(){
+  class BinBranch(var state: State, var block: Block, var a: Val, var b: Val, var opcode: BinBranch.Code) extends Jump(){
     def upstream = Seq(state, block, a, b)
     def replaceUpstream(swap: Swapper): Unit = {
       state = swap(state)
@@ -256,7 +253,7 @@ object SSA{
     val IF_ACMPEQ = new Code(Opcodes.IF_ACMPEQ)
     val IF_ACMPNE = new Code(Opcodes.IF_ACMPNE)
   }
-  case class ReturnVal(var state: State, var block: Block, var src: Val) extends Jump() with Stateful{
+  class ReturnVal(var state: State, var block: Block, var src: Val) extends Jump() with Stateful{
     def upstream = Seq(state, block, src)
     def replaceUpstream(swap: Swapper): Unit = {
       state = swap(state)
@@ -264,14 +261,14 @@ object SSA{
       src = swap(src)
     }
   }
-  case class Return(var state: State, var block: Block) extends Jump() with Stateful{
+  class Return(var state: State, var block: Block) extends Jump() with Stateful{
     def upstream = Seq(state, block)
     def replaceUpstream(swap: Swapper): Unit = {
       state = swap(state)
       block = swap(block)
     }
   }
-  case class AThrow(var state: State, var block: Block, var src: Val) extends Jump() with Stateful{
+  class AThrow(var state: State, var block: Block, var src: Val) extends Jump() with Stateful{
     def upstream = Seq(state, block, src)
     def replaceUpstream(swap: Swapper): Unit = {
       state = swap(state)
@@ -279,7 +276,7 @@ object SSA{
       src = swap(src)
     }
   }
-  case class TableSwitch(var state: State, var block: Block, var src: Val, min: Int, max: Int) extends Jump() {
+  class TableSwitch(var state: State, var block: Block, var src: Val, var min: Int, var max: Int) extends Jump() {
     def upstream = Seq(state, block, src)
     def replaceUpstream(swap: Swapper): Unit = {
       state = swap(state)
@@ -287,7 +284,7 @@ object SSA{
       src = swap(src)
     }
   }
-  case class LookupSwitch(var state: State, var block: Block, var src: Val, var keys: Seq[Int]) extends Jump(){
+  class LookupSwitch(var state: State, var block: Block, var src: Val, var keys: Seq[Int]) extends Jump(){
     def upstream = Seq(state, block, src)
     def replaceUpstream(swap: Swapper): Unit = {
       state = swap(state)
@@ -296,7 +293,7 @@ object SSA{
     }
   }
 
-  case class Case(var branch: Jump, var n: Int) extends SimpleBlock(){
+  class Case(var branch: Jump, var n: Int) extends SimpleBlock(){
     def controls = Seq(branch)
     def block = branch.block
     def upstream = Seq(branch)
@@ -304,7 +301,7 @@ object SSA{
       branch = swap(branch)
     }
   }
-  case class Default(var branch: Jump) extends SimpleBlock(){
+  class Default(var branch: Jump) extends SimpleBlock(){
     def controls = Seq(branch)
     def block = branch.block
     def upstream = Seq(branch)
@@ -312,58 +309,58 @@ object SSA{
       branch = swap(branch)
     }
   }
-  case class Copy(var src: Val) extends Val(src.jtype){
+  class Copy(var src: Val) extends Val(src.jtype){
     def upstream = Seq(src)
     def replaceUpstream(swap: Swapper): Unit = {
       src = swap(src)
     }
   }
-  case class CheckCast(var state: State, var src: Val, var desc: JType) extends Val(desc) with Stateful{
+  class CheckCast(var state: State, var src: Val, var desc: JType) extends Val(desc) with Stateful{
     def upstream = Seq(state, src)
     def replaceUpstream(swap: Swapper): Unit = {
       state = swap(state)
       src = swap(src)
     }
   }
-  case class ArrayLength(var state: State, var src: Val) extends Val(JType.Prim.I) with Stateful{
+  class ArrayLength(var state: State, var src: Val) extends Val(JType.Prim.I) with Stateful{
     def upstream = Seq(state, src)
     def replaceUpstream(swap: Swapper): Unit = {
       state = swap(state)
       src = swap(src)
     }
   }
-  case class InstanceOf(var src: Val, var desc: JType) extends Val(JType.Prim.Z){
+  class InstanceOf(var src: Val, var desc: JType) extends Val(JType.Prim.Z){
     def upstream = Seq(src)
     def replaceUpstream(swap: Swapper): Unit = {
       src = swap(src)
     }
   }
 
-  case class ConstI(var value: Int) extends Val(JType.Prim.I){
+  class ConstI(var value: Int) extends Val(JType.Prim.I){
     def upstream = Nil
     def replaceUpstream(swap: Swapper): Unit = {}
   }
-  case class ConstJ(var value: Long) extends Val(JType.Prim.J){
+  class ConstJ(var value: Long) extends Val(JType.Prim.J){
     def upstream = Nil
     def replaceUpstream(swap: Swapper): Unit = {}
   }
-  case class ConstF(var value: Float) extends Val(JType.Prim.F){
+  class ConstF(var value: Float) extends Val(JType.Prim.F){
     def upstream = Nil
     def replaceUpstream(swap: Swapper): Unit = {}
   }
-  case class ConstD(var value: Double) extends Val(JType.Prim.D){
+  class ConstD(var value: Double) extends Val(JType.Prim.D){
     def upstream = Nil
     def replaceUpstream(swap: Swapper): Unit = {}
   }
-  case class ConstStr(var value: String) extends Val(JType.Cls("java/lang/String")){
+  class ConstStr(var value: String) extends Val(JType.Cls("java/lang/String")){
     def upstream = Nil
     def replaceUpstream(swap: Swapper): Unit = {}
   }
-  case class ConstNull() extends Val(JType.Cls("java/lang/Object")){
+  class ConstNull() extends Val(JType.Cls("java/lang/Object")){
     def upstream = Nil
     def replaceUpstream(swap: Swapper): Unit = {}
   }
-  case class ConstCls(var value: JType.Cls) extends Val(value){
+  class ConstCls(var value: JType.Cls) extends Val(value){
     def upstream = Nil
     def replaceUpstream(swap: Swapper): Unit = {}
   }
@@ -380,7 +377,7 @@ object SSA{
 
     def sig = MethodSig(cls, name, desc, this.isInstanceOf[InvokeStatic])
   }
-  case class InvokeStatic(var state: State,
+  class InvokeStatic(var state: State,
                           var srcs: Seq[Val],
                           var cls: JType.Cls,
                           var name: String,
@@ -392,7 +389,7 @@ object SSA{
     }
   }
 
-  case class InvokeSpecial(var state: State,
+  class InvokeSpecial(var state: State,
                            var srcs: Seq[Val],
                            var cls: JType.Cls,
                            var name: String,
@@ -404,7 +401,7 @@ object SSA{
     }
   }
 
-  case class InvokeVirtual(var state: State,
+  class InvokeVirtual(var state: State,
                            var srcs: Seq[Val],
                            var cls: JType.Cls,
                            var name: String,
@@ -417,7 +414,7 @@ object SSA{
   }
 
 
-  case class InvokeInterface(var state: State,
+  class InvokeInterface(var state: State,
                              var srcs: Seq[Val],
                              var cls: JType.Cls,
                              var name: String,
@@ -429,7 +426,7 @@ object SSA{
     }
   }
 
-  case class InvokeDynamic(var name: String,
+  class InvokeDynamic(var name: String,
                            var desc: Desc,
                            var bootstrap: InvokeDynamic.Bootstrap,
                            var bootstrapArgs: Seq[InvokeDynamic.Arg],
@@ -485,11 +482,11 @@ object SSA{
       case SSA.InvokeDynamic.HandleArg(cls, name, desc, tag) => new Handle(tag, cls.name, name, desc.unparse)
     }
   }
-  case class New(var cls: JType.Cls) extends Val(cls){
+  class New(var cls: JType.Cls) extends Val(cls){
     def upstream = Nil
     def replaceUpstream(swap: Swapper): Unit = {}
   }
-  case class NewArray(var state: State, var size: Val, var typeRef: JType)
+  class NewArray(var state: State, var size: Val, var typeRef: JType)
     extends Val(JType.Arr(typeRef)) with Stateful{
     def upstream = Seq(state, size)
     def replaceUpstream(swap: Swapper): Unit = {
@@ -497,7 +494,7 @@ object SSA{
       size = swap(size)
     }
   }
-  case class MultiANewArray(var state: State, var desc: JType, var dims: Seq[Val])
+  class MultiANewArray(var state: State, var desc: JType, var dims: Seq[Val])
     extends Val(desc) with Stateful{
     def upstream = state +: dims
     def replaceUpstream(swap: Swapper): Unit = {
@@ -505,7 +502,7 @@ object SSA{
       dims = dims.map(swap(_))
     }
   }
-  case class PutStatic(var state: State, var src: Val, var cls: JType.Cls, var name: String, var desc: JType)
+  class PutStatic(var state: State, var src: Val, var cls: JType.Cls, var name: String, var desc: JType)
     extends Val(JType.Prim.V) with Stateful{
     def upstream = Seq(state, src)
     def replaceUpstream(swap: Swapper): Unit = {
@@ -513,14 +510,14 @@ object SSA{
       src = swap(src)
     }
   }
-  case class GetStatic(var state: State, var cls: JType.Cls, var name: String, var desc: JType)
+  class GetStatic(var state: State, var cls: JType.Cls, var name: String, var desc: JType)
     extends Val(desc) with Stateful{
     def upstream = Seq(state)
     def replaceUpstream(swap: Swapper): Unit = {
       state = swap(state)
     }
   }
-  case class PutField(var state: State, var src: Val, var obj: Val, var owner: JType.Cls, var name: String, var desc: JType)
+  class PutField(var state: State, var src: Val, var obj: Val, var owner: JType.Cls, var name: String, var desc: JType)
     extends Val(JType.Prim.V) with Stateful{
     def upstream = Seq(state, src, obj)
     def replaceUpstream(swap: Swapper): Unit = {
@@ -529,7 +526,7 @@ object SSA{
       obj = swap(obj)
     }
   }
-  case class GetField(var state: State, var obj: Val, var owner: JType.Cls, var name: String, var desc: JType)
+  class GetField(var state: State, var obj: Val, var owner: JType.Cls, var name: String, var desc: JType)
     extends Val(desc) with Stateful{
     def upstream = Seq(state, obj)
     def replaceUpstream(swap: Swapper): Unit = {
@@ -537,7 +534,7 @@ object SSA{
       obj = swap(obj)
     }
   }
-  case class PutArray(var state: State, var array: Val, var indexSrc: Val, var src: Val)
+  class PutArray(var state: State, var array: Val, var indexSrc: Val, var src: Val)
     extends Val(JType.Prim.V) with Stateful{
     def upstream = Seq(state, array, indexSrc, src)
     override def upstreamVals = Seq(array, indexSrc, src)
@@ -548,7 +545,7 @@ object SSA{
       src = swap(src)
     }
   }
-  case class GetArray(var state: State, var array: Val, var indexSrc: Val, var tpe: JType)
+  class GetArray(var state: State, var array: Val, var indexSrc: Val, var tpe: JType)
     extends Val(tpe) with Stateful{
     def upstream = Seq(state, array, indexSrc)
     override def upstreamVals = Seq(array, indexSrc)
@@ -559,13 +556,13 @@ object SSA{
     }
   }
 
-  case class MonitorEnter(var indexSrc: Val) extends Val(JType.Prim.V){
+  class MonitorEnter(var indexSrc: Val) extends Val(JType.Prim.V){
     def upstream = Seq(indexSrc)
     def replaceUpstream(swap: Swapper): Unit = {
       indexSrc = swap(indexSrc)
     }
   }
-  case class MonitorExit(var indexSrc: Val) extends Val(JType.Prim.V){
+  class MonitorExit(var indexSrc: Val) extends Val(JType.Prim.V){
     def upstream = Seq(indexSrc)
     def replaceUpstream(swap: Swapper): Unit = {
       indexSrc = swap(indexSrc)

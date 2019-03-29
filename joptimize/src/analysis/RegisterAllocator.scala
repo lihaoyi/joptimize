@@ -22,14 +22,14 @@ object RegisterAllocator {
                    _: SSA.ConstI | _: SSA.ConstJ | _: SSA.ConstStr | _: SSA.ConstCls =>
                 (k, v)
               case _ =>
-                val copy = SSA.Copy(v)
+                val copy = new SSA.Copy(v)
                 v.downstreamRemove(phi)
                 copy.downstreamAdd(phi)
                 copies.add(copy)
                 (k, copy)
             }
           }
-          val replacement = SSA.Copy(phi)
+          val replacement = new SSA.Copy(phi)
           phi.downstreamList.filter(_ != replacement).foreach{down =>
             down.replaceUpstream(phi, replacement)
             replacement.downstreamAdd(down)

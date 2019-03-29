@@ -137,10 +137,10 @@ class Walker(merge: (IType, IType) => IType) {
           }
           if (sideEffects == SideEffects.Pure){
             val replacement = inferred.get(n) match{
-              case Some(CType.I(v)) => Some(SSA.ConstI(v))
-              case Some(CType.J(v)) => Some(SSA.ConstJ(v))
-              case Some(CType.F(v)) => Some(SSA.ConstF(v))
-              case Some(CType.D(v)) => Some(SSA.ConstD(v))
+              case Some(CType.I(v)) => Some(new SSA.ConstI(v))
+              case Some(CType.J(v)) => Some(new SSA.ConstJ(v))
+              case Some(CType.F(v)) => Some(new SSA.ConstF(v))
+              case Some(CType.D(v)) => Some(new SSA.ConstD(v))
               case _ => None
             }
             replacement match{
@@ -177,10 +177,10 @@ class Walker(merge: (IType, IType) => IType) {
 
         case n: SSA.Val =>
           val replacement = inferred.get(n) match{
-            case Some(CType.I(v)) => Some(SSA.ConstI(v))
-            case Some(CType.J(v)) => Some(SSA.ConstJ(v))
-            case Some(CType.F(v)) => Some(SSA.ConstF(v))
-            case Some(CType.D(v)) => Some(SSA.ConstD(v))
+            case Some(CType.I(v)) => Some(new SSA.ConstI(v))
+            case Some(CType.J(v)) => Some(new SSA.ConstJ(v))
+            case Some(CType.F(v)) => Some(new SSA.ConstF(v))
+            case Some(CType.D(v)) => Some(new SSA.ConstD(v))
             case _ => None
           }
           replacement.foreach{r =>

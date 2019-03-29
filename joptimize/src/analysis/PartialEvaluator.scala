@@ -153,7 +153,7 @@ object PartialEvaluator {
     case n: SSA.BinOp =>
       (n.a, n.b) match {
         case (a: SSA.ConstI, b: SSA.ConstI) =>
-          Some(SSA.ConstI(
+          Some(new SSA.ConstI(
             n.opcode match {
               case SSA.BinOp.IADD => a.value + b.value
               case SSA.BinOp.ISUB => a.value - b.value
@@ -173,20 +173,20 @@ object PartialEvaluator {
         case (a: SSA.ConstJ, b: SSA.ConstJ) =>
 
           Some(n.opcode match {
-            case SSA.BinOp.LADD => SSA.ConstJ(a.value + b.value)
-            case SSA.BinOp.LSUB => SSA.ConstJ(a.value - b.value)
-            case SSA.BinOp.LMUL => SSA.ConstJ(a.value * b.value)
-            case SSA.BinOp.LDIV => SSA.ConstJ(a.value / b.value)
-            case SSA.BinOp.LREM => SSA.ConstJ(a.value % b.value)
+            case SSA.BinOp.LADD => new SSA.ConstJ(a.value + b.value)
+            case SSA.BinOp.LSUB => new SSA.ConstJ(a.value - b.value)
+            case SSA.BinOp.LMUL => new SSA.ConstJ(a.value * b.value)
+            case SSA.BinOp.LDIV => new SSA.ConstJ(a.value / b.value)
+            case SSA.BinOp.LREM => new SSA.ConstJ(a.value % b.value)
 
-            case SSA.BinOp.LAND => SSA.ConstJ(a.value & b.value)
-            case SSA.BinOp.LOR => SSA.ConstJ(a.value | b.value)
-            case SSA.BinOp.LXOR => SSA.ConstJ(a.value ^ b.value)
+            case SSA.BinOp.LAND => new SSA.ConstJ(a.value & b.value)
+            case SSA.BinOp.LOR => new SSA.ConstJ(a.value | b.value)
+            case SSA.BinOp.LXOR => new SSA.ConstJ(a.value ^ b.value)
 
-            case SSA.BinOp.LCMP => SSA.ConstI(java.lang.Long.compare(a.value, b.value))
+            case SSA.BinOp.LCMP => new SSA.ConstI(java.lang.Long.compare(a.value, b.value))
           })
         case (a: SSA.ConstJ, b: SSA.ConstI) =>
-          Some(SSA.ConstJ(
+          Some(new SSA.ConstJ(
             n.opcode match {
               case SSA.BinOp.LSHL => a.value << b.value
               case SSA.BinOp.LSHR => a.value >> b.value
@@ -196,17 +196,17 @@ object PartialEvaluator {
         case (a: SSA.ConstF, b: SSA.ConstF) =>
 
           Some(n.opcode match {
-            case SSA.BinOp.FADD => SSA.ConstF(a.value + b.value)
-            case SSA.BinOp.FSUB => SSA.ConstF(a.value - b.value)
-            case SSA.BinOp.FMUL => SSA.ConstF(a.value * b.value)
-            case SSA.BinOp.FDIV => SSA.ConstF(a.value / b.value)
-            case SSA.BinOp.FREM => SSA.ConstF(a.value % b.value)
+            case SSA.BinOp.FADD => new SSA.ConstF(a.value + b.value)
+            case SSA.BinOp.FSUB => new SSA.ConstF(a.value - b.value)
+            case SSA.BinOp.FMUL => new SSA.ConstF(a.value * b.value)
+            case SSA.BinOp.FDIV => new SSA.ConstF(a.value / b.value)
+            case SSA.BinOp.FREM => new SSA.ConstF(a.value % b.value)
 
-            case SSA.BinOp.FCMPL => SSA.ConstI(
+            case SSA.BinOp.FCMPL => new SSA.ConstI(
               if (java.lang.Float.isNaN(a.value) || java.lang.Float.isNaN(b.value)) -1
               else java.lang.Float.compare(a.value, b.value)
             )
-            case SSA.BinOp.FCMPG => SSA.ConstI(
+            case SSA.BinOp.FCMPG => new SSA.ConstI(
               if (java.lang.Float.isNaN(a.value) || java.lang.Float.isNaN(b.value)) 1
               else java.lang.Float.compare(a.value, b.value)
             )
@@ -215,17 +215,17 @@ object PartialEvaluator {
         case (a: SSA.ConstD, b: SSA.ConstD) =>
 
           Some(n.opcode match {
-            case SSA.BinOp.DADD => SSA.ConstD(a.value + b.value)
-            case SSA.BinOp.DSUB => SSA.ConstD(a.value - b.value)
-            case SSA.BinOp.DMUL => SSA.ConstD(a.value * b.value)
-            case SSA.BinOp.DDIV => SSA.ConstD(a.value / b.value)
-            case SSA.BinOp.DREM => SSA.ConstD(a.value % b.value)
+            case SSA.BinOp.DADD => new SSA.ConstD(a.value + b.value)
+            case SSA.BinOp.DSUB => new SSA.ConstD(a.value - b.value)
+            case SSA.BinOp.DMUL => new SSA.ConstD(a.value * b.value)
+            case SSA.BinOp.DDIV => new SSA.ConstD(a.value / b.value)
+            case SSA.BinOp.DREM => new SSA.ConstD(a.value % b.value)
 
-            case SSA.BinOp.DCMPL => SSA.ConstI(
+            case SSA.BinOp.DCMPL => new SSA.ConstI(
               if (java.lang.Double.isNaN(a.value) || java.lang.Double.isNaN(b.value)) -1
               else java.lang.Double.compare(a.value, b.value)
             )
-            case SSA.BinOp.DCMPG => SSA.ConstI(
+            case SSA.BinOp.DCMPG => new SSA.ConstI(
               if (java.lang.Double.isNaN(a.value) || java.lang.Double.isNaN(b.value)) 1
               else java.lang.Double.compare(a.value, b.value)
             )
@@ -237,34 +237,34 @@ object PartialEvaluator {
       n.a match {
         case a: SSA.ConstI =>
           Some(n.opcode match {
-            case SSA.UnaOp.INEG => SSA.ConstI(-a.value)
-            case SSA.UnaOp.I2B => SSA.ConstI(a.value.toByte)
-            case SSA.UnaOp.I2C => SSA.ConstI(a.value.toChar)
-            case SSA.UnaOp.I2S => SSA.ConstI(a.value.toShort)
-            case SSA.UnaOp.I2L => SSA.ConstJ(a.value)
-            case SSA.UnaOp.I2F => SSA.ConstF(a.value.toFloat)
-            case SSA.UnaOp.I2D => SSA.ConstD(a.value.toDouble)
+            case SSA.UnaOp.INEG => new SSA.ConstI(-a.value)
+            case SSA.UnaOp.I2B => new SSA.ConstI(a.value.toByte)
+            case SSA.UnaOp.I2C => new SSA.ConstI(a.value.toChar)
+            case SSA.UnaOp.I2S => new SSA.ConstI(a.value.toShort)
+            case SSA.UnaOp.I2L => new SSA.ConstJ(a.value)
+            case SSA.UnaOp.I2F => new SSA.ConstF(a.value.toFloat)
+            case SSA.UnaOp.I2D => new SSA.ConstD(a.value.toDouble)
           })
         case a: SSA.ConstJ =>
           Some(n.opcode match {
-            case SSA.UnaOp.LNEG => SSA.ConstJ(-a.value)
-            case SSA.UnaOp.L2I => SSA.ConstI(a.value.toInt)
-            case SSA.UnaOp.L2F => SSA.ConstF(a.value.toFloat)
-            case SSA.UnaOp.L2D => SSA.ConstD(a.value.toDouble)
+            case SSA.UnaOp.LNEG => new SSA.ConstJ(-a.value)
+            case SSA.UnaOp.L2I => new SSA.ConstI(a.value.toInt)
+            case SSA.UnaOp.L2F => new SSA.ConstF(a.value.toFloat)
+            case SSA.UnaOp.L2D => new SSA.ConstD(a.value.toDouble)
           })
         case a: SSA.ConstF =>
           Some(n.opcode match {
-            case SSA.UnaOp.FNEG => SSA.ConstF(-a.value)
-            case SSA.UnaOp.F2I => SSA.ConstI(a.value.toInt)
-            case SSA.UnaOp.F2L => SSA.ConstJ(a.value.toLong)
-            case SSA.UnaOp.F2D => SSA.ConstD(a.value)
+            case SSA.UnaOp.FNEG => new SSA.ConstF(-a.value)
+            case SSA.UnaOp.F2I => new SSA.ConstI(a.value.toInt)
+            case SSA.UnaOp.F2L => new SSA.ConstJ(a.value.toLong)
+            case SSA.UnaOp.F2D => new SSA.ConstD(a.value)
           })
         case a: SSA.ConstD =>
           Some(n.opcode match {
-            case SSA.UnaOp.DNEG => SSA.ConstD(-a.value)
-            case SSA.UnaOp.D2I => SSA.ConstI(a.value.toInt)
-            case SSA.UnaOp.D2L => SSA.ConstJ(a.value.toLong)
-            case SSA.UnaOp.D2F => SSA.ConstF(a.value.toFloat)
+            case SSA.UnaOp.DNEG => new SSA.ConstD(-a.value)
+            case SSA.UnaOp.D2I => new SSA.ConstI(a.value.toInt)
+            case SSA.UnaOp.D2L => new SSA.ConstJ(a.value.toLong)
+            case SSA.UnaOp.D2F => new SSA.ConstF(a.value.toFloat)
           })
         case _ => None
       }
