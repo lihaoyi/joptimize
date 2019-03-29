@@ -211,4 +211,21 @@ public class Loops {
             }
         }
     }
+
+    @joptimize.Test()
+    public static boolean twoLoops() {
+        return twoLoops0(123);
+    }
+
+    static boolean twoLoops0(int val) {
+        for (int k = 0; k < 2; ++k)
+            if (k > val)
+                return false;
+
+        for (int k = 0; k < 2; ++k)
+            if (k > val)
+                return false;
+
+        return true; // no violations, so it's legal
+    }
 }

@@ -428,6 +428,10 @@ object Renderer {
           allGraphvizNodes(x).link(
             ys.flatMap { case (y, downs, ups) =>
               val default = Arrow.INV.tail()
+              val size =
+                if (x.isInstanceOf[SSA.Control] && y.isInstanceOf[SSA.Control]){
+                  Seq(Style.lineWidth(3))
+                }else Nil
               val styles =
                 if (downs == ups) Seq.fill(downs)(
                   Seq(default.dir(Arrow.DirType.FORWARD))
@@ -442,7 +446,7 @@ object Renderer {
                 }
                 else ???
 
-              styles.map(to(allGraphvizNodes(y)).`with`(_:_*))
+              styles.map(x => to(allGraphvizNodes(y)).`with`(size ++ x:_*))
             }
               :_*
           )

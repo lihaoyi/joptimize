@@ -1,10 +1,6 @@
 package joptimize.examples.simple;
 
 public class Sudoku {
-    @joptimize.Test()
-    public static boolean legalTest() {
-        return legal(18, 18, 1, new int[9][9]);
-    }
 
     @joptimize.Test()
     public static String run() {

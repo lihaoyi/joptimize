@@ -55,6 +55,7 @@ object MainTests extends TestSuite{
         'loopReturn2 - annotatedTest
         'loopReturn3 - annotatedTest
         'sqrtFinder - annotatedTest
+        'twoLoops - annotatedTest
       }
 //
 //      'Switches - {
@@ -134,7 +135,6 @@ object MainTests extends TestSuite{
 //        'arrayIndexOutOfBounds - annotatedTest
 //      }
       'Sudoku - {
-        'legalTest - annotatedTest
 //        'run - annotatedTest
       }
     }
