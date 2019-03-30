@@ -65,7 +65,7 @@ object MainTests extends TestSuite{
         'bigSparseSwitch - annotatedTest
         'charSwitch - annotatedTest
         'byteSwitch - annotatedTest
-//        'stringSwitch - annotatedTest
+        'stringSwitch - annotatedTest
 //        'stringSwitchTwo - annotatedTest
       }
       'Statics - {
@@ -290,7 +290,6 @@ object MainTests extends TestSuite{
 
   val classesRoot = os.Path("out/joptimize/test/compile/dest/classes", os.pwd)
   val outRoot = os.Path("out/scratch", os.pwd)
-  val originalRoot = os.Path("out/original", os.pwd)
   val testRoot = classesRoot / "joptimize" / "examples"
 
   def annotatedTest(implicit tp: TestPath) = {
@@ -306,21 +305,21 @@ object MainTests extends TestSuite{
       .map(p => (p.relativeTo(classesRoot).toString, os.read.bytes(p)))
       .toMap
 
-    os.remove.all(originalRoot / tp.value)
-    for((k, bytes) <- inputFileMap){
-      os.write(originalRoot / tp.value / os.RelPath(k), bytes, createFolders = true)
-    }
-
+    val ignorePrefix = os.rel / 'joptimize / 'examples / tp.value.dropRight(2)
     val outputFileMap = JOptimize.run(
       inputFileMap,
       Seq(MethodSig(s"joptimize/examples/${tp.value.dropRight(1).mkString("/")}", tp.value.last, methodDesc, static = true)),
       eliminateOldMethods = true,
-      logRoot = outRoot / tp.value
+      logRoot = outRoot / tp.value,
+      ignorePrefix = ignorePrefix
     )
 
     os.remove.all(outRoot / tp.value)
     for((k, bytes) <- outputFileMap){
       os.write(outRoot / tp.value / os.RelPath(k), bytes, createFolders = true)
+//      val subPath = os.RelPath(k).relativeTo(ignorePrefix)
+//      assert(subPath.ups == 0)
+//      os.write(outRoot / tp.value / subPath, bytes, createFolders = true)
     }
 
     val testAnnot = rawMethod.getAnnotation(classOf[joptimize.Test])
@@ -347,6 +346,7 @@ object MainTests extends TestSuite{
           else if (p == classOf[Long]) Long.box(a.toLong)
           else if (p == classOf[Float]) Float.box(a.toFloat)
           else if (p == classOf[Double]) Double.box(a.toDouble)
+          else if (p == classOf[java.lang.String]) a.toString
           else throw new Exception(p.toString)
         }
 

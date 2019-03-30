@@ -103,19 +103,15 @@ object Analyzer{
                 merge(insnIndex, jumpInsnIndex, currentFrame)
 
               case lookupSwitchInsn: LookupSwitchInsnNode =>
-                var targetInsnIndex = insnList.indexOf(lookupSwitchInsn.dflt)
-                merge(insnIndex, targetInsnIndex, currentFrame)
+                merge(insnIndex, insnList.indexOf(lookupSwitchInsn.dflt), currentFrame)
                 for(label <- lookupSwitchInsn.labels.iterator().asScala){
-                  targetInsnIndex = insnList.indexOf(label)
-                  merge(insnIndex, targetInsnIndex, currentFrame)
+                  merge(insnIndex, insnList.indexOf(label), currentFrame)
                 }
 
               case tableSwitchInsn: TableSwitchInsnNode =>
-                var targetInsnIndex = insnList.indexOf(tableSwitchInsn.dflt)
-                merge(insnIndex, targetInsnIndex, currentFrame)
+                merge(insnIndex, insnList.indexOf(tableSwitchInsn.dflt), currentFrame)
                 for(label <- tableSwitchInsn.labels.iterator().asScala){
-                  targetInsnIndex = insnList.indexOf(label)
-                  merge(insnIndex, targetInsnIndex, currentFrame)
+                  merge(insnIndex, insnList.indexOf(label), currentFrame)
                 }
 
               case _ =>

@@ -5,11 +5,17 @@ import joptimize.model.{IType, MethodSig}
 
 import scala.collection.mutable
 
-class Logger(logRoot: os.Path, originalSig: MethodSig, inferredArgs: Seq[IType]) {
-  val destFile = logRoot / originalSig.cls.name.split('/') / (Util.mangleName0(originalSig, inferredArgs) + ".html")
+class Logger(logRoot: os.Path, ignorePrefix: os.RelPath, originalSig: MethodSig, inferredArgs: Seq[IType]) {
+  val destFile = logRoot / (os.rel / originalSig.cls.name.split('/') relativeTo ignorePrefix) / (Util.mangleName0(originalSig, inferredArgs) + ".html")
+  val headerStyles = tags2.style("""
+    |svg path:hover{
+    |    stroke: red;
+    |    stroke-width: 4px;
+    |}
+  """.stripMargin)
   os.write.over(
     destFile,
-    "<html><body style=\"background-color: black; color: c7c7c7;\">",
+    "<html><body style=\"background-color: black; color: c7c7c7;\">" + headerStyles,
     createFolders = true
   )
 

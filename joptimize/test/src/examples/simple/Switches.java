@@ -209,12 +209,10 @@ public class Switches {
     }
 
     @joptimize.Test(inputs = {1, 2, 4})
-    public static int stringSwitch(int n) {
-        switch ("".concat(String.valueOf(n))) {
+    public static int stringSwitch(String s) {
+        switch (s) {
             case "0":
                 return 0;
-            case "1":
-                return 1;
             default:
                 return 2;
         }

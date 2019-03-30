@@ -420,7 +420,7 @@ class Walker(merge: (IType, IType) => IType) {
           for((k, l) <- keys.zip(labels)){
             mergeJumpTarget(new SSA.Case(n, k), l, regionStarts, mergeBlocks, startRegion)
           }
-          mergeBlocks(insn.dflt, new SSA.Default(n))
+          mergeJumpTarget(new SSA.Default(n), insn.dflt, regionStarts, mergeBlocks, startRegion)
           Nil
 
         case (TABLESWITCH, insn: TableSwitchInsnNode) =>
@@ -431,7 +431,7 @@ class Walker(merge: (IType, IType) => IType) {
           for((k, l) <- keys.zip(labels)){
             mergeJumpTarget(new SSA.Case(n, k), l, regionStarts, mergeBlocks, startRegion)
           }
-          mergeBlocks(insn.dflt, new SSA.Default(n))
+          mergeJumpTarget(new SSA.Default(n), insn.dflt, regionStarts, mergeBlocks, startRegion)
           Nil
 
         case (IFEQ | IFNE | IFLT | IFGE | IFGT | IFLE, insn: JumpInsnNode) =>
@@ -479,6 +479,7 @@ class Walker(merge: (IType, IType) => IType) {
 
     mergeBlocks(destInsn, destBlock)
     val mergeNode = regionStarts(destInsn).get
+
     mergeNode.downstreamList.collect { case phi: SSA.Phi =>
       phi.incoming = phi.incoming.map {
         case (k, v) =>

@@ -279,11 +279,14 @@ class BytecodeToSSA(merges: mutable.LinkedHashSet[SSA.Phi],
 
   def merge[N <: SSA.Val](v1: N, v2: N, insnIndex: Int, targetInsnIndex: Int) = {
     if (v1 == v2) v1
-    else{
-      if (findBlockDest(targetInsnIndex).isDefined && insnIndex != targetInsnIndex) {
-        v1.asInstanceOf[SSA.Phi].incoming += (findBlockStart(insnIndex) -> v2)
-        findBlockStart(insnIndex).downstreamAdd(v1)
-        v2.downstreamAdd(v1)
+    else {
+      findBlockDest(targetInsnIndex) match {
+        case Some(dest) if insnIndex != targetInsnIndex =>
+          val src = findBlockStart(insnIndex)
+          v1.asInstanceOf[SSA.Phi].incoming += (src -> v2)
+          findBlockStart(insnIndex).downstreamAdd(v1)
+          v2.downstreamAdd(v1)
+        case _ => // do nothing
       }
       v1
     }
@@ -292,7 +295,8 @@ class BytecodeToSSA(merges: mutable.LinkedHashSet[SSA.Phi],
   def merge0[N <: SSA.Val](value1: N, insnIndex: Int, targetInsnIndex: Int) = {
     findBlockDest(targetInsnIndex) match{
       case Some(dest) if insnIndex != targetInsnIndex =>
-        val phiStub = new SSA.Phi(dest, Set(findBlockStart(insnIndex) -> value1), value1.jtype)
+        val src = findBlockStart(insnIndex)
+        val phiStub = new SSA.Phi(dest, Set(src -> value1), value1.jtype)
         merges.add(phiStub)
         phiStub.asInstanceOf[N]
       case _ => value1

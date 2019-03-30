@@ -11,7 +11,8 @@ object JOptimize{
   def run(classFiles: Map[String, Array[Byte]],
           entrypoints: Seq[MethodSig],
           eliminateOldMethods: Boolean,
-          logRoot: os.Path): Map[String, Array[Byte]] = {
+          logRoot: os.Path,
+          ignorePrefix: os.RelPath): Map[String, Array[Byte]] = {
 
     val classFileMap = for((k, v) <- classFiles) yield {
       val cr = new ClassReader(v)
@@ -133,7 +134,7 @@ object JOptimize{
                     computeSideEffects,
                     (inf, orig) => leastUpperBound(Seq(inf, orig)) == Seq(orig),
                     callStack,
-                    new Logger(logRoot, subSig, inferredArgs.drop(if (sig.static) 0 else 1)),
+                    new Logger(logRoot, ignorePrefix, subSig, inferredArgs.drop(if (sig.static) 0 else 1)),
                     classNodeMap.contains
                   )
                   newVisitedClasses.foreach(visitedClasses.add)
@@ -160,7 +161,7 @@ object JOptimize{
         computeSideEffects,
         (inf, orig) => leastUpperBound(Seq(inf, orig)) == Seq(orig),
         Nil,
-        new Logger(logRoot, ep, ep.desc.args.drop(if (ep.static) 0 else 1)),
+        new Logger(logRoot, ignorePrefix, ep, ep.desc.args.drop(if (ep.static) 0 else 1)),
         classNodeMap.contains
       )
       for(m <- calledMethods){

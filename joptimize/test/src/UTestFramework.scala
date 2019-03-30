@@ -6,7 +6,12 @@ class UTestFramework extends utest.runner.Framework {
     s.getClassName.startsWith("joptimize.")
   }
   override def setup() = {
-
-    os.remove.all(os.pwd / 'target / 'workspace)
+    val original = os.pwd / 'out / 'original
+    os.remove.all(original)
+    os.remove.all(os.pwd / 'out / 'scratch)
+    os.copy(
+      os.pwd / 'out / 'joptimize / 'test / 'compile / 'dest / 'classes / 'joptimize / 'examples,
+      original
+    )
   }
 }
