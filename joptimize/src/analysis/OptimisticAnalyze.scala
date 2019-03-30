@@ -342,8 +342,39 @@ object OptimisticAnalyze {
                   if (bool) queueNextBlock(n.downstreamList.collect{ case t: SSA.True => t}.head)
                   else queueNextBlock(n.downstreamList.collect{ case t: SSA.False => t}.head)
               }
-            case n: SSA.TableSwitch => ???
-            case n: SSA.LookupSwitch => ???
+            case n: SSA.TableSwitch =>
+              val value = evaluate(n.src)
+              val cases = n.downstreamList.collect{case c: SSA.Case => c}
+              val Array(default) = n.downstreamList.collect{case c: SSA.Default => c}
+              val doBranch = value match{
+                case CType.I(v) => Some(cases.find(_.n == v).getOrElse(default))
+                case _ => None
+              }
+
+              doBranch match{
+                case None =>
+                  for(dest <- cases) queueNextBlock(dest)
+                  queueNextBlock(default)
+
+                case Some(dest) => queueNextBlock(dest)
+              }
+            case n: SSA.LookupSwitch =>
+
+              val value = evaluate(n.src)
+              val cases = n.downstreamList.collect{case c: SSA.Case => c}
+              val Array(default) = n.downstreamList.collect{case c: SSA.Default => c}
+              val doBranch = value match{
+                case CType.I(v) => Some(cases.find(_.n == v).getOrElse(default))
+                case _ => None
+              }
+
+              doBranch match{
+                case None =>
+                  for(dest <- cases) queueNextBlock(dest)
+                  queueNextBlock(default)
+
+                case Some(dest) => queueNextBlock(dest)
+              }
           }
       }
     }

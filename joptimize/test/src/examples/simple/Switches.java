@@ -14,6 +14,17 @@ public class Switches {
         }
     }
 
+    @joptimize.Test(inputs = {0, 1, 2, 3, 4, 5, 6, 7, 9})
+    public static int smallSwitchNoDefault(int a) {
+        switch (a) {
+            case 0:
+                return 1;
+            case 1:
+                return 0;
+        }
+        return 2;
+    }
+
     @joptimize.Test(
         inputs = {
             0, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15, 16,

@@ -57,16 +57,17 @@ object MainTests extends TestSuite{
         'sqrtFinder - annotatedTest
         'twoLoops - annotatedTest
       }
-//
-//      'Switches - {
-//        'smallSwitch - annotatedTest
-//        'bigDenseSwitch - annotatedTest
-//        'bigSparseSwitch - annotatedTest
-//        'charSwitch - annotatedTest
-//        'byteSwitch - annotatedTest
+
+      'Switches - {
+        'smallSwitch - annotatedTest
+        'smallSwitchNoDefault - annotatedTest
+        'bigDenseSwitch - annotatedTest
+        'bigSparseSwitch - annotatedTest
+        'charSwitch - annotatedTest
+        'byteSwitch - annotatedTest
 //        'stringSwitch - annotatedTest
-////        'stringSwitchTwo - annotatedTest
-//      }
+//        'stringSwitchTwo - annotatedTest
+      }
       'Statics - {
         'helloWorld - annotatedTest
         'timesTwo - annotatedTest
