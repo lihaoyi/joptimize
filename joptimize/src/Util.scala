@@ -40,7 +40,10 @@ object Util{
   }
 
   def mangleName0(originalSig: MethodSig, inferredTypes: Seq[IType]) = {
-    originalSig.name + "__" + inferredTypes.map(_.name).mkString("__").replace('/', '_').replace('[', 'A')
+    val res = originalSig.name + "__" + inferredTypes.map(_.name).mkString("__").replace('/', '_').replace('[', 'A')
+    if (originalSig.name == "append")???
+    pprint.log((originalSig, inferredTypes, res))
+    res
   }
 
   def leastUpperBound[T](starts: Set[T])(edges: T => Seq[T]) = {

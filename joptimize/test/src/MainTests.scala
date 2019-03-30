@@ -123,6 +123,7 @@ object MainTests extends TestSuite{
         'superMethod - annotatedTest
         'staticInheritance - annotatedTest
         'staticInheritanceMethod - annotatedTest
+        'writeMatrixTest - annotatedTest
       }
 //      'Exceptions - {
 //        'throwCatch0 - annotatedTest
@@ -135,7 +136,7 @@ object MainTests extends TestSuite{
 //        'arrayIndexOutOfBounds - annotatedTest
 //      }
       'Sudoku - {
-//        'run - annotatedTest
+        'run - annotatedTest
       }
     }
     'opt - {

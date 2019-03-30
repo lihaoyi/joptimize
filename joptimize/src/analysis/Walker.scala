@@ -21,7 +21,8 @@ class Walker(merge: (IType, IType) => IType) {
                  checkSideEffects: (MethodSig, Seq[IType]) => SideEffects,
                  checkSubclass: (JType.Cls, JType.Cls) => Boolean,
                  callStack: List[(MethodSig, Seq[IType])],
-                 log: Logger): (Walker.MethodResult, Set[JType.Cls], Set[MethodSig]) = {
+                 log: Logger,
+                 classExists: JType.Cls => Boolean): (Walker.MethodResult, Set[JType.Cls], Set[MethodSig]) = {
 
     if (callStack.contains(originalSig -> inferredArgs) || mn.instructions.size() == 0){
       Tuple3(
@@ -124,7 +125,7 @@ class Walker(merge: (IType, IType) => IType) {
         case p: SSA.ChangedState => // do nothing
         case n: SSA.Invoke =>
           val (mangledName, mangledDesc) =
-            if (n.name == "<init>") (n.name, n.desc)
+            if (n.name == "<init>" || !classExists(n.cls)) (n.name, n.desc)
             else Util.mangle(
               n.sig,
               n.srcs.map(inferred).drop(if(n.sig.static) 0 else 1),
@@ -215,10 +216,10 @@ class Walker(merge: (IType, IType) => IType) {
       log.pprint(program.allTerminals)
 
       log.html(Renderer.dumpSvg(program))
-      program.checkLinks(checkDead = false)
+//      program.checkLinks(checkDead = false)
       removeDeadNodes(program)
       log.html(Renderer.dumpSvg(program))
-      program.checkLinks()
+//      program.checkLinks()
 
       val loopTree2 = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)
 

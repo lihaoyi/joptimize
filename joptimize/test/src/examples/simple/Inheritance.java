@@ -68,6 +68,32 @@ public class Inheritance {
                 Parent.overriden() + // Calls the method directly on parent
                 Child1.overriden(); // Calls the method on child overriding the one from parent
     }
+
+    @joptimize.Test()
+    public static int writeMatrixTest() {
+        return writeMatrix(new int[9][9]).length();
+    }
+    public static String writeMatrix(int[][] solution) {
+
+        StringBuilder s = new StringBuilder("\n");
+        for (int i = 0; i < 9; ++i) {
+            if (i % 3 == 0)
+                s.append(" -----------------------\n");
+            for (int j = 0; j < 9; ++j) {
+                if (j % 3 == 0) s.append("| ");
+                s.append(
+                        solution[i][j] == 0
+                                ? " "
+                                : Integer.toString(solution[i][j])
+                );
+
+                s.append(' ');
+            }
+            s.append("|\n");
+        }
+        s.append(" ----------------------- ");
+        return s.toString();
+    }
 }
 
 interface ParentInterface {
