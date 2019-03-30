@@ -105,7 +105,8 @@ class Walker(merge: (IType, IType) => IType) {
           computeMethodSig(_, _, _, (originalSig -> inferredArgs) :: callStack),
           inferredArgs.flatMap{i => Seq.fill(i.getSize)(i)}
         ),
-        postScheduleNaming
+        postScheduleNaming,
+        log
       )
 
       log.pprint(inferred)

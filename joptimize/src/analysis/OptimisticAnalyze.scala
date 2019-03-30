@@ -1,6 +1,6 @@
 package joptimize.analysis
 
-import joptimize.Util
+import joptimize.{Logger, Util}
 import joptimize.model._
 
 import scala.collection.mutable
@@ -208,7 +208,8 @@ object OptimisticAnalyze {
                initialValues: Map[SSA.Val, T],
                initialBlock: SSA.Block,
                lattice: Lattice[T],
-               naming: Namer.Result): (mutable.LinkedHashMap[SSA.Val, T], Set[SSA.Block]) = {
+               naming: Namer.Result,
+               log: Logger): (mutable.LinkedHashMap[SSA.Val, T], Set[SSA.Block]) = {
 
     val inferredBlocks = mutable.Set(initialBlock)
     val workList = mutable.LinkedHashSet(initialBlock)
@@ -278,13 +279,9 @@ object OptimisticAnalyze {
             .filter(!_.isInstanceOf[SSA.Phi])
 
           invalidated.foreach{
-            case b: SSA.Block =>
-              inferredBlocks.remove(b)
-            case p: SSA.Jump =>
-              inferredBlocks.remove(p.block)
-              workList.add(p.block)
-            case n: SSA.Val =>
-              evaluated.remove(n)
+            case removed: SSA.Block => inferredBlocks.remove(removed)
+            case removed: SSA.Jump => inferredBlocks.remove(removed.block)
+            case removed: SSA.Val => evaluated.remove(removed)
             case _ => // do nothing
           }
         }
