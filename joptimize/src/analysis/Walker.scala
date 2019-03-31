@@ -355,9 +355,9 @@ class Walker(merge: (IType, IType) => IType) {
   }
 
   def findStartRegionLookup(insns: IndexedSeq[AbstractInsnNode],
-                            regionStarts: IndexedSeq[Option[SSA.Block]]) = {
-    val startRegionLookup = new Array[SSA.Block](insns.size)
-    var currentRegion: SSA.Block = null
+                            regionStarts: IndexedSeq[Option[SSA.Merge]]) = {
+    val startRegionLookup = new Array[SSA.Merge](insns.size)
+    var currentRegion: SSA.Merge = null
 
     for(i <- insns.indices){
       for(x <- regionStarts(i)) currentRegion = x
@@ -382,22 +382,47 @@ class Walker(merge: (IType, IType) => IType) {
       for (i <- insns.indices)
         yield {
           if (!blockStarts.contains(insns(i))) None
-          else Some(new SSA.Merge(i, Set()): SSA.Block)
+          else Some(new SSA.Merge(i, Set()))
         }
     regionStarts
   }
 
   def extractControlFlow(insns: Vector[AbstractInsnNode],
-                         regionStarts: AbstractInsnNode => Option[SSA.Block],
+                         regionStarts: AbstractInsnNode => Option[SSA.Merge],
                          frames: Array[Frame[SSA.Val, SSA.State]],
-                         findStartRegion: Int => SSA.Block) = {
+                         findStartRegion: Int => SSA.Merge) = {
     def frameTop(i: Int, n: Int) = frames(i).getStack(frames(i).getStackSize - 1 - n)
 
-    def mergeBlocks(lhs0: AbstractInsnNode, rhs: SSA.Block): Unit = {
-      val lhs = regionStarts(lhs0).get.asInstanceOf[SSA.Merge]
-      lhs.incoming += rhs
+    def mergeBlocks(lhs: SSA.Merge, rhs: SSA.Block): Unit = {
+      lhs.asInstanceOf[SSA.Merge].incoming += rhs
       rhs.downstreamAdd(lhs)
     }
+
+    /**
+      * Similar to `mergeBlocks`, but does some work to re-wire the phi nodes
+      * associated with the regions following conditional jump target blocks
+      * refer to the conditional jump target blocks in their incoming list,
+      * rather than the shared upstream block containing the jump
+      */
+    def mergeJumpTarget(destBlock: SSA.Block,
+                        destInsn: AbstractInsnNode,
+                        startReg: SSA.Merge) = {
+      val startRegion = regionStarts(destInsn).get
+      mergeBlocks(startRegion, destBlock)
+      startRegion
+        .downstreamList
+        .collect { case phi: SSA.Phi if phi.block == startRegion =>
+          phi.incoming = phi.incoming.map {
+            case (k, v) if k == startReg =>
+              destBlock.downstreamAdd(phi)
+              startReg.downstreamRemove(phi)
+              (destBlock, v)
+
+            case (k, v) => (k, v)
+          }
+        }
+    }
+
 
     val terminals = insns.zipWithIndex.flatMap{case (insn, i) =>
       val newNodes = (insn.getOpcode, insn) match{
@@ -409,7 +434,7 @@ class Walker(merge: (IType, IType) => IType) {
         case (ATHROW, insn) => (insn, new SSA.AThrow(frames(i).state, findStartRegion(i), frameTop(i, 0)), i) :: Nil
 
         case (GOTO, insn: JumpInsnNode) =>
-          mergeBlocks(insn.label, findStartRegion(i))
+          mergeBlocks(regionStarts(insn.label).get, findStartRegion(i))
           Nil
 
         case (LOOKUPSWITCH, insn: LookupSwitchInsnNode) =>
@@ -418,9 +443,9 @@ class Walker(merge: (IType, IType) => IType) {
           val labels = insn.labels.asScala
           val n = new SSA.LookupSwitch(frames(i).state, startRegion, frameTop(i, 0), keys)
           for((k, l) <- keys.zip(labels)){
-            mergeJumpTarget(new SSA.Case(n, k), l, regionStarts, mergeBlocks, startRegion)
+            mergeJumpTarget(new SSA.Case(n, k), l, startRegion)
           }
-          mergeJumpTarget(new SSA.Default(n), insn.dflt, regionStarts, mergeBlocks, startRegion)
+          mergeJumpTarget(new SSA.Default(n), insn.dflt, startRegion)
           Nil
 
         case (TABLESWITCH, insn: TableSwitchInsnNode) =>
@@ -429,28 +454,28 @@ class Walker(merge: (IType, IType) => IType) {
           val labels = insn.labels.asScala
           val n = new SSA.TableSwitch(frames(i).state, startRegion, frameTop(i, 0), insn.min, insn.max)
           for((k, l) <- keys.zip(labels)){
-            mergeJumpTarget(new SSA.Case(n, k), l, regionStarts, mergeBlocks, startRegion)
+            mergeJumpTarget(new SSA.Case(n, k), l, startRegion)
           }
-          mergeJumpTarget(new SSA.Default(n), insn.dflt, regionStarts, mergeBlocks, startRegion)
+          mergeJumpTarget(new SSA.Default(n), insn.dflt, startRegion)
           Nil
 
         case (IFEQ | IFNE | IFLT | IFGE | IFGT | IFLE, insn: JumpInsnNode) =>
           val startRegion = findStartRegion(i)
           val n = new SSA.UnaBranch(frames(i).state, startRegion, frameTop(i, 0), SSA.UnaBranch.lookup(insn.getOpcode))
-          mergeJumpTarget(new SSA.True(n), insn.label, regionStarts, mergeBlocks, startRegion)
-          mergeJumpTarget(new SSA.False(n), insn.getNext, regionStarts, mergeBlocks, startRegion)
+          mergeJumpTarget(new SSA.True(n), insn.label, startRegion)
+          mergeJumpTarget(new SSA.False(n), insn.getNext, startRegion)
           Nil
 
         case (IF_ICMPEQ | IF_ICMPNE | IF_ICMPLT | IF_ICMPGE | IF_ICMPGT | IF_ICMPLE | IF_ACMPEQ | IF_ACMPNE, insn: JumpInsnNode) =>
           val startRegion = findStartRegion(i)
           val n = new SSA.BinBranch(frames(i).state, startRegion, frameTop(i, 1), frameTop(i, 0), SSA.BinBranch.lookup(insn.getOpcode))
-          mergeJumpTarget(new SSA.True(n), insn.label, regionStarts, mergeBlocks, startRegion)
-          mergeJumpTarget(new SSA.False(n), insn.getNext, regionStarts, mergeBlocks, startRegion)
+          mergeJumpTarget(new SSA.True(n), insn.label, startRegion)
+          mergeJumpTarget(new SSA.False(n), insn.getNext, startRegion)
           Nil
 
         case _ =>
           if (Option(insn.getNext).exists(regionStarts(_).isDefined)){
-            mergeBlocks(insn.getNext, findStartRegion(i))
+            mergeBlocks(regionStarts(insn.getNext).get, findStartRegion(i))
           }
           Nil
       }
@@ -463,34 +488,6 @@ class Walker(merge: (IType, IType) => IType) {
       .filter(_.jtype != JType.Prim.V)
 
     Program(locals.map(_.asInstanceOf[SSA.Arg]), terminals.map(_._2))
-  }
-
-  /**
-    * Similar to `mergeBlocks`, but does some work to re-wire the phi nodes
-    * associated with the regions following conditional jump target blocks
-    * refer to the conditional jump target blocks in their incoming list,
-    * rather than the shared upstream block containing the jump
-    */
-  def mergeJumpTarget(destBlock: SSA.Block,
-                      destInsn: AbstractInsnNode,
-                      regionStarts: AbstractInsnNode => Option[SSA.Block],
-                      mergeBlocks: (AbstractInsnNode, SSA.Block) => Unit,
-                      startReg: SSA.Block) = {
-
-    mergeBlocks(destInsn, destBlock)
-    val startRegion = regionStarts(destInsn).get
-    startRegion
-      .downstreamList
-      .collect { case phi: SSA.Phi if phi.block == startRegion =>
-        phi.incoming = phi.incoming.map {
-          case (k, v) if k == startReg =>
-            destBlock.downstreamAdd(phi)
-            startReg.downstreamRemove(phi)
-            (destBlock, v)
-
-          case (k, v) => (k, v)
-        }
-      }
   }
 
   def removeDeadNodes(program: Program) = {
