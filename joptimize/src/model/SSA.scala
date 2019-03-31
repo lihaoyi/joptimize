@@ -100,15 +100,15 @@ object SSA{
       block = swap(block)
       incoming = incoming.map(x => (swap(x._1), swap(x._2)))
     }
-//    override def checkLinks() = {
-//      super.checkLinks()
-//      val phiIncomingBlocks = incoming.map(_._1)
-//      val blockIncomingBlocks = block.upstream.toSet
-//      assert(
-//        phiIncomingBlocks == blockIncomingBlocks,
-//        s"$this incoming blocks doesn't match block $block incoming blocks, $phiIncomingBlocks != $blockIncomingBlocks"
-//      )
-//    }
+    override def checkLinks() = {
+      super.checkLinks()
+      val phiIncomingBlocks = incoming.map(_._1)
+      val blockIncomingBlocks = block.upstream.toSet
+      assert(
+        phiIncomingBlocks == blockIncomingBlocks,
+        s"$this incoming blocks doesn't match block $block incoming blocks, $phiIncomingBlocks != $blockIncomingBlocks"
+      )
+    }
   }
 
   class Merge(var insnIndex: Int, var incoming: Set[Block]) extends Block() {

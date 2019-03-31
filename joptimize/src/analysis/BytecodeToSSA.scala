@@ -278,18 +278,11 @@ class BytecodeToSSA(merges: mutable.LinkedHashSet[SSA.Phi],
   def returnOperation(insn: AbstractInsnNode, value: SSA.Val, expected: SSA.Val) = ()
 
   def merge[N <: SSA.Val](v1: N, v2: N, insnIndex: Int, targetInsnIndex: Int) = {
-    if (v1 == v2) v1
-    else {
-      findBlockDest(targetInsnIndex) match {
-        case Some(dest) if insnIndex != targetInsnIndex =>
-          val src = findBlockStart(insnIndex)
-          v1.asInstanceOf[SSA.Phi].incoming += (src -> v2)
-          findBlockStart(insnIndex).downstreamAdd(v1)
-          v2.downstreamAdd(v1)
-        case _ => // do nothing
-      }
-      v1
-    }
+    val src = findBlockStart(insnIndex)
+    v1.asInstanceOf[SSA.Phi].incoming += (src -> v2)
+    findBlockStart(insnIndex).downstreamAdd(v1)
+    v2.downstreamAdd(v1)
+    v1
   }
 
   def merge0[N <: SSA.Val](value1: N, insnIndex: Int, targetInsnIndex: Int) = {
@@ -304,9 +297,7 @@ class BytecodeToSSA(merges: mutable.LinkedHashSet[SSA.Phi],
   }
 
   def newParameterValue(local: Int, tpe: Type) = {
-    val jtype = JType.read(tpe.getInternalName)
-    val res = new SSA.Arg(local, jtype)
-    res
+    new SSA.Arg(local, JType.read(tpe.getInternalName))
   }
 
   def newEmptyValue(local: Int) = {
