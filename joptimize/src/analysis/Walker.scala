@@ -121,13 +121,13 @@ class Walker(merge: (IType, IType) => IType) {
         checkSideEffects
       )
 
+      program.checkLinks(checkDead = false)
       removeDeadNodes(program)
-//      program.checkLinks()
+      program.checkLinks()
 
       val loopTree2 = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)
 
       val dominators2 = Dominator.findDominators(blockEdges, allBlocks)
-
 
       { // Just for debugging
         val nodesToBlocks = Scheduler.apply(
