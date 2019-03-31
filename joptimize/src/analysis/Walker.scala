@@ -55,7 +55,7 @@ class Walker(merge: (IType, IType) => IType) {
 
       val program = constructSSAProgram(originalSig.cls.name, mn, log)
 
-//      log.html(Renderer.dumpSvg(program))
+      log.html(Renderer.dumpSvg(program))
       removeDeadNodes(program)
       program.checkLinks()
 
@@ -478,20 +478,19 @@ class Walker(merge: (IType, IType) => IType) {
                       startReg: SSA.Block) = {
 
     mergeBlocks(destInsn, destBlock)
-    val mergeNode = regionStarts(destInsn).get
-
-    mergeNode.downstreamList.collect { case phi: SSA.Phi =>
-      phi.incoming = phi.incoming.map {
-        case (k, v) =>
-          if (k == startReg) {
+    val startRegion = regionStarts(destInsn).get
+    startRegion
+      .downstreamList
+      .collect { case phi: SSA.Phi if phi.block == startRegion =>
+        phi.incoming = phi.incoming.map {
+          case (k, v) if k == startReg =>
             destBlock.downstreamAdd(phi)
             startReg.downstreamRemove(phi)
             (destBlock, v)
-          }
-          else (k, v)
-      }
 
-    }
+          case (k, v) => (k, v)
+        }
+      }
   }
 
   def removeDeadNodes(program: Program) = {

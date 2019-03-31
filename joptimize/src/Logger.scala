@@ -10,7 +10,7 @@ class Logger(logRoot: os.Path, ignorePrefix: os.RelPath, originalSig: MethodSig,
   val headerStyles = tags2.style("""
     |svg path:hover{
     |    stroke: red;
-    |    stroke-width: 4px;
+    |    stroke-width: 5px;
     |}
   """.stripMargin)
   os.write.over(

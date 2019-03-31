@@ -306,6 +306,7 @@ object MainTests extends TestSuite{
       .toMap
 
     val ignorePrefix = os.rel / 'joptimize / 'examples / tp.value.dropRight(2)
+    os.remove.all(outRoot / tp.value)
     val outputFileMap = JOptimize.run(
       inputFileMap,
       Seq(MethodSig(s"joptimize/examples/${tp.value.dropRight(1).mkString("/")}", tp.value.last, methodDesc, static = true)),
@@ -314,7 +315,7 @@ object MainTests extends TestSuite{
       ignorePrefix = ignorePrefix
     )
 
-    os.remove.all(outRoot / tp.value)
+
     for((k, bytes) <- outputFileMap){
       os.write(outRoot / tp.value / os.RelPath(k), bytes, createFolders = true)
 //      val subPath = os.RelPath(k).relativeTo(ignorePrefix)
