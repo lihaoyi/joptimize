@@ -4,28 +4,10 @@ import joptimize.Util
 import joptimize.model.{Program, SSA}
 
 object PartialEvaluator {
-  val transform: PartialFunction[SSA.Node, Seq[SSA.Node]] = {
-    case current: SSA.Val =>
-      // consta - op
-      //         /
-      //   constb
-      evaluateVal(current) match{
-        case None => Nil
-        case Some(replacement) => Util.replace(current, replacement)
-      }
-      // constc
 
-    case current: SSA.Jump =>
-      val directNextOpt = evaluateJump(current)
-
-      val next = for(directNext <- directNextOpt) yield {
-        replaceJump(current, directNext)
-
-      }
-      next.toSeq.flatten
-  }
-
-  def replaceJump(current: SSA.Jump, directNext: SSA.Block) = {
+  def replaceJump(current: SSA.Jump,
+                  directNext: SSA.Block,
+                  liveBlocks: SSA.Block => Boolean) = {
     //                     c
     //                    /
     //       a        TRUE -- d
@@ -59,15 +41,24 @@ object PartialEvaluator {
       case phi: SSA.Phi =>
         phi.incoming = phi.incoming.flatMap(x =>
           if (x._1 == directNext) Some(current.block -> x._2)
-          else if (branchBlocks(x._1)) None
-          else Some(x)
+          else if (branchBlocks(x._1)) {
+            x._1.downstreamRemove(phi)
+            x._2.downstreamRemove(phi)
+            None
+          }
+          else {
+            Some(x)
+          }
         )
         phi
 
       case r: SSA.Merge =>
         r.incoming = r.incoming.flatMap { x =>
           if (x == directNext) Some(current.block)
-          else if (branchBlocks(x)) None
+          else if (branchBlocks(x)) {
+            x.downstreamRemove(r)
+            None
+          }
           else Some(x)
         }
         r
@@ -84,10 +75,6 @@ object PartialEvaluator {
     // block -----
     //     \
     //      c
-  }
-
-  def apply(program: Program) = {
-    program.transform(Simplifier.transform.orElse(PartialEvaluator.transform))
   }
 
   def evaluateJump(current: SSA.Jump): Option[SSA.SimpleBlock] = {

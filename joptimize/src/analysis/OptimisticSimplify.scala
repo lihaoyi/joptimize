@@ -95,7 +95,7 @@ object OptimisticSimplify {
         val allTargets = j.downstreamList.collect{case b: SSA.Block => b}
         val liveTargets = allTargets.filter(liveBlocks)
         if (liveTargets.size == 1){
-          PartialEvaluator.replaceJump(j, liveTargets.head)
+          PartialEvaluator.replaceJump(j, liveTargets.head, liveBlocks)
         }else if (liveTargets.size <= allTargets.size){
           for(t <- allTargets if !liveTargets.contains(t)){
             j.downstreamRemove(t)
