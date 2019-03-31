@@ -66,7 +66,7 @@ object MainTests extends TestSuite{
         'charSwitch - annotatedTest
         'byteSwitch - annotatedTest
         'stringSwitch - annotatedTest
-//        'stringSwitchTwo - annotatedTest
+        'stringSwitchTwo - annotatedTest
       }
       'Statics - {
         'helloWorld - annotatedTest
