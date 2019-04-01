@@ -112,7 +112,7 @@ object OptimisticSimplify {
     log.pprint(liveBlocks)
     log.pprint(program.allTerminals)
 
-    log.html(Renderer.dumpSvg(program))
+    log.graph(Renderer.dumpSvg(program))
     //      program.checkLinks(checkDead = false)
 
     (aggregateSideEffects, calledMethodSigs)

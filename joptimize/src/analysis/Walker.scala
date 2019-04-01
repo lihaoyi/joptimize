@@ -55,13 +55,13 @@ class Walker(merge: (IType, IType) => IType) {
 
       val program = constructSSAProgram(originalSig.cls.name, mn, log)
 
-      log.html(Renderer.dumpSvg(program))
+      log.graph(Renderer.dumpSvg(program))
       removeDeadNodes(program)
       program.checkLinks()
 
       simplifyPhiMerges(program)
       program.checkLinks()
-      log.html(Renderer.dumpSvg(program))
+      log.graph(Renderer.dumpSvg(program))
       log.println("================ INITIAL ================")
 
       val preScheduleNaming = Namer.apply(program, Map.empty, program.getAllVertices())
@@ -94,7 +94,7 @@ class Walker(merge: (IType, IType) => IType) {
 
       log(Renderer.renderSSA(program, postScheduleNaming, nodesToBlocks2))
 
-      log.html(Renderer.dumpSvg(program, postScheduleNaming))
+      log.graph(Renderer.dumpSvg(program, postScheduleNaming))
       log.println("================ OPTIMISTIC ================")
 
       val (inferred, liveBlocks) = OptimisticAnalyze.apply(
