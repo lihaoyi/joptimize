@@ -195,10 +195,10 @@ object MainTests extends TestSuite{
         'jump2 - annotatedTest
         'jump3 - annotatedTest
 
-        //        'switch0 - annotatedTest
-        //        'switch1 - annotatedTest
-        //        'switch2 - annotatedTest
-        //        'switch3 - annotatedTest
+        'switch0 - annotatedTest
+        'switch1 - annotatedTest
+        'switch2 - annotatedTest
+        'switch3 - annotatedTest
       }
       'SimpleDce - {
         'main - annotatedTest
