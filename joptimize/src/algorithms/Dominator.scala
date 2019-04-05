@@ -1,4 +1,4 @@
-package joptimize.analysis
+package joptimize.algorithms
 
 import joptimize.graph.LengauerTarjanDominatorTree
 

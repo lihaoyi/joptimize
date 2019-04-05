@@ -1,7 +1,7 @@
-package joptimize.analysis
+package joptimize.optimize
 
 import joptimize.Util
-import joptimize.model.{Program, SSA}
+import joptimize.model.SSA
 
 object PartialEvaluator {
 

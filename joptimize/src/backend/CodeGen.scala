@@ -1,7 +1,7 @@
-package joptimize.analysis
-
+package joptimize.backend
 
 import joptimize.Util
+import joptimize.analysis.Namer
 import joptimize.model.JType
 import joptimize.model.{Program, SSA}
 import org.objectweb.asm.Handle

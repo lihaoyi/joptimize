@@ -1,4 +1,4 @@
-package joptimize.analysis
+package optimize
 
 import joptimize.Util
 import joptimize.model.SSA

@@ -1,12 +1,11 @@
-package joptimize.analysis
+package joptimize.backend
 
 import joptimize.Util
 import joptimize.model.{Desc, JType, MethodSig, SSA}
-import org.objectweb.asm.tree.InvokeDynamicInsnNode
+import org.objectweb.asm.tree._
 import org.objectweb.asm.{Handle, Opcodes}
-import org.objectweb.asm.tree.{ClassNode, FieldInsnNode, MethodInsnNode, TypeInsnNode}
 
-import collection.JavaConverters._
+import scala.collection.JavaConverters._
 import scala.collection.mutable
 
 /**

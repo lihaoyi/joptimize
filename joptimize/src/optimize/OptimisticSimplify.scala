@@ -1,7 +1,8 @@
-package joptimize.analysis
+package joptimize.optimize
 
-import joptimize.{Logger, Util}
+import joptimize.analysis.Renderer
 import joptimize.model._
+import joptimize.{Logger, Util}
 
 import scala.collection.mutable
 

@@ -1,19 +1,8 @@
-package joptimize.bytecode
+package joptimize.frontend
 
-import java.util
-import java.util.{ArrayList, List}
-
-import org.objectweb.asm.Opcodes
-import org.objectweb.asm.Type
-import org.objectweb.asm.tree.AbstractInsnNode
-import org.objectweb.asm.tree.IincInsnNode
-import org.objectweb.asm.tree.InvokeDynamicInsnNode
-import org.objectweb.asm.tree.LabelNode
-import org.objectweb.asm.tree.MethodInsnNode
-import org.objectweb.asm.tree.MultiANewArrayInsnNode
-import org.objectweb.asm.tree.VarInsnNode
-import org.objectweb.asm.tree.analysis.AnalyzerException
-import org.objectweb.asm.tree.analysis.Value
+import org.objectweb.asm.{Opcodes, Type}
+import org.objectweb.asm.tree._
+import org.objectweb.asm.tree.analysis.{AnalyzerException, Value}
 
 import scala.collection.mutable
 

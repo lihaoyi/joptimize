@@ -1,5 +1,5 @@
 package joptimize
-import joptimize.analysis.{CodeGen, Dominator}
+import joptimize.algorithms.Dominator
 import joptimize.graph.HavlakLoopTree.Loop
 import joptimize.graph.HavlakLoopTree
 import utest._

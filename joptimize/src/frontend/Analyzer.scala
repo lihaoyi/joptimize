@@ -1,18 +1,10 @@
-package joptimize.bytecode
-import joptimize.model.SSA
+package joptimize.frontend
 
-import collection.JavaConverters._
-import org.objectweb.asm.Opcodes
-import org.objectweb.asm.Type
-import org.objectweb.asm.tree.AbstractInsnNode
-import org.objectweb.asm.tree.InsnList
-import org.objectweb.asm.tree.JumpInsnNode
-import org.objectweb.asm.tree.LookupSwitchInsnNode
-import org.objectweb.asm.tree.MethodNode
-import org.objectweb.asm.tree.TableSwitchInsnNode
-import org.objectweb.asm.tree.TryCatchBlockNode
+import org.objectweb.asm.{Opcodes, Type}
+import org.objectweb.asm.tree._
 import org.objectweb.asm.tree.analysis._
 
+import scala.collection.JavaConverters._
 import scala.collection.mutable
 
 

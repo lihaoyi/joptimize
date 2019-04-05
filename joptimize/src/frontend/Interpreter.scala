@@ -1,12 +1,7 @@
-package joptimize.bytecode
-
-
-import java.util
+package joptimize.frontend
 
 import org.objectweb.asm.Type
-import org.objectweb.asm.tree.AbstractInsnNode
-import org.objectweb.asm.tree.TryCatchBlockNode
-import org.objectweb.asm.tree.analysis.AnalyzerException
+import org.objectweb.asm.tree.{AbstractInsnNode, TryCatchBlockNode}
 import org.objectweb.asm.tree.analysis.Value
 
 

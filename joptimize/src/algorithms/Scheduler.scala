@@ -1,8 +1,8 @@
-package joptimize.analysis
+package joptimize.algorithms
 
 import joptimize.algorithms.ClickScheduler
 import joptimize.graph.HavlakLoopTree
-import joptimize.model.{Program, SSA}
+import joptimize.model.SSA
 
 import scala.collection.mutable
 

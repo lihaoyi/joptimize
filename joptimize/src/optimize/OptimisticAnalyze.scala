@@ -1,7 +1,8 @@
-package joptimize.analysis
+package joptimize.optimize
 
-import joptimize.{Logger, Util}
+import joptimize.analysis.Namer
 import joptimize.model._
+import joptimize.{Logger, Util}
 
 import scala.collection.mutable
 trait Lattice[T]{

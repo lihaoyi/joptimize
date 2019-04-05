@@ -1,10 +1,11 @@
-package joptimize.analysis
+package joptimize.frontend
 
-import collection.JavaConverters._
-import joptimize.bytecode.Frame
+import joptimize.frontend.Frame
 import joptimize.model.{JType, Program, SSA}
 import org.objectweb.asm.Opcodes._
 import org.objectweb.asm.tree.{AbstractInsnNode, JumpInsnNode, LookupSwitchInsnNode, TableSwitchInsnNode}
+
+import scala.collection.JavaConverters._
 
 object ControlFlowExtraction {
 

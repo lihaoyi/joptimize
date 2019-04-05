@@ -1,4 +1,4 @@
-package joptimize.analysis
+package joptimize.backend
 
 import joptimize.Util
 import joptimize.model.{Program, SSA}

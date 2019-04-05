@@ -1,14 +1,11 @@
-package joptimize.analysis
-import java.util
+package joptimize.frontend
 
-import joptimize.model.{Desc, JType, MethodSig, SSA}
+import joptimize.model.{Desc, JType, SSA}
 import org.objectweb.asm.Opcodes._
 import org.objectweb.asm.Type._
-import org.objectweb.asm.tree.analysis._
-import org.objectweb.asm.{Handle, Type}
 import org.objectweb.asm.tree._
+import org.objectweb.asm.{Handle, Type}
 
-import collection.JavaConverters._
 import scala.collection.mutable
 
 /**
@@ -19,9 +16,9 @@ import scala.collection.mutable
   * generated SSA nodes; we do this to allow immediate constant folding if the
   * node's type is specific enough to be a concrete value.
   */
-class BytecodeToSSA(merges: mutable.LinkedHashSet[SSA.Phi],
-                    findBlockStart: Int => SSA.Block,
-                    findBlockDest: Int => Option[SSA.Block]) extends joptimize.bytecode.Interpreter[SSA.Val, SSA.State]{
+class BytecodeToSSAInterpreter(merges: mutable.LinkedHashSet[SSA.Phi],
+                               findBlockStart: Int => SSA.Block,
+                               findBlockDest: Int => Option[SSA.Block]) extends Interpreter[SSA.Val, SSA.State]{
 
   /**
     * ACONST_NULL, ICONST_M1, ICONST_0, ICONST_1, ICONST_2, ICONST_3, ICONST_4, ICONST_5,
