@@ -153,7 +153,7 @@ object Analyzer{
 
       log(Renderer.renderSSA(program, preScheduleNaming))
 
-      program.checkLinks()
+      log.check(program.checkLinks())
       val (controlFlowEdges, startBlock, allBlocks, blockEdges) =
         Analyzer.analyzeBlockStructure(program)
 
@@ -205,9 +205,9 @@ object Analyzer{
         classExists
       )
 
-      program.checkLinks(checkDead = false)
+      log.check(program.checkLinks(checkDead = false))
       program.removeDeadNodes()
-      program.checkLinks()
+      log.check(program.checkLinks())
 
       val allVertices2 = program.getAllVertices()
 

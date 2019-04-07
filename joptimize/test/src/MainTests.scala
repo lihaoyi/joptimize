@@ -311,11 +311,11 @@ object MainTests extends TestSuite{
       inputFileMap,
       Seq(MethodSig(s"joptimize/examples/${tp.value.dropRight(1).mkString("/")}", tp.value.last, methodDesc, static = true)),
       eliminateOldMethods = true,
-      log = DummyLogger
-//        new FileLogger.Global(
-//          logRoot = outRoot / tp.value,
-//          ignorePrefix = ignorePrefix
-//        )
+//      log = DummyLogger
+      log = new FileLogger.Global(
+        logRoot = outRoot / tp.value,
+        ignorePrefix = ignorePrefix
+      )
     )
 
 

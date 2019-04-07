@@ -18,10 +18,10 @@ class Frontend {
 
     log.graph(Renderer.dumpSvg(program))
     program.removeDeadNodes()
-    program.checkLinks()
+    log.check(program.checkLinks())
 
     simplifyPhiMerges(program)
-    program.checkLinks()
+    log.check(program.checkLinks())
     program
   }
 
