@@ -21,14 +21,14 @@ public class Sudoku {
     @joptimize.Test()
     public static String quick() {
         int[][] grid = new int[9][9];
-        Sudoku.quickSolve(9, 8, grid);
+        Sudoku.quickSolve(9, 9, grid);
         return Sudoku.writeMatrix(grid);
     }
 
 
     static boolean quickSolve(int i, int j, int[][] cells) {
         if (i == 9) {
-            if (++j == 9)
+            if (j == 9)
                 return true;
         }
 

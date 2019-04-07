@@ -1,13 +1,14 @@
 package joptimize.optimize
 
-import joptimize.Util
+import joptimize.{Logger, Util}
 import joptimize.model.SSA
 
 object PartialEvaluator {
 
   def replaceJump(current: SSA.Jump,
                   directNext: SSA.Block,
-                  liveBlocks: SSA.Block => Boolean) = {
+                  liveBlocks: SSA.Block => Boolean,
+                  log: Logger.InferredMethod) = {
     //                     c
     //                    /
     //       a        TRUE -- d
@@ -18,18 +19,18 @@ object PartialEvaluator {
     //                     \     /
     //                      e----
 //    Util.replace(directNext, current.block)
-    current.block.upstream.collect{case v: SSA.Val => v.downstreamRemoveAll(current.block)}
 
-    pprint.log(current)
-    pprint.log(current.block)
-    pprint.log(current.block.downstreamList)
 
-    val down = current.block.next
-    directNext.next = down.asInstanceOf[SSA.Control]
-    current.block.next = directNext
-    down.replaceUpstream(current, directNext)
-    for(phi <- current.block.nextPhis){
-      phi.replaceUpstream(current, directNext)
+    log.pprint(current)
+    log.pprint(current.block)
+    log.pprint(current.block.downstreamList)
+
+    log.pprint(directNext)
+    log.pprint(directNext.next)
+
+    directNext.next.replaceUpstream(directNext, current.block)
+    for(phi <- directNext.nextPhis){
+      phi.replaceUpstream(directNext, current.block)
     }
     //       --------------------
     //      /      a        TRUE \--- d
@@ -39,7 +40,7 @@ object PartialEvaluator {
     //      c      b        false ----  |
     //                           \      /
     //                            e ----
-    current.block.next = null
+    current.block.next = directNext.next
     //       --------------------
     //      /      a        TRUE \--- d
     //     /        \      /      \    \
