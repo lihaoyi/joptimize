@@ -4,7 +4,6 @@ import joptimize.Util
 import joptimize.model.{Desc, JType, MethodSig, SSA}
 import org.objectweb.asm.tree._
 import org.objectweb.asm.{Handle, Opcodes}
-
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 

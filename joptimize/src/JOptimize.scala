@@ -1,6 +1,6 @@
 package joptimize
 
-import backend.{Backend, BytecodeDCE}
+import backend.Backend
 import joptimize.analysis.Analyzer
 import joptimize.model._
 import org.objectweb.asm.{ClassReader, ClassWriter, Opcodes}
@@ -70,15 +70,7 @@ object JOptimize{
       else throw new Exception(flattened.toString)
     }
 
-    def ignore(s: String) = s.startsWith("java/") || s.startsWith("scala/")
 
-    def findSupertypes(cls: JType.Cls) = {
-      val output = mutable.Buffer(cls)
-      while(classNodeMap.contains(output.last) && classNodeMap(output.last).superName != null && !ignore(classNodeMap(output.last).superName)){
-        output.append(JType.Cls(classNodeMap(output.last).superName))
-      }
-      output
-    }
     val visitedClasses = mutable.LinkedHashSet.empty[JType.Cls]
     val visitedMethods = Analyzer.apply(
       subtypeMap,
@@ -94,37 +86,15 @@ object JOptimize{
 
     pprint.log(visitedMethods, height=9999)
 
-    val newMethods = Backend.apply(originalMethods, classNodeMap, visitedMethods)
-
-
-    if (eliminateOldMethods) {
-      for ((k, cn) <- classFileMap) {
-        cn.methods.clear()
-      }
-    }
-
-    val visitedInterfaces = Util.findSeenInterfaces(classNodeMap, newMethods.map(_._1))
-
-    val grouped =
-      (visitedInterfaces ++ visitedClasses.map(_.name)).map(classNodeMap(_) -> Nil).toMap ++
-      newMethods.groupBy(_._1).mapValues(_.map(_._2))
-
-    for((cn, mns) <- grouped) yield {
-      if (cn.attrs != null) Util.removeFromJavaList(cn.attrs)(_.`type` == "ScalaSig")
-      if (cn.attrs != null) Util.removeFromJavaList(cn.attrs)(_.`type` == "ScalaInlineInfo")
-      if (cn.visibleAnnotations != null) {
-        Util.removeFromJavaList(cn.visibleAnnotations )(_.desc == "Lscala/reflect/ScalaSignature;")
-      }
-
-      cn.methods.addAll(mns.asJava)
-    }
-
-    val outClasses = BytecodeDCE(
+    val outClasses = Backend.apply(
       entrypoints,
-      grouped.keys.toSeq,
-      findSubtypes = subtypeMap.getOrElse(_, Nil),
-      findSupertypes = findSupertypes,
-      ignore = ignore
+      originalMethods,
+      classNodeMap,
+      visitedMethods,
+      eliminateOldMethods,
+      classFileMap,
+      visitedClasses,
+      subtypeMap
     )
 
     outClasses
