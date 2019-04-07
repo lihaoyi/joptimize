@@ -107,11 +107,6 @@ object SSA{
     def block: SSA.Block
     def downstreamList = Option(next).toSeq ++ nextPhis
     def downstreamSize = 1 + nextPhis.length
-    override def update(): Control = {
-      block.next = this
-      super.update()
-      this
-    }
   }
 
   trait Codes{
@@ -380,8 +375,8 @@ object SSA{
       block = swap(block)
       src = swap(src)
     }
-    def downstreamList = cases.values.toSeq
-    def downstreamSize = cases.size
+    def downstreamList = cases.values.toSeq ++ Seq(default)
+    def downstreamSize = cases.size + 1
   }
   class LookupSwitch(var state: State,
                      var block: Block,
@@ -395,8 +390,8 @@ object SSA{
       block = swap(block)
       src = swap(src)
     }
-    def downstreamList = cases.values.toSeq
-    def downstreamSize = cases.size
+    def downstreamList = cases.values.toSeq ++ Seq(default)
+    def downstreamSize = cases.size + 1
   }
 
   class Case(var branch: Jump, var n: Int, var next: SSA.Control) extends SimpleBlock(){

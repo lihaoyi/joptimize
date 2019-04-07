@@ -118,6 +118,7 @@ object ControlFlowExtraction {
           val default = new SSA.Default(n, null)
           mergeJumpTarget(default, insn.dflt, startRegion)
           n.cases = mutable.LinkedHashMap.empty[Int, SSA.Case] ++ cases
+          n.default = default
           Nil
 
         case (TABLESWITCH, insn: TableSwitchInsnNode) =>
