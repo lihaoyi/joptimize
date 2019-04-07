@@ -1,11 +1,11 @@
 package joptimize.frontend
 
-import joptimize.frontend.Frame
 import joptimize.model.{JType, Program, SSA}
 import org.objectweb.asm.Opcodes._
 import org.objectweb.asm.tree.{AbstractInsnNode, JumpInsnNode, LookupSwitchInsnNode, TableSwitchInsnNode}
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 
 object ControlFlowExtraction {
 
@@ -33,11 +33,16 @@ object ControlFlowExtraction {
 
     val blockStarts = (insns.take(1) ++ jumpTargets).toSet
 
+    var first = true
     val regionStarts =
       for (i <- insns.indices)
         yield {
           if (!blockStarts.contains(insns(i))) None
-          else Some(new SSA.Merge(i, Set()))
+          else if (first){
+            first = false
+            Some(new SSA.Start(null, null))
+          }
+          else Some(new SSA.Merge(i, Set(), null, Nil))
         }
     regionStarts
   }
@@ -50,7 +55,7 @@ object ControlFlowExtraction {
 
     def mergeBlocks(lhs: SSA.Merge, rhs: SSA.Block): Unit = {
       lhs.asInstanceOf[SSA.Merge].incoming += rhs
-      rhs.downstreamAdd(lhs)
+      rhs.next = lhs
     }
 
     /**
@@ -69,8 +74,8 @@ object ControlFlowExtraction {
         .collect { case phi: SSA.Phi if phi.block == startRegion =>
           phi.incoming = phi.incoming.map {
             case (k, v) if k == startReg =>
-              destBlock.downstreamAdd(phi)
-              startReg.downstreamRemove(phi)
+              destBlock.nextPhis ++= Seq(phi)
+              startReg.nextPhis = startReg.nextPhis.filter(_ != phi)
               (destBlock, v)
 
             case (k, v) => (k, v)
@@ -81,12 +86,20 @@ object ControlFlowExtraction {
 
     val terminals = insns.zipWithIndex.flatMap{case (insn, i) =>
       val newNodes = (insn.getOpcode, insn) match{
-        case (RETURN, insn) => (insn, new SSA.Return(frames(i).state, findStartRegion(i)), i) :: Nil
+        case (RETURN, insn) =>
+          val n = new SSA.Return(frames(i).state, findStartRegion(i))
+          findStartRegion(i).next = n
+          (insn, n, i) :: Nil
 
         case (IRETURN | LRETURN | FRETURN | DRETURN | ARETURN, insn) =>
-          (insn, new SSA.ReturnVal(frames(i).state, findStartRegion(i), frameTop(i, 0)), i) :: Nil
+          val n = new SSA.ReturnVal(frames(i).state, findStartRegion(i), frameTop(i, 0))
+          findStartRegion(i).next = n
+          (insn, n, i) :: Nil
 
-        case (ATHROW, insn) => (insn, new SSA.AThrow(frames(i).state, findStartRegion(i), frameTop(i, 0)), i) :: Nil
+        case (ATHROW, insn) =>
+          val n = new SSA.AThrow(frames(i).state, findStartRegion(i), frameTop(i, 0))
+          findStartRegion(i).next = n
+          (insn, n, i) :: Nil
 
         case (GOTO, insn: JumpInsnNode) =>
           mergeBlocks(regionStarts(insn.label).get, findStartRegion(i))
@@ -96,36 +109,69 @@ object ControlFlowExtraction {
           val startRegion = findStartRegion(i)
           val keys = insn.keys.asScala.map(_.toInt)
           val labels = insn.labels.asScala
-          val n = new SSA.LookupSwitch(frames(i).state, startRegion, frameTop(i, 0), keys)
-          for((k, l) <- keys.zip(labels)){
-            mergeJumpTarget(new SSA.Case(n, k), l, startRegion)
+          val n = new SSA.LookupSwitch(frames(i).state, startRegion, frameTop(i, 0), keys, null, null)
+          val cases = for((k, l) <- keys.zip(labels)) yield {
+            val caseNode = new SSA.Case(n, k, null)
+            mergeJumpTarget(caseNode, l, startRegion)
+            k -> caseNode
           }
-          mergeJumpTarget(new SSA.Default(n), insn.dflt, startRegion)
+          val default = new SSA.Default(n, null)
+          mergeJumpTarget(default, insn.dflt, startRegion)
+          n.cases = mutable.LinkedHashMap.empty[Int, SSA.Case] ++ cases
           Nil
 
         case (TABLESWITCH, insn: TableSwitchInsnNode) =>
           val startRegion = findStartRegion(i)
           val keys = Range.inclusive(insn.min, insn.max)
           val labels = insn.labels.asScala
-          val n = new SSA.TableSwitch(frames(i).state, startRegion, frameTop(i, 0), insn.min, insn.max)
-          for((k, l) <- keys.zip(labels)){
-            mergeJumpTarget(new SSA.Case(n, k), l, startRegion)
+          val n = new SSA.TableSwitch(frames(i).state, startRegion, frameTop(i, 0), insn.min, insn.max, null, null)
+          val cases = for((k, l) <- keys.zip(labels)) yield{
+            val caseNode = new SSA.Case(n, k, null)
+            mergeJumpTarget(caseNode, l, startRegion)
+            k -> caseNode
           }
-          mergeJumpTarget(new SSA.Default(n), insn.dflt, startRegion)
+          val default = new SSA.Default(n, null)
+          mergeJumpTarget(default, insn.dflt, startRegion)
+          n.cases = mutable.LinkedHashMap.empty[Int, SSA.Case] ++ cases
+          n.default = default
           Nil
 
         case (IFEQ | IFNE | IFLT | IFGE | IFGT | IFLE, insn: JumpInsnNode) =>
           val startRegion = findStartRegion(i)
-          val n = new SSA.UnaBranch(frames(i).state, startRegion, frameTop(i, 0), SSA.UnaBranch.lookup(insn.getOpcode))
-          mergeJumpTarget(new SSA.True(n), insn.label, startRegion)
-          mergeJumpTarget(new SSA.False(n), insn.getNext, startRegion)
+          val n = new SSA.UnaBranch(
+            frames(i).state,
+            startRegion,
+            frameTop(i, 0),
+            SSA.UnaBranch.lookup(insn.getOpcode),
+            null,
+            null
+          )
+
+          val trueBranch = new SSA.True(n, null)
+          val falseBranch = new SSA.False(n, null)
+          mergeJumpTarget(trueBranch, insn.label, startRegion)
+          mergeJumpTarget(falseBranch, insn.getNext, startRegion)
+          startRegion.next = n
           Nil
 
         case (IF_ICMPEQ | IF_ICMPNE | IF_ICMPLT | IF_ICMPGE | IF_ICMPGT | IF_ICMPLE | IF_ACMPEQ | IF_ACMPNE, insn: JumpInsnNode) =>
           val startRegion = findStartRegion(i)
-          val n = new SSA.BinBranch(frames(i).state, startRegion, frameTop(i, 1), frameTop(i, 0), SSA.BinBranch.lookup(insn.getOpcode))
-          mergeJumpTarget(new SSA.True(n), insn.label, startRegion)
-          mergeJumpTarget(new SSA.False(n), insn.getNext, startRegion)
+          val n = new SSA.BinBranch(
+            frames(i).state,
+            startRegion,
+            frameTop(i, 1),
+            frameTop(i, 0),
+            SSA.BinBranch.lookup(insn.getOpcode),
+            null,
+            null
+          )
+
+
+          val trueBranch = new SSA.True(n, null)
+          val falseBranch = new SSA.False(n, null)
+          mergeJumpTarget(trueBranch, insn.label, startRegion)
+          mergeJumpTarget(falseBranch, insn.getNext, startRegion)
+          startRegion.next = n
           Nil
 
         case _ =>
@@ -142,7 +188,9 @@ object ControlFlowExtraction {
       .map(frames(0).getLocal)
       .filter(_.jtype != JType.Prim.V)
 
-    Program(locals.map(_.asInstanceOf[SSA.Arg]), terminals.map(_._2))
+    val program = Program(locals.map(_.asInstanceOf[SSA.Arg]), terminals.map(_._2))
+
+    program
   }
 
 }

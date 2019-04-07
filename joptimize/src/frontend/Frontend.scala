@@ -17,10 +17,13 @@ class Frontend {
     val program = ConstructSSA.apply(originalSig.cls.name, mn, log)
 
     log.graph(Renderer.dumpSvg(program))
+    log.check(program.checkLinks(checkDead = false))
     program.removeDeadNodes()
     log.check(program.checkLinks())
+    log.graph(Renderer.dumpSvg(program))
 
     simplifyPhiMerges(program)
+    log.graph(Renderer.dumpSvg(program))
     log.check(program.checkLinks())
     program
   }
@@ -30,11 +33,24 @@ class Frontend {
     case phi: SSA.Phi =>
       val filteredValues = phi.incoming.filter(_._2 != phi)
 
-      if (filteredValues.map(_._2).size == 1) Util.replace(phi, filteredValues.head._2)
+      if (filteredValues.map(_._2).size == 1) {
+        phi.block.phis = phi.block.phis.filter(_ != phi)
+        Util.replace(phi, filteredValues.head._2)
+      }
       else Nil
 
-    case reg: SSA.Merge =>
-      if (reg.incoming.size == 1) Util.replace(reg, reg.incoming.head)
+    case merge: SSA.Merge =>
+      if (merge.incoming.size == 1 && merge.next != null) {
+        for(next <- Option(merge.next) ++ merge.nextPhis){
+
+          next.replaceUpstream(merge, merge.incoming.head)
+        }
+
+        merge.incoming.head.next = merge.next
+        merge.incoming.head.nextPhis = merge.nextPhis
+        merge.next = null
+        (merge.incoming.head +: merge.phis) ++ merge.nextPhis
+      }
       else Nil
   }
 }

@@ -35,7 +35,7 @@ object OptimisticSimplify {
         p.incoming = p.incoming.filter{t =>
           val live = liveBlocks(t._1)
           if (!live) {
-            t._1.downstreamRemove(p)
+            t._1.next = null
             t._2.downstreamRemove(p)
           }
           live
@@ -43,7 +43,7 @@ object OptimisticSimplify {
       case m: SSA.Merge =>
         m.incoming = m.incoming.filter{ t =>
           val live = liveBlocks(t)
-          if (!live) t.downstreamRemove(m)
+          if (!live) t.next = null
           live
         }
 
@@ -57,7 +57,7 @@ object OptimisticSimplify {
         }
         replacement.foreach{r =>
           inferred(r) = inferred(n)
-          n.upstream.foreach(_.downstreamRemoveAll(n))
+          n.upstreamVals.foreach(_.downstreamRemoveAll(n))
           for(d <- n.downstreamList) {
             r.downstreamAdd(d)
             d.replaceUpstream(n, r)
@@ -71,7 +71,7 @@ object OptimisticSimplify {
           PartialEvaluator.replaceJump(j, liveTargets.head, liveBlocks)
         }else if (liveTargets.size <= allTargets.size){
           for(t <- allTargets if !liveTargets.contains(t)){
-            j.downstreamRemove(t)
+            ???
           }
         }
       case _ => // do nothing

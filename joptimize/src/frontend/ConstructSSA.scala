@@ -35,6 +35,7 @@ object ConstructSSA {
       ),
       startRegionLookup
     )
+
     program
   }
 }

@@ -17,30 +17,20 @@ object SSA{
 
     def checkLinks() = {
       val brokenUps = upstream.filter(!_.downstreamContains(this))
-      val brokenDowns = downstream.keys.filter(!_.upstream.contains(this))
+      val brokenDowns = downstreamList.filter(!_.upstream.contains(this))
       assert(brokenUps.isEmpty, s"Unreciprocated upstream edges: $this <-> ${brokenUps.mkString(", ")}")
       assert(brokenDowns.isEmpty, s"Unreciprocated downstream edges: $this <-> ${brokenDowns.mkString(", ")}")
     }
     def upstream: Seq[Node]
     def upstreamVals: Seq[Val] = upstream.collect{case v: Val => v}
-    private[this] val downstream = mutable.LinkedHashMap.empty[Node, Int]
-    def downstreamAdd(n: Node) = downstream(n) = downstream.getOrElse(n, 0) + 1
-    def downstreamContains(n: Node) = downstream.contains(n)
-    def downstreamRemove(n: Node) = downstream.get(n) match{
-      case None => // do nothing
-      case Some(1) => downstream.remove(n)
-      case Some(x) if x > 1 => downstream(n) = x - 1
-    }
-    def downstreamRemoveAll(n: Node) = downstream.get(n) match{
-      case None => // do nothing
-      case Some(_) => downstream.remove(n)
-    }
 
-    def downstreamList = downstream.keysIterator.toArray
-    def downstreamSize = downstream.valuesIterator.sum
+    def downstreamContains(n: Node): Boolean = downstreamList.contains(n)
+
+    def downstreamList: Seq[SSA.Node]
+    def downstreamSize: Int
 
     def update(): Node = {
-      upstream.filter(_ != null).foreach(_.downstreamAdd(this))
+      upstream.filter(_ != null).collect{case c: SSA.Val => c.downstreamAdd(this)}
       this
     }
 
@@ -55,6 +45,21 @@ object SSA{
       super.update()
       this
     }
+    private[this] val downstream = mutable.LinkedHashMap.empty[Node, Int]
+    override def downstreamContains(n: Node) = downstream.contains(n)
+    def downstreamList: Seq[SSA.Node] = downstream.keysIterator.toArray[SSA.Node]
+    def downstreamSize: Int = downstream.valuesIterator.sum
+    def downstreamAdd(n: Node) = downstream(n) = downstream.getOrElse(n, 0) + 1
+    def downstreamRemove(n: Node) = downstream.get(n) match{
+      case None => // do nothing
+      case Some(1) => downstream.remove(n)
+      case Some(x) if x > 1 => downstream(n) = x - 1
+    }
+    def downstreamRemoveAll(n: Node) = downstream.get(n) match{
+      case None => // do nothing
+      case Some(_) => downstream.remove(n)
+    }
+
   }
   sealed trait Stateful extends Node{
     def state: State
@@ -65,6 +70,13 @@ object SSA{
     def replaceUpstream(swap: Swapper): Unit = {
       parent = swap(parent)
     }
+    override def update() = {
+      parent match{
+        case s: SSA.Start => s.startingState = this
+        case _ =>
+      }
+      super.update()
+    }
   }
 
   sealed abstract class Control() extends Node{
@@ -74,14 +86,32 @@ object SSA{
       this
     }
   }
-  sealed abstract class Block() extends Control()
+  sealed abstract class Block() extends Control(){
+    var nextPhis: Seq[Phi] = Nil
+    def next: SSA.Control
+    def next_=(v: SSA.Control)
+  }
   sealed abstract class Jump() extends Control(){
     def controls = Seq(block)
     def block: SSA.Block
+    override def update(): Control = {
+      block.next = this
+      super.update()
+      this
+    }
   }
   sealed abstract class SimpleBlock() extends Block(){
 
+    def next: SSA.Control
+    def next_=(v: SSA.Control)
     def block: SSA.Block
+    def downstreamList = Option(next).toSeq ++ nextPhis
+    def downstreamSize = 1 + nextPhis.length
+    override def update(): Control = {
+      block.next = this
+      super.update()
+      this
+    }
   }
 
   trait Codes{
@@ -93,8 +123,9 @@ object SSA{
     def lookup(i: Int) = lookup0(i)
   }
 
-  class Phi(var block: Block, var incoming: Set[(SSA.Block, SSA.Val)], var tpe: JType) extends Val(tpe) with SSA.State{
-    override def upstream: Seq[SSA.Node] = Seq(block) ++ incoming.flatMap(x => Seq(x._1, x._2)).toArray[SSA.Node]
+  class Phi(var block: Merge, var incoming: Set[(SSA.Block, SSA.Val)], var tpe: JType) extends Val(tpe) with SSA.State{
+    override def upstream: Seq[SSA.Node] =
+      Seq(block) ++ incoming.flatMap(x => Seq(x._1, x._2)).toArray[SSA.Node]
     override def toString = s"Phi@${Integer.toHexString(System.identityHashCode(this))}(${incoming.size})"
     def replaceUpstream(swap: Swapper): Unit = {
       block = swap(block)
@@ -109,9 +140,24 @@ object SSA{
         s"$this incoming blocks doesn't match block $block incoming blocks, $phiIncomingBlocks != $blockIncomingBlocks"
       )
     }
+//    override def update() = {
+//      block match{
+//        case s: SSA.Merge => s.phis = s.phis ++ Seq(this)
+//      }
+//      super.update()
+//    }
   }
 
-  class Merge(var insnIndex: Int, var incoming: Set[Block]) extends Block() {
+  class Start(next: SSA.Control,
+              var startingState: SSA.ChangedState) extends Merge(0, Set(), next, Nil){
+    override def toString = s"Start@${Integer.toHexString(System.identityHashCode(this))}"
+    override def downstreamList = super.downstreamList ++ Seq(startingState)
+    override def downstreamSize = super.downstreamSize + 1
+  }
+  class Merge(var insnIndex: Int,
+              var incoming: Set[Block],
+              var next: SSA.Control,
+              var phis: Seq[SSA.Phi]) extends Block() {
     def controls = upstream
     def upstream = incoming.toSeq
 
@@ -119,19 +165,37 @@ object SSA{
     def replaceUpstream(swap: Swapper): Unit = {
       incoming = incoming.map(swap(_))
     }
+    def downstreamList = Option(next).toSeq ++ phis ++ nextPhis
+    def downstreamSize = 1 + phis.length + nextPhis.length
   }
-  class True(var branch: Jump) extends SimpleBlock(){
+  class True(var branch: Jump, var next: SSA.Control) extends SimpleBlock(){
     def controls = Seq(branch)
     def block = branch.block
     def upstream = Seq(branch)
+    override def update(): Control = {
+      branch match{
+        case u: UnaBranch => u.trueBranch = this
+        case u: BinBranch => u.trueBranch = this
+      }
+      super.update()
+      this
+    }
     def replaceUpstream(swap: Swapper): Unit = {
       branch = swap(branch)
     }
   }
-  class False(var branch: Jump) extends SimpleBlock(){
+  class False(var branch: Jump, var next: SSA.Control) extends SimpleBlock(){
     def controls = Seq(branch)
     def block = branch.block
     def upstream = Seq(branch)
+    override def update(): Control = {
+      branch match{
+        case u: UnaBranch => u.falseBranch = this
+        case u: BinBranch => u.falseBranch = this
+      }
+      super.update()
+      this
+    }
     def replaceUpstream(swap: Swapper): Unit = {
       branch = swap(branch)
     }
@@ -219,13 +283,20 @@ object SSA{
     val F2D = new Code(Opcodes.F2D, JType.Prim.D)
   }
 
-  class UnaBranch(var state: State, var block: Block, var a: Val, var opcode: UnaBranch.Code) extends Jump(){
+  class UnaBranch(var state: State,
+                  var block: Block,
+                  var a: Val,
+                  var opcode: UnaBranch.Code,
+                  var trueBranch: SSA.True,
+                  var falseBranch: SSA.False) extends Jump(){
     def upstream = Seq(state, block, a)
     def replaceUpstream(swap: Swapper): Unit = {
       state = swap(state)
       block = swap(block)
       a = swap(a)
     }
+    def downstreamList = Seq(trueBranch, falseBranch)
+    def downstreamSize = 2
     override def toString = s"${super.toString()}($opcode)"
   }
   object UnaBranch  extends Codes{
@@ -238,7 +309,13 @@ object SSA{
     val IFNULL = new Code(Opcodes.IFNULL)
     val IFNONNULL = new Code(Opcodes.IFNONNULL)
   }
-  class BinBranch(var state: State, var block: Block, var a: Val, var b: Val, var opcode: BinBranch.Code) extends Jump(){
+  class BinBranch(var state: State,
+                  var block: Block,
+                  var a: Val,
+                  var b: Val,
+                  var opcode: BinBranch.Code,
+                  var trueBranch: SSA.True,
+                  var falseBranch: SSA.False) extends Jump(){
     def upstream = Seq(state, block, a, b)
     def replaceUpstream(swap: Swapper): Unit = {
       state = swap(state)
@@ -246,6 +323,8 @@ object SSA{
       a = swap(a)
       b = swap(b)
     }
+    def downstreamList = Seq(trueBranch, falseBranch)
+    def downstreamSize = 2
     override def toString = s"${super.toString()}($opcode)"
   }
 
@@ -266,6 +345,8 @@ object SSA{
       block = swap(block)
       src = swap(src)
     }
+    def downstreamList = Nil
+    def downstreamSize = 0
   }
   class Return(var state: State, var block: Block) extends Jump() with Stateful{
     def upstream = Seq(state, block)
@@ -273,6 +354,8 @@ object SSA{
       state = swap(state)
       block = swap(block)
     }
+    def downstreamList = Nil
+    def downstreamSize = 0
   }
   class AThrow(var state: State, var block: Block, var src: Val) extends Jump() with Stateful{
     def upstream = Seq(state, block, src)
@@ -281,25 +364,42 @@ object SSA{
       block = swap(block)
       src = swap(src)
     }
+    def downstreamList = Nil
+    def downstreamSize = 0
   }
-  class TableSwitch(var state: State, var block: Block, var src: Val, var min: Int, var max: Int) extends Jump() {
+  class TableSwitch(var state: State,
+                    var block: Block,
+                    var src: Val,
+                    var min: Int,
+                    var max: Int,
+                    var cases: mutable.LinkedHashMap[Int, SSA.Case],
+                    var default: SSA.Default) extends Jump() {
     def upstream = Seq(state, block, src)
     def replaceUpstream(swap: Swapper): Unit = {
       state = swap(state)
       block = swap(block)
       src = swap(src)
     }
+    def downstreamList = cases.values.toSeq
+    def downstreamSize = cases.size
   }
-  class LookupSwitch(var state: State, var block: Block, var src: Val, var keys: Seq[Int]) extends Jump(){
+  class LookupSwitch(var state: State,
+                     var block: Block,
+                     var src: Val,
+                     var keys: Seq[Int],
+                     var cases: mutable.LinkedHashMap[Int, SSA.Case],
+                     var default: SSA.Default) extends Jump(){
     def upstream = Seq(state, block, src)
     def replaceUpstream(swap: Swapper): Unit = {
       state = swap(state)
       block = swap(block)
       src = swap(src)
     }
+    def downstreamList = cases.values.toSeq
+    def downstreamSize = cases.size
   }
 
-  class Case(var branch: Jump, var n: Int) extends SimpleBlock(){
+  class Case(var branch: Jump, var n: Int, var next: SSA.Control) extends SimpleBlock(){
     def controls = Seq(branch)
     def block = branch.block
     def upstream = Seq(branch)
@@ -308,7 +408,7 @@ object SSA{
     }
     override def toString = s"${super.toString()}($n)"
   }
-  class Default(var branch: Jump) extends SimpleBlock(){
+  class Default(var branch: Jump, var next: SSA.Control) extends SimpleBlock(){
     def controls = Seq(branch)
     def block = branch.block
     def upstream = Seq(branch)

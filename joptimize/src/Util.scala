@@ -285,8 +285,11 @@ object Util{
   }
 
 
-  def replace(current: SSA.Node, replacement: SSA.Node): Seq[SSA.Node] = {
-    for (v <- current.upstream) v.downstreamRemoveAll(current)
+  def replace(current: SSA.Val, replacement: SSA.Val): Seq[SSA.Node] = {
+    current.upstream.collect{
+      case v: SSA.Val => v.downstreamRemoveAll(current)
+      case v: SSA.Block => v.nextPhis = v.nextPhis.filter(_ != current)
+    }
 
     for (down <- current.downstreamList if down != current) {
       replacement.downstreamAdd(down)

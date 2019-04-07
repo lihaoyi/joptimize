@@ -232,7 +232,7 @@ object OptimisticAnalyze {
       val currentBlock = workList.head
       inferredBlocks.add(currentBlock)
       workList.remove(currentBlock)
-      val Array(nextControl) = currentBlock.downstreamList.collect{case n: SSA.Control => n}
+      val Seq(nextControl) = currentBlock.downstreamList.collect{case n: SSA.Control => n}
 
       def queueNextBlock(nextBlock: SSA.Block) = {
         val nextPhis = nextBlock
@@ -345,8 +345,8 @@ object OptimisticAnalyze {
               }
             case n: SSA.TableSwitch =>
               val value = evaluate(n.src)
-              val cases = n.downstreamList.collect{case c: SSA.Case => c}
-              val Array(default) = n.downstreamList.collect{case c: SSA.Default => c}
+              val cases = n.cases.values
+              val default = n.default
               val doBranch = value match{
                 case CType.I(v) => Some(cases.find(_.n == v).getOrElse(default))
                 case _ => None
@@ -362,8 +362,8 @@ object OptimisticAnalyze {
             case n: SSA.LookupSwitch =>
 
               val value = evaluate(n.src)
-              val cases = n.downstreamList.collect{case c: SSA.Case => c}
-              val Array(default) = n.downstreamList.collect{case c: SSA.Default => c}
+              val cases = n.cases.values
+              val default = n.default
               val doBranch = value match{
                 case CType.I(v) => Some(cases.find(_.n == v).getOrElse(default))
                 case _ => None

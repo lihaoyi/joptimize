@@ -42,8 +42,21 @@ case class Program(args: Seq[SSA.Arg], var allTerminals: Seq[SSA.Control]){
     val allVertices = getAllVertices()
     for(v <- allVertices){
       for(down <- v.downstreamList){
-        if (!allVertices.contains(down)) {
-          v.downstreamRemoveAll(down)
+        v match{
+          case n: SSA.Val =>
+            if (!allVertices.contains(down)) {
+              n.downstreamRemoveAll(down)
+            }
+          case n: SSA.Merge =>
+            if (!allVertices.contains(down)) {
+              n.phis = n.phis.filter(_ != down)
+              n.nextPhis = n.nextPhis.filter(_ != down)
+            }
+          case n: SSA.SimpleBlock =>
+            if (!allVertices.contains(down)) {
+              n.nextPhis = n.nextPhis.filter(_ != down)
+            }
+          case _ =>
         }
       }
     }

@@ -17,7 +17,13 @@ object PartialEvaluator {
     //       b        false ---  |
     //                     \     /
     //                      e----
-    Util.replace(directNext, current.block)
+//    Util.replace(directNext, current.block)
+    current.block.upstream.collect{case v: SSA.Val => v.downstreamRemoveAll(current.block)}
+
+    for (down <- current.block.downstreamList if down != current) {
+      directNext.next = down.asInstanceOf[SSA.Control]
+      down.replaceUpstream(current, directNext)
+    }
     //       --------------------
     //      /      a        TRUE \--- d
     //     /        \      /      \    \
@@ -26,7 +32,7 @@ object PartialEvaluator {
     //      c      b        false ----  |
     //                           \      /
     //                            e ----
-    current.block.downstreamRemove(current)
+    current.block.next = null
     //       --------------------
     //      /      a        TRUE \--- d
     //     /        \      /      \    \
@@ -42,7 +48,7 @@ object PartialEvaluator {
         phi.incoming = phi.incoming.flatMap(x =>
           if (x._1 == directNext) Some(current.block -> x._2)
           else if (branchBlocks(x._1)) {
-            x._1.downstreamRemove(phi)
+            x._1.next = null
             x._2.downstreamRemove(phi)
             None
           }
@@ -56,7 +62,7 @@ object PartialEvaluator {
         r.incoming = r.incoming.flatMap { x =>
           if (x == directNext) Some(current.block)
           else if (branchBlocks(x)) {
-            x.downstreamRemove(r)
+            x.next = null
             None
           }
           else Some(x)

@@ -18,7 +18,7 @@ import scala.collection.mutable
   */
 class BytecodeToSSAInterpreter(merges: mutable.LinkedHashSet[SSA.Phi],
                                findBlockStart: Int => SSA.Block,
-                               findBlockDest: Int => Option[SSA.Block]) extends Interpreter[SSA.Val, SSA.State]{
+                               findBlockDest: Int => Option[SSA.Merge]) extends Interpreter[SSA.Val, SSA.State]{
 
   /**
     * ACONST_NULL, ICONST_M1, ICONST_0, ICONST_1, ICONST_2, ICONST_3, ICONST_4, ICONST_5,
@@ -275,9 +275,11 @@ class BytecodeToSSAInterpreter(merges: mutable.LinkedHashSet[SSA.Phi],
   def returnOperation(insn: AbstractInsnNode, value: SSA.Val, expected: SSA.Val) = ()
 
   def merge[N <: SSA.Val](v1: N, v2: N, insnIndex: Int, targetInsnIndex: Int) = {
-    val src = findBlockStart(insnIndex)
-    v1.asInstanceOf[SSA.Phi].incoming += (src -> v2)
-    findBlockStart(insnIndex).downstreamAdd(v1)
+    val src = findBlockStart(insnIndex).asInstanceOf[SSA.Merge]
+    val phi = v1.asInstanceOf[SSA.Phi]
+    phi.incoming += (src -> v2)
+    src.nextPhis = Seq(phi) ++ src.nextPhis
+
     v2.downstreamAdd(v1)
     v1
   }
@@ -287,6 +289,8 @@ class BytecodeToSSAInterpreter(merges: mutable.LinkedHashSet[SSA.Phi],
       case Some(dest) if insnIndex != targetInsnIndex =>
         val src = findBlockStart(insnIndex)
         val phiStub = new SSA.Phi(dest, Set(src -> value1), value1.jtype)
+        src.nextPhis ++= Seq(phiStub)
+        dest.phis ++= Seq(phiStub)
         merges.add(phiStub)
         phiStub.asInstanceOf[N]
       case _ => value1
