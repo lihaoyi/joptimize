@@ -2,7 +2,7 @@ package joptimize.backend
 
 import joptimize.Util
 import joptimize.algorithms.{Dominator, Scheduler}
-import joptimize.analysis.{Namer, Walker}
+import joptimize.analysis.{Namer, Analyzer}
 import joptimize.graph.HavlakLoopTree
 import joptimize.model.{IType, JType, MethodSig}
 import org.objectweb.asm.Opcodes
@@ -14,11 +14,11 @@ import scala.collection.mutable
 object Backend {
   def apply(originalMethods: Map[MethodSig, MethodNode],
             classNodeMap: Map[JType.Cls, ClassNode],
-            visitedMethods: mutable.LinkedHashMap[(MethodSig, Seq[IType]), Walker.MethodResult]) = {
+            visitedMethods: mutable.LinkedHashMap[(MethodSig, Seq[IType]), Analyzer.MethodResult]) = {
     visitedMethods.toList.collect {
       case (
         (sig, inferredArgs),
-        Walker.MethodResult(returnType, program, seenTryCatchBlocks, blockEdges, allBlocks, startBlock, allVertices2)) =>
+        Analyzer.MethodResult(returnType, program, seenTryCatchBlocks, blockEdges, allBlocks, startBlock, allVertices2)) =>
 
         val originalNode = originalMethods(sig)
 
@@ -70,7 +70,7 @@ object Backend {
             program,
             allVertices2,
             nodesToBlocks,
-            Walker.analyzeBlockStructure(program)._1,
+            Analyzer.analyzeBlockStructure(program)._1,
             postRegisterAllocNaming
           )
 

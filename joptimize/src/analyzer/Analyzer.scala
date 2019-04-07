@@ -2,21 +2,113 @@ package joptimize.analysis
 
 import frontend.ConstructSSA
 import joptimize.algorithms.{Dominator, Scheduler}
-import joptimize.backend.{CodeGenMethod, RegisterAllocator}
-import joptimize.frontend.{BytecodeToSSAInterpreter, ControlFlowExtraction}
 import joptimize.{Logger, Util}
 import joptimize.graph.HavlakLoopTree
 import joptimize.model._
 import joptimize.optimize.{ITypeLattice, OptimisticAnalyze, OptimisticSimplify}
-
-import collection.JavaConverters._
-import org.objectweb.asm.Opcodes._
 import org.objectweb.asm.tree._
 import org.objectweb.asm.util.{Textifier, TraceMethodVisitor}
+import os.{Path, RelPath}
 
 import scala.collection.mutable
 
-class Walker(merge: (IType, IType) => IType) {
+object Analyzer{
+  def apply(subtypeMap: mutable.LinkedHashMap[JType.Cls, scala.List[JType.Cls]],
+            entrypoints: Seq[MethodSig],
+            logRoot: Path,
+            ignorePrefix: RelPath,
+            classNodeMap: Map[JType.Cls, ClassNode],
+            originalMethods: Map[MethodSig, MethodNode],
+            leastUpperBound: Seq[JType.Cls] => Seq[JType.Cls],
+            merge: Seq[IType] => IType,
+            visitedClasses: mutable.LinkedHashSet[JType.Cls]) = {
+    val visitedMethods = mutable.LinkedHashMap.empty[(MethodSig, Seq[IType]), Analyzer.MethodResult]
+
+    val callerGraph = mutable.LinkedHashMap[MethodSig, mutable.LinkedHashSet[MethodSig]]()
+
+    def computeMethodSig(sig: MethodSig,
+                         invokeSpecial: Boolean,
+                         inferredArgs: Seq[IType],
+                         callStack: List[(MethodSig, Seq[IType])]): IType = {
+
+      val subSigs = {
+        (sig.static, invokeSpecial) match {
+          case (true, false) =>
+            def rec(currentCls: JType.Cls): Option[MethodSig] = {
+              val currentSig = sig.copy(cls = currentCls)
+              if (originalMethods.contains(currentSig)) Some(currentSig)
+              else if (!classNodeMap.contains(currentCls)) None
+              else rec(JType.Cls(classNodeMap(currentCls).superName))
+            }
+
+            if (sig.name == "<clinit>") Some(Seq(sig))
+            else rec(sig.cls).map(Seq(_))
+          case (false, true) => Some(Seq(sig))
+          case (false, false) =>
+            val subTypes = subtypeMap
+              .getOrElse(sig.cls, Nil)
+              .filter(c => leastUpperBound(Seq(c, inferredArgs(0).asInstanceOf[JType.Cls])) == Seq(inferredArgs(0)))
+              .map(c => sig.copy(cls = c))
+
+            Some(sig :: subTypes)
+        }
+      }
+
+      subSigs match {
+        case None => sig.desc.ret
+        case Some(subSigs) =>
+          val rets = for (subSig <- subSigs) yield originalMethods.get(subSig) match {
+            case Some(original) =>
+              visitedMethods.getOrElseUpdate(
+                (subSig, inferredArgs.drop(if (sig.static) 0 else 1)),
+                {
+                  val (res, newVisitedClasses, calledMethods) = walkMethod(
+                    subSig,
+                    original,
+                    computeMethodSig,
+                    inferredArgs,
+                    (inf, orig) => leastUpperBound(Seq(inf, orig)) == Seq(orig),
+                    callStack,
+                    new Logger(logRoot, ignorePrefix, subSig, inferredArgs.drop(if (sig.static) 0 else 1)),
+                    classNodeMap.contains,
+                    merge
+                  )
+                  newVisitedClasses.foreach(visitedClasses.add)
+                  for (m <- calledMethods) {
+                    callerGraph.getOrElseUpdate(m, mutable.LinkedHashSet.empty).add(subSig)
+                  }
+                  res
+                }
+              ).inferredReturn
+            case None =>
+              sig.desc.ret
+          }
+
+          merge(rets)
+      }
+    }
+
+    for (ep <- entrypoints) {
+      val (res, seenClasses, calledMethods) = walkMethod(
+        ep,
+        originalMethods(ep),
+        computeMethodSig,
+        ep.desc.args,
+        (inf, orig) => leastUpperBound(Seq(inf, orig)) == Seq(orig),
+        Nil,
+        new Logger(logRoot, ignorePrefix, ep, ep.desc.args.drop(if (ep.static) 0 else 1)),
+        classNodeMap.contains,
+        merge
+      )
+      for (m <- calledMethods) {
+        callerGraph.getOrElseUpdate(m, mutable.LinkedHashSet.empty).add(ep)
+      }
+
+      visitedMethods((ep, ep.desc.args)) = res
+      seenClasses.foreach(visitedClasses.add)
+    }
+    visitedMethods
+  }
 
   def walkMethod(originalSig: MethodSig,
                  mn: MethodNode,
@@ -25,11 +117,12 @@ class Walker(merge: (IType, IType) => IType) {
                  checkSubclass: (JType.Cls, JType.Cls) => Boolean,
                  callStack: List[(MethodSig, Seq[IType])],
                  log: Logger,
-                 classExists: JType.Cls => Boolean): (Walker.MethodResult, Set[JType.Cls], Set[MethodSig]) = {
+                 classExists: JType.Cls => Boolean,
+                 merge: Seq[IType] => IType): (Analyzer.MethodResult, Set[JType.Cls], Set[MethodSig]) = {
 
     if (callStack.contains(originalSig -> inferredArgs) || mn.instructions.size() == 0){
       Tuple3(
-        Walker.MethodResult(
+        Analyzer.MethodResult(
           inferredReturn = originalSig.desc.ret,
           program = new Program(Nil, Nil),
           seenTryCatchBlocks = Nil,
@@ -72,7 +165,7 @@ class Walker(merge: (IType, IType) => IType) {
 
       program.checkLinks()
       val (controlFlowEdges, startBlock, allBlocks, blockEdges) =
-        Walker.analyzeBlockStructure(program)
+        Analyzer.analyzeBlockStructure(program)
 
       log.println("")
       log(Renderer.renderControlFlowGraph(controlFlowEdges, preScheduleNaming.savedLocals))
@@ -104,7 +197,7 @@ class Walker(merge: (IType, IType) => IType) {
         Map.empty,
         program.getAllVertices().collect{case b: SSA.Block if b.upstream.isEmpty => b}.head,
         new ITypeLattice(
-          merge,
+          (x, y) => merge(Seq(x, y)),
           computeMethodSig(_, _, _, (originalSig -> inferredArgs) :: callStack),
           inferredArgs.flatMap{i => Seq.fill(i.getSize)(i)}
         ),
@@ -152,9 +245,9 @@ class Walker(merge: (IType, IType) => IType) {
           case n => inferred.get(n)
         }
 
-      val inferredReturn = allInferredReturns
-        .reduceLeftOption(merge)
-        .getOrElse(JType.Prim.V)
+      val inferredReturn =
+        if (allInferredReturns.isEmpty) JType.Prim.V
+        else merge(allInferredReturns.toSeq)
 
       assert(
         Util.isValidationCompatible0(inferredReturn, originalSig.desc.ret, checkSubclass),
@@ -162,7 +255,7 @@ class Walker(merge: (IType, IType) => IType) {
           s"with declared return type [${originalSig.desc.ret}]"
       )
 
-      val result = Walker.MethodResult(
+      val result = Analyzer.MethodResult(
         inferredReturn,
         program,
         Nil,
@@ -204,9 +297,6 @@ class Walker(merge: (IType, IType) => IType) {
       if (reg.incoming.size == 1) Util.replace(reg, reg.incoming.head)
       else Nil
   }
-}
-
-object Walker{
 
   /**
     * @param inferredReturn The return type of the method, narrowed to potentially

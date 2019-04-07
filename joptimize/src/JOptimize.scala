@@ -1,7 +1,7 @@
 package joptimize
 
 import backend.{Backend, PostLivenessDCE}
-import joptimize.analysis.Walker
+import joptimize.analysis.Analyzer
 import joptimize.model._
 import org.objectweb.asm.{ClassReader, ClassWriter, Opcodes}
 import org.objectweb.asm.tree._
@@ -80,89 +80,18 @@ object JOptimize{
       output
     }
     val visitedClasses = mutable.LinkedHashSet.empty[JType.Cls]
-    val walker = new Walker((lhs, rhs) => merge(Seq(lhs, rhs)))
+    val visitedMethods = Analyzer.apply(
+      subtypeMap,
+      entrypoints,
+      logRoot,
+      ignorePrefix,
+      classNodeMap,
+      originalMethods,
+      leastUpperBound,
+      merge,
+      visitedClasses
+    )
 
-    val visitedMethods = mutable.LinkedHashMap.empty[(MethodSig, Seq[IType]), Walker.MethodResult]
-
-    val callerGraph = mutable.LinkedHashMap[MethodSig, mutable.LinkedHashSet[MethodSig]]()
-    def computeMethodSig(sig: MethodSig,
-                         invokeSpecial: Boolean,
-                         inferredArgs: Seq[IType],
-                         callStack: List[(MethodSig, Seq[IType])]): IType = {
-
-      val subSigs = {
-        (sig.static, invokeSpecial) match{
-          case (true, false) =>
-            def rec(currentCls: JType.Cls): Option[MethodSig] = {
-              val currentSig = sig.copy(cls = currentCls)
-              if (originalMethods.contains(currentSig)) Some(currentSig)
-              else if (!classNodeMap.contains(currentCls)) None
-              else rec(JType.Cls(classNodeMap(currentCls).superName))
-            }
-            if (sig.name == "<clinit>") Some(Seq(sig))
-            else rec(sig.cls).map(Seq(_))
-          case (false, true) => Some(Seq(sig))
-          case (false, false) =>
-            val subTypes = subtypeMap
-              .getOrElse(sig.cls, Nil)
-              .filter(c => leastUpperBound(Seq(c, inferredArgs(0).asInstanceOf[JType.Cls])) == Seq(inferredArgs(0)))
-              .map(c => sig.copy(cls = c))
-
-            Some(sig :: subTypes)
-        }
-      }
-
-      subSigs match{
-        case None => sig.desc.ret
-        case Some(subSigs) =>
-          val rets = for(subSig <- subSigs) yield originalMethods.get(subSig) match{
-            case Some(original) =>
-              visitedMethods.getOrElseUpdate(
-                (subSig, inferredArgs.drop(if (sig.static) 0 else 1)),
-                {
-                  val (res, newVisitedClasses, calledMethods) = walker.walkMethod(
-                    subSig,
-                    original,
-                    computeMethodSig,
-                    inferredArgs,
-                    (inf, orig) => leastUpperBound(Seq(inf, orig)) == Seq(orig),
-                    callStack,
-                    new Logger(logRoot, ignorePrefix, subSig, inferredArgs.drop(if (sig.static) 0 else 1)),
-                    classNodeMap.contains
-                  )
-                  newVisitedClasses.foreach(visitedClasses.add)
-                  for(m <- calledMethods){
-                    callerGraph.getOrElseUpdate(m, mutable.LinkedHashSet.empty).add(subSig)
-                  }
-                  res
-                }
-              ).inferredReturn
-            case None =>
-              sig.desc.ret
-          }
-
-          merge(rets)
-      }
-    }
-
-    for(ep <- entrypoints){
-      val (res, seenClasses, calledMethods) = walker.walkMethod(
-        ep,
-        originalMethods(ep),
-        computeMethodSig,
-        ep.desc.args,
-        (inf, orig) => leastUpperBound(Seq(inf, orig)) == Seq(orig),
-        Nil,
-        new Logger(logRoot, ignorePrefix, ep, ep.desc.args.drop(if (ep.static) 0 else 1)),
-        classNodeMap.contains
-      )
-      for(m <- calledMethods){
-        callerGraph.getOrElseUpdate(m, mutable.LinkedHashSet.empty).add(ep)
-      }
-
-      visitedMethods((ep, ep.desc.args)) = res
-      seenClasses.foreach(visitedClasses.add)
-    }
     pprint.log(visitedMethods, height=9999)
 
     val newMethods = Backend.apply(originalMethods, classNodeMap, visitedMethods)
@@ -206,5 +135,6 @@ object JOptimize{
       }
       .toMap
   }
+
 
 }
