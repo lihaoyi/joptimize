@@ -1,6 +1,6 @@
 package joptimize.optimize
 
-import joptimize.analysis.Namer
+import joptimize.analyzer.Namer
 import joptimize.model._
 import joptimize.{Logger, Util}
 

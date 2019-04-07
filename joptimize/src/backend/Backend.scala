@@ -2,7 +2,7 @@ package joptimize.backend
 
 import joptimize.Util
 import joptimize.algorithms.{Dominator, Scheduler}
-import joptimize.analysis.{Analyzer, Namer}
+import joptimize.analyzer.{Analyzer, Namer}
 import joptimize.graph.HavlakLoopTree
 import joptimize.model.{IType, JType, MethodSig}
 import org.objectweb.asm.Opcodes

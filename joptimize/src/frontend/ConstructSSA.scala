@@ -1,7 +1,7 @@
 package frontend
 
 import joptimize.Logger
-import joptimize.analysis.Renderer
+import joptimize.analyzer.Renderer
 import joptimize.frontend.{BytecodeToSSAInterpreter, ControlFlowExtraction}
 import joptimize.model.SSA
 import org.objectweb.asm.tree.MethodNode

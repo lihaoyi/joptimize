@@ -1,4 +1,4 @@
-package joptimize.analysis
+package joptimize.analyzer
 
 import joptimize.Util.sortVerticesForPrinting
 import joptimize.model.{Program, SSA}

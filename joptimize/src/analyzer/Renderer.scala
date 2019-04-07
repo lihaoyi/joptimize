@@ -1,4 +1,4 @@
-package joptimize.analysis
+package joptimize.analyzer
 import java.io.{PrintWriter, StringReader, StringWriter}
 
 import fansi.Str

@@ -1,4 +1,4 @@
-package joptimize.analysis
+package joptimize.analyzer
 
 import frontend.ConstructSSA
 import joptimize.algorithms.{Dominator, Scheduler}

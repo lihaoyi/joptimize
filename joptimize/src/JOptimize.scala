@@ -1,7 +1,7 @@
 package joptimize
 
 import backend.Backend
-import joptimize.analysis.Analyzer
+import joptimize.analyzer.Analyzer
 import joptimize.model._
 import org.objectweb.asm.{ClassReader, ClassWriter, Opcodes}
 import org.objectweb.asm.tree._
