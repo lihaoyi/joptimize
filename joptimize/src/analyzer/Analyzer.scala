@@ -2,6 +2,7 @@ package joptimize.analyzer
 
 import frontend.ConstructSSA
 import joptimize.algorithms.{Dominator, Scheduler}
+import joptimize.frontend.Frontend
 import joptimize.{Logger, Util}
 import joptimize.graph.HavlakLoopTree
 import joptimize.model._
@@ -19,7 +20,8 @@ object Analyzer{
             originalMethods: Map[MethodSig, MethodNode],
             leastUpperBound: Seq[JType.Cls] => Seq[JType.Cls],
             merge: Seq[IType] => IType,
-            log: Logger.Global) = {
+            log: Logger.Global,
+            frontend: Frontend) = {
     val visitedMethods = mutable.LinkedHashMap.empty[(MethodSig, Seq[IType]), Analyzer.Result]
     val visitedClasses = mutable.LinkedHashSet.empty[JType.Cls]
     val callerGraph = mutable.LinkedHashMap[MethodSig, mutable.LinkedHashSet[MethodSig]]()
@@ -69,7 +71,8 @@ object Analyzer{
                     callStack,
                     log.inferredMethod(sig, inferredArgs.drop(if (sig.static) 0 else 1)),
                     classNodeMap.contains,
-                    merge
+                    merge,
+                    frontend
                   )
                   newVisitedClasses.foreach(visitedClasses.add)
                   for (m <- calledMethods) {
@@ -96,7 +99,8 @@ object Analyzer{
         Nil,
         log.inferredMethod(ep, ep.desc.args.drop(if (ep.static) 0 else 1)),
         classNodeMap.contains,
-        merge
+        merge,
+        frontend
       )
       for (m <- calledMethods) {
         callerGraph.getOrElseUpdate(m, mutable.LinkedHashSet.empty).add(ep)
@@ -116,7 +120,8 @@ object Analyzer{
                  callStack: List[(MethodSig, Seq[IType])],
                  log: Logger.InferredMethod,
                  classExists: JType.Cls => Boolean,
-                 merge: Seq[IType] => IType): (Analyzer.Result, Set[JType.Cls], Set[MethodSig]) = {
+                 merge: Seq[IType] => IType,
+                 frontend: Frontend): (Analyzer.Result, Set[JType.Cls], Set[MethodSig]) = {
 
     if (callStack.contains(originalSig -> inferredArgs) || mn.instructions.size() == 0){
       Tuple3(
@@ -139,19 +144,8 @@ object Analyzer{
         s"Inferred param types [${inferredArgs.mkString(", ")}] is not compatible " +
           s"with declared param types [${originalSig.desc.args.mkString(", ")}]"
       )
-      val printer = new Textifier
-      val methodPrinter = new TraceMethodVisitor(printer)
-      log.println("================ BYTECODE ================")
-      log(Renderer.renderInsns(mn.instructions, printer, methodPrinter))
 
-      val program = ConstructSSA.apply(originalSig.cls.name, mn, log)
-
-      log.graph(Renderer.dumpSvg(program))
-      removeDeadNodes(program)
-      program.checkLinks()
-
-      simplifyPhiMerges(program)
-      program.checkLinks()
+      val program = frontend.apply(originalSig, mn, log.method(originalSig))
       log.graph(Renderer.dumpSvg(program))
       log.println("================ INITIAL ================")
 
@@ -212,7 +206,7 @@ object Analyzer{
       )
 
       program.checkLinks(checkDead = false)
-      removeDeadNodes(program)
+      program.removeDeadNodes()
       program.checkLinks()
 
       val allVertices2 = program.getAllVertices()
@@ -263,31 +257,6 @@ object Analyzer{
     }
   }
 
-
-
-  def removeDeadNodes(program: Program) = {
-    // Remove dead phi nodes that may have been inserted during SSA construction
-    val allVertices = program.getAllVertices()
-    for(v <- allVertices){
-      for(down <- v.downstreamList){
-        if (!allVertices.contains(down)) {
-          v.downstreamRemoveAll(down)
-        }
-      }
-    }
-  }
-
-  def simplifyPhiMerges(program: Program) = program.transform{
-    case phi: SSA.Phi =>
-      val filteredValues = phi.incoming.filter(_._2 != phi)
-
-      if (filteredValues.map(_._2).size == 1) Util.replace(phi, filteredValues.head._2)
-      else Nil
-
-    case reg: SSA.Merge =>
-      if (reg.incoming.size == 1) Util.replace(reg, reg.incoming.head)
-      else Nil
-  }
 
   /**
     * @param inferredReturn The return type of the method, narrowed to potentially

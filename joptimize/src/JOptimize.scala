@@ -2,6 +2,7 @@ package joptimize
 
 import backend.Backend
 import joptimize.analyzer.Analyzer
+import joptimize.frontend.Frontend
 import joptimize.model._
 import org.objectweb.asm.{ClassReader, ClassWriter, Opcodes}
 import org.objectweb.asm.tree._
@@ -69,6 +70,7 @@ object JOptimize{
       else throw new Exception(flattened.toString)
     }
 
+    val frontend = new Frontend()
     val (visitedMethods, visitedClasses) = Analyzer.apply(
       subtypeMap,
       entrypoints,
@@ -76,7 +78,8 @@ object JOptimize{
       originalMethods,
       leastUpperBound,
       merge,
-      log
+      log,
+      frontend
     )
 
     log.pprint(visitedMethods)

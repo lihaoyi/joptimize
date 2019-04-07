@@ -13,7 +13,7 @@ import scala.collection.mutable
   * to give us a bit more flexibility in keeping track of the control flow
   * graph's incoming edges during the {@link Interpreter#merge}
   */
-object Analyzer{
+object DataflowExecutor{
   def analyze[V <: Value, S <: V](owner: String,
                                   method: MethodNode,
                                   interpreter: Interpreter[V, S],

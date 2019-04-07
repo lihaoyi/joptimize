@@ -28,7 +28,7 @@ object ConstructSSA {
     val program = ControlFlowExtraction.extractControlFlow(
       insns,
       i => regionStarts(insnIndices(i)),
-      joptimize.frontend.Analyzer.analyze(
+      joptimize.frontend.DataflowExecutor.analyze(
         clsName, mn,
         new BytecodeToSSAInterpreter(phiMerges0, startRegionLookup, regionStarts),
         new SSA.ChangedState(regionStarts(0).get)

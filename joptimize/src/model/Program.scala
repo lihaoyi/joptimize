@@ -36,4 +36,16 @@ case class Program(args: Seq[SSA.Arg], var allTerminals: Seq[SSA.Control]){
       }
     }
   }
+
+  def removeDeadNodes() = {
+    // Remove dead phi nodes that may have been inserted during SSA construction
+    val allVertices = getAllVertices()
+    for(v <- allVertices){
+      for(down <- v.downstreamList){
+        if (!allVertices.contains(down)) {
+          v.downstreamRemoveAll(down)
+        }
+      }
+    }
+  }
 }
