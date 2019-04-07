@@ -1,23 +1,6 @@
 package joptimize.examples.simple;
 
 public class Sudoku {
-
-    @joptimize.Test()
-    public static String run() {
-        int[][] grid = {
-                {5, 3, 0, 0, 7, 0, 0, 0, 0},
-                {6, 0, 0, 1, 9, 5, 0, 0, 0},
-                {0, 9, 8, 0, 0, 0, 0, 6, 0},
-                {8, 0, 0, 0, 6, 0, 0, 0, 3},
-                {4, 0, 0, 8, 0, 3, 0, 0, 1},
-                {7, 0, 0, 0, 2, 0, 0, 0, 6},
-                {0, 6, 0, 0, 0, 0, 2, 8, 0},
-                {0, 0, 0, 4, 1, 9, 0, 0, 5},
-                {0, 0, 0, 0, 8, 0, 0, 7, 9},
-        };
-        Sudoku.solve(0, 0, grid);
-        return Sudoku.writeMatrix(grid);
-    }
     @joptimize.Test()
     public static String quick() {
         int[][] grid = new int[9][9];
@@ -33,6 +16,13 @@ public class Sudoku {
         }
 
         return false;
+    }
+
+    @joptimize.Test(inputs = {0, 1, 2, 3, 4, 5, 6, 7, 9})
+    public static boolean quick2(int i) {
+        int[] grid = new int[9];
+
+        return Sudoku.quickSolve2(8, grid);
     }
 
     static boolean solve(int i, int j, int[][] cells) {
@@ -53,6 +43,35 @@ public class Sudoku {
         }
         cells[i][j] = 0; // reset on backtrack
         return false;
+    }
+
+    static boolean quickSolve2(int i, int[] cells) {
+        if (i == 9) {
+            i = 0;
+        }
+
+        if (cells[i] != 0) {
+            i = 2;
+        }
+
+        return i > 0;
+    }
+
+    @joptimize.Test()
+    public static String run() {
+        int[][] grid = {
+                {5, 3, 0, 0, 7, 0, 0, 0, 0},
+                {6, 0, 0, 1, 9, 5, 0, 0, 0},
+                {0, 9, 8, 0, 0, 0, 0, 6, 0},
+                {8, 0, 0, 0, 6, 0, 0, 0, 3},
+                {4, 0, 0, 8, 0, 3, 0, 0, 1},
+                {7, 0, 0, 0, 2, 0, 0, 0, 6},
+                {0, 6, 0, 0, 0, 0, 2, 8, 0},
+                {0, 0, 0, 4, 1, 9, 0, 0, 5},
+                {0, 0, 0, 0, 8, 0, 0, 7, 9},
+        };
+        Sudoku.solve(0, 0, grid);
+        return Sudoku.writeMatrix(grid);
     }
 
     static boolean legal(int i, int j, int val, int[][] cells) {

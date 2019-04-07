@@ -77,13 +77,13 @@ object OptimisticSimplify {
       case _ => // do nothing
     }
 
-    log.pprint(program.allTerminals)
+//    log.pprint(program.allTerminals)
     program.allTerminals = program.allTerminals.filter{
       case j: SSA.Jump => liveBlocks.contains(j.block)
       case t: SSA.AThrow => liveBlocks.contains(t.block)
     }
-    log.pprint(liveBlocks)
-    log.pprint(program.allTerminals)
+//    log.pprint(liveBlocks)
+//    log.pprint(program.allTerminals)
 
     log.graph(Renderer.dumpSvg(program))
     //      program.checkLinks(checkDead = false)
