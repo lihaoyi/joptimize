@@ -40,8 +40,10 @@ object Util{
   }
 
   def mangleName0(originalSig: MethodSig, inferredTypes: Seq[IType]) = {
-    originalSig.name + "__" + inferredTypes.map(_.name).mkString("__").replace('/', '_').replace('[', 'A')
+    originalSig.name + "__" + mangleArgs(inferredTypes)
   }
+
+  def mangleArgs(inferredTypes: Seq[IType]) = inferredTypes.map(_.name).mkString("__").replace('/', '_').replace('[', 'A')
 
   def leastUpperBound[T](starts: Set[T])(edges: T => Seq[T]) = {
     // Walk up the graph from all starting locations

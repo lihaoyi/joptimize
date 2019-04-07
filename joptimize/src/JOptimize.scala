@@ -12,8 +12,7 @@ object JOptimize{
   def run(classFiles: Map[String, Array[Byte]],
           entrypoints: Seq[MethodSig],
           eliminateOldMethods: Boolean,
-          logRoot: os.Path,
-          ignorePrefix: os.RelPath): Map[String, Array[Byte]] = {
+          log: Logger.Global): Map[String, Array[Byte]] = {
 
     val classFileMap = for((k, v) <- classFiles) yield {
       val cr = new ClassReader(v)
@@ -70,20 +69,17 @@ object JOptimize{
       else throw new Exception(flattened.toString)
     }
 
-
-
     val (visitedMethods, visitedClasses) = Analyzer.apply(
       subtypeMap,
       entrypoints,
-      logRoot,
-      ignorePrefix,
       classNodeMap,
       originalMethods,
       leastUpperBound,
-      merge
+      merge,
+      log
     )
 
-    pprint.log(visitedMethods, height=9999)
+    log.pprint(visitedMethods)
 
     val outClasses = Backend.apply(
       entrypoints,
@@ -93,7 +89,8 @@ object JOptimize{
       eliminateOldMethods,
       classFileMap,
       visitedClasses,
-      subtypeMap
+      subtypeMap,
+      log
     )
 
     outClasses

@@ -1,10 +1,10 @@
 package joptimize.backend
 
-import joptimize.Util
+import joptimize.{Logger, Util}
 import joptimize.algorithms.{Dominator, Scheduler}
-import joptimize.analyzer.{Analyzer, Namer}
+import joptimize.analyzer.{Analyzer, Namer, Renderer}
 import joptimize.graph.HavlakLoopTree
-import joptimize.model.{IType, JType, MethodSig}
+import joptimize.model.{IType, JType, MethodSig, SSA}
 import org.objectweb.asm.Opcodes
 import org.objectweb.asm.tree.{ClassNode, InsnList, MethodNode}
 
@@ -19,7 +19,8 @@ object Backend {
             eliminateOldMethods: Boolean,
             classFileMap: Map[String, ClassNode],
             visitedClasses: mutable.LinkedHashSet[JType.Cls],
-            subtypeMap: mutable.LinkedHashMap[JType.Cls, scala.List[JType.Cls]]) = {
+            subtypeMap: mutable.LinkedHashMap[JType.Cls, scala.List[JType.Cls]],
+            log: Logger.Global) = {
     val newMethods = for(((sig, inferredArgs), result) <- visitedMethods.toList) yield {
 
         val allVertices2 = result.program.getAllVertices()
@@ -42,55 +43,18 @@ object Backend {
 
         if (result.program.allTerminals.isEmpty) newNode.instructions = new InsnList()
         else {
-          val (controlFlowEdges, startBlock, allBlocks, blockEdges) =
-            Analyzer.analyzeBlockStructure(result.program)
-          val loopTree2 = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)
 
-          val dominators2 = Dominator.findDominators(blockEdges, allBlocks)
-
-          { // Just for debugging
-            val nodesToBlocks = Scheduler.apply(
-              loopTree2, dominators2, startBlock,
-              allVertices2
-            )
-
-            val postOptimisticNaming = Namer.apply(result.program, nodesToBlocks, allVertices2)
-
-            //        log(Renderer.renderSSA(program, postOptimisticNaming, nodesToBlocks))
-          }
-
-          //        log.println("================ REGISTERS ALLOCATED ================")
-          RegisterAllocator.apply(result.program, dominators2.immediateDominators)
-
-          val nodesToBlocks = Scheduler.apply(
-            loopTree2, dominators2, startBlock,
-            allVertices2
-          )
-
-          val postRegisterAllocNaming = Namer.apply(result.program, nodesToBlocks, result.program.getAllVertices())
-
-          //        log(Renderer.renderSSA(program, postRegisterAllocNaming, nodesToBlocks))
-
-          val (blockCode, finalInsns) = CodeGenMethod(
-            result.program,
+          newNode.instructions = processMethodBody(
+            result,
             allVertices2,
-            nodesToBlocks,
-            Analyzer.analyzeBlockStructure(result.program)._1,
-            postRegisterAllocNaming
+            log.inferredMethod(sig, inferredArgs)
           )
-
-          //        log.println("================ OUTPUT BYTECODE ================")
-          //        log(Renderer.renderBlockCode(blockCode, finalInsns))
-
-          newNode.instructions = finalInsns
         }
         newNode.desc = mangledDesc.unparse
         newNode.tryCatchBlocks = Nil.asJava
 
         classNodeMap(sig.cls) -> newNode
     }
-
-
 
     if (eliminateOldMethods) {
       for ((k, cn) <- classFileMap) {
@@ -131,5 +95,50 @@ object Backend {
     )
 
     outClasses
+  }
+
+  def processMethodBody(result: Analyzer.Result,
+                        allVertices2: Set[SSA.Node],
+                        log: Logger.InferredMethod) = {
+    val (controlFlowEdges, startBlock, allBlocks, blockEdges) =
+      Analyzer.analyzeBlockStructure(result.program)
+    val loopTree2 = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)
+
+    val dominators2 = Dominator.findDominators(blockEdges, allBlocks)
+
+    { // Just for debugging
+      val nodesToBlocks = Scheduler.apply(
+        loopTree2, dominators2, startBlock,
+        allVertices2
+      )
+
+      val postOptimisticNaming = Namer.apply(result.program, nodesToBlocks, allVertices2)
+
+      log(Renderer.renderSSA(result.program, postOptimisticNaming, nodesToBlocks))
+    }
+
+    log.println("================ REGISTERS ALLOCATED ================")
+    RegisterAllocator.apply(result.program, dominators2.immediateDominators)
+
+    val nodesToBlocks = Scheduler.apply(
+      loopTree2, dominators2, startBlock,
+      allVertices2
+    )
+
+    val postRegisterAllocNaming = Namer.apply(result.program, nodesToBlocks, result.program.getAllVertices())
+
+    log(Renderer.renderSSA(result.program, postRegisterAllocNaming, nodesToBlocks))
+
+    val (blockCode, finalInsns) = CodeGenMethod(
+      result.program,
+      allVertices2,
+      nodesToBlocks,
+      Analyzer.analyzeBlockStructure(result.program)._1,
+      postRegisterAllocNaming
+    )
+
+    log.println("================ OUTPUT BYTECODE ================")
+    log(Renderer.renderBlockCode(blockCode, finalInsns))
+    finalInsns
   }
 }

@@ -4,8 +4,9 @@ import joptimize.viewer.model.LogMessage
 
 import scala.collection.mutable
 
-class Logger(logRoot: os.Path, ignorePrefix: os.RelPath, originalSig: MethodSig, inferredArgs: Seq[IType]) {
-  val destFile = logRoot / (os.rel / originalSig.cls.name.split('/') relativeTo ignorePrefix) / (Util.mangleName0(originalSig, inferredArgs) + ".js")
+abstract class Logger(logRoot: os.Path, ignorePrefix: os.RelPath, segments: Seq[String], name: String) {
+  val destFile = logRoot / (os.rel / segments relativeTo ignorePrefix) / (name + ".js")
+  if (!os.exists(destFile))
   os.write.over(destFile, "", createFolders = true)
 
   def renderAnsiLine(labelOpt: Option[String],
@@ -28,7 +29,7 @@ class Logger(logRoot: os.Path, ignorePrefix: os.RelPath, originalSig: MethodSig,
 
   def pprint(value0: sourcecode.Text[Any])
             (implicit f: sourcecode.File, line: sourcecode.Line)= {
-    renderAnsiLine(Some(value0.source), _root_.pprint.apply(value0.value))
+    renderAnsiLine(Some(value0.source), _root_.pprint.apply(value0.value, height=99999))
   }
 
   def graph(g: LogMessage.Graph)
@@ -45,4 +46,32 @@ class Logger(logRoot: os.Path, ignorePrefix: os.RelPath, originalSig: MethodSig,
     renderAnsiLine(None, value)
   }
 
+  def method(originalSig: MethodSig) = new Logger.Method(logRoot, ignorePrefix, originalSig)
+  def global() = new Logger.Global(logRoot, ignorePrefix)
+  def inferredMethod(originalSig: MethodSig, inferredArgs: Seq[IType]) = new Logger.InferredMethod(logRoot, ignorePrefix, originalSig, inferredArgs)
+}
+
+object Logger{
+  class Global(logRoot: os.Path, ignorePrefix: os.RelPath)
+    extends Logger(
+      logRoot,
+      ignorePrefix,
+      ignorePrefix.segments,
+      "global"
+    )
+  class Method(logRoot: os.Path, ignorePrefix: os.RelPath, originalSig: MethodSig)
+    extends Logger(
+      logRoot,
+      ignorePrefix,
+      originalSig.cls.name.split('/') :+ Util.mangleName0(originalSig, originalSig.desc.args),
+      "original"
+    )
+
+  class InferredMethod(logRoot: os.Path, ignorePrefix: os.RelPath, originalSig: MethodSig, inferredArgs: Seq[IType])
+    extends Logger(
+      logRoot,
+      ignorePrefix,
+      originalSig.cls.name.split('/') :+ Util.mangleName0(originalSig, originalSig.desc.args),
+      Util.mangleArgs(inferredArgs)
+    )
 }

@@ -15,12 +15,11 @@ import scala.collection.mutable
 object Analyzer{
   def apply(subtypeMap: mutable.LinkedHashMap[JType.Cls, scala.List[JType.Cls]],
             entrypoints: Seq[MethodSig],
-            logRoot: Path,
-            ignorePrefix: RelPath,
             classNodeMap: Map[JType.Cls, ClassNode],
             originalMethods: Map[MethodSig, MethodNode],
             leastUpperBound: Seq[JType.Cls] => Seq[JType.Cls],
-            merge: Seq[IType] => IType) = {
+            merge: Seq[IType] => IType,
+            log: Logger.Global) = {
     val visitedMethods = mutable.LinkedHashMap.empty[(MethodSig, Seq[IType]), Analyzer.Result]
     val visitedClasses = mutable.LinkedHashSet.empty[JType.Cls]
     val callerGraph = mutable.LinkedHashMap[MethodSig, mutable.LinkedHashSet[MethodSig]]()
@@ -68,7 +67,7 @@ object Analyzer{
                     inferredArgs,
                     (inf, orig) => leastUpperBound(Seq(inf, orig)) == Seq(orig),
                     callStack,
-                    new Logger(logRoot, ignorePrefix, subSig, inferredArgs.drop(if (sig.static) 0 else 1)),
+                    log.inferredMethod(sig, inferredArgs.drop(if (sig.static) 0 else 1)),
                     classNodeMap.contains,
                     merge
                   )
@@ -95,7 +94,7 @@ object Analyzer{
         ep.desc.args,
         (inf, orig) => leastUpperBound(Seq(inf, orig)) == Seq(orig),
         Nil,
-        new Logger(logRoot, ignorePrefix, ep, ep.desc.args.drop(if (ep.static) 0 else 1)),
+        log.inferredMethod(ep, ep.desc.args.drop(if (ep.static) 0 else 1)),
         classNodeMap.contains,
         merge
       )
@@ -115,7 +114,7 @@ object Analyzer{
                  inferredArgs: Seq[IType],
                  checkSubclass: (JType.Cls, JType.Cls) => Boolean,
                  callStack: List[(MethodSig, Seq[IType])],
-                 log: Logger,
+                 log: Logger.InferredMethod,
                  classExists: JType.Cls => Boolean,
                  merge: Seq[IType] => IType): (Analyzer.Result, Set[JType.Cls], Set[MethodSig]) = {
 
@@ -129,7 +128,7 @@ object Analyzer{
         Set.empty
       )
     }else{
-      println(
+      log.global().println(
         "  " * callStack.length +
         "+" + Util.mangleName(originalSig, inferredArgs.drop(if(originalSig.static) 0 else 1))
       )
@@ -256,7 +255,7 @@ object Analyzer{
         inferredReturn,
         program
       )
-      println(
+      log.global().println(
         "  " * callStack.length +
         "-" + Util.mangleName(originalSig, inferredArgs.drop(if(originalSig.static) 0 else 1))
       )
