@@ -1,6 +1,6 @@
 package joptimize.backend
 
-import joptimize.{Logger, Util}
+import joptimize.{FileLogger, Logger, Util}
 import joptimize.algorithms.{Dominator, Scheduler}
 import joptimize.analyzer.{Analyzer, Namer, Renderer}
 import joptimize.graph.HavlakLoopTree

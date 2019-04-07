@@ -1,6 +1,6 @@
 package frontend
 
-import joptimize.Logger
+import joptimize.{FileLogger, Logger}
 import joptimize.analyzer.Renderer
 import joptimize.frontend.{BytecodeToSSAInterpreter, ControlFlowExtraction}
 import joptimize.model.SSA
@@ -11,7 +11,7 @@ import scala.collection.mutable
 import collection.JavaConverters._
 object ConstructSSA {
 
-  def apply(clsName: String, mn: MethodNode, log: Logger) = {
+  def apply(clsName: String, mn: MethodNode, log: Logger.Method) = {
     val phiMerges0 = mutable.LinkedHashSet.empty[SSA.Phi]
 
     val insns = mn.instructions.iterator().asScala.toVector

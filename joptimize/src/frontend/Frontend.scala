@@ -1,7 +1,7 @@
 package joptimize.frontend
 
 import frontend.ConstructSSA
-import joptimize.{Logger, Util}
+import joptimize.{FileLogger, Logger, Util}
 import joptimize.analyzer.Renderer
 import joptimize.model.{MethodSig, Program, SSA}
 import org.objectweb.asm.tree.MethodNode

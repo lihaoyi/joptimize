@@ -2,7 +2,7 @@ package joptimize.optimize
 
 import joptimize.analyzer.Renderer
 import joptimize.model._
-import joptimize.{Logger, Util}
+import joptimize.{FileLogger, Logger, Util}
 
 import scala.collection.mutable
 
@@ -10,7 +10,7 @@ object OptimisticSimplify {
   def apply(program: Program,
             inferred: mutable.LinkedHashMap[SSA.Val, IType],
             liveBlocks: Set[SSA.Block],
-            log: Logger,
+            log: Logger.InferredMethod,
             classExists: JType.Cls => Boolean) = {
 
     val calledMethodSigs = mutable.Set.empty[MethodSig]

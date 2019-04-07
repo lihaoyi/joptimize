@@ -3,7 +3,7 @@ package joptimize.analyzer
 import frontend.ConstructSSA
 import joptimize.algorithms.{Dominator, Scheduler}
 import joptimize.frontend.Frontend
-import joptimize.{Logger, Util}
+import joptimize.{FileLogger, Logger, Util}
 import joptimize.graph.HavlakLoopTree
 import joptimize.model._
 import joptimize.optimize.{ITypeLattice, OptimisticAnalyze, OptimisticSimplify}

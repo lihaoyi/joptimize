@@ -2,7 +2,7 @@ package joptimize.optimize
 
 import joptimize.analyzer.Namer
 import joptimize.model._
-import joptimize.{Logger, Util}
+import joptimize.{FileLogger, Logger, Util}
 
 import scala.collection.mutable
 trait Lattice[T]{
@@ -210,7 +210,7 @@ object OptimisticAnalyze {
                initialBlock: SSA.Block,
                lattice: Lattice[T],
                naming: Namer.Result,
-               log: Logger): (mutable.LinkedHashMap[SSA.Val, T], Set[SSA.Block]) = {
+               log: Logger.InferredMethod): (mutable.LinkedHashMap[SSA.Val, T], Set[SSA.Block]) = {
 
     val inferredBlocks = mutable.Set(initialBlock)
     val workList = mutable.LinkedHashSet(initialBlock)
