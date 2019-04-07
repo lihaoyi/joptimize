@@ -208,6 +208,7 @@ object Analyzer{
 
       log.check(program.checkLinks(checkDead = false))
       program.removeDeadNodes()
+      log.graph(Renderer.dumpSvg(program))
       log.check(program.checkLinks())
 
       val allVertices2 = program.getAllVertices()
