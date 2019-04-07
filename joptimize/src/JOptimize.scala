@@ -1,6 +1,6 @@
 package joptimize
 
-import joptimize.backend.PostLivenessDCE
+import backend.{Backend, PostLivenessDCE}
 import joptimize.analysis.Walker
 import joptimize.model._
 import org.objectweb.asm.{ClassReader, ClassWriter, Opcodes}
@@ -84,13 +84,6 @@ object JOptimize{
 
     val visitedMethods = mutable.LinkedHashMap.empty[(MethodSig, Seq[IType]), Walker.MethodResult]
 
-    def computeSideEffects(sig: MethodSig, args: Seq[IType]) = {
-      visitedMethods.get((sig, args)) match{
-        case None => SideEffects.Global
-        case Some(x) => x.sideEffects
-      }
-    }
-
     val callerGraph = mutable.LinkedHashMap[MethodSig, mutable.LinkedHashSet[MethodSig]]()
     def computeMethodSig(sig: MethodSig,
                          invokeSpecial: Boolean,
@@ -132,7 +125,6 @@ object JOptimize{
                     original,
                     computeMethodSig,
                     inferredArgs,
-                    computeSideEffects,
                     (inf, orig) => leastUpperBound(Seq(inf, orig)) == Seq(orig),
                     callStack,
                     new Logger(logRoot, ignorePrefix, subSig, inferredArgs.drop(if (sig.static) 0 else 1)),
@@ -159,7 +151,6 @@ object JOptimize{
         originalMethods(ep),
         computeMethodSig,
         ep.desc.args,
-        computeSideEffects,
         (inf, orig) => leastUpperBound(Seq(inf, orig)) == Seq(orig),
         Nil,
         new Logger(logRoot, ignorePrefix, ep, ep.desc.args.drop(if (ep.static) 0 else 1)),
@@ -174,31 +165,7 @@ object JOptimize{
     }
     pprint.log(visitedMethods, height=9999)
 
-    val newMethods = visitedMethods.toList.collect{
-      case ((sig, inferredArgs), Walker.MethodResult(liveArgs, returnType, insns, pure, seenTryCatchBlocks)) =>
-
-        val originalNode = originalMethods(sig)
-
-        val (mangledName, mangledDesc) =
-          if (sig.name == "<init>") (sig.name, sig.desc)
-          else Util.mangle(sig, inferredArgs, returnType)
-
-        val newNode = new MethodNode(
-          Opcodes.ASM6,
-          originalNode.access,
-          mangledName,
-          mangledDesc.unparse,
-          originalNode.signature,
-          originalNode.exceptions.asScala.toArray
-        )
-
-        originalNode.accept(newNode)
-        newNode.instructions = insns
-        newNode.desc = mangledDesc.unparse
-        newNode.tryCatchBlocks = seenTryCatchBlocks.asJava
-
-        classNodeMap(sig.cls) -> newNode
-    }
+    val newMethods = Backend.apply(originalMethods, classNodeMap, visitedMethods)
 
 
     if (eliminateOldMethods) {
@@ -239,4 +206,5 @@ object JOptimize{
       }
       .toMap
   }
+
 }

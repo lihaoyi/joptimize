@@ -10,7 +10,6 @@ object Scheduler {
   def apply(loopTree: HavlakLoopTree.Loop[SSA.Block],
             dominators: Dominator.Result[SSA.Block],
             startBlock: SSA.Block,
-            mapping: Map[SSA.Node, String],
             allVertices: Set[SSA.Node]): Map[SSA.Val, SSA.Block] = {
 
     val loopNestMap = mutable.LinkedHashMap.empty[SSA.Node, Int]
@@ -21,7 +20,7 @@ object Scheduler {
 
     recLoop(loopTree, 0)
 
-    val scheduler = new ClickScheduler(dominators, mapping) {
+    val scheduler = new ClickScheduler(dominators) {
       override def downstream(ssa: SSA.Node) = ssa.downstreamList.toSeq
 
       override def upstream(ssa: SSA.Node) = ssa.upstream.collect{case ssa: SSA.Val => ssa}

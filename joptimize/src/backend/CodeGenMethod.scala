@@ -17,7 +17,7 @@ import scala.collection.mutable
   * constant-folded instructions
   */
 
-object CodeGen{
+object CodeGenMethod{
   def apply(program: Program,
             allVertices: Set[SSA.Node],
             nodesToBlocks: Map[SSA.Val, SSA.Block],

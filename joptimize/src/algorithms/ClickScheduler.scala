@@ -4,8 +4,7 @@ import joptimize.model.SSA
 
 import scala.collection.mutable
 
-abstract class ClickScheduler(dominators: Dominator.Result[SSA.Block],
-                              mapping: Map[SSA.Node, String]) {
+abstract class ClickScheduler(dominators: Dominator.Result[SSA.Block]) {
   def downstream(ssa: SSA.Node): Seq[SSA.Node]
   def upstream(ssa: SSA.Node): Seq[SSA.Val]
   def isPinned(ssa: SSA.Node): Boolean

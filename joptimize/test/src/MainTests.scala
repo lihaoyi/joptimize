@@ -211,10 +211,10 @@ object MainTests extends TestSuite{
         'branchConstant - annotatedTest
       }
       'ConstantMethod - {
-        'intMain0 - annotatedTest
-        'intMain - annotatedTest
+//        'intMain0 - annotatedTest
+//        'intMain - annotatedTest
         'nonFoldedIntMain - annotatedTest
-        'boolMain - annotatedTest
+//        'boolMain - annotatedTest
         'impureMain - annotatedTest
       }
       'BooleanJumpFlatten - {

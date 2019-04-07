@@ -11,9 +11,7 @@ object OptimisticSimplify {
             inferred: mutable.LinkedHashMap[SSA.Val, IType],
             liveBlocks: Set[SSA.Block],
             log: Logger,
-            classExists: JType.Cls => Boolean,
-            checkSideEffects: (MethodSig, Seq[IType]) => SideEffects) = {
-    var aggregateSideEffects: SideEffects = SideEffects.Pure
+            classExists: JType.Cls => Boolean) = {
 
     val calledMethodSigs = mutable.Set.empty[MethodSig]
     program.getAllVertices().foreach{
@@ -29,36 +27,10 @@ object OptimisticSimplify {
             n.srcs.map(inferred).drop(if(n.sig.static) 0 else 1),
             inferred.getOrElseUpdate(n, n.desc.ret)
           )
-        val sideEffects = checkSideEffects(n.sig, n.srcs.map(inferred))
         calledMethodSigs.add(n.sig)
-        aggregateSideEffects = (aggregateSideEffects, sideEffects) match{
-          case (SideEffects.Pure, SideEffects.Pure) => SideEffects.Pure
-          case _ => SideEffects.Global
-        }
-        if (sideEffects == SideEffects.Pure){
-          val replacement = inferred.get(n) match{
-            case Some(CType.I(v)) => Some(new SSA.ConstI(v))
-            case Some(CType.J(v)) => Some(new SSA.ConstJ(v))
-            case Some(CType.F(v)) => Some(new SSA.ConstF(v))
-            case Some(CType.D(v)) => Some(new SSA.ConstD(v))
-            case _ => None
-          }
-          replacement match{
-            case Some(r) =>
-              inferred(r) = inferred(n)
-              n.upstream.foreach(_.downstreamRemoveAll(n))
-              for(d <- n.downstreamList) {
-                r.downstreamAdd(d)
-                d.replaceUpstream(n, r)
-              }
-            case None =>
-              n.name = mangledName
-              n.desc = mangledDesc
-          }
-        }else{
-          n.name = mangledName
-          n.desc = mangledDesc
-        }
+        n.name = mangledName
+        n.desc = mangledDesc
+
       case p: SSA.Phi =>
         p.incoming = p.incoming.filter{t =>
           val live = liveBlocks(t._1)
@@ -116,6 +88,6 @@ object OptimisticSimplify {
     log.graph(Renderer.dumpSvg(program))
     //      program.checkLinks(checkDead = false)
 
-    (aggregateSideEffects, calledMethodSigs)
+    calledMethodSigs
   }
 }

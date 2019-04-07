@@ -2,7 +2,7 @@ package joptimize.analysis
 
 import frontend.ConstructSSA
 import joptimize.algorithms.{Dominator, Scheduler}
-import joptimize.backend.{CodeGen, RegisterAllocator}
+import joptimize.backend.{CodeGenMethod, RegisterAllocator}
 import joptimize.frontend.{BytecodeToSSAInterpreter, ControlFlowExtraction}
 import joptimize.{Logger, Util}
 import joptimize.graph.HavlakLoopTree
@@ -22,7 +22,6 @@ class Walker(merge: (IType, IType) => IType) {
                  mn: MethodNode,
                  computeMethodSig: (MethodSig, Boolean, Seq[IType], List[(MethodSig, Seq[IType])]) => IType,
                  inferredArgs: Seq[IType],
-                 checkSideEffects: (MethodSig, Seq[IType]) => SideEffects,
                  checkSubclass: (JType.Cls, JType.Cls) => Boolean,
                  callStack: List[(MethodSig, Seq[IType])],
                  log: Logger,
@@ -31,11 +30,10 @@ class Walker(merge: (IType, IType) => IType) {
     if (callStack.contains(originalSig -> inferredArgs) || mn.instructions.size() == 0){
       Tuple3(
         Walker.MethodResult(
-          liveArgs = Nil,
           inferredReturn = originalSig.desc.ret,
-          methodBody = new InsnList(),
-          sideEffects = SideEffects.Pure,
-          seenTryCatchBlocks = Nil
+          program = new Program(Nil, Nil),
+          seenTryCatchBlocks = Nil,
+          Nil, Nil, null, Set.empty
         ),
         Set.empty,
         Set.empty
@@ -74,7 +72,7 @@ class Walker(merge: (IType, IType) => IType) {
 
       program.checkLinks()
       val (controlFlowEdges, startBlock, allBlocks, blockEdges) =
-        analyzeBlockStructure(program)
+        Walker.analyzeBlockStructure(program)
 
       log.println("")
       log(Renderer.renderControlFlowGraph(controlFlowEdges, preScheduleNaming.savedLocals))
@@ -91,7 +89,7 @@ class Walker(merge: (IType, IType) => IType) {
       // Just for debugging
       val nodesToBlocks2 = Scheduler.apply(
         loopTree, dominators, startBlock,
-        preScheduleNaming.savedLocals.mapValues(_._2), program.getAllVertices()
+        program.getAllVertices()
       )
 
       val postScheduleNaming = Namer.apply(program, nodesToBlocks2, program.getAllVertices())
@@ -116,58 +114,19 @@ class Walker(merge: (IType, IType) => IType) {
 
       log.pprint(inferred)
 
-      val (aggregateSideEffects, calledMethodSigs) = OptimisticSimplify.apply(
+      val calledMethodSigs = OptimisticSimplify.apply(
         program,
         inferred,
         liveBlocks,
         log,
-        classExists,
-        checkSideEffects
+        classExists
       )
 
       program.checkLinks(checkDead = false)
       removeDeadNodes(program)
       program.checkLinks()
 
-      val loopTree2 = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)
-
-      val dominators2 = Dominator.findDominators(blockEdges, allBlocks)
-
-      { // Just for debugging
-        val nodesToBlocks = Scheduler.apply(
-          loopTree2, dominators2, startBlock,
-          preScheduleNaming.savedLocals.mapValues(_._2), program.getAllVertices()
-        )
-
-        val postOptimisticNaming = Namer.apply(program, nodesToBlocks, program.getAllVertices())
-
-        log(Renderer.renderSSA(program, postOptimisticNaming, nodesToBlocks))
-      }
-
-      log.println("================ REGISTERS ALLOCATED ================")
-      RegisterAllocator.apply(program, dominators2.immediateDominators)
-
       val allVertices2 = Util.breadthFirstSeen[SSA.Node](program.allTerminals.toSet)(_.upstream)
-
-      val nodesToBlocks = Scheduler.apply(
-        loopTree2, dominators2, startBlock,
-        preScheduleNaming.savedLocals.mapValues(_._2), allVertices2
-      )
-
-      val postRegisterAllocNaming = Namer.apply(program, nodesToBlocks, allVertices2)
-
-      log(Renderer.renderSSA(program, postRegisterAllocNaming, nodesToBlocks))
-
-      val (blockCode, finalInsns) = CodeGen(
-        program,
-        allVertices2,
-        nodesToBlocks,
-        analyzeBlockStructure(program)._1,
-        postRegisterAllocNaming
-      )
-
-      log.println("================ OUTPUT BYTECODE ================")
-      log(Renderer.renderBlockCode(blockCode, finalInsns))
 
       val classes = allVertices2.collect{
         case n: SSA.GetField => n.owner
@@ -204,11 +163,13 @@ class Walker(merge: (IType, IType) => IType) {
       )
 
       val result = Walker.MethodResult(
-        Nil,
         inferredReturn,
-        finalInsns,
-        aggregateSideEffects,
-        Nil
+        program,
+        Nil,
+        blockEdges,
+        allBlocks,
+        startBlock,
+        allVertices2
       )
       println(
         "  " * callStack.length +
@@ -218,21 +179,6 @@ class Walker(merge: (IType, IType) => IType) {
     }
   }
 
-  def analyzeBlockStructure(program: Program) = {
-    val controlFlowEdges = Renderer.findControlFlowGraph(program)
-    val startBlock = (controlFlowEdges.map(_._1).toSet -- controlFlowEdges.map(_._2)).head.asInstanceOf[SSA.Block]
-    val allBlocks = controlFlowEdges
-      .flatMap { case (k, v) => Seq(k, v) }
-      .collect { case b: SSA.Block => b }
-
-    val blockEdges = controlFlowEdges.flatMap {
-      case (k: SSA.Block, v: SSA.Jump) => Nil
-      case (k: SSA.Jump, v: SSA.Block) => Seq(k.block -> v)
-      case (k: SSA.Block, v: SSA.Block) => Seq(k -> v)
-    }
-
-    (controlFlowEdges, startBlock, allBlocks, blockEdges)
-  }
 
 
   def removeDeadNodes(program: Program) = {
@@ -263,26 +209,32 @@ class Walker(merge: (IType, IType) => IType) {
 object Walker{
 
   /**
-    *
-    * @param liveArgs Which of the method's original arguments end up being live:
-    *                 possibly contributing to the execution of the method. Other
-    *                 arguments are candidate for removal since they don't do
-    *                 anything
-    *
     * @param inferredReturn The return type of the method, narrowed to potentially
     *                       a more specific value given what we learned from
     *                       analyzing the method body.
-    *
-    * @param methodBody The optimized instruction list of the optimized method
-    *
-    * @param pure Whether the method's only contribution to the computation is
-    *             its return value: without side effects, IO, or exceptions.
-    *             Such methods are candidates for re-ordering or outright
-    *             elimination if their return value does not end up being used.
     */
-  case class MethodResult(liveArgs: Seq[Boolean],
-                          inferredReturn: IType,
-                          methodBody: InsnList,
-                          sideEffects: SideEffects,
-                          seenTryCatchBlocks: Seq[TryCatchBlockNode])
+  case class MethodResult(inferredReturn: IType,
+                          program: Program,
+                          seenTryCatchBlocks: Seq[TryCatchBlockNode],
+                          blockEdges: Seq[(SSA.Block, SSA.Block)],
+                          allBlocks: Seq[SSA.Block],
+                          startBlock: SSA.Block,
+                          allVertices2: Set[SSA.Node])
+
+  def analyzeBlockStructure(program: Program) = {
+    val controlFlowEdges = Renderer.findControlFlowGraph(program)
+    val startBlock = (controlFlowEdges.map(_._1).toSet -- controlFlowEdges.map(_._2)).head.asInstanceOf[SSA.Block]
+    val allBlocks = controlFlowEdges
+      .flatMap { case (k, v) => Seq(k, v) }
+      .collect { case b: SSA.Block => b }
+
+    val blockEdges = controlFlowEdges.flatMap {
+      case (k: SSA.Block, v: SSA.Jump) => Nil
+      case (k: SSA.Jump, v: SSA.Block) => Seq(k.block -> v)
+      case (k: SSA.Block, v: SSA.Block) => Seq(k -> v)
+    }
+
+    (controlFlowEdges, startBlock, allBlocks, blockEdges)
+  }
+
 }
