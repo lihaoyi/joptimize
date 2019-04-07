@@ -18,6 +18,22 @@ public class Sudoku {
         Sudoku.solve(0, 0, grid);
         return Sudoku.writeMatrix(grid);
     }
+    @joptimize.Test()
+    public static String quick() {
+        int[][] grid = new int[9][9];
+        Sudoku.quickSolve(9, 8, grid);
+        return Sudoku.writeMatrix(grid);
+    }
+
+
+    static boolean quickSolve(int i, int j, int[][] cells) {
+        if (i == 9) {
+            if (++j == 9)
+                return true;
+        }
+
+        return false;
+    }
 
     static boolean solve(int i, int j, int[][] cells) {
         if (i == 9) {

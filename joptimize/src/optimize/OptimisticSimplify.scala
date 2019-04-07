@@ -65,14 +65,16 @@ object OptimisticSimplify {
         }
 
       case j: SSA.Jump =>
+        pprint.log(j.downstreamList)
+        pprint.log(liveBlocks)
         val allTargets = j.downstreamList.collect{case b: SSA.Block => b}
         val liveTargets = allTargets.filter(liveBlocks)
-        if (liveTargets.size == 1){
+        if (liveTargets.isEmpty){
+         // do nothing
+        } else if (liveTargets.size == 1){
           PartialEvaluator.replaceJump(j, liveTargets.head, liveBlocks)
-        }else if (liveTargets.size <= allTargets.size){
-          for(t <- allTargets if !liveTargets.contains(t)){
-            ???
-          }
+        } else if (liveTargets.size <= allTargets.size){
+          ???
         }
       case _ => // do nothing
     }

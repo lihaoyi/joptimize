@@ -196,6 +196,7 @@ object Analyzer{
       )
 
       log.pprint(inferred)
+      log.pprint(liveBlocks)
 
       val calledMethodSigs = OptimisticSimplify.apply(
         program,

@@ -137,6 +137,7 @@ object MainTests extends TestSuite{
 //        'arrayIndexOutOfBounds - annotatedTest
 //      }
       'Sudoku - {
+        'quick - annotatedTest
         'run - annotatedTest
       }
     }

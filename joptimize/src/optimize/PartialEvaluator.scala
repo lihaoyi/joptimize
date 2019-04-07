@@ -20,9 +20,16 @@ object PartialEvaluator {
 //    Util.replace(directNext, current.block)
     current.block.upstream.collect{case v: SSA.Val => v.downstreamRemoveAll(current.block)}
 
-    for (down <- current.block.downstreamList if down != current) {
-      directNext.next = down.asInstanceOf[SSA.Control]
-      down.replaceUpstream(current, directNext)
+    pprint.log(current)
+    pprint.log(current.block)
+    pprint.log(current.block.downstreamList)
+
+    val down = current.block.next
+    directNext.next = down.asInstanceOf[SSA.Control]
+    current.block.next = directNext
+    down.replaceUpstream(current, directNext)
+    for(phi <- current.block.nextPhis){
+      phi.replaceUpstream(current, directNext)
     }
     //       --------------------
     //      /      a        TRUE \--- d

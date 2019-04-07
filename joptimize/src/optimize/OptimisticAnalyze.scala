@@ -232,7 +232,9 @@ object OptimisticAnalyze {
       val currentBlock = workList.head
       inferredBlocks.add(currentBlock)
       workList.remove(currentBlock)
+      log.pprint(currentBlock)
       val Seq(nextControl) = currentBlock.downstreamList.collect{case n: SSA.Control => n}
+      log.pprint(nextControl)
 
       def queueNextBlock(nextBlock: SSA.Block) = {
         val nextPhis = nextBlock
