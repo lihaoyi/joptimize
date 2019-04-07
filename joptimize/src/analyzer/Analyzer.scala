@@ -22,7 +22,7 @@ object Analyzer{
             leastUpperBound: Seq[JType.Cls] => Seq[JType.Cls],
             merge: Seq[IType] => IType,
             visitedClasses: mutable.LinkedHashSet[JType.Cls]) = {
-    val visitedMethods = mutable.LinkedHashMap.empty[(MethodSig, Seq[IType]), Analyzer.MethodResult]
+    val visitedMethods = mutable.LinkedHashMap.empty[(MethodSig, Seq[IType]), Analyzer.Result]
 
     val callerGraph = mutable.LinkedHashMap[MethodSig, mutable.LinkedHashSet[MethodSig]]()
 
@@ -118,15 +118,13 @@ object Analyzer{
                  callStack: List[(MethodSig, Seq[IType])],
                  log: Logger,
                  classExists: JType.Cls => Boolean,
-                 merge: Seq[IType] => IType): (Analyzer.MethodResult, Set[JType.Cls], Set[MethodSig]) = {
+                 merge: Seq[IType] => IType): (Analyzer.Result, Set[JType.Cls], Set[MethodSig]) = {
 
     if (callStack.contains(originalSig -> inferredArgs) || mn.instructions.size() == 0){
       Tuple3(
-        Analyzer.MethodResult(
+        Analyzer.Result(
           inferredReturn = originalSig.desc.ret,
           program = new Program(Nil, Nil),
-          seenTryCatchBlocks = Nil,
-          Set.empty
         ),
         Set.empty,
         Set.empty
@@ -255,11 +253,9 @@ object Analyzer{
           s"with declared return type [${originalSig.desc.ret}]"
       )
 
-      val result = Analyzer.MethodResult(
+      val result = Analyzer.Result(
         inferredReturn,
-        program,
-        Nil,
-        allVertices2
+        program
       )
       println(
         "  " * callStack.length +
@@ -300,10 +296,7 @@ object Analyzer{
     *                       a more specific value given what we learned from
     *                       analyzing the method body.
     */
-  case class MethodResult(inferredReturn: IType,
-                          program: Program,
-                          seenTryCatchBlocks: Seq[TryCatchBlockNode],
-                          allVertices2: Set[SSA.Node])
+  case class Result(inferredReturn: IType, program: Program)
 
   def analyzeBlockStructure(program: Program) = {
     val controlFlowEdges = Renderer.findControlFlowGraph(program)

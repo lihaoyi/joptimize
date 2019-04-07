@@ -15,21 +15,19 @@ object Backend {
   def apply(entrypoints: scala.Seq[MethodSig],
             originalMethods: Map[MethodSig, MethodNode],
             classNodeMap: Map[JType.Cls, ClassNode],
-            visitedMethods: mutable.LinkedHashMap[(MethodSig, Seq[IType]), Analyzer.MethodResult],
+            visitedMethods: mutable.LinkedHashMap[(MethodSig, Seq[IType]), Analyzer.Result],
             eliminateOldMethods: Boolean,
             classFileMap: Map[String, ClassNode],
             visitedClasses: mutable.LinkedHashSet[JType.Cls],
             subtypeMap: mutable.LinkedHashMap[JType.Cls, scala.List[JType.Cls]]) = {
-    val newMethods = visitedMethods.toList.collect {
-      case (
-        (sig, inferredArgs),
-        Analyzer.MethodResult(returnType, program, seenTryCatchBlocks, allVertices2)) =>
+    val newMethods = for(((sig, inferredArgs), result) <- visitedMethods.toList) yield {
 
+        val allVertices2 = result.program.getAllVertices()
         val originalNode = originalMethods(sig)
 
         val (mangledName, mangledDesc) =
           if (sig.name == "<init>") (sig.name, sig.desc)
-          else Util.mangle(sig, inferredArgs, returnType)
+          else Util.mangle(sig, inferredArgs, result.inferredReturn)
 
         val newNode = new MethodNode(
           Opcodes.ASM6,
@@ -42,10 +40,10 @@ object Backend {
 
         originalNode.accept(newNode)
 
-        if (program.allTerminals.isEmpty) newNode.instructions = new InsnList()
+        if (result.program.allTerminals.isEmpty) newNode.instructions = new InsnList()
         else {
           val (controlFlowEdges, startBlock, allBlocks, blockEdges) =
-            Analyzer.analyzeBlockStructure(program)
+            Analyzer.analyzeBlockStructure(result.program)
           val loopTree2 = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)
 
           val dominators2 = Dominator.findDominators(blockEdges, allBlocks)
@@ -53,31 +51,31 @@ object Backend {
           { // Just for debugging
             val nodesToBlocks = Scheduler.apply(
               loopTree2, dominators2, startBlock,
-              program.getAllVertices()
+              allVertices2
             )
 
-            val postOptimisticNaming = Namer.apply(program, nodesToBlocks, program.getAllVertices())
+            val postOptimisticNaming = Namer.apply(result.program, nodesToBlocks, allVertices2)
 
             //        log(Renderer.renderSSA(program, postOptimisticNaming, nodesToBlocks))
           }
 
           //        log.println("================ REGISTERS ALLOCATED ================")
-          RegisterAllocator.apply(program, dominators2.immediateDominators)
+          RegisterAllocator.apply(result.program, dominators2.immediateDominators)
 
           val nodesToBlocks = Scheduler.apply(
             loopTree2, dominators2, startBlock,
             allVertices2
           )
 
-          val postRegisterAllocNaming = Namer.apply(program, nodesToBlocks, program.getAllVertices())
+          val postRegisterAllocNaming = Namer.apply(result.program, nodesToBlocks, result.program.getAllVertices())
 
           //        log(Renderer.renderSSA(program, postRegisterAllocNaming, nodesToBlocks))
 
           val (blockCode, finalInsns) = CodeGenMethod(
-            program,
+            result.program,
             allVertices2,
             nodesToBlocks,
-            Analyzer.analyzeBlockStructure(program)._1,
+            Analyzer.analyzeBlockStructure(result.program)._1,
             postRegisterAllocNaming
           )
 
@@ -87,7 +85,7 @@ object Backend {
           newNode.instructions = finalInsns
         }
         newNode.desc = mangledDesc.unparse
-        newNode.tryCatchBlocks = seenTryCatchBlocks.asJava
+        newNode.tryCatchBlocks = Nil.asJava
 
         classNodeMap(sig.cls) -> newNode
     }
