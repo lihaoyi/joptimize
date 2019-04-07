@@ -8,7 +8,7 @@ import scala.collection.mutable
 
 object OptimisticSimplify {
   def apply(program: Program,
-            inferred: mutable.LinkedHashMap[SSA.Val, IType],
+            inferred: mutable.LinkedHashMap[SSA.Val, (IType, Boolean)],
             liveBlocks: Set[SSA.Block],
             log: Logger.InferredMethod,
             classExists: JType.Cls => Boolean) = {
@@ -20,17 +20,19 @@ object OptimisticSimplify {
       simplifyNode(n, inferred, classExists, log, liveBlocks)
     }
 
+//    log.pprint(liveBlocks.map(x => (x, x.next)))
+//    log.pprint(program.allTerminals.map{ case j: SSA.Jump => j -> j.block })
     program.allTerminals = program.allTerminals.filter{
       case j: SSA.Jump => liveBlocks.contains(j.block)
-      case t: SSA.AThrow => liveBlocks.contains(t.block)
     }
+//    log.pprint(program.allTerminals)
 
     log.graph(Renderer.dumpSvg(program))
 
   }
 
   def simplifyNode(node: SSA.Node,
-                   inferred: mutable.LinkedHashMap[SSA.Val, IType],
+                   inferred: mutable.LinkedHashMap[SSA.Val, (IType, Boolean)],
                    classExists: JType.Cls => Boolean,
                    log: Logger.InferredMethod,
                    liveBlocks: Set[SSA.Block]) = node match {
@@ -45,12 +47,44 @@ object OptimisticSimplify {
         if (n.name == "<init>" || !classExists(n.cls)) (n.name, n.desc)
         else Util.mangle(
           n.sig,
-          n.srcs.map(inferred).drop(if(n.sig.static) 0 else 1),
-          inferred.getOrElseUpdate(n, n.desc.ret)
+          n.srcs.map(inferred(_)._1).drop(if(n.sig.static) 0 else 1),
+          inferred.getOrElseUpdate(n, (n.desc.ret, false))._1
         )
 
-      n.name = mangledName
-      n.desc = mangledDesc
+      if (inferred(n)._2){
+        val replacement = inferred.get(n).map(_._1) match{
+          case Some(CType.I(v)) => Some(new SSA.ConstI(v))
+          case Some(CType.J(v)) => Some(new SSA.ConstJ(v))
+          case Some(CType.F(v)) => Some(new SSA.ConstF(v))
+          case Some(CType.D(v)) => Some(new SSA.ConstD(v))
+          case _ => None
+        }
+        replacement match{
+          case Some(r) =>
+            inferred(r) = inferred(n)
+            var upstreamState: SSA.ChangedState = null
+            n.upstreamVals.foreach{
+              case s: SSA.ChangedState =>
+                upstreamState = s
+                s.downstreamRemoveAll(n)
+              case u => u.downstreamRemoveAll(n)
+            }
+            n.downstreamList.foreach{
+              case s: SSA.ChangedState if upstreamState != null  =>
+                s.parent = upstreamState
+                upstreamState.downstreamAdd(s)
+              case d =>
+                r.downstreamAdd(d)
+                d.replaceUpstream(n, r)
+            }
+          case None =>
+            n.name = mangledName
+            n.desc = mangledDesc
+        }
+      }else{
+        n.name = mangledName
+        n.desc = mangledDesc
+      }
 
     case p: SSA.Phi =>
       p.incoming = p.incoming.filter{t =>
@@ -69,7 +103,7 @@ object OptimisticSimplify {
       }
 
     case n: SSA.Val =>
-      val replacement = inferred.get(n) match{
+      val replacement = inferred.get(n).map(_._1) match{
         case Some(CType.I(v)) => Some(new SSA.ConstI(v))
         case Some(CType.J(v)) => Some(new SSA.ConstJ(v))
         case Some(CType.F(v)) => Some(new SSA.ConstF(v))
@@ -106,6 +140,7 @@ object OptimisticSimplify {
       } else if (liveTargets.size < allTargets.size){
         ???
       }
-    case _ => // do nothing
+    case _ =>
+    // do nothing
   }
 }

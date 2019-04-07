@@ -23,40 +23,40 @@ object Backend {
             subtypeMap: mutable.LinkedHashMap[JType.Cls, scala.List[JType.Cls]],
             log: Logger.Global) = {
     val newMethods = for(((sig, inferredArgs), result) <- visitedMethods.toList) yield {
+      log.pprint(sig)
+      val allVertices2 = result.program.getAllVertices()
+      val originalNode = originalMethods(sig)
 
-        val allVertices2 = result.program.getAllVertices()
-        val originalNode = originalMethods(sig)
+      val (mangledName, mangledDesc) =
+        if (sig.name == "<init>") (sig.name, sig.desc)
+        else Util.mangle(sig, inferredArgs, result.inferredReturn)
 
-        val (mangledName, mangledDesc) =
-          if (sig.name == "<init>") (sig.name, sig.desc)
-          else Util.mangle(sig, inferredArgs, result.inferredReturn)
+      val newNode = new MethodNode(
+        Opcodes.ASM6,
+        originalNode.access,
+        mangledName,
+        mangledDesc.unparse,
+        originalNode.signature,
+        originalNode.exceptions.asScala.toArray
+      )
 
-        val newNode = new MethodNode(
-          Opcodes.ASM6,
-          originalNode.access,
-          mangledName,
-          mangledDesc.unparse,
-          originalNode.signature,
-          originalNode.exceptions.asScala.toArray
+      originalNode.accept(newNode)
+
+      if (result.program.allTerminals.isEmpty) newNode.instructions = new InsnList()
+      else {
+
+        newNode.instructions = processMethodBody(
+          sig,
+          result,
+          allVertices2,
+          log.inferredMethod(sig, inferredArgs),
+          classNodeMap.contains
         )
+      }
+      newNode.desc = mangledDesc.unparse
+      newNode.tryCatchBlocks = Nil.asJava
 
-        originalNode.accept(newNode)
-
-        if (result.program.allTerminals.isEmpty) newNode.instructions = new InsnList()
-        else {
-
-          newNode.instructions = processMethodBody(
-            sig,
-            result,
-            allVertices2,
-            log.inferredMethod(sig, inferredArgs),
-            classNodeMap.contains
-          )
-        }
-        newNode.desc = mangledDesc.unparse
-        newNode.tryCatchBlocks = Nil.asJava
-
-        classNodeMap(sig.cls) -> newNode
+      classNodeMap(sig.cls) -> newNode
     }
 
     if (eliminateOldMethods) {
@@ -121,6 +121,8 @@ object Backend {
 
     val allVertices2 = result.program.getAllVertices()
 
+//    pprint.log(originalSig)
+//    pprint.log(result.program)
     val (controlFlowEdges, startBlock, allBlocks, blockEdges) =
       Analyzer.analyzeBlockStructure(result.program)
     val loopTree2 = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)

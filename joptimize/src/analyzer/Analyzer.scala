@@ -6,7 +6,7 @@ import joptimize.frontend.Frontend
 import joptimize.{FileLogger, Logger, Util}
 import joptimize.graph.HavlakLoopTree
 import joptimize.model._
-import joptimize.optimize.{ITypeLattice, OptimisticAnalyze, OptimisticSimplify}
+import joptimize.optimize._
 import org.objectweb.asm.tree._
 import org.objectweb.asm.util.{Textifier, TraceMethodVisitor}
 import os.{Path, RelPath}
@@ -29,7 +29,7 @@ object Analyzer{
     def computeMethodSig(sig: MethodSig,
                          invokeSpecial: Boolean,
                          inferredArgs: Seq[IType],
-                         callStack: List[(MethodSig, Seq[IType])]): IType = {
+                         callStack: List[(MethodSig, Seq[IType])]): (IType, Boolean) = {
 
       val subSigs = {
         (sig.static, invokeSpecial) match {
@@ -55,11 +55,11 @@ object Analyzer{
       }
 
       subSigs match {
-        case None => sig.desc.ret
+        case None => (sig.desc.ret, false)
         case Some(subSigs) =>
           val rets = for (subSig <- subSigs) yield originalMethods.get(subSig) match {
             case Some(original) =>
-              visitedMethods.getOrElseUpdate(
+              val res = visitedMethods.getOrElseUpdate(
                 (subSig, inferredArgs.drop(if (sig.static) 0 else 1)),
                 {
                   val (res, newVisitedClasses, calledMethods) = walkMethod(
@@ -80,12 +80,14 @@ object Analyzer{
                   }
                   res
                 }
-              ).inferredReturn
+              )
+              (res.inferredReturn, res.pure)
             case None =>
-              sig.desc.ret
+              (sig.desc.ret, false)
           }
 
-          merge(rets)
+          val (retTypes, retBooleans) = rets.unzip
+          (merge(retTypes), retBooleans.forall(identity))
       }
     }
 
@@ -114,7 +116,7 @@ object Analyzer{
 
   def walkMethod(originalSig: MethodSig,
                  mn: MethodNode,
-                 computeMethodSig: (MethodSig, Boolean, Seq[IType], List[(MethodSig, Seq[IType])]) => IType,
+                 computeMethodSig: (MethodSig, Boolean, Seq[IType], List[(MethodSig, Seq[IType])]) => (IType, Boolean),
                  inferredArgs: Seq[IType],
                  checkSubclass: (JType.Cls, JType.Cls) => Boolean,
                  callStack: List[(MethodSig, Seq[IType])],
@@ -126,10 +128,11 @@ object Analyzer{
     if (callStack.contains(originalSig -> inferredArgs) || mn.instructions.size() == 0){
       Tuple3(
         Analyzer.Result(
-          inferredReturn = originalSig.desc.ret,
-          program = new Program(Nil, Nil),
+          originalSig.desc.ret,
+          new Program(Nil, Nil),
           mutable.LinkedHashMap.empty,
-          Set.empty
+          Set.empty,
+          true
         ),
         Set.empty,
         Set.empty
@@ -184,33 +187,37 @@ object Analyzer{
       log.graph(Renderer.dumpSvg(program, postScheduleNaming))
       log.println("================ OPTIMISTIC ================")
 
-      val (inferred, liveBlocks) = OptimisticAnalyze.apply(
+      val optResult = OptimisticAnalyze.apply[(IType, Boolean)](
         program,
         Map.empty,
         program.getAllVertices().collect{case b: SSA.Block if b.upstream.isEmpty => b}.head,
-        new ITypeLattice(
-          (x, y) => merge(Seq(x, y)),
-          computeMethodSig(_, _, _, (originalSig -> inferredArgs) :: callStack),
-          inferredArgs.flatMap{i => Seq.fill(i.getSize)(i)}
+        new CombinedLattice(
+          new ITypeLattice(
+            (x, y) => merge(Seq(x, y)),
+            computeMethodSig(_, _, _, (originalSig -> inferredArgs) :: callStack)._1,
+            inferredArgs.flatMap{i => Seq.fill(i.getSize)(i)}
+          ),
+          new PurityLattice(
+            computeMethodSig(_, _, _, (originalSig -> inferredArgs) :: callStack)._2
+          )
         ),
         postScheduleNaming,
         log
       )
+      val blockEnds = optResult.liveBlocks.map(_.next)
+      val canThrow = blockEnds.exists(_.isInstanceOf[SSA.AThrow])
 
-      log.pprint(inferred)
-      log.pprint(liveBlocks)
-
-      val allInferredReturns = program.allTerminals
-        .collect{case r: SSA.ReturnVal => r.src}
-        .flatMap{
-          case n: SSA.Copy => inferred.get(n.src)
-          case n => inferred.get(n)
-        }
-
+//      pprint.log(optResult.inferredReturns)
+      val (retTypes0, retBooleans) = optResult.inferredReturns.unzip
+      val retTypes = retTypes0.filter(_ != JType.Prim.V)
+//      pprint.log(retTypes)
       val inferredReturn =
-        if (allInferredReturns.isEmpty) JType.Prim.V
-        else merge(allInferredReturns.toSeq)
+        if (retTypes.isEmpty) JType.Prim.V
+        else merge(retTypes)
+      val inferredPurity = retBooleans.forall(identity)
 
+      log.pprint(optResult.inferred)
+      log.pprint(optResult.liveBlocks)
 
       val allVertices2 = program.getAllVertices()
       val classes = allVertices2.collect{
@@ -232,19 +239,20 @@ object Analyzer{
         )
       }
 
-
       log.check(assert(
         Util.isValidationCompatible0(inferredReturn, originalSig.desc.ret, checkSubclass),
-        s"Inferred return type [$inferredReturn] is not compatible " +
+        s"Inferred return type [${inferredReturn}] is not compatible " +
           s"with declared return type [${originalSig.desc.ret}]"
       ))
 
       val result = Analyzer.Result(
         inferredReturn,
         program,
-        inferred,
-        liveBlocks
+        optResult.inferred,
+        optResult.liveBlocks,
+        !canThrow && inferredPurity
       )
+
       log.global().println(
         "  " * callStack.length +
         "-" + Util.mangleName(originalSig, inferredArgs.drop(if(originalSig.static) 0 else 1))
@@ -261,8 +269,9 @@ object Analyzer{
     */
   case class Result(inferredReturn: IType,
                     program: Program,
-                    inferred: mutable.LinkedHashMap[SSA.Val, IType],
-                    liveBlocks: Set[SSA.Block])
+                    inferred: mutable.LinkedHashMap[SSA.Val, (IType, Boolean)],
+                    liveBlocks: Set[SSA.Block],
+                    pure: Boolean)
 
   def analyzeBlockStructure(program: Program) = {
     val controlFlowEdges = Renderer.findControlFlowGraph(program)
