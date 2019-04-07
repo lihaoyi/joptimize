@@ -71,8 +71,8 @@ object JOptimize{
     }
 
 
-    val visitedClasses = mutable.LinkedHashSet.empty[JType.Cls]
-    val visitedMethods = Analyzer.apply(
+
+    val (visitedMethods, visitedClasses) = Analyzer.apply(
       subtypeMap,
       entrypoints,
       logRoot,
@@ -80,8 +80,7 @@ object JOptimize{
       classNodeMap,
       originalMethods,
       leastUpperBound,
-      merge,
-      visitedClasses
+      merge
     )
 
     pprint.log(visitedMethods, height=9999)

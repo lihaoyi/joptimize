@@ -20,10 +20,9 @@ object Analyzer{
             classNodeMap: Map[JType.Cls, ClassNode],
             originalMethods: Map[MethodSig, MethodNode],
             leastUpperBound: Seq[JType.Cls] => Seq[JType.Cls],
-            merge: Seq[IType] => IType,
-            visitedClasses: mutable.LinkedHashSet[JType.Cls]) = {
+            merge: Seq[IType] => IType) = {
     val visitedMethods = mutable.LinkedHashMap.empty[(MethodSig, Seq[IType]), Analyzer.Result]
-
+    val visitedClasses = mutable.LinkedHashSet.empty[JType.Cls]
     val callerGraph = mutable.LinkedHashMap[MethodSig, mutable.LinkedHashSet[MethodSig]]()
 
     def computeMethodSig(sig: MethodSig,
@@ -107,7 +106,7 @@ object Analyzer{
       visitedMethods((ep, ep.desc.args)) = res
       seenClasses.foreach(visitedClasses.add)
     }
-    visitedMethods
+    (visitedMethods, visitedClasses)
   }
 
   def walkMethod(originalSig: MethodSig,
@@ -217,7 +216,7 @@ object Analyzer{
       removeDeadNodes(program)
       program.checkLinks()
 
-      val allVertices2 = Util.breadthFirstSeen[SSA.Node](program.allTerminals.toSet)(_.upstream)
+      val allVertices2 = program.getAllVertices()
 
       val classes = allVertices2.collect{
         case n: SSA.GetField => n.owner
