@@ -4,7 +4,8 @@ import joptimize.{FileLogger, Logger, Util}
 import joptimize.algorithms.{Dominator, Scheduler}
 import joptimize.analyzer.{Analyzer, Namer, Renderer}
 import joptimize.graph.HavlakLoopTree
-import joptimize.model.{IType, JType, MethodSig, SSA}
+import joptimize.model._
+import joptimize.optimize.OptimisticSimplify
 import org.objectweb.asm.Opcodes
 import org.objectweb.asm.tree.{ClassNode, InsnList, MethodNode}
 
@@ -45,9 +46,11 @@ object Backend {
         else {
 
           newNode.instructions = processMethodBody(
+            sig,
             result,
             allVertices2,
-            log.inferredMethod(sig, inferredArgs)
+            log.inferredMethod(sig, inferredArgs),
+            classNodeMap.contains
           )
         }
         newNode.desc = mangledDesc.unparse
@@ -97,9 +100,27 @@ object Backend {
     outClasses
   }
 
-  def processMethodBody(result: Analyzer.Result,
+  def processMethodBody(originalSig: MethodSig,
+                        result: Analyzer.Result,
                         allVertices2: Set[SSA.Node],
-                        log: Logger.InferredMethod) = {
+                        log: Logger.InferredMethod,
+                        classExists: JType.Cls => Boolean) = {
+
+    OptimisticSimplify.apply(
+      result.program,
+      result.inferred,
+      result.liveBlocks,
+      log,
+      classExists
+    )
+
+    log.check(result.program.checkLinks(checkDead = false))
+    result.program.removeDeadNodes()
+    log.graph(Renderer.dumpSvg(result.program))
+    log.check(result.program.checkLinks())
+
+    val allVertices2 = result.program.getAllVertices()
+
     val (controlFlowEdges, startBlock, allBlocks, blockEdges) =
       Analyzer.analyzeBlockStructure(result.program)
     val loopTree2 = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)

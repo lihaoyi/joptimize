@@ -13,12 +13,11 @@ object OptimisticSimplify {
             log: Logger.InferredMethod,
             classExists: JType.Cls => Boolean) = {
 
-    val calledMethodSigs = mutable.Set.empty[MethodSig]
     for(n <- program.getAllVertices()){
 //      log.graph(Renderer.dumpSvg(program))
 //      log.pprint(n)
 //      n match{case n: SSA.Val => log.pprint(inferred.get(n)) case _ =>}
-      simplifyNode(n, inferred, calledMethodSigs, classExists, log, liveBlocks)
+      simplifyNode(n, inferred, classExists, log, liveBlocks)
     }
 
     program.allTerminals = program.allTerminals.filter{
@@ -28,12 +27,10 @@ object OptimisticSimplify {
 
     log.graph(Renderer.dumpSvg(program))
 
-    calledMethodSigs
   }
 
   def simplifyNode(node: SSA.Node,
                    inferred: mutable.LinkedHashMap[SSA.Val, IType],
-                   calledMethodSigs: mutable.Set[MethodSig],
                    classExists: JType.Cls => Boolean,
                    log: Logger.InferredMethod,
                    liveBlocks: Set[SSA.Block]) = node match {
@@ -51,7 +48,7 @@ object OptimisticSimplify {
           n.srcs.map(inferred).drop(if(n.sig.static) 0 else 1),
           inferred.getOrElseUpdate(n, n.desc.ret)
         )
-      calledMethodSigs.add(n.sig)
+
       n.name = mangledName
       n.desc = mangledDesc
 

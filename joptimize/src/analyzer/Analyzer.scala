@@ -128,6 +128,8 @@ object Analyzer{
         Analyzer.Result(
           inferredReturn = originalSig.desc.ret,
           program = new Program(Nil, Nil),
+          mutable.LinkedHashMap.empty,
+          Set.empty
         ),
         Set.empty,
         Set.empty
@@ -139,11 +141,11 @@ object Analyzer{
       )
       log.pprint(callStack)
       log.pprint(inferredArgs)
-      assert(
+      log.check(assert(
         Util.isValidationCompatible(inferredArgs.drop(if(originalSig.static) 0 else 1), originalSig, checkSubclass),
         s"Inferred param types [${inferredArgs.mkString(", ")}] is not compatible " +
           s"with declared param types [${originalSig.desc.args.mkString(", ")}]"
-      )
+      ))
 
       val program = frontend.apply(originalSig, mn, log.method(originalSig))
       log.graph(Renderer.dumpSvg(program))
@@ -198,26 +200,27 @@ object Analyzer{
       log.pprint(inferred)
       log.pprint(liveBlocks)
 
-      val calledMethodSigs = OptimisticSimplify.apply(
-        program,
-        inferred,
-        liveBlocks,
-        log,
-        classExists
-      )
+      val allInferredReturns = program.allTerminals
+        .collect{case r: SSA.ReturnVal => r.src}
+        .flatMap{
+          case n: SSA.Copy => inferred.get(n.src)
+          case n => inferred.get(n)
+        }
 
-      log.check(program.checkLinks(checkDead = false))
-      program.removeDeadNodes()
-      log.graph(Renderer.dumpSvg(program))
-      log.check(program.checkLinks())
+      val inferredReturn =
+        if (allInferredReturns.isEmpty) JType.Prim.V
+        else merge(allInferredReturns.toSeq)
+
 
       val allVertices2 = program.getAllVertices()
-
       val classes = allVertices2.collect{
         case n: SSA.GetField => n.owner
         case n: SSA.PutField => n.owner
         case n: SSA.GetStatic => n.cls
         case n: SSA.PutStatic => n.cls
+      }
+      val calledMethodSigs = allVertices2.collect{
+        case n: SSA.Invoke => n.sig
       }
 
       for(cls <- Seq(originalSig.cls) ++ classes){
@@ -230,26 +233,17 @@ object Analyzer{
       }
 
 
-      val allInferredReturns = allVertices2
-        .collect{case r: SSA.ReturnVal => r.src}
-        .flatMap{
-          case n: SSA.Copy => inferred.get(n.src)
-          case n => inferred.get(n)
-        }
-
-      val inferredReturn =
-        if (allInferredReturns.isEmpty) JType.Prim.V
-        else merge(allInferredReturns.toSeq)
-
-      assert(
+      log.check(assert(
         Util.isValidationCompatible0(inferredReturn, originalSig.desc.ret, checkSubclass),
         s"Inferred return type [$inferredReturn] is not compatible " +
           s"with declared return type [${originalSig.desc.ret}]"
-      )
+      ))
 
       val result = Analyzer.Result(
         inferredReturn,
-        program
+        program,
+        inferred,
+        liveBlocks
       )
       log.global().println(
         "  " * callStack.length +
@@ -265,7 +259,10 @@ object Analyzer{
     *                       a more specific value given what we learned from
     *                       analyzing the method body.
     */
-  case class Result(inferredReturn: IType, program: Program)
+  case class Result(inferredReturn: IType,
+                    program: Program,
+                    inferred: mutable.LinkedHashMap[SSA.Val, IType],
+                    liveBlocks: Set[SSA.Block])
 
   def analyzeBlockStructure(program: Program) = {
     val controlFlowEdges = Renderer.findControlFlowGraph(program)
