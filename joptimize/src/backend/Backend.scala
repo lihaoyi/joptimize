@@ -23,7 +23,7 @@ object Backend {
     val newMethods = visitedMethods.toList.collect {
       case (
         (sig, inferredArgs),
-        Analyzer.MethodResult(returnType, program, seenTryCatchBlocks, blockEdges, allBlocks, startBlock, allVertices2)) =>
+        Analyzer.MethodResult(returnType, program, seenTryCatchBlocks, allVertices2)) =>
 
         val originalNode = originalMethods(sig)
 
@@ -42,8 +42,10 @@ object Backend {
 
         originalNode.accept(newNode)
 
-        if (startBlock == null) newNode.instructions = new InsnList()
+        if (program.allTerminals.isEmpty) newNode.instructions = new InsnList()
         else {
+          val (controlFlowEdges, startBlock, allBlocks, blockEdges) =
+            Analyzer.analyzeBlockStructure(program)
           val loopTree2 = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)
 
           val dominators2 = Dominator.findDominators(blockEdges, allBlocks)

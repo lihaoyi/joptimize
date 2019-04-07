@@ -126,7 +126,7 @@ object Analyzer{
           inferredReturn = originalSig.desc.ret,
           program = new Program(Nil, Nil),
           seenTryCatchBlocks = Nil,
-          Nil, Nil, null, Set.empty
+          Set.empty
         ),
         Set.empty,
         Set.empty
@@ -259,9 +259,6 @@ object Analyzer{
         inferredReturn,
         program,
         Nil,
-        blockEdges,
-        allBlocks,
-        startBlock,
         allVertices2
       )
       println(
@@ -306,9 +303,6 @@ object Analyzer{
   case class MethodResult(inferredReturn: IType,
                           program: Program,
                           seenTryCatchBlocks: Seq[TryCatchBlockNode],
-                          blockEdges: Seq[(SSA.Block, SSA.Block)],
-                          allBlocks: Seq[SSA.Block],
-                          startBlock: SSA.Block,
                           allVertices2: Set[SSA.Node])
 
   def analyzeBlockStructure(program: Program) = {
