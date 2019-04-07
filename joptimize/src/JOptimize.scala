@@ -1,6 +1,6 @@
 package joptimize
 
-import backend.{Backend, PostLivenessDCE}
+import backend.{Backend, BytecodeDCE}
 import joptimize.analysis.Analyzer
 import joptimize.model._
 import org.objectweb.asm.{ClassReader, ClassWriter, Opcodes}
@@ -119,7 +119,7 @@ object JOptimize{
       cn.methods.addAll(mns.asJava)
     }
 
-    val outClasses = PostLivenessDCE(
+    val outClasses = BytecodeDCE(
       entrypoints,
       grouped.keys.toSeq,
       findSubtypes = subtypeMap.getOrElse(_, Nil),

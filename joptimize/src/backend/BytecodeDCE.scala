@@ -14,7 +14,7 @@ import scala.collection.mutable
   * walk because we need all liveness analysis to be complete before we can
   * scan for new unreachability.
   */
-object PostLivenessDCE {
+object BytecodeDCE {
   def apply(entrypoints: scala.Seq[MethodSig],
             classNodes: Seq[ClassNode],
             findSubtypes: JType.Cls => List[JType.Cls],
