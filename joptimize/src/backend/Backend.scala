@@ -50,7 +50,8 @@ object Backend {
           result,
           allVertices2,
           log.inferredMethod(sig, inferredArgs),
-          classNodeMap.contains
+          classNodeMap.contains,
+          (originalSig, inferredArgs) => visitedMethods((originalSig, inferredArgs)).liveArgs
         )
       }
       newNode.desc = mangledDesc.unparse
@@ -104,14 +105,16 @@ object Backend {
                         result: Analyzer.Result,
                         allVertices2: Set[SSA.Node],
                         log: Logger.InferredMethod,
-                        classExists: JType.Cls => Boolean) = {
+                        classExists: JType.Cls => Boolean,
+                        liveArgsFor: (MethodSig, Seq[IType]) => Set[Int]) = {
 
     OptimisticSimplify.apply(
       result.program,
       result.inferred,
       result.liveBlocks,
       log,
-      classExists
+      classExists,
+      liveArgsFor
     )
 
     log.check(result.program.checkLinks(checkDead = false))

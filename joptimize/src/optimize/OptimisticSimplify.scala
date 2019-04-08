@@ -8,16 +8,17 @@ import scala.collection.mutable
 
 object OptimisticSimplify {
   def apply(program: Program,
-            inferred: mutable.LinkedHashMap[SSA.Val, (IType, Boolean)],
+            inferred: mutable.LinkedHashMap[SSA.Val, (IType, Boolean, Set[Int])],
             liveBlocks: Set[SSA.Block],
             log: Logger.InferredMethod,
-            classExists: JType.Cls => Boolean) = {
+            classExists: JType.Cls => Boolean,
+            liveArgsFor: (MethodSig, Seq[IType]) => Set[Int]) = {
 
     for(n <- program.getAllVertices()){
 //      log.graph(Renderer.dumpSvg(program))
 //      log.pprint(n)
 //      n match{case n: SSA.Val => log.pprint(inferred.get(n)) case _ =>}
-      simplifyNode(n, inferred, classExists, log, liveBlocks)
+      simplifyNode(n, inferred, classExists, log, liveBlocks, liveArgsFor)
     }
 
 //    log.pprint(liveBlocks.map(x => (x, x.next)))
@@ -32,10 +33,11 @@ object OptimisticSimplify {
   }
 
   def simplifyNode(node: SSA.Node,
-                   inferred: mutable.LinkedHashMap[SSA.Val, (IType, Boolean)],
+                   inferred: mutable.LinkedHashMap[SSA.Val, (IType, Boolean, Set[Int])],
                    classExists: JType.Cls => Boolean,
                    log: Logger.InferredMethod,
-                   liveBlocks: Set[SSA.Block]) = node match {
+                   liveBlocks: Set[SSA.Block],
+                   liveArgsFor: (MethodSig, Seq[IType]) => Set[Int]) = node match {
     case p: SSA.ChangedState =>
       log.pprint(inferred.contains(p))
     // do nothing
@@ -48,15 +50,16 @@ object OptimisticSimplify {
         else Util.mangle(
           n.sig,
           n.srcs.map(inferred(_)._1).drop(if(n.sig.static) 0 else 1),
-          inferred.getOrElseUpdate(n, (n.desc.ret, false))._1
+          inferred.getOrElseUpdate(n, (n.desc.ret, false, n.desc.args.indices.toSet))._1
         )
 
-      if (inferred(n)._2){
-        val replacement = inferred.get(n).map(_._1) match{
-          case Some(CType.I(v)) => Some(new SSA.ConstI(v))
-          case Some(CType.J(v)) => Some(new SSA.ConstJ(v))
-          case Some(CType.F(v)) => Some(new SSA.ConstF(v))
-          case Some(CType.D(v)) => Some(new SSA.ConstD(v))
+      val (inferredType, pure, liveArgs) = inferred(n)
+      if (pure){
+        val replacement = inferredType match{
+          case CType.I(v) => Some(new SSA.ConstI(v))
+          case CType.J(v) => Some(new SSA.ConstJ(v))
+          case CType.F(v) => Some(new SSA.ConstF(v))
+          case CType.D(v) => Some(new SSA.ConstD(v))
           case _ => None
         }
         replacement match{
@@ -101,6 +104,7 @@ object OptimisticSimplify {
             n.desc = mangledDesc
         }
       }else{
+
         n.name = mangledName
         n.desc = mangledDesc
       }

@@ -7,6 +7,7 @@ import joptimize.{FileLogger, Logger, Util}
 import joptimize.graph.HavlakLoopTree
 import joptimize.model._
 import joptimize.optimize._
+import optimize.LivenessLattice
 import org.objectweb.asm.tree._
 import org.objectweb.asm.util.{Textifier, TraceMethodVisitor}
 import os.{Path, RelPath}
@@ -29,7 +30,7 @@ object Analyzer{
     def computeMethodSig(sig: MethodSig,
                          invokeSpecial: Boolean,
                          inferredArgs: Seq[IType],
-                         callStack: List[(MethodSig, Seq[IType])]): (IType, Boolean) = {
+                         callStack: List[(MethodSig, Seq[IType])]): (IType, Boolean, Set[Int]) = {
 
       val subSigs = {
         (sig.static, invokeSpecial) match {
@@ -55,7 +56,7 @@ object Analyzer{
       }
 
       subSigs match {
-        case None => (sig.desc.ret, false)
+        case None => (sig.desc.ret, false, sig.desc.args.indices.toSet)
         case Some(subSigs) =>
           val rets = for (subSig <- subSigs) yield originalMethods.get(subSig) match {
             case Some(original) =>
@@ -81,13 +82,13 @@ object Analyzer{
                   res
                 }
               )
-              (res.inferredReturn, res.pure)
+              (res.inferredReturn, res.pure, res.liveArgs)
             case None =>
-              (sig.desc.ret, false)
+              (sig.desc.ret, false, sig.desc.args.indices.toSet)
           }
 
-          val (retTypes, retBooleans) = rets.unzip
-          (merge(retTypes), retBooleans.forall(identity))
+          val (retTypes, retPurity, retLiveArgs) = rets.unzip3
+          (merge(retTypes), retPurity.forall(identity), retLiveArgs.iterator.flatten.toSet)
       }
     }
 
@@ -116,7 +117,7 @@ object Analyzer{
 
   def walkMethod(originalSig: MethodSig,
                  mn: MethodNode,
-                 computeMethodSig: (MethodSig, Boolean, Seq[IType], List[(MethodSig, Seq[IType])]) => (IType, Boolean),
+                 computeMethodSig: (MethodSig, Boolean, Seq[IType], List[(MethodSig, Seq[IType])]) => (IType, Boolean, Set[Int]),
                  inferredArgs: Seq[IType],
                  checkSubclass: (JType.Cls, JType.Cls) => Boolean,
                  callStack: List[(MethodSig, Seq[IType])],
@@ -188,7 +189,7 @@ object Analyzer{
       log.graph(Renderer.dumpSvg(program, postScheduleNaming))
       log.println("================ OPTIMISTIC ================")
 
-      val optResult = OptimisticAnalyze.apply[(IType, Boolean)](
+      val optResult = OptimisticAnalyze.apply[(IType, Boolean, Set[Int])](
         program,
         Map.empty,
         program.getAllVertices().collect{case b: SSA.Block if b.upstream.isEmpty => b}.head,
@@ -200,32 +201,35 @@ object Analyzer{
           ),
           new PurityLattice(
             computeMethodSig(_, _, _, (originalSig -> inferredArgs) :: callStack)._2
+          ),
+          new LivenessLattice(
+            computeMethodSig(_, _, _, (originalSig -> inferredArgs) :: callStack)._3
           )
         ),
         postScheduleNaming,
         log,
         evaluateUnaBranch = {
-          case ((CType.I(v), _), SSA.UnaBranch.IFNE) => Some(v != 0)
-          case ((CType.I(v), _), SSA.UnaBranch.IFEQ) => Some(v == 0)
-          case ((CType.I(v), _), SSA.UnaBranch.IFLE) => Some(v <= 0)
-          case ((CType.I(v), _), SSA.UnaBranch.IFLT) => Some(v < 0)
-          case ((CType.I(v), _), SSA.UnaBranch.IFGE) => Some(v >= 0)
-          case ((CType.I(v), _), SSA.UnaBranch.IFGT) => Some(v > 0)
-          case ((JType.Null, _), SSA.UnaBranch.IFNULL) => Some(true)
-          case ((JType.Null, _), SSA.UnaBranch.IFNONNULL) => Some(false)
+          case ((CType.I(v), _, _), SSA.UnaBranch.IFNE) => Some(v != 0)
+          case ((CType.I(v), _, _), SSA.UnaBranch.IFEQ) => Some(v == 0)
+          case ((CType.I(v), _, _), SSA.UnaBranch.IFLE) => Some(v <= 0)
+          case ((CType.I(v), _, _), SSA.UnaBranch.IFLT) => Some(v < 0)
+          case ((CType.I(v), _, _), SSA.UnaBranch.IFGE) => Some(v >= 0)
+          case ((CType.I(v), _, _), SSA.UnaBranch.IFGT) => Some(v > 0)
+          case ((JType.Null, _, _), SSA.UnaBranch.IFNULL) => Some(true)
+          case ((JType.Null, _, _), SSA.UnaBranch.IFNONNULL) => Some(false)
           case _ => None
         },
         evaluateBinBranch = {
-          case ((CType.I(v1), _), (CType.I(v2), _), SSA.BinBranch.IF_ICMPEQ) => Some(v1 == v2)
-          case ((CType.I(v1), _), (CType.I(v2), _), SSA.BinBranch.IF_ICMPNE) => Some(v1 != v2)
-          case ((CType.I(v1), _), (CType.I(v2), _), SSA.BinBranch.IF_ICMPLT) => Some(v1 < v2)
-          case ((CType.I(v1), _), (CType.I(v2), _), SSA.BinBranch.IF_ICMPGE) => Some(v1 >= v2)
-          case ((CType.I(v1), _), (CType.I(v2), _), SSA.BinBranch.IF_ICMPGT) => Some(v1 > v2)
-          case ((CType.I(v1), _), (CType.I(v2), _), SSA.BinBranch.IF_ICMPLE) => Some(v1 <= v2)
+          case ((CType.I(v1), _, _), (CType.I(v2), _, _), SSA.BinBranch.IF_ICMPEQ) => Some(v1 == v2)
+          case ((CType.I(v1), _, _), (CType.I(v2), _, _), SSA.BinBranch.IF_ICMPNE) => Some(v1 != v2)
+          case ((CType.I(v1), _, _), (CType.I(v2), _, _), SSA.BinBranch.IF_ICMPLT) => Some(v1 < v2)
+          case ((CType.I(v1), _, _), (CType.I(v2), _, _), SSA.BinBranch.IF_ICMPGE) => Some(v1 >= v2)
+          case ((CType.I(v1), _, _), (CType.I(v2), _, _), SSA.BinBranch.IF_ICMPGT) => Some(v1 > v2)
+          case ((CType.I(v1), _, _), (CType.I(v2), _, _), SSA.BinBranch.IF_ICMPLE) => Some(v1 <= v2)
           case _ => None
         },
         evaluateSwitch = {
-          case (CType.I(v), _) => Some(v)
+          case (CType.I(v), _, _) => Some(v)
           case _ => None
         }
       )
@@ -233,16 +237,20 @@ object Analyzer{
       val canThrow = blockEnds.exists(_.isInstanceOf[SSA.AThrow])
 
 //      pprint.log(optResult.inferredReturns)
-      val (retTypes0, retBooleans) = optResult.inferredReturns.unzip
+      val (retTypes0, retPurity, retLiveArgss) = optResult.inferredReturns.unzip3
       val retTypes = retTypes0.filter(_ != JType.Prim.V)
 //      pprint.log(retTypes)
       val inferredReturn =
         if (retTypes.isEmpty) JType.Prim.V
         else merge(retTypes)
-      val inferredPurity = retBooleans.forall(identity)
+      val inferredPurity = retPurity.forall(identity)
 
+      val inferredLiveArgs = retLiveArgss.flatten.toSet
       log.pprint(optResult.inferred)
       log.pprint(optResult.liveBlocks)
+      log.pprint(inferredReturn)
+      log.pprint(inferredPurity)
+      log.pprint(inferredLiveArgs)
 
       val allVertices2 = program.getAllVertices()
       val classes = allVertices2.collect{
@@ -277,7 +285,7 @@ object Analyzer{
         optResult.inferred,
         optResult.liveBlocks,
         !canThrow && inferredPurity,
-        optResult.inferred.keysIterator.collect{case a: SSA.Arg => a.index}.toSet
+        inferredLiveArgs
       )
 
       log.global().println(
@@ -296,7 +304,7 @@ object Analyzer{
     */
   case class Result(inferredReturn: IType,
                     program: Program,
-                    inferred: mutable.LinkedHashMap[SSA.Val, (IType, Boolean)],
+                    inferred: mutable.LinkedHashMap[SSA.Val, (IType, Boolean, Set[Int])],
                     liveBlocks: Set[SSA.Block],
                     pure: Boolean,
                     liveArgs: Set[Int])

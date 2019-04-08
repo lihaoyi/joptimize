@@ -37,10 +37,10 @@ class PurityLattice(checkMethodPurity: (MethodSig, Boolean, Seq[IType]) => Boole
       case n: SSA.MultiANewArray => false
 
       case n: SSA.BinOp =>
-          n.opcode match {
-            case SSA.BinOp.IDIV | SSA.BinOp.IREM | SSA.BinOp.LDIV | SSA.BinOp.LREM => false
-            case _ => true
-          }
+        n.opcode match {
+          case SSA.BinOp.IDIV | SSA.BinOp.IREM | SSA.BinOp.LDIV | SSA.BinOp.LREM => false
+          case _ => true
+        }
       case n: SSA.UnaOp => true
 
       case n: SSA.InvokeStatic => checkMethodPurity(n.sig, false, n.srcs.map(inferences(_)._1))
