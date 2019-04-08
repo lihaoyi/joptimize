@@ -36,7 +36,10 @@ object OptimisticAnalyze {
                initialBlock: SSA.Block,
                lattice: Lattice[T],
                naming: Namer.Result,
-               log: Logger.InferredMethod): Result[T] = {
+               log: Logger.InferredMethod,
+               evaluateUnaBranch: (T, SSA.UnaBranch.Code) => Option[Boolean],
+               evaluateBinBranch: (T, T, SSA.BinBranch.Code) => Option[Boolean],
+               evaluateSwitch: T => Option[Int]): Result[T] = {
 
     val inferredBlocks = mutable.Set(initialBlock)
 
@@ -140,17 +143,7 @@ object OptimisticAnalyze {
               inferredReturns.append(evaluated(r.state))
             case n: SSA.UnaBranch =>
               val valueA = evaluate(n.a)
-              val doBranch = (valueA, n.opcode) match{
-                case ((CType.I(v), _), SSA.UnaBranch.IFNE) => Some(v != 0)
-                case ((CType.I(v), _), SSA.UnaBranch.IFEQ) => Some(v == 0)
-                case ((CType.I(v), _), SSA.UnaBranch.IFLE) => Some(v <= 0)
-                case ((CType.I(v), _), SSA.UnaBranch.IFLT) => Some(v < 0)
-                case ((CType.I(v), _), SSA.UnaBranch.IFGE) => Some(v >= 0)
-                case ((CType.I(v), _), SSA.UnaBranch.IFGT) => Some(v > 0)
-                case ((JType.Null, _), SSA.UnaBranch.IFNULL) => Some(true)
-                case ((JType.Null, _), SSA.UnaBranch.IFNONNULL) => Some(false)
-                case _ => None
-              }
+              val doBranch = evaluateUnaBranch(valueA, n.opcode)
 
               doBranch match{
                 case None =>
@@ -164,15 +157,7 @@ object OptimisticAnalyze {
             case n: SSA.BinBranch =>
               val valueA = evaluate(n.a)
               val valueB = evaluate(n.b)
-              val doBranch = (valueA, valueB, n.opcode) match{
-                case ((CType.I(v1), _), (CType.I(v2), _), SSA.BinBranch.IF_ICMPEQ) => Some(v1 == v2)
-                case ((CType.I(v1), _), (CType.I(v2), _), SSA.BinBranch.IF_ICMPNE) => Some(v1 != v2)
-                case ((CType.I(v1), _), (CType.I(v2), _), SSA.BinBranch.IF_ICMPLT) => Some(v1 < v2)
-                case ((CType.I(v1), _), (CType.I(v2), _), SSA.BinBranch.IF_ICMPGE) => Some(v1 >= v2)
-                case ((CType.I(v1), _), (CType.I(v2), _), SSA.BinBranch.IF_ICMPGT) => Some(v1 > v2)
-                case ((CType.I(v1), _), (CType.I(v2), _), SSA.BinBranch.IF_ICMPLE) => Some(v1 <= v2)
-                case _ => None
-              }
+              val doBranch = evaluateBinBranch(valueA, valueB, n.opcode)
               doBranch match{
                 case None =>
                   queueNextBlock(n.downstreamList.collect{ case t: SSA.True => t}.head)
@@ -203,17 +188,16 @@ object OptimisticAnalyze {
               val value = evaluate(n.src)
               val cases = n.cases.values
               val default = n.default
-              val doBranch = value match{
-                case (CType.I(v), _) => Some(cases.find(_.n == v).getOrElse(default))
-                case _ => None
-              }
+              val doBranch = evaluateSwitch(value)
 
               doBranch match{
                 case None =>
                   for(dest <- cases) queueNextBlock(dest)
                   queueNextBlock(default)
 
-                case Some(dest) => queueNextBlock(dest)
+                case Some(destValue) =>
+                  val dest = cases.find(_.n == destValue).getOrElse(default)
+                  queueNextBlock(dest)
               }
           }
       }

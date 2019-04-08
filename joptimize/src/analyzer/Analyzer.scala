@@ -202,7 +202,31 @@ object Analyzer{
           )
         ),
         postScheduleNaming,
-        log
+        log,
+        evaluateUnaBranch = {
+          case ((CType.I(v), _), SSA.UnaBranch.IFNE) => Some(v != 0)
+          case ((CType.I(v), _), SSA.UnaBranch.IFEQ) => Some(v == 0)
+          case ((CType.I(v), _), SSA.UnaBranch.IFLE) => Some(v <= 0)
+          case ((CType.I(v), _), SSA.UnaBranch.IFLT) => Some(v < 0)
+          case ((CType.I(v), _), SSA.UnaBranch.IFGE) => Some(v >= 0)
+          case ((CType.I(v), _), SSA.UnaBranch.IFGT) => Some(v > 0)
+          case ((JType.Null, _), SSA.UnaBranch.IFNULL) => Some(true)
+          case ((JType.Null, _), SSA.UnaBranch.IFNONNULL) => Some(false)
+          case _ => None
+        },
+        evaluateBinBranch = {
+          case ((CType.I(v1), _), (CType.I(v2), _), SSA.BinBranch.IF_ICMPEQ) => Some(v1 == v2)
+          case ((CType.I(v1), _), (CType.I(v2), _), SSA.BinBranch.IF_ICMPNE) => Some(v1 != v2)
+          case ((CType.I(v1), _), (CType.I(v2), _), SSA.BinBranch.IF_ICMPLT) => Some(v1 < v2)
+          case ((CType.I(v1), _), (CType.I(v2), _), SSA.BinBranch.IF_ICMPGE) => Some(v1 >= v2)
+          case ((CType.I(v1), _), (CType.I(v2), _), SSA.BinBranch.IF_ICMPGT) => Some(v1 > v2)
+          case ((CType.I(v1), _), (CType.I(v2), _), SSA.BinBranch.IF_ICMPLE) => Some(v1 <= v2)
+          case _ => None
+        },
+        evaluateSwitch = {
+          case (CType.I(v), _) => Some(v)
+          case _ => None
+        }
       )
       val blockEnds = optResult.liveBlocks.map(_.next)
       val canThrow = blockEnds.exists(_.isInstanceOf[SSA.AThrow])
