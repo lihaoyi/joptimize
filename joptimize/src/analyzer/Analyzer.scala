@@ -156,7 +156,7 @@ object Analyzer{
       log.graph(Renderer.dumpSvg(program))
       log.println("================ INITIAL ================")
 
-      val preScheduleNaming = Namer.apply(program, Map.empty, program.getAllVertices())
+      val preScheduleNaming = Namer.apply(program, Map.empty, program.getAllVertices(), log = log)
 
       log(Renderer.renderSSA(program, preScheduleNaming))
 
@@ -182,7 +182,7 @@ object Analyzer{
         program.getAllVertices()
       )
 
-      val postScheduleNaming = Namer.apply(program, nodesToBlocks2, program.getAllVertices())
+      val postScheduleNaming = Namer.apply(program, nodesToBlocks2, program.getAllVertices(), log = log)
 
       log(Renderer.renderSSA(program, postScheduleNaming, nodesToBlocks2))
 
@@ -243,9 +243,11 @@ object Analyzer{
       val inferredReturn =
         if (retTypes.isEmpty) JType.Prim.V
         else merge(retTypes)
-      val inferredPurity = retPurity.forall(identity)
 
-      val inferredLiveArgs = retLiveArgss.flatten.toSet
+      val inferredPurity = optResult.inferred.valuesIterator.forall(_._2)
+
+      val inferredLiveArgs = optResult.inferred.valuesIterator.flatMap(_._3).toSet
+
       log.pprint(optResult.inferred)
       log.pprint(optResult.liveBlocks)
       log.pprint(inferredReturn)

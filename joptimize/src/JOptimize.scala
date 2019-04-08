@@ -93,11 +93,14 @@ object JOptimize{
       classFileMap,
       visitedClasses,
       subtypeMap,
-      log
+      log,
+      leastUpperBound,
+      merge,
     )
 
     outClasses
       .map{cn =>
+        log.pprint(cn.name)
         val cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES)
         cn.accept(cw)
         (cn.name + ".class", cw.toByteArray)

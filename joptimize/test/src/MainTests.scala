@@ -252,8 +252,8 @@ object MainTests extends TestSuite{
         'simple2b - annotatedTest
 
         'chained - annotatedTest
-//        'chained2a - annotatedTest
-//        'chained2b - annotatedTest
+        'chained2a - annotatedTest
+        'chained2b - annotatedTest
       }
     }
 

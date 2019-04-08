@@ -8,7 +8,7 @@ import scala.collection.mutable
 /**
   * Represents the combined control/data-flow graph of a SSA program.
   */
-case class Program(args: Seq[SSA.Arg], var allTerminals: Seq[SSA.Control]){
+case class Program(var args: Seq[SSA.Arg], var allTerminals: Seq[SSA.Control]){
   def getAllVertices() = Util.breadthFirstSeen[SSA.Node](allTerminals.toSet)(_.upstream)
 
   def checkLinks(checkDead: Boolean = true) = {

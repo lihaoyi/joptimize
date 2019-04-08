@@ -7,18 +7,25 @@ import joptimize.{FileLogger, Logger, Util}
 import scala.collection.mutable
 
 object OptimisticSimplify {
-  def apply(program: Program,
+  def apply(isStatic: Boolean,
+            argMapping: Map[Int, Int],
+            program: Program,
             inferred: mutable.LinkedHashMap[SSA.Val, (IType, Boolean, Set[Int])],
             liveBlocks: Set[SSA.Block],
             log: Logger.InferredMethod,
             classExists: JType.Cls => Boolean,
-            liveArgsFor: (MethodSig, Seq[IType]) => Set[Int]) = {
+            liveArgsFor: (MethodSig, Boolean, Seq[IType]) => Set[Int]) = {
 
+    log.pprint(program.args -> argMapping)
+    program.args = program.args.filter(a => argMapping.contains(a.index) || (a.index == 0 && !isStatic))
+    log.pprint(program.args -> argMapping)
+
+//    log.pprint(argMapping)
     for(n <- program.getAllVertices()){
 //      log.graph(Renderer.dumpSvg(program))
 //      log.pprint(n)
 //      n match{case n: SSA.Val => log.pprint(inferred.get(n)) case _ =>}
-      simplifyNode(n, inferred, classExists, log, liveBlocks, liveArgsFor)
+      simplifyNode(n, inferred, classExists, log, liveBlocks, liveArgsFor, argMapping)
     }
 
 //    log.pprint(liveBlocks.map(x => (x, x.next)))
@@ -26,8 +33,11 @@ object OptimisticSimplify {
     program.allTerminals = program.allTerminals.filter{
       case j: SSA.Jump => liveBlocks.contains(j.block)
     }
+
+
 //    log.pprint(program.allTerminals)
 
+    log.println("POST OPTIMISTIC SIMPLIFY")
     log.graph(Renderer.dumpSvg(program))
 
   }
@@ -37,23 +47,54 @@ object OptimisticSimplify {
                    classExists: JType.Cls => Boolean,
                    log: Logger.InferredMethod,
                    liveBlocks: Set[SSA.Block],
-                   liveArgsFor: (MethodSig, Seq[IType]) => Set[Int]) = node match {
+                   liveArgsFor: (MethodSig, Boolean, Seq[IType]) => Set[Int],
+                   argMapping: Map[Int, Int]) = node match {
     case p: SSA.ChangedState =>
-      log.pprint(inferred.contains(p))
+//      log.pprint(inferred.contains(p))
     // do nothing
     case unInferred: SSA.Val if !inferred.contains(unInferred) =>
-      log.pprint(unInferred)
+//      log.pprint(unInferred)
     // do nothing
     case n: SSA.Invoke =>
-      val (mangledName, mangledDesc) =
-        if (n.name == "<init>" || !classExists(n.cls)) (n.name, n.desc)
-        else Util.mangle(
-          n.sig,
-          n.srcs.map(inferred(_)._1).drop(if(n.sig.static) 0 else 1),
-          inferred.getOrElseUpdate(n, (n.desc.ret, false, n.desc.args.indices.toSet))._1
-        )
+//      log.pprint(n)
+      val (mangledName, mangledDesc, liveArgsOpt) =
+        if (n.name == "<init>" || !classExists(n.cls)) (n.name, n.desc, None)
+        else {
 
-      val (inferredType, pure, liveArgs) = inferred(n)
+          val inferredArgs0 = n.srcs.map(inferred(_)._1)
+          val liveArgs = liveArgsFor(n.sig, n.isInstanceOf[SSA.InvokeSpecial], inferredArgs0)
+          log.pprint(liveArgs)
+          val inferredArgs = inferredArgs0.drop(if(n.sig.static) 0 else 1)
+          //          log.pprint(n.sig)
+//          log.pprint(inferredArgs)
+//          log.pprint(liveArgs)
+          val (name, desc) = Util.mangle(
+            n.sig,
+            inferredArgs,
+            inferred.getOrElseUpdate(n, (n.desc.ret, false, n.desc.args.indices.toSet))._1,
+            liveArgs
+          )
+          val liveArgsOut: Set[Int] = {
+
+            var originalIndex = if (n.sig.static) 0 else 1
+            log.pprint(originalIndex)
+            val output = mutable.Set.empty[Int]
+            for((arg, i) <- n.sig.desc.args.zipWithIndex){
+              if (liveArgs(originalIndex)){
+                output.add(i + (if (n.sig.static) 0 else 1))
+              }
+              originalIndex += arg.size
+            }
+
+            output.toSet
+          }
+          log.pprint(liveArgsOut)
+
+          (name, desc, Some(liveArgsOut))
+        }
+
+      log.pprint(liveArgsOpt)
+      val (inferredType, pure, _) = inferred(n)
       if (pure){
         val replacement = inferredType match{
           case CType.I(v) => Some(new SSA.ConstI(v))
@@ -85,7 +126,6 @@ object OptimisticSimplify {
             n.upstreamVals.foreach{
               case s: SSA.ChangedState =>
                 upstreamState = s
-//                s.downstreamRemoveAll(n)
               case _ => // do nothing
             }
 
@@ -100,11 +140,25 @@ object OptimisticSimplify {
             if (upstreamState != null){
               n.downstreamRemove(downstreamState)
             }
+            for(liveArgs <- liveArgsOpt){
+
+              val (live, die) = n.srcs.zipWithIndex.partition{
+                case (a, i) => (!n.sig.static && i == 0) || liveArgs(i)
+              }
+              n.srcs = live.map(_._1)
+              die.map(_._1).foreach(_.downstreamRemove(n))
+            }
             n.name = mangledName
             n.desc = mangledDesc
         }
       }else{
-
+        for(liveArgs <- liveArgsOpt){
+          val (live, die) = n.srcs.zipWithIndex.partition{
+            case (a, i) => (!n.sig.static && i == 0) || liveArgs(i)
+          }
+          n.srcs = live.map(_._1)
+          die.map(_._1).foreach(_.downstreamRemove(n))
+        }
         n.name = mangledName
         n.desc = mangledDesc
       }
@@ -126,6 +180,10 @@ object OptimisticSimplify {
       }
 
     case n: SSA.Val =>
+      n match{
+        case a: SSA.Arg if argMapping.contains(a.index) => a.index = argMapping(a.index)
+        case _ => //do nothing
+      }
       val replacement = inferred.get(n).map(_._1) match{
         case Some(CType.I(v)) => Some(new SSA.ConstI(v))
         case Some(CType.J(v)) => Some(new SSA.ConstJ(v))

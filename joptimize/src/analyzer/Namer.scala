@@ -1,5 +1,6 @@
 package joptimize.analyzer
 
+import joptimize.Logger
 import joptimize.Util.sortVerticesForPrinting
 import joptimize.model.{Program, SSA}
 
@@ -18,7 +19,8 @@ object Namer {
 
   def apply(program: Program,
             scheduledVals: Map[SSA.Val, SSA.Control],
-            allVertices: Set[SSA.Node]): Result = {
+            allVertices: Set[SSA.Node],
+            log: Logger.InferredMethod): Result = {
 
     val downstreamEdges = allVertices.flatMap(x => x.downstreamList.map(x -> _)).toSeq ++ scheduledVals.map(_.swap)
 
@@ -55,11 +57,13 @@ object Namer {
     val savedControls = mutable.Map[SSA.Control, (Int, String)]()
 
     var maxVal = 0
+    log.pprint(program.args)
     for(a <- program.args){
       savedLocals.update(a, (a.index, "arg" + a.index))
       maxVal += a.getSize
     }
 
+    log.pprint(maxVal)
     var maxControl = 0
 
     saveable.toSeq.sortBy(finalOrderingMap).collect{

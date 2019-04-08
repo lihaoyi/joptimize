@@ -21,7 +21,8 @@ object Util{
 
   def mangle(originalSig: MethodSig,
              inferredTypes: Seq[IType],
-             narrowReturnType: IType) = {
+             narrowReturnType: IType,
+             liveArgs: Set[Int]) = {
     if (isManglingCompatible(inferredTypes, originalSig.desc.args)) (originalSig.name, originalSig.desc)
     else{
       val mangledName = mangleName0(originalSig, inferredTypes)
@@ -29,7 +30,12 @@ object Util{
       val jTypeArgs = inferredTypes
         .zip(originalSig.desc.args)
         .map(t => CType.toJType(t._1, t._2))
-      val mangledJTypeDesc = Desc(jTypeArgs, jTypeRet)
+      val mangledJTypeDesc = Desc(
+        jTypeArgs.zipWithIndex.collect{
+          case (a, i) if (!originalSig.static && i == 0) || liveArgs(i) => a
+        },
+        jTypeRet
+      )
       (mangledName, mangledJTypeDesc)
     }
   }

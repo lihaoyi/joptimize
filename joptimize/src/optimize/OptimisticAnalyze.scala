@@ -63,14 +63,14 @@ object OptimisticAnalyze {
       val currentBlock = workList.head
       inferredBlocks.add(currentBlock)
       workList.remove(currentBlock)
-      log.pprint(currentBlock)
+//      log.pprint(currentBlock)
       val Seq(nextControl) = currentBlock.downstreamList.collect{case n: SSA.Control => n}
-      log.pprint(nextControl)
-      log.pprint(inferredBlocks)
-      log.pprint(workList)
+//      log.pprint(nextControl)
+//      log.pprint(inferredBlocks)
+//      log.pprint(workList)
 
       def queueNextBlock(nextBlock: SSA.Block) = {
-        log.pprint(nextBlock)
+//        log.pprint(nextBlock)
         val nextPhis = nextBlock
           .downstreamList
           .collect{case p: SSA.Phi => p}
@@ -102,7 +102,7 @@ object OptimisticAnalyze {
                 val merged = lattice.join(old, v)
                 if (merged != old){
                   continueNextBlock = true
-                  log.pprint((k, old, v, merged))
+//                  log.pprint((k, old, v, merged))
                   invalidatedPhis.add(k)
                   evaluated(k) = merged
                 }
@@ -110,15 +110,15 @@ object OptimisticAnalyze {
           }
         }
 
-        log.pprint(invalidatedPhis)
-        log.pprint(continueNextBlock)
+//        log.pprint(invalidatedPhis)
+//        log.pprint(continueNextBlock)
         if (continueNextBlock) {
 
           workList.add(nextBlock)
           val invalidated = Util.breadthFirstSeen[SSA.Node](invalidatedPhis.toSet)(_.downstreamList.filter(!_.isInstanceOf[SSA.Phi]))
             .filter(!_.isInstanceOf[SSA.Phi])
 
-          log.pprint(invalidated)
+//          log.pprint(invalidated)
           invalidated.foreach{
             case removed: SSA.Block => inferredBlocks.remove(removed)
             case removed: SSA.Jump => inferredBlocks.remove(removed.block)

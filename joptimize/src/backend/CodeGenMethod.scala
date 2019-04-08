@@ -1,6 +1,6 @@
 package joptimize.backend
 
-import joptimize.Util
+import joptimize.{Logger, Util}
 import joptimize.analyzer.Namer
 import joptimize.model.JType
 import joptimize.model.{Program, SSA}
@@ -22,8 +22,10 @@ object CodeGenMethod{
             allVertices: Set[SSA.Node],
             nodesToBlocks: Map[SSA.Val, SSA.Block],
             cfg: Seq[(SSA.Control, SSA.Control)],
-            naming: Namer.Result) = {
+            naming: Namer.Result,
+            log: Logger.InferredMethod) = {
 
+    log.pprint(naming)
     val blocksToNodes = nodesToBlocks.groupBy(_._2).map{case (k, v) => (k, v.keys)}
     val sortedControls = sortControlFlowGraph(cfg)
 

@@ -21,7 +21,55 @@ object Backend {
             classFileMap: Map[String, ClassNode],
             visitedClasses: mutable.LinkedHashSet[JType.Cls],
             subtypeMap: mutable.LinkedHashMap[JType.Cls, scala.List[JType.Cls]],
-            log: Logger.Global) = {
+            log: Logger.Global,
+            leastUpperBound: Seq[JType.Cls] => Seq[JType.Cls],
+            merge: Seq[IType] => IType) = {
+
+    def computeMethodSig(sig: MethodSig,
+                         invokeSpecial: Boolean,
+                         inferredArgs: Seq[IType]): (IType, Boolean, Set[Int]) = {
+
+      val subSigs = {
+        (sig.static, invokeSpecial) match {
+          case (true, false) =>
+            def rec(currentCls: JType.Cls): Option[MethodSig] = {
+              val currentSig = sig.copy(cls = currentCls)
+              if (originalMethods.contains(currentSig)) Some(currentSig)
+              else if (!classNodeMap.contains(currentCls)) None
+              else rec(JType.Cls(classNodeMap(currentCls).superName))
+            }
+
+            if (sig.name == "<clinit>") Some(Seq(sig))
+            else rec(sig.cls).map(Seq(_))
+          case (false, true) => Some(Seq(sig))
+          case (false, false) =>
+            val subTypes = subtypeMap
+              .getOrElse(sig.cls, Nil)
+              .filter(c => leastUpperBound(Seq(c, inferredArgs(0).asInstanceOf[JType.Cls])) == Seq(inferredArgs(0)))
+              .map(c => sig.copy(cls = c))
+
+            Some(sig :: subTypes)
+        }
+      }
+
+      subSigs match {
+        case None => (sig.desc.ret, false, sig.desc.args.indices.toSet)
+        case Some(subSigs) =>
+          val rets = for (subSig <- subSigs) yield originalMethods.get(subSig) match {
+            case Some(original) =>
+              val res = visitedMethods(
+                (subSig, inferredArgs.drop(if (sig.static) 0 else 1)),
+              )
+              (res.inferredReturn, res.pure, res.liveArgs)
+            case None =>
+              (sig.desc.ret, false, sig.desc.args.indices.toSet)
+          }
+
+          val (retTypes, retPurity, retLiveArgs) = rets.unzip3
+          (merge(retTypes), retPurity.forall(identity), retLiveArgs.iterator.flatten.toSet)
+      }
+    }
+
     val newMethods = for(((sig, inferredArgs), result) <- visitedMethods.toList) yield {
       log.pprint(sig)
       val allVertices2 = result.program.getAllVertices()
@@ -29,7 +77,7 @@ object Backend {
 
       val (mangledName, mangledDesc) =
         if (sig.name == "<init>") (sig.name, sig.desc)
-        else Util.mangle(sig, inferredArgs, result.inferredReturn)
+        else Util.mangle(sig, inferredArgs, result.inferredReturn, result.liveArgs)
 
       val newNode = new MethodNode(
         Opcodes.ASM6,
@@ -45,13 +93,34 @@ object Backend {
       if (result.program.allTerminals.isEmpty) newNode.instructions = new InsnList()
       else {
 
+        val argMapping: Map[Int, Int] = {
+          val liveArgs = visitedMethods((sig, inferredArgs)).liveArgs
+          log.pprint(liveArgs)
+          var originalIndex = if (sig.static) 0 else 1
+          log.pprint(originalIndex)
+          var finalIndex = originalIndex
+          log.pprint(finalIndex)
+          val output = mutable.Map.empty[Int, Int]
+          for(arg <- sig.desc.args){
+            if (liveArgs(originalIndex)){
+              output(originalIndex) = finalIndex
+              finalIndex += arg.size
+            }
+            originalIndex += arg.size
+          }
+
+          output.toMap
+        }
+
         newNode.instructions = processMethodBody(
           sig,
+          inferredArgs,
           result,
           allVertices2,
           log.inferredMethod(sig, inferredArgs),
           classNodeMap.contains,
-          (originalSig, inferredArgs) => visitedMethods((originalSig, inferredArgs)).liveArgs
+          (originalSig, special, inferredArgs) => computeMethodSig(originalSig, special, inferredArgs)._3,
+          argMapping
         )
       }
       newNode.desc = mangledDesc.unparse
@@ -102,13 +171,21 @@ object Backend {
   }
 
   def processMethodBody(originalSig: MethodSig,
+                        inferredArgs: Seq[IType],
                         result: Analyzer.Result,
                         allVertices2: Set[SSA.Node],
                         log: Logger.InferredMethod,
                         classExists: JType.Cls => Boolean,
-                        liveArgsFor: (MethodSig, Seq[IType]) => Set[Int]) = {
+                        liveArgsFor: (MethodSig, Boolean, Seq[IType]) => Set[Int],
+                        argMapping: Map[Int, Int]) = {
+
+
+
+    log.pprint(argMapping)
 
     OptimisticSimplify.apply(
+      originalSig.static,
+      argMapping,
       result.program,
       result.inferred,
       result.liveBlocks,
@@ -138,7 +215,12 @@ object Backend {
         allVertices2
       )
 
-      val postOptimisticNaming = Namer.apply(result.program, nodesToBlocks, allVertices2)
+      val postOptimisticNaming = Namer.apply(
+        result.program,
+        nodesToBlocks,
+        allVertices2,
+        log
+      )
 
       log(Renderer.renderSSA(result.program, postOptimisticNaming, nodesToBlocks))
     }
@@ -151,7 +233,12 @@ object Backend {
       allVertices2
     )
 
-    val postRegisterAllocNaming = Namer.apply(result.program, nodesToBlocks, result.program.getAllVertices())
+    val postRegisterAllocNaming = Namer.apply(
+      result.program,
+      nodesToBlocks,
+      result.program.getAllVertices(),
+      log
+    )
 
     log(Renderer.renderSSA(result.program, postRegisterAllocNaming, nodesToBlocks))
 
@@ -160,7 +247,8 @@ object Backend {
       allVertices2,
       nodesToBlocks,
       Analyzer.analyzeBlockStructure(result.program)._1,
-      postRegisterAllocNaming
+      postRegisterAllocNaming,
+      log
     )
 
     log.println("================ OUTPUT BYTECODE ================")
