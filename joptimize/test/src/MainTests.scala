@@ -254,16 +254,16 @@ object MainTests extends TestSuite{
         'deep - annotatedTest
       }
 
-      //
-      //      'Liveness - {
-      //        'simple - annotatedTest
-      //        'simple2a - annotatedTest
-      //        'simple2b - annotatedTest
-      //
-      //        'chained - annotatedTest
-      //        'chained2a - annotatedTest
-      //        'chained2b - annotatedTest
-      //      }
+
+      'Liveness - {
+        'simple - annotatedTest
+//        'simple2a - annotatedTest
+//        'simple2b - annotatedTest
+
+        'chained - annotatedTest
+//        'chained2a - annotatedTest
+//        'chained2b - annotatedTest
+      }
     }
 
     'narrow - {
@@ -313,11 +313,11 @@ object MainTests extends TestSuite{
       inputFileMap,
       Seq(MethodSig(s"joptimize/examples/${tp.value.dropRight(1).mkString("/")}", tp.value.last, methodDesc, static = true)),
       eliminateOldMethods = true,
-      log = DummyLogger
-//      log = new FileLogger.Global(
-//        logRoot = outRoot / tp.value,
-//        ignorePrefix = ignorePrefix
-//      )
+//      log = DummyLogger
+      log = new FileLogger.Global(
+        logRoot = outRoot / tp.value,
+        ignorePrefix = ignorePrefix
+      )
     )
 
 

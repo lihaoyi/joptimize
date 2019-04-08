@@ -78,6 +78,25 @@ object OptimisticSimplify {
                 d.replaceUpstream(n, r)
             }
           case None =>
+            var upstreamState: SSA.ChangedState = null
+            n.upstreamVals.foreach{
+              case s: SSA.ChangedState =>
+                upstreamState = s
+//                s.downstreamRemoveAll(n)
+              case _ => // do nothing
+            }
+
+            var downstreamState: SSA.ChangedState = null
+            n.downstreamList.foreach{
+              case s: SSA.ChangedState if upstreamState != null  =>
+                downstreamState = s
+                s.parent = upstreamState
+                upstreamState.downstreamAdd(s)
+              case _ => // do nothing
+            }
+            if (upstreamState != null){
+              n.downstreamRemove(downstreamState)
+            }
             n.name = mangledName
             n.desc = mangledDesc
         }
