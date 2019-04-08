@@ -94,73 +94,17 @@ object OptimisticSimplify {
         }
 
       log.pprint(liveArgsOpt)
-      val (inferredType, pure, _) = inferred(n)
+      val pure = inferred(n)._2
       if (pure){
-        val replacement = inferredType match{
-          case CType.I(v) => Some(new SSA.ConstI(v))
-          case CType.J(v) => Some(new SSA.ConstJ(v))
-          case CType.F(v) => Some(new SSA.ConstF(v))
-          case CType.D(v) => Some(new SSA.ConstD(v))
-          case _ => None
-        }
+        val replacement = prepareNodeReplacement(inferred, n)
         replacement match{
-          case Some(r) =>
-            inferred(r) = inferred(n)
-            var upstreamState: SSA.ChangedState = null
-            n.upstreamVals.foreach{
-              case s: SSA.ChangedState =>
-                upstreamState = s
-                s.downstreamRemoveAll(n)
-              case u => u.downstreamRemoveAll(n)
-            }
-            n.downstreamList.foreach{
-              case s: SSA.ChangedState if upstreamState != null  =>
-                s.parent = upstreamState
-                upstreamState.downstreamAdd(s)
-              case d =>
-                r.downstreamAdd(d)
-                d.replaceUpstream(n, r)
-            }
+          case Some(r) => constantFoldNode(inferred, r, n)
           case None =>
-            var upstreamState: SSA.ChangedState = null
-            n.upstreamVals.foreach{
-              case s: SSA.ChangedState =>
-                upstreamState = s
-              case _ => // do nothing
-            }
-
-            var downstreamState: SSA.ChangedState = null
-            n.downstreamList.foreach{
-              case s: SSA.ChangedState if upstreamState != null  =>
-                downstreamState = s
-                s.parent = upstreamState
-                upstreamState.downstreamAdd(s)
-              case _ => // do nothing
-            }
-            if (upstreamState != null){
-              n.downstreamRemove(downstreamState)
-            }
-            for(liveArgs <- liveArgsOpt){
-
-              val (live, die) = n.srcs.zipWithIndex.partition{
-                case (a, i) => (!n.sig.static && i == 0) || liveArgs(i)
-              }
-              n.srcs = live.map(_._1)
-              die.map(_._1).foreach(_.downstreamRemove(n))
-            }
-            n.name = mangledName
-            n.desc = mangledDesc
+            purifyNode(n)
+            mangleInvocation(n, liveArgsOpt, mangledName, mangledDesc)
         }
       }else{
-        for(liveArgs <- liveArgsOpt){
-          val (live, die) = n.srcs.zipWithIndex.partition{
-            case (a, i) => (!n.sig.static && i == 0) || liveArgs(i)
-          }
-          n.srcs = live.map(_._1)
-          die.map(_._1).foreach(_.downstreamRemove(n))
-        }
-        n.name = mangledName
-        n.desc = mangledDesc
+        mangleInvocation(n, liveArgsOpt, mangledName, mangledDesc)
       }
 
     case p: SSA.Phi =>
@@ -184,32 +128,9 @@ object OptimisticSimplify {
         case a: SSA.Arg if argMapping.contains(a.index) => a.index = argMapping(a.index)
         case _ => //do nothing
       }
-      val replacement = inferred.get(n).map(_._1) match{
-        case Some(CType.I(v)) => Some(new SSA.ConstI(v))
-        case Some(CType.J(v)) => Some(new SSA.ConstJ(v))
-        case Some(CType.F(v)) => Some(new SSA.ConstF(v))
-        case Some(CType.D(v)) => Some(new SSA.ConstD(v))
-        case _ => None
-      }
+      val replacement = prepareNodeReplacement(inferred, n)
 
-      replacement.foreach{r =>
-        inferred(r) = inferred(n)
-        var upstreamState: SSA.ChangedState = null
-        n.upstreamVals.foreach{
-          case s: SSA.ChangedState =>
-            upstreamState = s
-            s.downstreamRemoveAll(n)
-          case u => u.downstreamRemoveAll(n)
-        }
-        n.downstreamList.foreach{
-          case s: SSA.ChangedState if upstreamState != null  =>
-            s.parent = upstreamState
-            upstreamState.downstreamAdd(s)
-          case d =>
-            r.downstreamAdd(d)
-            d.replaceUpstream(n, r)
-        }
-      }
+      for(r <- replacement) constantFoldNode(inferred, r, n)
 
     case j: SSA.Jump =>
       val allTargets = j.downstreamList.collect{case b: SSA.Block => b}
@@ -223,5 +144,79 @@ object OptimisticSimplify {
       }
     case _ =>
     // do nothing
+  }
+
+  def prepareNodeReplacement(inferred: mutable.LinkedHashMap[SSA.Val, (IType, Boolean, Set[Int])],
+                             n: SSA.Val) = {
+    inferred(n)._1 match {
+      case CType.I(v) => Some(new SSA.ConstI(v))
+      case CType.J(v) => Some(new SSA.ConstJ(v))
+      case CType.F(v) => Some(new SSA.ConstF(v))
+      case CType.D(v) => Some(new SSA.ConstD(v))
+      case _ => None
+    }
+  }
+
+  /**
+    * Removes a node entirely and replace it with a constant value
+    */
+  def constantFoldNode(inferred: mutable.LinkedHashMap[SSA.Val, (IType, Boolean, Set[Int])],
+                       r: SSA.Val,
+                       n: SSA.Val) = {
+    inferred(r) = inferred(n)
+    var upstreamState: SSA.ChangedState = null
+    n.upstreamVals.foreach {
+      case s: SSA.ChangedState =>
+        upstreamState = s
+        s.downstreamRemoveAll(n)
+      case u => u.downstreamRemoveAll(n)
+    }
+    n.downstreamList.foreach {
+      case s: SSA.ChangedState if upstreamState != null =>
+        s.parent = upstreamState
+        upstreamState.downstreamAdd(s)
+      case d =>
+        r.downstreamAdd(d)
+        d.replaceUpstream(n, r)
+    }
+  }
+
+  /**
+    * Leaves a node in place but removes its effect on the state edges
+    */
+  def purifyNode(n: SSA.Val) = {
+    var upstreamState: SSA.ChangedState = null
+    n.upstreamVals.foreach {
+      case s: SSA.ChangedState =>
+        upstreamState = s
+      case _ => // do nothing
+    }
+
+    var downstreamState: SSA.ChangedState = null
+    n.downstreamList.foreach {
+      case s: SSA.ChangedState if upstreamState != null =>
+        downstreamState = s
+        s.parent = upstreamState
+        upstreamState.downstreamAdd(s)
+      case _ => // do nothing
+    }
+    if (upstreamState != null) {
+      n.downstreamRemove(downstreamState)
+    }
+  }
+
+  def mangleInvocation(n: SSA.Invoke,
+                       liveArgsOpt: Option[Set[Int]],
+                       mangledName: String,
+                       mangledDesc: Desc) = {
+    for (liveArgs <- liveArgsOpt) {
+      val (live, die) = n.srcs.zipWithIndex.partition {
+        case (a, i) => (!n.sig.static && i == 0) || liveArgs(i)
+      }
+      n.srcs = live.map(_._1)
+      die.map(_._1).foreach(_.downstreamRemove(n))
+    }
+    n.name = mangledName
+    n.desc = mangledDesc
   }
 }
