@@ -1,21 +1,19 @@
 package joptimize.analyzer
 
-import frontend.ConstructSSA
 import joptimize.algorithms.{Dominator, Scheduler}
 import joptimize.frontend.Frontend
-import joptimize.{FileLogger, Logger, Util}
+import joptimize.{Logger, Util}
 import joptimize.graph.HavlakLoopTree
 import joptimize.model._
 import joptimize.optimize._
 import optimize.LivenessLattice
 import org.objectweb.asm.tree._
-import org.objectweb.asm.util.{Textifier, TraceMethodVisitor}
-import os.{Path, RelPath}
 
 import scala.collection.mutable
 
 object Analyzer{
-  def apply(subtypeMap: mutable.LinkedHashMap[JType.Cls, scala.List[JType.Cls]],
+  def apply(resolver: Resolver,
+            subtypeMap: mutable.LinkedHashMap[JType.Cls, scala.List[JType.Cls]],
             entrypoints: Seq[MethodSig],
             classNodeMap: Map[JType.Cls, ClassNode],
             originalMethods: Map[MethodSig, MethodNode],
@@ -32,64 +30,33 @@ object Analyzer{
                          inferredArgs: Seq[IType],
                          callStack: List[(MethodSig, Seq[IType])]): (IType, Boolean, Set[Int]) = {
 
-      val subSigs = {
-        (sig.static, invokeSpecial) match {
-          case (true, false) =>
-            def rec(currentCls: JType.Cls): Option[MethodSig] = {
-              val currentSig = sig.copy(cls = currentCls)
-              if (originalMethods.contains(currentSig)) Some(currentSig)
-              else if (!classNodeMap.contains(currentCls)) None
-              else rec(JType.Cls(classNodeMap(currentCls).superName))
+      resolver.resolvePossibleSigs(
+        sig,
+        invokeSpecial,
+        inferredArgs,
+        compute = (subSig, original, inferredArgs) => visitedMethods.getOrElseUpdate(
+          (subSig, inferredArgs.drop(if (subSig.static) 0 else 1)),
+          {
+            val (res, newVisitedClasses, calledMethods) = walkMethod(
+              subSig,
+              original,
+              computeMethodSig,
+              inferredArgs,
+              (inf, orig) => leastUpperBound(Seq(inf, orig)) == Seq(orig),
+              callStack,
+              log.inferredMethod(subSig, inferredArgs.drop(if (subSig.static) 0 else 1)),
+              classNodeMap.contains,
+              merge,
+              frontend
+            )
+            newVisitedClasses.foreach(visitedClasses.add)
+            for (m <- calledMethods) {
+              callerGraph.getOrElseUpdate(m, mutable.LinkedHashSet.empty).add(subSig)
             }
-
-            if (sig.name == "<clinit>") Some(Seq(sig))
-            else rec(sig.cls).map(Seq(_))
-          case (false, true) => Some(Seq(sig))
-          case (false, false) =>
-            val subTypes = subtypeMap
-              .getOrElse(sig.cls, Nil)
-              .filter(c => leastUpperBound(Seq(c, inferredArgs(0).asInstanceOf[JType.Cls])) == Seq(inferredArgs(0)))
-              .map(c => sig.copy(cls = c))
-
-            Some(sig :: subTypes)
-        }
-      }
-
-      subSigs match {
-        case None => (sig.desc.ret, false, sig.desc.args.indices.toSet)
-        case Some(subSigs) =>
-          val rets = for (subSig <- subSigs) yield originalMethods.get(subSig) match {
-            case Some(original) =>
-              val res = visitedMethods.getOrElseUpdate(
-                (subSig, inferredArgs.drop(if (sig.static) 0 else 1)),
-                {
-                  val (res, newVisitedClasses, calledMethods) = walkMethod(
-                    subSig,
-                    original,
-                    computeMethodSig,
-                    inferredArgs,
-                    (inf, orig) => leastUpperBound(Seq(inf, orig)) == Seq(orig),
-                    callStack,
-                    log.inferredMethod(sig, inferredArgs.drop(if (sig.static) 0 else 1)),
-                    classNodeMap.contains,
-                    merge,
-                    frontend
-                  )
-                  newVisitedClasses.foreach(visitedClasses.add)
-                  for (m <- calledMethods) {
-                    callerGraph.getOrElseUpdate(m, mutable.LinkedHashSet.empty).add(subSig)
-                  }
-                  res
-                }
-              )
-              (res.inferredReturn, res.pure, res.liveArgs)
-            case None =>
-              (sig.desc.ret, false, sig.desc.args.indices.toSet)
+            res
           }
-
-          val (retTypes, retPurity, retLiveArgs) = rets.unzip3
-          (merge(retTypes), retPurity.forall(identity), retLiveArgs.iterator.flatten.toSet)
-      }
+        )
+      )
     }
 
     for (ep <- entrypoints) {
@@ -113,6 +80,54 @@ object Analyzer{
       seenClasses.foreach(visitedClasses.add)
     }
     (visitedMethods, visitedClasses)
+  }
+
+  class Resolver(val classNodeMap: Map[JType.Cls, ClassNode],
+                 val originalMethods: Map[MethodSig, MethodNode],
+                 val subtypeMap: mutable.LinkedHashMap[JType.Cls, List[JType.Cls]],
+                 val leastUpperBound: Seq[JType.Cls] => Seq[JType.Cls],
+                 val merge: Seq[IType] => IType) {
+    def resolvePossibleSigs(sig: MethodSig,
+                            invokeSpecial: Boolean,
+                            inferredArgs: Seq[IType],
+                            compute: (MethodSig, MethodNode, Seq[IType]) => Analyzer.Result) = {
+
+      val subSigs = (sig.static, invokeSpecial) match {
+        case (true, false) =>
+          def rec(currentCls: JType.Cls): Option[MethodSig] = {
+            val currentSig = sig.copy(cls = currentCls)
+            if (originalMethods.contains(currentSig)) Some(currentSig)
+            else if (!classNodeMap.contains(currentCls)) None
+            else rec(JType.Cls(classNodeMap(currentCls).superName))
+          }
+
+          if (sig.name == "<clinit>") Some(Seq(sig))
+          else rec(sig.cls).map(Seq(_))
+        case (false, true) => Some(Seq(sig))
+        case (false, false) =>
+          val subTypes = subtypeMap
+            .getOrElse(sig.cls, Nil)
+            .filter(c => leastUpperBound(Seq(c, inferredArgs(0).asInstanceOf[JType.Cls])) == Seq(inferredArgs(0)))
+            .map(c => sig.copy(cls = c))
+
+          Some(sig :: subTypes)
+      }
+
+      subSigs match {
+        case None => (sig.desc.ret, false, sig.desc.args.indices.toSet)
+        case Some(subSigs) =>
+          val rets = for (subSig <- subSigs) yield originalMethods.get(subSig) match {
+            case Some(original) =>
+              val res = compute(subSig, original, inferredArgs)
+              (res.inferredReturn, res.pure, res.liveArgs)
+            case None =>
+              (sig.desc.ret, false, sig.desc.args.indices.toSet)
+          }
+
+          val (retTypes, retPurity, retLiveArgs) = rets.unzip3
+          (merge(retTypes), retPurity.forall(identity), retLiveArgs.iterator.flatten.toSet)
+      }
+    }
   }
 
   def walkMethod(originalSig: MethodSig,
@@ -326,5 +341,6 @@ object Analyzer{
 
     (controlFlowEdges, startBlock, allBlocks, blockEdges)
   }
+
 
 }

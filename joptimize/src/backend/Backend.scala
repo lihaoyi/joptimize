@@ -2,6 +2,7 @@ package joptimize.backend
 
 import joptimize.{FileLogger, Logger, Util}
 import joptimize.algorithms.{Dominator, Scheduler}
+import joptimize.analyzer.Analyzer.Resolver
 import joptimize.analyzer.{Analyzer, Namer, Renderer}
 import joptimize.graph.HavlakLoopTree
 import joptimize.model._
@@ -13,7 +14,8 @@ import collection.JavaConverters._
 import scala.collection.mutable
 
 object Backend {
-  def apply(entrypoints: scala.Seq[MethodSig],
+  def apply(resolver: Resolver,
+            entrypoints: scala.Seq[MethodSig],
             originalMethods: Map[MethodSig, MethodNode],
             classNodeMap: Map[JType.Cls, ClassNode],
             visitedMethods: mutable.LinkedHashMap[(MethodSig, Seq[IType]), Analyzer.Result],
@@ -24,51 +26,6 @@ object Backend {
             log: Logger.Global,
             leastUpperBound: Seq[JType.Cls] => Seq[JType.Cls],
             merge: Seq[IType] => IType) = {
-
-    def computeMethodSig(sig: MethodSig,
-                         invokeSpecial: Boolean,
-                         inferredArgs: Seq[IType]): (IType, Boolean, Set[Int]) = {
-
-      val subSigs = {
-        (sig.static, invokeSpecial) match {
-          case (true, false) =>
-            def rec(currentCls: JType.Cls): Option[MethodSig] = {
-              val currentSig = sig.copy(cls = currentCls)
-              if (originalMethods.contains(currentSig)) Some(currentSig)
-              else if (!classNodeMap.contains(currentCls)) None
-              else rec(JType.Cls(classNodeMap(currentCls).superName))
-            }
-
-            if (sig.name == "<clinit>") Some(Seq(sig))
-            else rec(sig.cls).map(Seq(_))
-          case (false, true) => Some(Seq(sig))
-          case (false, false) =>
-            val subTypes = subtypeMap
-              .getOrElse(sig.cls, Nil)
-              .filter(c => leastUpperBound(Seq(c, inferredArgs(0).asInstanceOf[JType.Cls])) == Seq(inferredArgs(0)))
-              .map(c => sig.copy(cls = c))
-
-            Some(sig :: subTypes)
-        }
-      }
-
-      subSigs match {
-        case None => (sig.desc.ret, false, sig.desc.args.indices.toSet)
-        case Some(subSigs) =>
-          val rets = for (subSig <- subSigs) yield originalMethods.get(subSig) match {
-            case Some(original) =>
-              val res = visitedMethods(
-                (subSig, inferredArgs.drop(if (sig.static) 0 else 1)),
-              )
-              (res.inferredReturn, res.pure, res.liveArgs)
-            case None =>
-              (sig.desc.ret, false, sig.desc.args.indices.toSet)
-          }
-
-          val (retTypes, retPurity, retLiveArgs) = rets.unzip3
-          (merge(retTypes), retPurity.forall(identity), retLiveArgs.iterator.flatten.toSet)
-      }
-    }
 
     val newMethods = for(((sig, inferredArgs), result) <- visitedMethods.toList) yield {
       log.pprint(sig)
@@ -119,7 +76,15 @@ object Backend {
           allVertices2,
           log.inferredMethod(sig, inferredArgs),
           classNodeMap.contains,
-          (originalSig, special, inferredArgs) => computeMethodSig(originalSig, special, inferredArgs)._3,
+          (originalSig, invokeSpecial, inferredArgs) =>
+            resolver.resolvePossibleSigs(
+              originalSig,
+              invokeSpecial,
+              inferredArgs,
+              compute = (subSig, original, inferredArgs) => {
+                visitedMethods(subSig, inferredArgs.drop(if (subSig.static) 0 else 1))
+              }
+            )._3,
           argMapping
         )
       }
