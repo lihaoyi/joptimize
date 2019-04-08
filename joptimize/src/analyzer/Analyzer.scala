@@ -132,7 +132,8 @@ object Analyzer{
           new Program(Nil, Nil),
           mutable.LinkedHashMap.empty,
           Set.empty,
-          true
+          true,
+          Set.empty
         ),
         Set.empty,
         Set.empty
@@ -263,6 +264,7 @@ object Analyzer{
         )
       }
 
+
       log.check(assert(
         Util.isValidationCompatible0(inferredReturn, originalSig.desc.ret, checkSubclass),
         s"Inferred return type [${inferredReturn}] is not compatible " +
@@ -274,7 +276,8 @@ object Analyzer{
         program,
         optResult.inferred,
         optResult.liveBlocks,
-        !canThrow && inferredPurity
+        !canThrow && inferredPurity,
+        optResult.inferred.keysIterator.collect{case a: SSA.Arg => a.index}.toSet
       )
 
       log.global().println(
@@ -295,7 +298,8 @@ object Analyzer{
                     program: Program,
                     inferred: mutable.LinkedHashMap[SSA.Val, (IType, Boolean)],
                     liveBlocks: Set[SSA.Block],
-                    pure: Boolean)
+                    pure: Boolean,
+                    liveArgs: Set[Int])
 
   def analyzeBlockStructure(program: Program) = {
     val controlFlowEdges = Renderer.findControlFlowGraph(program)

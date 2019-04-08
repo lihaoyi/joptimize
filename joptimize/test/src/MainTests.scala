@@ -249,7 +249,7 @@ object MainTests extends TestSuite{
       'Liveness - {
         'simple - annotatedTest
         'simple2a - annotatedTest
-//        'simple2b - annotatedTest
+        'simple2b - annotatedTest
 
         'chained - annotatedTest
 //        'chained2a - annotatedTest
