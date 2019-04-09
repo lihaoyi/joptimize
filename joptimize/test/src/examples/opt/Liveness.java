@@ -179,6 +179,31 @@ class Liveness {
 
     @joptimize.Test(
             inputs = {1, 2, 3, 4, 5, 6, 7, 8},
+            addedNumConst = {123, 456}
+    )
+    static int implement3(int i) {
+        Foo2 bar = new Bar2();
+        bar.choose(i + 123, i + 456);
+        Foo2 qux = new Qux2();
+        return qux.choose(i + 123, i + 456);
+    }
+    interface Foo3{
+        int choose(int x, int y);
+    }
+    static class Bar3 implements Foo3{
+        public int choose(int x, int y){
+            return x;
+        }
+    }
+    static class Qux3 implements Foo3{
+        public int choose(int x, int y){
+            return y;
+        }
+    }
+
+
+    @joptimize.Test(
+            inputs = {1, 2, 3, 4, 5, 6, 7, 8},
             removedNumConst = {123},
             addedNumConst = {456}
     )
@@ -234,6 +259,46 @@ class Liveness {
         int choose(int x, int y){
             return x;
         }
+    }
+
+
+
+    @joptimize.Test(
+            inputs = {1, 2, 3, 4, 5, 6, 7, 8},
+            addedNumConst = {123, 456}
+    )
+    static int override3(int i) {
+        BarOverride3 x = new BarOverride3();
+        return x.choose(i + 123, i + 456);
+    }
+    static abstract class FooOverride3{
+        int choose(int x, int y){
+            return y;
+        }
+    }
+    static class BarOverride3 extends FooOverride3{
+        int choose(int x, int y){
+            return x;
+        }
+    }
+
+
+    @joptimize.Test(
+            inputs = {1, 2, 3, 4, 5, 6, 7, 8},
+            addedNumConst = {123}
+    )
+    static int deadLoopCounter(int i) {
+        return deadLoopCounter0(i + 123, i + 456);
+    }
+    static int deadLoopCounter0(int x, int y) {
+        int z = 1;
+        int w = y;
+        while(z < x){
+            z *= 2;
+            w *= 3;
+        }
+
+        return z;
     }
 
 }

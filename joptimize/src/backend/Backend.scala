@@ -26,6 +26,7 @@ object Backend {
             log: Logger.Global,
             leastUpperBound: Seq[JType.Cls] => Seq[JType.Cls],
             merge: Seq[IType] => IType) = {
+
     val highestMethodDefiners = for(((sig, inferredArgs), result) <- visitedMethods) yield {
       var parentClasses = List.empty[JType.Cls]
       var current = sig.cls

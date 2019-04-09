@@ -265,10 +265,14 @@ object MainTests extends TestSuite{
         'implement1 - annotatedTest
         'implement2a - annotatedTest
         'implement2b - annotatedTest
+        'implement3 - annotatedTest
 
         'override0 - annotatedTest
         'override1 - annotatedTest
         'override2 - annotatedTest
+//        'override3 - annotatedTest
+
+        'deadLoopCounter - annotatedTest
       }
     }
 
