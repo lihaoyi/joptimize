@@ -260,6 +260,15 @@ object MainTests extends TestSuite{
         'chained - annotatedTest
         'chained2a - annotatedTest
         'chained2b - annotatedTest
+
+        'implement0 - annotatedTest
+        'implement1 - annotatedTest
+        'implement2a - annotatedTest
+        'implement2b - annotatedTest
+
+        'override0 - annotatedTest
+        'override1 - annotatedTest
+        'override2 - annotatedTest
       }
     }
 

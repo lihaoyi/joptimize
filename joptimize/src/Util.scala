@@ -22,7 +22,7 @@ object Util{
   def mangle(originalSig: MethodSig,
              inferredTypes: Seq[IType],
              narrowReturnType: IType,
-             liveArgs: Set[Int]) = {
+             liveArgs: Int => Boolean) = {
     if (isManglingCompatible(inferredTypes, originalSig.desc.args)) {
       var i = if (originalSig.static) 0 else 1
       val narrowedDesc = Desc(

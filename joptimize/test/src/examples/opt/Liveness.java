@@ -7,7 +7,6 @@ class Liveness {
     )
     static int entrypointUnused0(int i) {
         return 123;
-
     }
 
     @joptimize.Test(
@@ -28,7 +27,8 @@ class Liveness {
 
     @joptimize.Test(
             inputs = {1, 2},
-            removedNumConst = {456}
+            removedNumConst = {456},
+            addedNumConst = {123}
     )
     static int trivialUnused(int i) {
         return trivialUnused0(i + 123, i + 456);
@@ -108,4 +108,132 @@ class Liveness {
     static int chained2b(int i) {
         return terminal(false, pureButNotConstant((i - 1) * (i - 5)), pureButNotConstant2(i));
     }
+
+
+    @joptimize.Test(
+            inputs = {1, 2, 3, 4, 5, 6, 7, 8},
+            removedNumConst = {123},
+            addedNumConst = {456}
+    )
+    static int implement0(int i) {
+        return (new Bar0()).choose(i + 123, i + 456);
+    }
+    static abstract class Foo0{
+        abstract int choose(int x, int y);
+    }
+    static class Bar0 extends Foo0{
+        int choose(int x, int y){
+            return y;
+        }
+    }
+
+
+    @joptimize.Test(
+            inputs = {1, 2, 3, 4, 5, 6, 7, 8},
+            removedNumConst = {456},
+            addedNumConst = {123}
+    )
+    static int implement1(int i) {
+        return (new Bar1()).choose(i + 123, i + 456);
+    }
+    static abstract class Foo1{
+        abstract int choose(int x, int y);
+    }
+    static class Bar1 extends Foo1{
+        int choose(int x, int y){
+            return x;
+        }
+    }
+
+
+    @joptimize.Test(
+            inputs = {1, 2, 3, 4, 5, 6, 7, 8}
+    )
+    static int implement2a(int i) {
+        return (new Bar2()).choose(i + 123, i + 456);
+    }
+    @joptimize.Test(
+            inputs = {1, 2, 3, 4, 5, 6, 7, 8},
+            addedNumConst = {123, 456}
+    )
+    static int implement2b(int i) {
+        Foo2 bar = new Bar2();
+        bar.choose(i + 123, i + 456);
+        Foo2 qux = new Qux2();
+        return qux.choose(i + 123, i + 456);
+    }
+    static abstract class Foo2{
+        abstract int choose(int x, int y);
+    }
+    static class Bar2 extends Foo2{
+        int choose(int x, int y){
+            return x;
+        }
+    }
+    static class Qux2 extends Foo2{
+        int choose(int x, int y){
+            return y;
+        }
+    }
+
+
+    @joptimize.Test(
+            inputs = {1, 2, 3, 4, 5, 6, 7, 8},
+            removedNumConst = {123},
+            addedNumConst = {456}
+    )
+    static int override0(int i) {
+        return (new BarOverride0()).choose(i + 123, i + 456);
+    }
+    static abstract class FooOverride0{
+        int choose(int x, int y){
+            return y;
+        }
+    }
+    static class BarOverride0 extends FooOverride0{
+        int choose(int x, int y){
+            return y;
+        }
+    }
+
+
+    @joptimize.Test(
+            inputs = {1, 2, 3, 4, 5, 6, 7, 8},
+            removedNumConst = {456},
+            addedNumConst = {123}
+    )
+    static int override1(int i) {
+        return (new BarOverride1()).choose(i + 123, i + 456);
+    }
+    static abstract class FooOverride1{
+        int choose(int x, int y){
+            return x;
+        }
+    }
+    static class BarOverride1 extends FooOverride1{
+        int choose(int x, int y){
+            return x;
+        }
+    }
+
+
+    @joptimize.Test(
+            inputs = {1, 2, 3, 4, 5, 6, 7, 8},
+            addedNumConst = {123, 456}
+    )
+    static int override2(int i) {
+        FooOverride2 x = new BarOverride2();
+        return x.choose(i + 123, i + 456);
+    }
+    static abstract class FooOverride2{
+        int choose(int x, int y){
+            return y;
+        }
+    }
+    static class BarOverride2 extends FooOverride2{
+        int choose(int x, int y){
+            return x;
+        }
+    }
+
 }

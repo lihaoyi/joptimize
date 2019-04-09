@@ -107,7 +107,6 @@ object Analyzer{
         case (false, false) =>
           val subTypes = subtypeMap
             .getOrElse(sig.cls, Nil)
-            .filter(c => leastUpperBound(Seq(c, inferredArgs(0).asInstanceOf[JType.Cls])) == Seq(inferredArgs(0)))
             .map(c => sig.copy(cls = c))
 
           Some(sig :: subTypes)

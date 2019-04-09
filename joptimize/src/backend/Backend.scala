@@ -43,37 +43,38 @@ object Backend {
       })()
 
       val highestCls = parentClasses
-        .find(cls => visitedMethods.contains((sig.copy(cls = cls), inferredArgs)))
+        .find{ cls =>
+          val key = (sig.copy(cls = cls), inferredArgs)
+          val res = visitedMethods.contains(key)
+          res
+        }
         .get
 
       ((sig, inferredArgs), highestCls)
     }
+
     val newMethods = for(((sig, inferredArgs), result) <- visitedMethods.toList) yield {
+      val liveArgs =
+        if (entrypoints.contains(sig)) (_: Int) => true
+        else{
+          val highestSig = if (sig.static) sig else sig.copy(cls = highestMethodDefiners((sig, inferredArgs)))
+          resolver.resolvePossibleSigs(
+            highestSig,
+            false,
+            (if (sig.static) Nil else Seq(sig.cls)) ++ inferredArgs,
+            compute = (subSig, original, inferredArgs) => {
+              //                pprint.log(visitedMethods.keys, height=9999)
+              visitedMethods.get((subSig, inferredArgs.drop(if (subSig.static) 0 else 1)))
+            }
+          )._3
+        }
       log.pprint(sig)
       val allVertices2 = result.program.getAllVertices()
       val originalNode = originalMethods(sig)
 
       val (mangledName, mangledDesc) =
-        if (entrypoints.contains(sig) || sig.name == "<init>") (sig.name, sig.desc)
-        else {
-          val highestSig = if (sig.static) sig else sig.copy(cls = highestMethodDefiners((sig, inferredArgs)))
-          log.pprint(highestSig)
-          log.pprint(sig.cls +: inferredArgs)
-          Util.mangle(
-            sig,
-            inferredArgs,
-            result.inferredReturn,
-            resolver.resolvePossibleSigs(
-              highestSig,
-              false,
-              (if (sig.static) Nil else Seq(sig.cls)) ++ inferredArgs,
-              compute = (subSig, original, inferredArgs) => {
-//                pprint.log(visitedMethods.keys, height=9999)
-                visitedMethods.get((subSig, inferredArgs.drop(if (subSig.static) 0 else 1)))
-              }
-            )._3
-          )
-        }
+        if (sig.name == "<init>") (sig.name, sig.desc)
+        else Util.mangle(sig, inferredArgs, result.inferredReturn, liveArgs)
 
       val newNode = new MethodNode(
         Opcodes.ASM6,
@@ -83,19 +84,17 @@ object Backend {
         originalNode.signature,
         originalNode.exceptions.asScala.toArray
       )
-
       originalNode.accept(newNode)
 
       if (result.program.allTerminals.isEmpty) newNode.instructions = new InsnList()
       else {
 
         val argMapping: Map[Int, Int] = {
-          val liveArgs = visitedMethods((sig, inferredArgs)).liveArgs
           var originalIndex = if (sig.static) 0 else 1
           var finalIndex = originalIndex
           val output = mutable.Map.empty[Int, Int]
           for(arg <- sig.desc.args){
-            if (liveArgs(originalIndex) || entrypoints.contains(sig)){
+            if (liveArgs(originalIndex)){
               output(originalIndex) = finalIndex
               finalIndex += arg.size
             }
@@ -112,18 +111,22 @@ object Backend {
           allVertices2,
           log.inferredMethod(sig, inferredArgs),
           classNodeMap.contains,
-          (originalSig, invokeSpecial, inferredArgs) =>
-            resolver.resolvePossibleSigs(
+          (originalSig, invokeSpecial, inferredArgs) => {
+            val highestSig =
               if (originalSig.static) originalSig
               else originalSig.copy(cls =
                 highestMethodDefiners((originalSig, inferredArgs.drop(if (originalSig.static) 0 else 1)))
-              ),
+              )
+
+            resolver.resolvePossibleSigs(
+              highestSig,
               false,
               inferredArgs,
               compute = (subSig, original, inferredArgs) => {
                 visitedMethods.get((subSig, inferredArgs.drop(if (subSig.static) 0 else 1)))
               }
-            )._3,
+            )._3
+          },
           argMapping
         )
       }
