@@ -28,7 +28,6 @@ object MainTestUtils {
       .map(p => (p.relativeTo(classesRoot).toString, os.read.bytes(p)))
       .toMap
 
-    val ignorePrefix = os.rel / 'joptimize / 'examples / tp.value.dropRight(2)
     os.remove.all(outRoot / tp.value)
     val outputFileMap = JOptimize.run(
       inputFileMap,
@@ -37,7 +36,7 @@ object MainTestUtils {
       log = DummyLogger
 //      log = new FileLogger.Global(
 //        logRoot = outRoot / tp.value,
-//        ignorePrefix = ignorePrefix
+//        ignorePrefix = os.rel / 'joptimize / 'examples / tp.value.dropRight(2)
 //      )
     )
 

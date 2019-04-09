@@ -247,6 +247,12 @@ object MainTests extends TestSuite{
 
 
       'Liveness - {
+        'entrypointUnused0 - annotatedTest
+        'entrypointUnused1 - annotatedTest
+        'entrypointUnused2 - annotatedTest
+
+        'trivialUnused - annotatedTest
+
         'simple - annotatedTest
         'simple2a - annotatedTest
         'simple2b - annotatedTest

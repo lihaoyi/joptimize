@@ -4,7 +4,7 @@ import backend.Backend
 import joptimize.analyzer.Analyzer
 import joptimize.frontend.Frontend
 import joptimize.model._
-import org.objectweb.asm.{ClassReader, ClassWriter, Opcodes}
+import org.objectweb.asm.{ClassReader, ClassVisitor, ClassWriter, Opcodes}
 import org.objectweb.asm.tree._
 
 import collection.JavaConverters._
@@ -112,7 +112,16 @@ object JOptimize{
       .map{cn =>
         log.pprint(cn.name)
         val cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES)
-        cn.accept(cw)
+        cn.accept(new ClassVisitor(Opcodes.ASM7, cw) {
+          override def visitMethod(access: Int,
+                                   name: String,
+                                   descriptor: String,
+                                   signature: String,
+                                   exceptions: Array[String]) = {
+            log.pprint(access, name, descriptor, signature)
+            super.visitMethod(access, name, descriptor, signature, exceptions)
+          }
+        })
         (cn.name + ".class", cw.toByteArray)
       }
       .toMap

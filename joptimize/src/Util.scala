@@ -23,16 +23,36 @@ object Util{
              inferredTypes: Seq[IType],
              narrowReturnType: IType,
              liveArgs: Set[Int]) = {
-    if (isManglingCompatible(inferredTypes, originalSig.desc.args)) (originalSig.name, originalSig.desc)
+    if (isManglingCompatible(inferredTypes, originalSig.desc.args)) {
+      var i = if (originalSig.static) 0 else 1
+      val narrowedDesc = Desc(
+        originalSig.desc.args.flatMap{ a =>
+          val res =
+            if ((!originalSig.static && i == 0) || liveArgs(i)){
+              Some(a)
+            } else None
+          i += a.size
+          res
+        },
+        originalSig.desc.ret
+      )
+      (originalSig.name, narrowedDesc)
+    }
     else{
       val mangledName = mangleName0(originalSig, inferredTypes)
       val jTypeRet = CType.toJType(narrowReturnType, originalSig.desc.ret)
       val jTypeArgs = inferredTypes
         .zip(originalSig.desc.args)
         .map(t => CType.toJType(t._1, t._2))
+      var i = if (originalSig.static) 0 else 1
       val mangledJTypeDesc = Desc(
-        jTypeArgs.zipWithIndex.collect{
-          case (a, i) if (!originalSig.static && i == 0) || liveArgs(i) => a
+        jTypeArgs.flatMap{ a =>
+          val res =
+            if ((!originalSig.static && i == 0) || liveArgs(i)){
+              Some(a)
+            } else None
+          i += a.size
+          res
         },
         jTypeRet
       )

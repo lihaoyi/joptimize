@@ -1,6 +1,45 @@
 package joptimize.examples.opt;
 
 class Liveness {
+
+    @joptimize.Test(
+        inputs = {1, 2, 3, 4, 5, 6, 7, 8}
+    )
+    static int entrypointUnused0(int i) {
+        return 123;
+
+    }
+
+    @joptimize.Test(
+        inputs = {1, 2, 3, 4, 5, 6, 7, 8}
+    )
+    static int entrypointUnused1(int i, int j) {
+        return 123 + j;
+
+    }
+
+    @joptimize.Test(
+        inputs = {1, 2, 3, 4, 5, 6, 7, 8}
+    )
+    static int entrypointUnused2(int i, int j) {
+        return 123 + i;
+
+    }
+
+    @joptimize.Test(
+            inputs = {1, 2},
+            removedNumConst = {456}
+    )
+    static int trivialUnused(int i) {
+        return trivialUnused0(i + 123, i + 456);
+
+    }
+
+    static int trivialUnused0(int i, int j) {
+        return i;
+    }
+
+
     @joptimize.Test(
         inputs = {1, 2},
         checkPresent = {"Liveness.simple"},
@@ -69,5 +108,4 @@ class Liveness {
     static int chained2b(int i) {
         return terminal(false, pureButNotConstant((i - 1) * (i - 5)), pureButNotConstant2(i));
     }
-
 }

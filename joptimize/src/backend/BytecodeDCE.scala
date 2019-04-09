@@ -39,17 +39,10 @@ object BytecodeDCE {
         val mn = methodSigMap(
           if (!current.static) current
           else {
-            val x =
-              findSupertypes(current.cls)
-            val y = x
-              .iterator
-              .map(MethodSig(_, current.name, current.desc, current.static))
-              .filter(methodSigMap.contains)
-
-            y
-              .take(1)
-              .toSeq
-              .head
+            val x = findSupertypes(current.cls)
+            val y = x.map(MethodSig(_, current.name, current.desc, current.static))
+            val z = y.filter(methodSigMap.contains)
+            z.take(1).toSeq.head
           }
         )
 

@@ -34,7 +34,7 @@ object Analyzer{
         sig,
         invokeSpecial,
         inferredArgs,
-        compute = (subSig, original, inferredArgs) => visitedMethods.getOrElseUpdate(
+        compute = (subSig, original, inferredArgs) => Some(visitedMethods.getOrElseUpdate(
           (subSig, inferredArgs.drop(if (subSig.static) 0 else 1)),
           {
             val (res, newVisitedClasses, calledMethods) = walkMethod(
@@ -55,7 +55,7 @@ object Analyzer{
             }
             res
           }
-        )
+        ))
       )
     }
 
@@ -90,7 +90,7 @@ object Analyzer{
     def resolvePossibleSigs(sig: MethodSig,
                             invokeSpecial: Boolean,
                             inferredArgs: Seq[IType],
-                            compute: (MethodSig, MethodNode, Seq[IType]) => Analyzer.Result) = {
+                            compute: (MethodSig, MethodNode, Seq[IType]) => Option[Analyzer.Result]) = {
 
       val subSigs = (sig.static, invokeSpecial) match {
         case (true, false) =>
@@ -118,13 +118,13 @@ object Analyzer{
         case Some(subSigs) =>
           val rets = for (subSig <- subSigs) yield originalMethods.get(subSig) match {
             case Some(original) =>
-              val res = compute(subSig, original, inferredArgs)
-              (res.inferredReturn, res.pure, res.liveArgs)
+              val resOpt = compute(subSig, original, inferredArgs)
+              resOpt.map(res => (res.inferredReturn, res.pure, res.liveArgs))
             case None =>
-              (sig.desc.ret, false, sig.desc.args.indices.toSet)
+              Some((sig.desc.ret, false, sig.desc.args.indices.toSet))
           }
 
-          val (retTypes, retPurity, retLiveArgs) = rets.unzip3
+          val (retTypes, retPurity, retLiveArgs) = rets.flatten.unzip3
           (merge(retTypes), retPurity.forall(identity), retLiveArgs.iterator.flatten.toSet)
       }
     }
