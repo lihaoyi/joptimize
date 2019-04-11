@@ -90,20 +90,7 @@ object Backend {
       if (result.program.allTerminals.isEmpty) newNode.instructions = new InsnList()
       else {
 
-        val argMapping: Map[Int, Int] = {
-          var originalIndex = if (sig.static) 0 else 1
-          var finalIndex = originalIndex
-          val output = mutable.Map.empty[Int, Int]
-          for(arg <- sig.desc.args){
-            if (liveArgs(originalIndex)){
-              output(originalIndex) = finalIndex
-              finalIndex += arg.size
-            }
-            originalIndex += arg.size
-          }
-
-          output.toMap
-        }
+        val argMapping = Util.argMapping(sig, liveArgs)
 
         newNode.instructions = processMethodBody(
           sig,

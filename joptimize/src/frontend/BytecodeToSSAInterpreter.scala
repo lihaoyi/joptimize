@@ -18,7 +18,8 @@ import scala.collection.mutable
   */
 class BytecodeToSSAInterpreter(merges: mutable.LinkedHashSet[SSA.Phi],
                                findBlockStart: Int => SSA.Block,
-                               findBlockDest: Int => Option[SSA.Merge]) extends Interpreter[SSA.Val, SSA.State]{
+                               findBlockDest: Int => Option[SSA.Merge],
+                               argMapping: Map[Int, Int]) extends Interpreter[SSA.Val, SSA.State]{
 
   /**
     * ACONST_NULL, ICONST_M1, ICONST_0, ICONST_1, ICONST_2, ICONST_3, ICONST_4, ICONST_5,
@@ -298,7 +299,7 @@ class BytecodeToSSAInterpreter(merges: mutable.LinkedHashSet[SSA.Phi],
   }
 
   def newParameterValue(local: Int, tpe: Type) = {
-    new SSA.Arg(local, JType.read(tpe.getInternalName))
+    new SSA.Arg(argMapping(local), JType.read(tpe.getInternalName))
   }
 
   def newEmptyValue(local: Int) = {

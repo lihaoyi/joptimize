@@ -74,23 +74,8 @@ object OptimisticSimplify {
             inferred.getOrElseUpdate(n, (n.desc.ret, false, n.desc.args.indices.toSet))._1,
             liveArgs
           )
-          val liveArgsOut: Set[Int] = {
 
-            var originalIndex = if (n.sig.static) 0 else 1
-            log.pprint(originalIndex)
-            val output = mutable.Set.empty[Int]
-            for((arg, i) <- n.sig.desc.args.zipWithIndex){
-              if (liveArgs(originalIndex)){
-                output.add(i + (if (n.sig.static) 0 else 1))
-              }
-              originalIndex += arg.size
-            }
-
-            output.toSet
-          }
-          log.pprint(liveArgsOut)
-
-          (name, desc, Some(liveArgsOut))
+          (name, desc, Some(liveArgs))
         }
 
       log.pprint(liveArgsOpt)

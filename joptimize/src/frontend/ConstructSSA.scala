@@ -1,9 +1,9 @@
 package frontend
 
-import joptimize.{FileLogger, Logger}
+import joptimize.{FileLogger, Logger, Util}
 import joptimize.analyzer.Renderer
 import joptimize.frontend.{BytecodeToSSAInterpreter, ControlFlowExtraction}
-import joptimize.model.SSA
+import joptimize.model.{MethodSig, SSA}
 import org.objectweb.asm.tree.MethodNode
 import org.objectweb.asm.util.{Textifier, TraceMethodVisitor}
 
@@ -11,7 +11,9 @@ import scala.collection.mutable
 import collection.JavaConverters._
 object ConstructSSA {
 
-  def apply(clsName: String, mn: MethodNode, log: Logger.Method) = {
+  def apply(sig: MethodSig,
+            mn: MethodNode,
+            log: Logger.Method) = {
     val phiMerges0 = mutable.LinkedHashSet.empty[SSA.Phi]
 
     val insns = mn.instructions.iterator().asScala.toVector
@@ -25,12 +27,13 @@ object ConstructSSA {
     log(Renderer.renderInsns(mn.instructions, printer, methodPrinter, decorate = i => " " + pprint.apply(decoration(i))))
     val startRegionLookup = ControlFlowExtraction.findStartRegionLookup(insns, regionStarts)
 
+    val argMapping = Util.argMapping(sig, _ => true).map(_.swap)
     val program = ControlFlowExtraction.extractControlFlow(
       insns,
       i => regionStarts(insnIndices(i)),
       joptimize.frontend.DataflowExecutor.analyze(
-        clsName, mn,
-        new BytecodeToSSAInterpreter(phiMerges0, startRegionLookup, regionStarts),
+        sig.cls.name, mn,
+        new BytecodeToSSAInterpreter(phiMerges0, startRegionLookup, regionStarts, argMapping),
         new SSA.ChangedState(regionStarts(0).get)
       ),
       startRegionLookup

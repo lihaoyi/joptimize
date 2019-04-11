@@ -23,19 +23,14 @@ object Util{
              inferredTypes: Seq[IType],
              narrowReturnType: IType,
              liveArgs: Int => Boolean) = {
+
     if (isManglingCompatible(inferredTypes, originalSig.desc.args)) {
-      var i = if (originalSig.static) 0 else 1
+
       val narrowedDesc = Desc(
-        originalSig.desc.args.flatMap{ a =>
-          val res =
-            if ((!originalSig.static && i == 0) || liveArgs(i)){
-              Some(a)
-            } else None
-          i += a.size
-          res
-        },
+        mangleLiveArgList(originalSig.desc.args, originalSig.static, liveArgs),
         originalSig.desc.ret
       )
+
       (originalSig.name, narrowedDesc)
     }
     else{
@@ -44,19 +39,23 @@ object Util{
       val jTypeArgs = inferredTypes
         .zip(originalSig.desc.args)
         .map(t => CType.toJType(t._1, t._2))
-      var i = if (originalSig.static) 0 else 1
+
       val mangledJTypeDesc = Desc(
-        jTypeArgs.flatMap{ a =>
-          val res =
-            if ((!originalSig.static && i == 0) || liveArgs(i)){
-              Some(a)
-            } else None
-          i += a.size
-          res
-        },
+        mangleLiveArgList(jTypeArgs, originalSig.static, liveArgs),
         jTypeRet
       )
       (mangledName, mangledJTypeDesc)
+    }
+  }
+
+  private def mangleLiveArgList(args: Seq[JType], static: Boolean, liveArgs: Int => Boolean) = {
+    var i = if (static) 0 else 1
+    args.flatMap { a =>
+      val res =
+        if ((!static && i == 0) || liveArgs(i)) Some(a)
+        else None
+      i += 1
+      res
     }
   }
 
@@ -322,5 +321,23 @@ object Util{
       down.replaceUpstream(current, replacement)
     }
     replacement +: replacement.downstreamList
+  }
+
+  def argMapping(sig: MethodSig, filter: Int => Boolean) = {
+    var originalIndex = if (sig.static) 0 else 1
+    var finalIndex = originalIndex
+    val output = mutable.Map.empty[Int, Int]
+    if (!sig.static) {
+      output(0) = 0
+    }
+    for(arg <- sig.desc.args){
+      if (filter(originalIndex)){
+        output(originalIndex) = finalIndex
+        finalIndex += arg.size
+      }
+      originalIndex += 1
+    }
+
+    output.toMap
   }
 }

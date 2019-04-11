@@ -388,7 +388,7 @@ class Frame[V <: Value, S <: V] (var numLocals: Int, val numStack0: Int){
       case INVOKEDYNAMIC =>
         val valueList = new mutable.ArrayBuffer[V]
         val methodDescriptor = insn.asInstanceOf[InvokeDynamicInsnNode].desc
-        pprint.log(methodDescriptor)
+
         var i = Type.getArgumentTypes(methodDescriptor).length
         while (i > 0) {
           valueList.insert(0, pop())

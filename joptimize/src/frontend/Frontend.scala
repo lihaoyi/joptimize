@@ -14,7 +14,7 @@ class Frontend {
     log.println("================ BYTECODE ================")
     log(Renderer.renderInsns(mn.instructions, printer, methodPrinter))
 
-    val program = ConstructSSA.apply(originalSig.cls.name, mn, log)
+    val program = ConstructSSA.apply(originalSig, mn, log)
 
     log.graph(Renderer.dumpSvg(program))
     log.check(program.checkLinks(checkDead = false))

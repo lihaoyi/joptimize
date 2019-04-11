@@ -252,6 +252,8 @@ object MainTests extends TestSuite{
         'entrypointUnused2 - annotatedTest
 
         'trivialUnused - annotatedTest
+        'longUnusedRight - annotatedTest
+        'longUnusedLeft - annotatedTest
 
         'simple - annotatedTest
         'simple2a - annotatedTest

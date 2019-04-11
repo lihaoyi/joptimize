@@ -41,6 +41,36 @@ class Liveness {
 
 
     @joptimize.Test(
+            inputs = {1, 2},
+            removedNumConst = {456},
+            addedNumConst = {123}
+    )
+    static long longUnusedRight(long i) {
+        return longUnusedRight0(i + 123, i + 456);
+
+    }
+
+    static long longUnusedRight0(long i, long j) {
+        return i;
+    }
+
+
+    @joptimize.Test(
+            inputs = {1, 2},
+            removedNumConst = {123},
+            addedNumConst = {456}
+    )
+    static long longUnusedLeft(long i) {
+        return longUnusedLeft0(i + 123, i + 456);
+
+    }
+
+    static long longUnusedLeft0(long i, long j) {
+        return j;
+    }
+
+
+    @joptimize.Test(
         inputs = {1, 2},
         checkPresent = {"Liveness.simple"},
         checkRemoved = {"Liveness.pureButNotConstant"}
