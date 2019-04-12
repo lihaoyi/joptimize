@@ -11,47 +11,14 @@ import org.objectweb.asm.tree._
 
 import scala.collection.mutable
 
-object Analyzer{
-  def apply(resolver: Resolver,
-            entrypoints: Seq[MethodSig],
-            merge: Seq[IType] => IType,
-            log: Logger.Global,
-            frontend: Frontend) = {
-    val visitedMethods = mutable.LinkedHashMap.empty[(MethodSig, Seq[IType]), Analyzer.Result]
-    val visitedClasses = mutable.LinkedHashSet.empty[JType.Cls]
-    val callerGraph = mutable.LinkedHashMap[MethodSig, mutable.LinkedHashSet[MethodSig]]()
-
-    def computeMethodSig(sig: MethodSig,
-                         invokeSpecial: Boolean,
-                         inferredArgs: Seq[IType],
-                         callStack: List[(MethodSig, Seq[IType])]): (IType, Boolean, Set[Int]) = {
-
-      resolver.resolvePossibleSigs(
-        sig,
-        invokeSpecial,
-        inferredArgs,
-        compute = (subSig, original, inferredArgs) => Some(visitedMethods.getOrElseUpdate(
-          (subSig, inferredArgs.drop(if (subSig.static) 0 else 1)),
-          {
-            val (res, newVisitedClasses, calledMethods) = walkMethod(
-              subSig,
-              computeMethodSig,
-              inferredArgs,
-              (inf, orig) => merge(Seq(inf, orig)) == orig,
-              callStack,
-              log.inferredMethod(subSig, inferredArgs.drop(if (subSig.static) 0 else 1)),
-              merge,
-              frontend
-            )
-            newVisitedClasses.foreach(visitedClasses.add)
-            for (m <- calledMethods) {
-              callerGraph.getOrElseUpdate(m, mutable.LinkedHashSet.empty).add(subSig)
-            }
-            res
-          }
-        ))
-      )
-    }
+class Analyzer(entrypoints: Seq[MethodSig],
+               merge: Seq[IType] => IType,
+               log: Logger.Global,
+               frontend: Frontend){
+  val visitedMethods = mutable.LinkedHashMap.empty[(MethodSig, Seq[IType]), Analyzer.Result]
+  val visitedClasses = mutable.LinkedHashSet.empty[JType.Cls]
+  val callerGraph = mutable.LinkedHashMap[MethodSig, mutable.LinkedHashSet[MethodSig]]()
+  def apply() = {
 
     for (ep <- entrypoints) {
       val (res, seenClasses, calledMethods) = walkMethod(
@@ -74,52 +41,49 @@ object Analyzer{
     (visitedMethods, visitedClasses)
   }
 
-  class Resolver(val classNodeMap: Map[JType.Cls, ClassNode],
-                 val originalMethods: Map[MethodSig, MethodNode],
-                 val subtypeMap: mutable.LinkedHashMap[JType.Cls, List[JType.Cls]],
-                 val leastUpperBound: Seq[JType.Cls] => Seq[JType.Cls],
-                 val merge: Seq[IType] => IType) {
-    def resolvePossibleSigs(sig: MethodSig,
-                            invokeSpecial: Boolean,
-                            inferredArgs: Seq[IType],
-                            compute: (MethodSig, MethodNode, Seq[IType]) => Option[Analyzer.Result]) = {
 
-      val subSigs = (sig.static, invokeSpecial) match {
-        case (true, false) =>
-          def rec(currentCls: JType.Cls): Option[MethodSig] = {
-            val currentSig = sig.copy(cls = currentCls)
-            if (originalMethods.contains(currentSig)) Some(currentSig)
-            else if (!classNodeMap.contains(currentCls)) None
-            else rec(JType.Cls(classNodeMap(currentCls).superName))
-          }
+  def computeMethodSig(sig: MethodSig,
+                       invokeSpecial: Boolean,
+                       inferredArgs: Seq[IType],
+                       callStack: List[(MethodSig, Seq[IType])]): (IType, Boolean, Set[Int]) = {
 
-          if (sig.name == "<clinit>") Some(Seq(sig))
-          else rec(sig.cls).map(Seq(_))
-        case (false, true) => Some(Seq(sig))
-        case (false, false) =>
-          val subTypes = subtypeMap
-            .getOrElse(sig.cls, Nil)
-            .map(c => sig.copy(cls = c))
+    val subSigs = frontend.resolvePossibleSigs(sig, invokeSpecial, inferredArgs)
 
-          Some(sig :: subTypes)
-      }
+    subSigs match {
+      case None => (sig.desc.ret, false, sig.desc.args.indices.toSet)
+      case Some(subSigs) =>
+        val rets = for (subSig <- subSigs) yield frontend.loadMethod(subSig) match {
+          case Some(original) =>
+            val resOpt = Some(visitedMethods.getOrElseUpdate(
+              (subSig, inferredArgs.drop(if (subSig.static) 0 else 1)),
+              {
+                val (res, newVisitedClasses, calledMethods) = walkMethod(
+                  subSig,
+                  computeMethodSig,
+                  inferredArgs,
+                  (inf, orig) => merge(Seq(inf, orig)) == orig,
+                  callStack,
+                  log.inferredMethod(subSig, inferredArgs.drop(if (subSig.static) 0 else 1)),
+                  merge,
+                  frontend
+                )
+                newVisitedClasses.foreach(visitedClasses.add)
+                for (m <- calledMethods) {
+                  callerGraph.getOrElseUpdate(m, mutable.LinkedHashSet.empty).add(subSig)
+                }
+                res
+              }
+            ))
+            resOpt.map(res => (res.inferredReturn, res.pure, res.liveArgs))
+          case None =>
+            Some((sig.desc.ret, false, sig.desc.args.indices.toSet))
+        }
 
-      subSigs match {
-        case None => (sig.desc.ret, false, sig.desc.args.indices.toSet)
-        case Some(subSigs) =>
-          val rets = for (subSig <- subSigs) yield originalMethods.get(subSig) match {
-            case Some(original) =>
-              val resOpt = compute(subSig, original, inferredArgs)
-              resOpt.map(res => (res.inferredReturn, res.pure, res.liveArgs))
-            case None =>
-              Some((sig.desc.ret, false, sig.desc.args.indices.toSet))
-          }
-
-          val (retTypes, retPurity, retLiveArgs) = rets.flatten.unzip3
-          (merge(retTypes), retPurity.forall(identity), retLiveArgs.iterator.flatten.toSet)
-      }
+        val (retTypes, retPurity, retLiveArgs) = rets.flatten.unzip3
+        (merge(retTypes), retPurity.forall(identity), retLiveArgs.iterator.flatten.toSet)
     }
   }
+
 
   def walkMethod(originalSig: MethodSig,
                  computeMethodSig: (MethodSig, Boolean, Seq[IType], List[(MethodSig, Seq[IType])]) => (IType, Boolean, Set[Int]),
@@ -305,7 +269,8 @@ object Analyzer{
       }
     }
   }
-
+}
+object Analyzer {
 
   /**
     * @param inferredReturn The return type of the method, narrowed to potentially

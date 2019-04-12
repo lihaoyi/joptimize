@@ -3,17 +3,44 @@ package joptimize.frontend
 import frontend.ConstructSSA
 import joptimize.{FileLogger, Logger, Util}
 import joptimize.analyzer.Renderer
-import joptimize.model.{JType, MethodSig, Program, SSA}
-import org.objectweb.asm.tree.MethodNode
+import joptimize.model.{IType, JType, MethodSig, Program, SSA}
+import org.objectweb.asm.tree.{ClassNode, MethodNode}
 import org.objectweb.asm.util.{Textifier, TraceMethodVisitor}
 
-class Frontend(originalMethods: MethodSig => MethodNode,
-               classExists0: JType.Cls => Boolean) {
-  def classExists(cls: JType.Cls): Boolean = classExists0(cls)
+import scala.collection.mutable
+
+class Frontend(val loadMethod: MethodSig => Option[MethodNode],
+               loadClass: JType.Cls => Option[ClassNode],
+               subtypeMap: mutable.LinkedHashMap[JType.Cls, List[JType.Cls]]) {
+
+  def resolvePossibleSigs(sig: MethodSig, invokeSpecial: Boolean, inferredArgs: Seq[IType]): Option[Seq[MethodSig]] = {
+    (sig.static, invokeSpecial) match {
+      case (true, false) =>
+        def rec(currentCls: JType.Cls): Option[MethodSig] = {
+          val currentSig = sig.copy(cls = currentCls)
+          if (loadMethod(currentSig).nonEmpty) Some(currentSig)
+          else loadClass(currentCls) match{
+            case None => None
+            case Some(cls) => rec(JType.Cls(cls.superName))
+          }
+        }
+
+        if (sig.name == "<clinit>") Some(Seq(sig))
+        else rec(sig.cls).map(Seq(_))
+      case (false, true) => Some(Seq(sig))
+      case (false, false) =>
+        val subTypes = subtypeMap
+          .getOrElse(sig.cls, Nil)
+          .map(c => sig.copy(cls = c))
+
+        Some(sig :: subTypes)
+    }
+  }
+
   def apply(originalSig: MethodSig, log: Logger.Method): Option[Program] = {
     val printer = new Textifier
     val methodPrinter = new TraceMethodVisitor(printer)
-    val mn = originalMethods(originalSig)
+    val mn = loadMethod(originalSig).get
     if(mn.instructions.size() == 0) None
     else {
       log.println("================ BYTECODE ================")

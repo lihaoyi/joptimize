@@ -2,8 +2,8 @@ package joptimize.backend
 
 import joptimize.{FileLogger, Logger, Util}
 import joptimize.algorithms.{Dominator, Scheduler}
-import joptimize.analyzer.Analyzer.Resolver
 import joptimize.analyzer.{Analyzer, Namer, Renderer}
+import joptimize.frontend.Frontend
 import joptimize.graph.HavlakLoopTree
 import joptimize.model._
 import joptimize.optimize.OptimisticSimplify
@@ -14,7 +14,8 @@ import collection.JavaConverters._
 import scala.collection.mutable
 
 object Backend {
-  def apply(resolver: Resolver,
+  def apply(frontend: Frontend,
+            analyzer: Analyzer,
             entrypoints: scala.Seq[MethodSig],
             originalMethods: Map[MethodSig, MethodNode],
             classNodeMap: Map[JType.Cls, ClassNode],
@@ -59,14 +60,11 @@ object Backend {
         if (entrypoints.contains(sig)) (_: Int) => true
         else{
           val highestSig = if (sig.static) sig else sig.copy(cls = highestMethodDefiners((sig, inferredArgs)))
-          resolver.resolvePossibleSigs(
+          analyzer.computeMethodSig(
             highestSig,
             false,
             (if (sig.static) Nil else Seq(sig.cls)) ++ inferredArgs,
-            compute = (subSig, original, inferredArgs) => {
-              //                pprint.log(visitedMethods.keys, height=9999)
-              visitedMethods.get((subSig, inferredArgs.drop(if (subSig.static) 0 else 1)))
-            }
+            Nil
           )._3
         }
       log.pprint(sig)
@@ -106,13 +104,11 @@ object Backend {
                 highestMethodDefiners((originalSig, inferredArgs.drop(if (originalSig.static) 0 else 1)))
               )
 
-            resolver.resolvePossibleSigs(
+            analyzer.computeMethodSig(
               highestSig,
               false,
               inferredArgs,
-              compute = (subSig, original, inferredArgs) => {
-                visitedMethods.get((subSig, inferredArgs.drop(if (subSig.static) 0 else 1)))
-              }
+              Nil
             )._3
           },
           argMapping

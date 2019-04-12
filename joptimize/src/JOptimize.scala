@@ -70,27 +70,22 @@ object JOptimize{
       else throw new Exception(flattened.toString)
     }
 
+    val frontend = new Frontend(originalMethods.get, classNodeMap.get, subtypeMap)
 
-    val resolver = new Analyzer.Resolver(
-      classNodeMap,
-      originalMethods,
-      subtypeMap,
-      leastUpperBound,
-      merge,
-    )
-    val frontend = new Frontend(originalMethods, classNodeMap.contains)
-    val (visitedMethods, visitedClasses) = Analyzer.apply(
-      resolver,
+    val analyzer = new Analyzer(
       entrypoints,
       merge,
       log,
       frontend
     )
 
+    val (visitedMethods, visitedClasses) = analyzer.apply()
+
     log.pprint(visitedMethods)
 
     val outClasses = Backend.apply(
-      resolver,
+      frontend,
+      analyzer,
       entrypoints,
       originalMethods,
       classNodeMap,
