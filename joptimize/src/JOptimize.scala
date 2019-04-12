@@ -78,14 +78,10 @@ object JOptimize{
       leastUpperBound,
       merge,
     )
-    val frontend = new Frontend()
+    val frontend = new Frontend(originalMethods, classNodeMap.contains)
     val (visitedMethods, visitedClasses) = Analyzer.apply(
       resolver,
-      subtypeMap,
       entrypoints,
-      classNodeMap,
-      originalMethods,
-      leastUpperBound,
       merge,
       log,
       frontend

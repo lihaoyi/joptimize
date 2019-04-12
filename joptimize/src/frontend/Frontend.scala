@@ -3,29 +3,35 @@ package joptimize.frontend
 import frontend.ConstructSSA
 import joptimize.{FileLogger, Logger, Util}
 import joptimize.analyzer.Renderer
-import joptimize.model.{MethodSig, Program, SSA}
+import joptimize.model.{JType, MethodSig, Program, SSA}
 import org.objectweb.asm.tree.MethodNode
 import org.objectweb.asm.util.{Textifier, TraceMethodVisitor}
 
-class Frontend {
-  def apply(originalSig: MethodSig, mn: MethodNode, log: Logger.Method) = {
+class Frontend(originalMethods: MethodSig => MethodNode,
+               classExists0: JType.Cls => Boolean) {
+  def classExists(cls: JType.Cls): Boolean = classExists0(cls)
+  def apply(originalSig: MethodSig, log: Logger.Method): Option[Program] = {
     val printer = new Textifier
     val methodPrinter = new TraceMethodVisitor(printer)
-    log.println("================ BYTECODE ================")
-    log(Renderer.renderInsns(mn.instructions, printer, methodPrinter))
+    val mn = originalMethods(originalSig)
+    if(mn.instructions.size() == 0) None
+    else {
+      log.println("================ BYTECODE ================")
+      log(Renderer.renderInsns(mn.instructions, printer, methodPrinter))
 
-    val program = ConstructSSA.apply(originalSig, mn, log)
+      val program = ConstructSSA.apply(originalSig, mn, log)
 
-    log.graph(Renderer.dumpSvg(program))
-    log.check(program.checkLinks(checkDead = false))
-    program.removeDeadNodes()
-    log.check(program.checkLinks())
-    log.graph(Renderer.dumpSvg(program))
+      log.graph(Renderer.dumpSvg(program))
+      log.check(program.checkLinks(checkDead = false))
+      program.removeDeadNodes()
+      log.check(program.checkLinks())
+      log.graph(Renderer.dumpSvg(program))
 
-    simplifyPhiMerges(program)
-    log.graph(Renderer.dumpSvg(program))
-    log.check(program.checkLinks())
-    program
+      simplifyPhiMerges(program)
+      log.graph(Renderer.dumpSvg(program))
+      log.check(program.checkLinks())
+      Some(program)
+    }
   }
 
 
