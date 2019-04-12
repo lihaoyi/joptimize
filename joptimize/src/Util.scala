@@ -48,14 +48,12 @@ object Util{
     }
   }
 
-  private def mangleLiveArgList(args: Seq[JType], static: Boolean, liveArgs: Int => Boolean) = {
-    var i = if (static) 0 else 1
-    args.flatMap { a =>
-      val res =
-        if ((!static && i == 0) || liveArgs(i)) Some(a)
-        else None
-      i += 1
-      res
+  def mangleLiveArgList(args: Seq[JType], static: Boolean, liveArgs: Int => Boolean) = {
+    val offset = if (static) 0 else 1
+    args.zipWithIndex.flatMap { case (a, i) =>
+      val offsetIndex = i + offset
+      if ((!static && offsetIndex == 0) || liveArgs(offsetIndex)) Some(a)
+      else None
     }
   }
 
