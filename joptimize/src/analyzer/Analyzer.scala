@@ -35,7 +35,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
     if (visitedResolved.contains(visitedKey)) visitedResolved(visitedKey)
     else if(frontend.loadClass(sig.cls).isEmpty) Analyzer.Properties(sig.desc.ret, false, sig.desc.args.indices.toSet)
     else {
-      val walked = walkMethod(
+      lazy val walked = walkMethod(
         sig,
         computeMethodSig,
         inferredArgs,
