@@ -13,27 +13,25 @@ class Frontend(val loadMethod: MethodSig => Option[MethodNode],
                val loadClass: JType.Cls => Option[ClassNode],
                subtypeMap: mutable.LinkedHashMap[JType.Cls, List[JType.Cls]]) {
 
-  def resolvePossibleSigs(sig: MethodSig, invokeSpecial: Boolean, inferredArgs: Seq[IType]): Option[Seq[MethodSig]] = {
-    (sig.static, invokeSpecial) match {
-      case (true, false) =>
-        def rec(currentCls: JType.Cls): Option[MethodSig] = {
-          val currentSig = sig.copy(cls = currentCls)
-          if (loadMethod(currentSig).nonEmpty) Some(currentSig)
-          else loadClass(currentCls) match{
-            case None => None
-            case Some(cls) => rec(JType.Cls(cls.superName))
-          }
+  def resolvePossibleSigs(sig: MethodSig, inferredArgs: Seq[IType]): Option[Seq[MethodSig]] = {
+    if (sig.static) {
+      def rec(currentCls: JType.Cls): Option[MethodSig] = {
+        val currentSig = sig.copy(cls = currentCls)
+        if (loadMethod(currentSig).nonEmpty) Some(currentSig)
+        else loadClass(currentCls) match {
+          case None => None
+          case Some(cls) => rec(JType.Cls(cls.superName))
         }
+      }
 
-        if (sig.name == "<clinit>") Some(Seq(sig))
-        else rec(sig.cls).map(Seq(_))
-      case (false, true) => Some(Seq(sig))
-      case (false, false) =>
-        val subTypes = subtypeMap
-          .getOrElse(sig.cls, Nil)
-          .map(c => sig.copy(cls = c))
+      if (sig.name == "<clinit>") Some(Seq(sig))
+      else rec(sig.cls).map(s => Seq(s))
+    }else{
+      val subTypes = subtypeMap
+        .getOrElse(sig.cls, Nil)
+        .map(c => sig.copy(cls = c))
 
-        Some(sig :: subTypes)
+      Some(sig :: subTypes)
     }
   }
 
