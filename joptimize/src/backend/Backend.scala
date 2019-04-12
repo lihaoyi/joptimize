@@ -83,9 +83,7 @@ object Backend {
 
         newNode.instructions = processMethodBody(
           sig,
-          inferredArgs,
           result,
-          allVertices2,
           log.inferredMethod(sig, inferredArgs),
           classNodeMap.contains,
           (originalSig, invokeSpecial, inferredArgs) => {
@@ -149,9 +147,7 @@ object Backend {
   }
 
   def processMethodBody(originalSig: MethodSig,
-                        inferredArgs: Seq[IType],
                         result: Analyzer.Result,
-                        allVertices2: Set[SSA.Node],
                         log: Logger.InferredMethod,
                         classExists: JType.Cls => Boolean,
                         liveArgsFor: (MethodSig, Boolean, Seq[IType]) => Set[Int],
