@@ -21,22 +21,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
   def apply() = {
 
     for (ep <- entrypoints) {
-      val (res, seenClasses, calledMethods) = walkMethod(
-        ep,
-        computeMethodSig,
-        ep.desc.args,
-        (inf, orig) => merge(Seq(inf, orig)) == orig,
-        Nil,
-        log.inferredMethod(ep, ep.desc.args.drop(if (ep.static) 0 else 1)),
-        merge,
-        frontend
-      )
-      for (m <- calledMethods) {
-        callerGraph.getOrElseUpdate(m, mutable.LinkedHashSet.empty).add(ep)
-      }
-
-      visitedMethods((ep, ep.desc.args)) = res
-      seenClasses.foreach(visitedClasses.add)
+      computeMethodSig(ep, false, ep.desc.args, Nil)
     }
     (visitedMethods, visitedClasses)
   }
