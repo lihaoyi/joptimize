@@ -21,7 +21,9 @@ class Analyzer(entrypoints: Seq[MethodSig],
   val callerGraph = mutable.LinkedHashMap[MethodSig, mutable.LinkedHashSet[MethodSig]]()
   def apply() = {
     for (ep <- entrypoints) computeMethodSig(ep, false, ep.desc.args, Nil)
-
+    for((k, v) <- visitedMethods if !visitedResolved.contains(k)){
+      computeMethodSig(k._1, false, (if (!k._1.static) Seq(k._1.cls) else Nil) ++ k._2, Nil)
+    }
     (visitedMethods, visitedResolved, visitedClasses)
   }
 
@@ -35,28 +37,19 @@ class Analyzer(entrypoints: Seq[MethodSig],
     if (visitedResolved.contains(visitedKey)) visitedResolved(visitedKey)
     else if(frontend.loadClass(sig.cls).isEmpty) Analyzer.Properties(sig.desc.ret, false, sig.desc.args.indices.toSet)
     else {
-      lazy val walked = walkMethod(
-        sig,
-        computeMethodSig,
-        inferredArgs,
-        (inf, orig) => merge(Seq(inf, orig)) == orig,
-        callStack,
-        log.inferredMethod(sig, inferredArgs.drop(if (sig.static) 0 else 1)),
-        merge,
-        frontend
-      )
-
-      val subSigs = frontend.resolvePossibleSigs(sig, invokeSpecial, inferredArgs)
-
-      val res = subSigs match {
+      val res = frontend.resolvePossibleSigs(sig, invokeSpecial, inferredArgs) match {
         case None => Analyzer.Properties(sig.desc.ret, false, sig.desc.args.indices.toSet)
         case Some(subSigs) =>
           val rets = for (subSig <- subSigs) yield {
-            if (subSig == sig) (walked.props.inferredReturn, walked.props.pure, walked.props.liveArgs)
-            else if (frontend.loadMethod(subSig).isEmpty) (sig.desc.ret, false, sig.desc.args.indices.toSet)
+            if (frontend.loadMethod(subSig).isEmpty) (sig.desc.ret, false, sig.desc.args.indices.toSet)
             else {
-              val res = computeMethodSig(subSig, invokeSpecial, inferredArgs, callStack)
-              (res.inferredReturn, res.pure, res.liveArgs)
+              val res = walkMethod(
+                subSig,
+                inferredArgs,
+                callStack,
+                log.inferredMethod(sig, inferredArgs.drop(if (sig.static) 0 else 1))
+              )
+              (res.props.inferredReturn, res.props.pure, res.props.liveArgs)
             }
           }
 
@@ -69,15 +62,10 @@ class Analyzer(entrypoints: Seq[MethodSig],
     }
   }
 
-
   def walkMethod(originalSig: MethodSig,
-                 computeMethodSig: (MethodSig, Boolean, Seq[IType], List[(MethodSig, Seq[IType])]) => Analyzer.Properties,
                  inferredArgs: Seq[IType],
-                 checkSubclass: (JType.Cls, JType.Cls) => Boolean,
                  callStack: List[(MethodSig, Seq[IType])],
-                 log: Logger.InferredMethod,
-                 merge: Seq[IType] => IType,
-                 frontend: Frontend): Analyzer.Result = {
+                 log: Logger.InferredMethod): Analyzer.Result = {
 
     def dummyResult = Analyzer.Result(
       new Program(Nil, Nil),
@@ -270,6 +258,8 @@ class Analyzer(entrypoints: Seq[MethodSig],
         result
     }
   }
+
+  def checkSubclass(cls1: JType.Cls, cls2: JType.Cls) = merge(Seq(cls1, cls2)) == cls2
 }
 object Analyzer {
 
