@@ -90,11 +90,9 @@ object JOptimize{
       classNodeMap,
       visitedMethods,
       eliminateOldMethods,
-      classFileMap,
       visitedClasses,
       subtypeMap,
       log,
-      leastUpperBound,
       merge,
     )
 

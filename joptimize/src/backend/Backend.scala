@@ -19,11 +19,9 @@ object Backend {
             classNodeMap: Map[JType.Cls, ClassNode],
             visitedMethods: mutable.LinkedHashMap[(MethodSig, Seq[IType]), Analyzer.Result],
             eliminateOldMethods: Boolean,
-            classFileMap: Map[String, ClassNode],
             visitedClasses: mutable.LinkedHashSet[JType.Cls],
             subtypeMap: mutable.LinkedHashMap[JType.Cls, scala.List[JType.Cls]],
             log: Logger.Global,
-            leastUpperBound: Seq[JType.Cls] => Seq[JType.Cls],
             merge: Seq[IType] => IType) = {
 
     val highestMethodDefiners = for(((sig, inferredArgs), result) <- visitedMethods) yield {
@@ -110,7 +108,7 @@ object Backend {
     }
 
     if (eliminateOldMethods) {
-      for ((k, cn) <- classFileMap) {
+      for ((k, cn) <- classNodeMap) {
         cn.methods.clear()
       }
     }
