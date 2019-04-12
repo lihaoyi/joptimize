@@ -3,7 +3,6 @@ package joptimize.backend
 import joptimize.{FileLogger, Logger, Util}
 import joptimize.algorithms.{Dominator, Scheduler}
 import joptimize.analyzer.{Analyzer, Namer, Renderer}
-import joptimize.frontend.Frontend
 import joptimize.graph.HavlakLoopTree
 import joptimize.model._
 import joptimize.optimize.OptimisticSimplify
@@ -14,8 +13,7 @@ import collection.JavaConverters._
 import scala.collection.mutable
 
 object Backend {
-  def apply(frontend: Frontend,
-            analyzer: Analyzer,
+  def apply(visitedResolved: mutable.LinkedHashMap[(MethodSig, Seq[IType]), Analyzer.Properties],
             entrypoints: scala.Seq[MethodSig],
             originalMethods: Map[MethodSig, MethodNode],
             classNodeMap: Map[JType.Cls, ClassNode],
@@ -60,12 +58,7 @@ object Backend {
         if (entrypoints.contains(sig)) (_: Int) => true
         else{
           val highestSig = if (sig.static) sig else sig.copy(cls = highestMethodDefiners((sig, inferredArgs)))
-          analyzer.computeMethodSig(
-            highestSig,
-            false,
-            (if (sig.static) Nil else Seq(sig.cls)) ++ inferredArgs,
-            Nil
-          )._3
+          visitedResolved((highestSig, inferredArgs)).liveArgs
         }
       log.pprint(sig)
       val allVertices2 = result.program.getAllVertices()
@@ -73,7 +66,7 @@ object Backend {
 
       val (mangledName, mangledDesc) =
         if (sig.name == "<init>") (sig.name, sig.desc)
-        else Util.mangle(sig, inferredArgs, result.inferredReturn, liveArgs)
+        else Util.mangle(sig, inferredArgs, result.props.inferredReturn, liveArgs)
 
       val newNode = new MethodNode(
         Opcodes.ASM6,
@@ -100,16 +93,12 @@ object Backend {
           (originalSig, invokeSpecial, inferredArgs) => {
             val highestSig =
               if (originalSig.static) originalSig
-              else originalSig.copy(cls =
-                highestMethodDefiners((originalSig, inferredArgs.drop(if (originalSig.static) 0 else 1)))
-              )
-
-            analyzer.computeMethodSig(
-              highestSig,
-              false,
-              inferredArgs,
-              Nil
-            )._3
+              else {
+                originalSig.copy(cls =
+                  highestMethodDefiners((originalSig, inferredArgs.drop(if (originalSig.static) 0 else 1)))
+                )
+              }
+            visitedResolved(highestSig, inferredArgs.drop(if (originalSig.static) 0 else 1)).liveArgs
           },
           argMapping
         )

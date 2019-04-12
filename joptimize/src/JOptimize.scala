@@ -79,13 +79,12 @@ object JOptimize{
       frontend
     )
 
-    val (visitedMethods, visitedClasses) = analyzer.apply()
+    val (visitedMethods, visitedResolved, visitedClasses) = analyzer.apply()
 
     log.pprint(visitedMethods)
 
     val outClasses = Backend.apply(
-      frontend,
-      analyzer,
+      visitedResolved,
       entrypoints,
       originalMethods,
       classNodeMap,

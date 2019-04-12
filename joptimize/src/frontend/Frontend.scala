@@ -10,7 +10,7 @@ import org.objectweb.asm.util.{Textifier, TraceMethodVisitor}
 import scala.collection.mutable
 
 class Frontend(val loadMethod: MethodSig => Option[MethodNode],
-               loadClass: JType.Cls => Option[ClassNode],
+               val loadClass: JType.Cls => Option[ClassNode],
                subtypeMap: mutable.LinkedHashMap[JType.Cls, List[JType.Cls]]) {
 
   def resolvePossibleSigs(sig: MethodSig, invokeSpecial: Boolean, inferredArgs: Seq[IType]): Option[Seq[MethodSig]] = {
@@ -40,7 +40,7 @@ class Frontend(val loadMethod: MethodSig => Option[MethodNode],
   def apply(originalSig: MethodSig, log: Logger.Method): Option[Program] = {
     val printer = new Textifier
     val methodPrinter = new TraceMethodVisitor(printer)
-    val mn = loadMethod(originalSig).get
+    val mn = loadMethod(originalSig).getOrElse(throw new Exception("Unknown Sig: " + originalSig))
     if(mn.instructions.size() == 0) None
     else {
       log.println("================ BYTECODE ================")
