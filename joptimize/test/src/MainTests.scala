@@ -69,7 +69,7 @@ object MainTests extends TestSuite{
         'voidCall - annotatedTest
         'tailFactorial - annotatedTest
         'tailFactorialLong - annotatedTest
-//        'tailFactorialVoid - annotatedTest
+        'tailFactorialVoid - annotatedTest
         'fibonacci - annotatedTest
 
       }

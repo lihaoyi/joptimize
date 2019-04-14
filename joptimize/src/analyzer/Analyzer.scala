@@ -1,6 +1,6 @@
 package joptimize.analyzer
 
-import joptimize.algorithms.{Dominator, Scheduler}
+import joptimize.algorithms.{Dominator, MultiBiMap, Scheduler}
 import joptimize.frontend.Frontend
 import joptimize.{Logger, Util}
 import joptimize.graph.HavlakLoopTree
@@ -16,7 +16,8 @@ class Analyzer(entrypoints: Seq[MethodSig],
   val visitedMethods = mutable.LinkedHashMap.empty[(MethodSig, Seq[IType]), Analyzer.Result]
   val visitedResolved = mutable.LinkedHashMap.empty[(MethodSig, Seq[IType]), Analyzer.Properties]
   val visitedClasses = mutable.LinkedHashSet.empty[JType.Cls]
-  val callerGraph = mutable.LinkedHashMap[(MethodSig, Seq[IType]), mutable.LinkedHashSet[(MethodSig, Seq[IType])]]()
+
+  val callerGraph = new MultiBiMap.Mutable[(MethodSig, Seq[IType]), (MethodSig, Seq[IType])]()
   def apply() = {
     for (ep <- entrypoints) computeMethodSig(ep, ep.desc.args, Nil)
     for(((sig, inferred), v) <- visitedMethods if !visitedResolved.contains((sig, inferred))){
@@ -98,10 +99,11 @@ class Analyzer(entrypoints: Seq[MethodSig],
                  inferredArgs: Seq[IType],
                  callStack: List[(MethodSig, Seq[IType])],
                  log: Logger.InferredMethod): Analyzer.Result = {
-
     visitedMethods.getOrElseUpdate(
       (originalSig, inferredArgs.drop(if (originalSig.static) 0 else 1)),
+      // Unknown or external methods are treated pessimistically
       if (frontend.loadMethod(originalSig).isEmpty) dummyResult(originalSig, optimistic = false)
+      // Recursive calls to the same method are treated optimistically
       else if (callStack.contains(originalSig -> inferredArgs)) dummyResult(originalSig, optimistic = true)
       else frontend.loadMethodBody(originalSig, log.method(originalSig)) match{
         case None => dummyResult(originalSig, optimistic = true)
@@ -227,7 +229,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
 
           classes.foreach(visitedClasses.add)
           for (m <- calledMethodSigs) {
-            callerGraph.getOrElseUpdate(m, mutable.LinkedHashSet.empty).add((originalSig, inferredArgs))
+            callerGraph.add(m, (originalSig, inferredArgs))
           }
 
           result
