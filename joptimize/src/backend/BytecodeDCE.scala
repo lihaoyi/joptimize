@@ -66,6 +66,8 @@ object BytecodeDCE {
             )
 
             val subtypes = if (sig.static) findSupertypes(sig.cls) else findSubtypes(sig.cls)
+            if (sig.static) subtypes.foreach(seenClasses.add)
+
             val possibleSigs = subtypes.map(st => sig.copy(cls = st)) ++ Seq(sig)
 
             queue.enqueue(possibleSigs.filter(methodSigMap.contains):_*)

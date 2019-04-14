@@ -24,7 +24,10 @@ object Backend {
             log: Logger.Global,
             merge: Seq[IType] => IType) = {
 
-    val highestMethodDefiners = for(((sig, inferredArgs), result) <- visitedMethods) yield {
+    val highestMethodDefiners = for{
+      ((sig, inferredArgs), result) <- visitedMethods
+      if originalMethods.contains(sig)
+    } yield {
       var parentClasses = List.empty[JType.Cls]
       var current = sig.cls
       while({
@@ -51,15 +54,21 @@ object Backend {
       ((sig, inferredArgs), highestCls)
     }
 
-    val newMethods = for(((sig, inferredArgs), result) <- visitedMethods.toList) yield {
+    val newMethods = for{
+      ((sig, inferredArgs), result) <- visitedMethods.toList
+      if originalMethods.contains(sig)
+    } yield {
       val liveArgs =
         if (entrypoints.contains(sig)) (_: Int) => true
         else{
-          val highestSig = if (sig.static) sig else sig.copy(cls = highestMethodDefiners((sig, inferredArgs)))
+          val highestSig =
+            if (sig.static) sig
+            else sig.copy(cls = highestMethodDefiners((sig, inferredArgs)))
+
           visitedResolved((highestSig, inferredArgs)).liveArgs
         }
       log.pprint(sig)
-      val allVertices2 = result.program.getAllVertices()
+
       val originalNode = originalMethods(sig)
 
       val (mangledName, mangledDesc) =
@@ -88,13 +97,13 @@ object Backend {
           classNodeMap.contains,
           (originalSig, invokeSpecial, inferredArgs) => {
             val highestSig =
-              if (originalSig.static) originalSig
+              if (originalSig.static || !originalMethods.contains(originalSig)) originalSig
               else {
                 originalSig.copy(cls =
                   highestMethodDefiners((originalSig, inferredArgs.drop(if (originalSig.static) 0 else 1)))
                 )
               }
-            visitedResolved(highestSig, inferredArgs.drop(if (originalSig.static) 0 else 1)).liveArgs
+            visitedResolved(highestSig, inferredArgs.drop(if (originalSig.static) 0 else 1))
           },
           argMapping
         )
@@ -114,7 +123,7 @@ object Backend {
     val visitedInterfaces = Util.findSeenInterfaces(classNodeMap, newMethods.map(_._1))
 
     val grouped =
-      (visitedInterfaces ++ visitedClasses.map(_.name)).map(classNodeMap(_) -> Nil).toMap ++
+      (visitedInterfaces ++ visitedClasses.map(_.name)).filter(s => classNodeMap.contains(JType.Cls(s))).map(classNodeMap(_) -> Nil).toMap ++
         newMethods.groupBy(_._1).mapValues(_.map(_._2))
 
     for((cn, mns) <- grouped) yield {
@@ -150,7 +159,7 @@ object Backend {
                         result: Analyzer.Result,
                         log: Logger.InferredMethod,
                         classExists: JType.Cls => Boolean,
-                        liveArgsFor: (MethodSig, Boolean, Seq[IType]) => Set[Int],
+                        resolvedProperties: (MethodSig, Boolean, Seq[IType]) => Analyzer.Properties,
                         argMapping: Map[Int, Int]) = {
 
 
@@ -165,7 +174,7 @@ object Backend {
       result.liveBlocks,
       log,
       classExists,
-      liveArgsFor
+      resolvedProperties
     )
 
     log.check(result.program.checkLinks(checkDead = false))

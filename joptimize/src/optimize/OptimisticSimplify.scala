@@ -1,6 +1,6 @@
 package joptimize.optimize
 
-import joptimize.analyzer.Renderer
+import joptimize.analyzer.{Analyzer, Renderer}
 import joptimize.model._
 import joptimize.{FileLogger, Logger, Util}
 
@@ -10,11 +10,11 @@ object OptimisticSimplify {
   def apply(isStatic: Boolean,
             argMapping: Map[Int, Int],
             program: Program,
-            inferred: mutable.LinkedHashMap[SSA.Val, (IType, Boolean, Set[Int])],
+            inferred: mutable.LinkedHashMap[SSA.Val, IType],
             liveBlocks: Set[SSA.Block],
             log: Logger.InferredMethod,
             classExists: JType.Cls => Boolean,
-            liveArgsFor: (MethodSig, Boolean, Seq[IType]) => Set[Int]) = {
+            resolvedProperties: (MethodSig, Boolean, Seq[IType]) => Analyzer.Properties) = {
 
     log.pprint(program.args -> argMapping)
     program.args = program.args.filter(a => argMapping.contains(a.index) || (a.index == 0 && !isStatic))
@@ -25,7 +25,7 @@ object OptimisticSimplify {
 //      log.graph(Renderer.dumpSvg(program))
 //      log.pprint(n)
 //      n match{case n: SSA.Val => log.pprint(inferred.get(n)) case _ =>}
-      simplifyNode(n, inferred, classExists, log, liveBlocks, liveArgsFor, argMapping)
+      simplifyNode(n, inferred, classExists, log, liveBlocks, resolvedProperties, argMapping)
     }
 
 //    log.pprint(liveBlocks.map(x => (x, x.next)))
@@ -43,11 +43,11 @@ object OptimisticSimplify {
   }
 
   def simplifyNode(node: SSA.Node,
-                   inferred: mutable.LinkedHashMap[SSA.Val, (IType, Boolean, Set[Int])],
+                   inferred: mutable.LinkedHashMap[SSA.Val, IType],
                    classExists: JType.Cls => Boolean,
                    log: Logger.InferredMethod,
                    liveBlocks: Set[SSA.Block],
-                   liveArgsFor: (MethodSig, Boolean, Seq[IType]) => Set[Int],
+                   resolvedProperties: (MethodSig, Boolean, Seq[IType]) => Analyzer.Properties,
                    argMapping: Map[Int, Int]) = node match {
     case p: SSA.ChangedState =>
 //      log.pprint(inferred.contains(p))
@@ -56,14 +56,15 @@ object OptimisticSimplify {
 //      log.pprint(unInferred)
     // do nothing
     case n: SSA.Invoke =>
-//      log.pprint(n)
+      val inferredArgs0 = n.srcs.map(inferred(_))
+      val properties = resolvedProperties(n.sig, n.isInstanceOf[SSA.InvokeSpecial], inferredArgs0)
+      //      log.pprint(n)
       val (mangledName, mangledDesc, liveArgsOpt) =
         if (n.name == "<init>" || !classExists(n.cls)) (n.name, n.desc, None)
         else {
 
-          val inferredArgs0 = n.srcs.map(inferred(_)._1)
-          val liveArgs = liveArgsFor(n.sig, n.isInstanceOf[SSA.InvokeSpecial], inferredArgs0)
-          log.pprint(liveArgs)
+
+          log.pprint(properties.liveArgs)
           val inferredArgs = inferredArgs0.drop(if(n.sig.static) 0 else 1)
           //          log.pprint(n.sig)
 //          log.pprint(inferredArgs)
@@ -71,16 +72,15 @@ object OptimisticSimplify {
           val (name, desc) = Util.mangle(
             n.sig,
             inferredArgs,
-            inferred.getOrElseUpdate(n, (n.desc.ret, false, n.desc.args.indices.toSet))._1,
-            liveArgs
+            inferred.getOrElseUpdate(n, n.desc.ret),
+            properties.liveArgs
           )
 
-          (name, desc, Some(liveArgs))
+          (name, desc, Some(properties.liveArgs))
         }
 
       log.pprint(liveArgsOpt)
-      val pure = inferred(n)._2
-      if (pure){
+      if (properties.pure){
         val replacement = prepareNodeReplacement(inferred, n)
         replacement match{
           case Some(r) => constantFoldNode(inferred, r, n)
@@ -131,9 +131,9 @@ object OptimisticSimplify {
     // do nothing
   }
 
-  def prepareNodeReplacement(inferred: mutable.LinkedHashMap[SSA.Val, (IType, Boolean, Set[Int])],
+  def prepareNodeReplacement(inferred: mutable.LinkedHashMap[SSA.Val, IType],
                              n: SSA.Val) = {
-    inferred(n)._1 match {
+    inferred(n) match {
       case CType.I(v) => Some(new SSA.ConstI(v))
       case CType.J(v) => Some(new SSA.ConstJ(v))
       case CType.F(v) => Some(new SSA.ConstF(v))
@@ -145,7 +145,7 @@ object OptimisticSimplify {
   /**
     * Removes a node entirely and replace it with a constant value
     */
-  def constantFoldNode(inferred: mutable.LinkedHashMap[SSA.Val, (IType, Boolean, Set[Int])],
+  def constantFoldNode(inferred: mutable.LinkedHashMap[SSA.Val, IType],
                        r: SSA.Val,
                        n: SSA.Val) = {
     inferred(r) = inferred(n)
