@@ -1,6 +1,6 @@
 package joptimize.frontend
 
-import joptimize.model.{JType, Program, SSA}
+import joptimize.model.{JType, MethodBody, SSA}
 import org.objectweb.asm.Opcodes._
 import org.objectweb.asm.tree.{AbstractInsnNode, JumpInsnNode, LookupSwitchInsnNode, TableSwitchInsnNode}
 
@@ -189,7 +189,7 @@ object ControlFlowExtraction {
       .map(frames(0).getLocal)
       .filter(_.jtype != JType.Prim.V)
 
-    val program = Program(locals.map(_.asInstanceOf[SSA.Arg]), terminals.map(_._2))
+    val program = MethodBody(locals.map(_.asInstanceOf[SSA.Arg]), terminals.map(_._2))
 
     program
   }

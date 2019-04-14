@@ -9,19 +9,19 @@ import scala.collection.mutable
 object OptimisticSimplify {
   def apply(isStatic: Boolean,
             argMapping: Map[Int, Int],
-            program: Program,
+            methodBody: MethodBody,
             inferred: mutable.LinkedHashMap[SSA.Val, IType],
             liveBlocks: Set[SSA.Block],
             log: Logger.InferredMethod,
             classExists: JType.Cls => Boolean,
             resolvedProperties: (MethodSig, Boolean, Seq[IType]) => Analyzer.Properties) = {
 
-    log.pprint(program.args -> argMapping)
-    program.args = program.args.filter(a => argMapping.contains(a.index) || (a.index == 0 && !isStatic))
-    log.pprint(program.args -> argMapping)
+    log.pprint(methodBody.args -> argMapping)
+    methodBody.args = methodBody.args.filter(a => argMapping.contains(a.index) || (a.index == 0 && !isStatic))
+    log.pprint(methodBody.args -> argMapping)
 
 //    log.pprint(argMapping)
-    for(n <- program.getAllVertices()){
+    for(n <- methodBody.getAllVertices()){
 //      log.graph(Renderer.dumpSvg(program))
 //      log.pprint(n)
 //      n match{case n: SSA.Val => log.pprint(inferred.get(n)) case _ =>}
@@ -30,7 +30,7 @@ object OptimisticSimplify {
 
 //    log.pprint(liveBlocks.map(x => (x, x.next)))
 //    log.pprint(program.allTerminals.map{ case j: SSA.Jump => j -> j.block })
-    program.allTerminals = program.allTerminals.filter{
+    methodBody.allTerminals = methodBody.allTerminals.filter{
       case j: SSA.Jump => liveBlocks.contains(j.block)
     }
 
@@ -38,7 +38,7 @@ object OptimisticSimplify {
 //    log.pprint(program.allTerminals)
 
     log.println("POST OPTIMISTIC SIMPLIFY")
-    log.graph(Renderer.dumpSvg(program))
+    log.graph(Renderer.dumpSvg(methodBody))
 
   }
 

@@ -1,14 +1,14 @@
 package joptimize.backend
 
 import joptimize.Util
-import joptimize.model.{Program, SSA}
+import joptimize.model.{MethodBody, SSA}
 
 import scala.collection.mutable
 
 object RegisterAllocator {
-  def apply(program: Program,
+  def apply(methodBody: MethodBody,
             immediateDominators: Map[SSA.Block, SSA.Block]): Unit /*Map[SSA.Val, Int]*/ = {
-    val allVertices = Util.breadthFirstSeen[SSA.Node](program.allTerminals.toSet)(_.upstream)
+    val allVertices = Util.breadthFirstSeen[SSA.Node](methodBody.allTerminals.toSet)(_.upstream)
 
     val copies = mutable.Set.empty[SSA.Copy]
     val eqClses = mutable.Set.empty[Set[SSA.Val]]

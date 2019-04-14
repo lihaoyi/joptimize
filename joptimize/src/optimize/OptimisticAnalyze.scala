@@ -31,7 +31,7 @@ object OptimisticAnalyze {
     * modified, the respective blocks are added to the worklist for processing.
     * When the worklist is empty, inference is complete and the algorithm exits
     */
-  def apply[T](program: Program,
+  def apply[T](methodBody: MethodBody,
                initialValues: Map[SSA.Val, T],
                initialBlock: SSA.Block,
                lattice: Lattice[T],

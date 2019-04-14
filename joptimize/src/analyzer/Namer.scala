@@ -2,7 +2,7 @@ package joptimize.analyzer
 
 import joptimize.Logger
 import joptimize.Util.sortVerticesForPrinting
-import joptimize.model.{Program, SSA}
+import joptimize.model.{MethodBody, SSA}
 
 import scala.collection.mutable
 
@@ -17,7 +17,7 @@ object Namer {
     def apply(n: SSA.Node) = savedLocals.get(n).map(_._2)
   }
 
-  def apply(program: Program,
+  def apply(methodBody: MethodBody,
             scheduledVals: Map[SSA.Val, SSA.Control],
             allVertices: Set[SSA.Node],
             log: Logger.InferredMethod): Result = {
@@ -57,8 +57,8 @@ object Namer {
     val savedControls = mutable.Map[SSA.Control, (Int, String)]()
 
     var maxVal = 0
-    log.pprint(program.args)
-    for(a <- program.args){
+    log.pprint(methodBody.args)
+    for(a <- methodBody.args){
       savedLocals.update(a, (a.index, "arg" + a.index))
       maxVal += a.getSize
     }

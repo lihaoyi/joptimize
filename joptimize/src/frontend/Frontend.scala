@@ -3,7 +3,7 @@ package joptimize.frontend
 import frontend.ConstructSSA
 import joptimize.{FileLogger, Logger, Util}
 import joptimize.analyzer.Renderer
-import joptimize.model.{IType, JType, MethodSig, Program, SSA}
+import joptimize.model.{IType, JType, MethodSig, MethodBody, SSA}
 import org.objectweb.asm.tree.{ClassNode, MethodNode}
 import org.objectweb.asm.util.{Textifier, TraceMethodVisitor}
 
@@ -35,7 +35,7 @@ class Frontend(val loadMethod: MethodSig => Option[MethodNode],
     }
   }
 
-  def apply(originalSig: MethodSig, log: Logger.Method): Option[Program] = {
+  def loadMethodBody(originalSig: MethodSig, log: Logger.Method): Option[MethodBody] = {
     val printer = new Textifier
     val methodPrinter = new TraceMethodVisitor(printer)
     val mn = loadMethod(originalSig).getOrElse(throw new Exception("Unknown Sig: " + originalSig))
@@ -60,7 +60,7 @@ class Frontend(val loadMethod: MethodSig => Option[MethodNode],
   }
 
 
-  def simplifyPhiMerges(program: Program) = program.transform{
+  def simplifyPhiMerges(methodBody: MethodBody) = methodBody.transform{
     case phi: SSA.Phi =>
       val filteredValues = phi.incoming.filter(_._2 != phi)
 

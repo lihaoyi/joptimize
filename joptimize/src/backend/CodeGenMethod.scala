@@ -3,7 +3,7 @@ package joptimize.backend
 import joptimize.{Logger, Util}
 import joptimize.analyzer.Namer
 import joptimize.model.JType
-import joptimize.model.{Program, SSA}
+import joptimize.model.{MethodBody, SSA}
 import org.objectweb.asm.Handle
 import org.objectweb.asm.Opcodes._
 import org.objectweb.asm.tree._
@@ -18,7 +18,7 @@ import scala.collection.mutable
   */
 
 object CodeGenMethod{
-  def apply(program: Program,
+  def apply(methodBody: MethodBody,
             allVertices: Set[SSA.Node],
             nodesToBlocks: Map[SSA.Val, SSA.Block],
             cfg: Seq[(SSA.Control, SSA.Control)],

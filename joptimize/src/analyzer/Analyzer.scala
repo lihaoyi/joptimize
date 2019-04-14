@@ -85,7 +85,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
   }
 
   def dummyResult(originalSig: MethodSig, optimistic: Boolean) = Analyzer.Result(
-    new Program(Nil, Nil),
+    new MethodBody(Nil, Nil),
     mutable.LinkedHashMap.empty,
     Set.empty,
     Analyzer.Properties(
@@ -104,9 +104,9 @@ class Analyzer(entrypoints: Seq[MethodSig],
       (originalSig, inferredArgs.drop(if (originalSig.static) 0 else 1)),
       if (frontend.loadMethod(originalSig).isEmpty) dummyResult(originalSig, optimistic = false)
       else if (callStack.contains(originalSig -> inferredArgs)) dummyResult(originalSig, optimistic = true)
-      else frontend.apply(originalSig, log.method(originalSig)) match{
+      else frontend.loadMethodBody(originalSig, log.method(originalSig)) match{
         case None => dummyResult(originalSig, optimistic = true)
-        case Some(program) =>
+        case Some(methodBody) =>
           log.global().println(
             "  " * callStack.length +
               "+" + Util.mangleName(originalSig, inferredArgs.drop(if(originalSig.static) 0 else 1))
@@ -120,16 +120,16 @@ class Analyzer(entrypoints: Seq[MethodSig],
           ))
 
 
-          log.graph(Renderer.dumpSvg(program))
+          log.graph(Renderer.dumpSvg(methodBody))
           log.println("================ INITIAL ================")
 
-          val preScheduleNaming = Namer.apply(program, Map.empty, program.getAllVertices(), log = log)
+          val preScheduleNaming = Namer.apply(methodBody, Map.empty, methodBody.getAllVertices(), log = log)
 
-          log(Renderer.renderSSA(program, preScheduleNaming))
+          log(Renderer.renderSSA(methodBody, preScheduleNaming))
 
-          log.check(program.checkLinks())
+          log.check(methodBody.checkLinks())
           val (controlFlowEdges, startBlock, allBlocks, blockEdges) =
-            Analyzer.analyzeBlockStructure(program)
+            Analyzer.analyzeBlockStructure(methodBody)
 
           log.println("")
           log(Renderer.renderControlFlowGraph(controlFlowEdges, preScheduleNaming.savedLocals))
@@ -146,54 +146,20 @@ class Analyzer(entrypoints: Seq[MethodSig],
           // Just for debugging
           val nodesToBlocks2 = Scheduler.apply(
             loopTree, dominators, startBlock,
-            program.getAllVertices()
+            methodBody.getAllVertices()
           )
 
-          val postScheduleNaming = Namer.apply(program, nodesToBlocks2, program.getAllVertices(), log = log)
+          val postScheduleNaming = Namer.apply(methodBody, nodesToBlocks2, methodBody.getAllVertices(), log = log)
 
-          log(Renderer.renderSSA(program, postScheduleNaming, nodesToBlocks2))
+          log(Renderer.renderSSA(methodBody, postScheduleNaming, nodesToBlocks2))
 
-          log.graph(Renderer.dumpSvg(program, postScheduleNaming))
+          log.graph(Renderer.dumpSvg(methodBody, postScheduleNaming))
           log.println("================ OPTIMISTIC ================")
 
           val innerStack = (originalSig -> inferredArgs) :: callStack
 
-          val optResult = OptimisticAnalyze.apply[IType](
-            program,
-            Map.empty,
-            program.getAllVertices().collect{case b: SSA.Block if b.upstream.isEmpty => b}.head,
-            new ITypeLattice(
-              (x, y) => merge(Seq(x, y)),
-              computeMethodSigFor(_, _, _, innerStack).inferredReturn,
-              inferredArgs.flatMap{i => Seq.fill(i.getSize)(i)}
-            ),
-            postScheduleNaming,
-            log,
-            evaluateUnaBranch = {
-              case (CType.I(v), SSA.UnaBranch.IFNE) => Some(v != 0)
-              case (CType.I(v), SSA.UnaBranch.IFEQ) => Some(v == 0)
-              case (CType.I(v), SSA.UnaBranch.IFLE) => Some(v <= 0)
-              case (CType.I(v), SSA.UnaBranch.IFLT) => Some(v < 0)
-              case (CType.I(v), SSA.UnaBranch.IFGE) => Some(v >= 0)
-              case (CType.I(v), SSA.UnaBranch.IFGT) => Some(v > 0)
-              case (JType.Null, SSA.UnaBranch.IFNULL) => Some(true)
-              case (JType.Null, SSA.UnaBranch.IFNONNULL) => Some(false)
-              case _ => None
-            },
-            evaluateBinBranch = {
-              case (CType.I(v1), CType.I(v2), SSA.BinBranch.IF_ICMPEQ) => Some(v1 == v2)
-              case (CType.I(v1), CType.I(v2), SSA.BinBranch.IF_ICMPNE) => Some(v1 != v2)
-              case (CType.I(v1), CType.I(v2), SSA.BinBranch.IF_ICMPLT) => Some(v1 < v2)
-              case (CType.I(v1), CType.I(v2), SSA.BinBranch.IF_ICMPGE) => Some(v1 >= v2)
-              case (CType.I(v1), CType.I(v2), SSA.BinBranch.IF_ICMPGT) => Some(v1 > v2)
-              case (CType.I(v1), CType.I(v2), SSA.BinBranch.IF_ICMPLE) => Some(v1 <= v2)
-              case _ => None
-            },
-            evaluateSwitch = {
-              case CType.I(v) => Some(v)
-              case _ => None
-            }
-          )
+          val optResult = optimisticAnalyze(inferredArgs, log, methodBody, postScheduleNaming, innerStack)
+
           val blockEnds = optResult.liveBlocks.map(_.next)
           val canThrow = blockEnds.exists(_.isInstanceOf[SSA.AThrow])
 
@@ -205,50 +171,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
             if (retTypes.isEmpty) JType.Prim.V
             else merge(retTypes)
 
-          val inferredPurity = optResult.inferred.keysIterator.forall{
-            case n: SSA.New => false
-            case n: SSA.CheckCast => false
-            case n: SSA.InstanceOf => true
-
-            case n: SSA.ChangedState => true
-            case n: SSA.Arg => true
-
-            case n: SSA.ConstI => true
-            case n: SSA.ConstJ => true
-            case n: SSA.ConstF => true
-            case n: SSA.ConstD => true
-            case n: SSA.ConstStr => true
-            case n: SSA.ConstNull => true
-            case n: SSA.ConstCls => true
-
-            case n: SSA.ArrayLength => false
-
-            case n: SSA.GetField => false
-            case n: SSA.PutField => false
-
-            case n: SSA.GetStatic => false
-            case n: SSA.PutStatic => false
-
-            case n: SSA.GetArray => false
-            case n: SSA.PutArray => false
-
-            case n: SSA.NewArray => false
-            case n: SSA.MultiANewArray => false
-
-            case n: SSA.BinOp =>
-              n.opcode match {
-                case SSA.BinOp.IDIV | SSA.BinOp.IREM | SSA.BinOp.LDIV | SSA.BinOp.LREM => false
-                case _ => true
-              }
-            case n: SSA.UnaOp => true
-
-            case n: SSA.InvokeStatic => computeMethodSigFor(n.sig, false, n.srcs.map(optResult.inferred), innerStack).pure
-            case n: SSA.InvokeSpecial => computeMethodSigFor(n.sig, true, n.srcs.map(optResult.inferred), innerStack).pure
-            case n: SSA.InvokeVirtual => computeMethodSigFor(n.sig, false, n.srcs.map(optResult.inferred), innerStack).pure
-            case n: SSA.InvokeInterface => computeMethodSigFor(n.sig, false, n.srcs.map(optResult.inferred), innerStack).pure
-            //    case n: SSA.InvokeDynamic => computeMethodSig(n, n.srcs.map(inferences))
-            case p: SSA.Phi => true
-          }
+          val inferredPurity = computePurity(optResult, innerStack)
 
           val inferredLiveArgs = optResult.inferred.collect{case (a: SSA.Arg, _) => a.index}
 
@@ -258,7 +181,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
           log.pprint(inferredPurity)
           log.pprint(inferredLiveArgs)
 
-          val allVertices2 = program.getAllVertices()
+          val allVertices2 = methodBody.getAllVertices()
           val classes = allVertices2.collect{
             case n: SSA.GetField => n.owner
             case n: SSA.PutField => n.owner
@@ -293,7 +216,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
 
 
           val result = Analyzer.Result(
-            program,
+            methodBody,
             optResult.inferred,
             optResult.liveBlocks,
             Analyzer.Properties(
@@ -313,12 +236,99 @@ class Analyzer(entrypoints: Seq[MethodSig],
     )
   }
 
+  def optimisticAnalyze(inferredArgs: Seq[IType], log: Logger.InferredMethod, methodBody: MethodBody, postScheduleNaming: Namer.Result, innerStack: List[(MethodSig, Seq[IType])]) = {
+    OptimisticAnalyze.apply[IType](
+      methodBody,
+      Map.empty,
+      methodBody.getAllVertices().collect { case b: SSA.Block if b.upstream.isEmpty => b }.head,
+      new ITypeLattice(
+        (x, y) => merge(Seq(x, y)),
+        computeMethodSigFor(_, _, _, innerStack).inferredReturn,
+        inferredArgs.flatMap { i => Seq.fill(i.getSize)(i) }
+      ),
+      postScheduleNaming,
+      log,
+      evaluateUnaBranch = {
+        case (CType.I(v), SSA.UnaBranch.IFNE) => Some(v != 0)
+        case (CType.I(v), SSA.UnaBranch.IFEQ) => Some(v == 0)
+        case (CType.I(v), SSA.UnaBranch.IFLE) => Some(v <= 0)
+        case (CType.I(v), SSA.UnaBranch.IFLT) => Some(v < 0)
+        case (CType.I(v), SSA.UnaBranch.IFGE) => Some(v >= 0)
+        case (CType.I(v), SSA.UnaBranch.IFGT) => Some(v > 0)
+        case (JType.Null, SSA.UnaBranch.IFNULL) => Some(true)
+        case (JType.Null, SSA.UnaBranch.IFNONNULL) => Some(false)
+        case _ => None
+      },
+      evaluateBinBranch = {
+        case (CType.I(v1), CType.I(v2), SSA.BinBranch.IF_ICMPEQ) => Some(v1 == v2)
+        case (CType.I(v1), CType.I(v2), SSA.BinBranch.IF_ICMPNE) => Some(v1 != v2)
+        case (CType.I(v1), CType.I(v2), SSA.BinBranch.IF_ICMPLT) => Some(v1 < v2)
+        case (CType.I(v1), CType.I(v2), SSA.BinBranch.IF_ICMPGE) => Some(v1 >= v2)
+        case (CType.I(v1), CType.I(v2), SSA.BinBranch.IF_ICMPGT) => Some(v1 > v2)
+        case (CType.I(v1), CType.I(v2), SSA.BinBranch.IF_ICMPLE) => Some(v1 <= v2)
+        case _ => None
+      },
+      evaluateSwitch = {
+        case CType.I(v) => Some(v)
+        case _ => None
+      }
+    )
+  }
+
+  def computePurity(optResult: OptimisticAnalyze.Result[IType],
+                    innerStack: List[(MethodSig, Seq[IType])]) = {
+    optResult.inferred.keysIterator.forall {
+      case n: SSA.New => false
+      case n: SSA.CheckCast => false
+      case n: SSA.InstanceOf => true
+
+      case n: SSA.ChangedState => true
+      case n: SSA.Arg => true
+
+      case n: SSA.ConstI => true
+      case n: SSA.ConstJ => true
+      case n: SSA.ConstF => true
+      case n: SSA.ConstD => true
+      case n: SSA.ConstStr => true
+      case n: SSA.ConstNull => true
+      case n: SSA.ConstCls => true
+
+      case n: SSA.ArrayLength => false
+
+      case n: SSA.GetField => false
+      case n: SSA.PutField => false
+
+      case n: SSA.GetStatic => false
+      case n: SSA.PutStatic => false
+
+      case n: SSA.GetArray => false
+      case n: SSA.PutArray => false
+
+      case n: SSA.NewArray => false
+      case n: SSA.MultiANewArray => false
+
+      case n: SSA.BinOp =>
+        n.opcode match {
+          case SSA.BinOp.IDIV | SSA.BinOp.IREM | SSA.BinOp.LDIV | SSA.BinOp.LREM => false
+          case _ => true
+        }
+      case n: SSA.UnaOp => true
+
+      case n: SSA.InvokeStatic => computeMethodSigFor(n.sig, false, n.srcs.map(optResult.inferred), innerStack).pure
+      case n: SSA.InvokeSpecial => computeMethodSigFor(n.sig, true, n.srcs.map(optResult.inferred), innerStack).pure
+      case n: SSA.InvokeVirtual => computeMethodSigFor(n.sig, false, n.srcs.map(optResult.inferred), innerStack).pure
+      case n: SSA.InvokeInterface => computeMethodSigFor(n.sig, false, n.srcs.map(optResult.inferred), innerStack).pure
+      //    case n: SSA.InvokeDynamic => computeMethodSig(n, n.srcs.map(inferences))
+      case p: SSA.Phi => true
+    }
+  }
+
   def checkSubclass(cls1: JType.Cls, cls2: JType.Cls) = merge(Seq(cls1, cls2)) == cls2
 }
 
 object Analyzer {
 
-  case class Result(program: Program,
+  case class Result(methodBody: MethodBody,
                     inferred: mutable.LinkedHashMap[SSA.Val, IType],
                     liveBlocks: Set[SSA.Block],
                     props: Properties)
@@ -327,8 +337,8 @@ object Analyzer {
                         pure: Boolean,
                         liveArgs: Set[Int])
 
-  def analyzeBlockStructure(program: Program) = {
-    val controlFlowEdges = Renderer.findControlFlowGraph(program)
+  def analyzeBlockStructure(methodBody: MethodBody) = {
+    val controlFlowEdges = Renderer.findControlFlowGraph(methodBody)
     val startBlock = (controlFlowEdges.map(_._1).toSet -- controlFlowEdges.map(_._2)).head.asInstanceOf[SSA.Block]
     val allBlocks = controlFlowEdges
       .flatMap { case (k, v) => Seq(k, v) }

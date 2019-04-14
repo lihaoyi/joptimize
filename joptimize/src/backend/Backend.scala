@@ -85,7 +85,7 @@ object Backend {
       )
       originalNode.accept(newNode)
 
-      if (result.program.allTerminals.isEmpty) newNode.instructions = new InsnList()
+      if (result.methodBody.allTerminals.isEmpty) newNode.instructions = new InsnList()
       else {
 
         val argMapping = Util.argMapping(sig, liveArgs)
@@ -169,7 +169,7 @@ object Backend {
     OptimisticSimplify.apply(
       originalSig.static,
       argMapping,
-      result.program,
+      result.methodBody,
       result.inferred,
       result.liveBlocks,
       log,
@@ -177,17 +177,17 @@ object Backend {
       resolvedProperties
     )
 
-    log.check(result.program.checkLinks(checkDead = false))
-    result.program.removeDeadNodes()
-    log.graph(Renderer.dumpSvg(result.program))
-    log.check(result.program.checkLinks())
+    log.check(result.methodBody.checkLinks(checkDead = false))
+    result.methodBody.removeDeadNodes()
+    log.graph(Renderer.dumpSvg(result.methodBody))
+    log.check(result.methodBody.checkLinks())
 
-    val allVertices2 = result.program.getAllVertices()
+    val allVertices2 = result.methodBody.getAllVertices()
 
 //    pprint.log(originalSig)
 //    pprint.log(result.program)
     val (controlFlowEdges, startBlock, allBlocks, blockEdges) =
-      Analyzer.analyzeBlockStructure(result.program)
+      Analyzer.analyzeBlockStructure(result.methodBody)
     val loopTree2 = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)
 
     val dominators2 = Dominator.findDominators(blockEdges, allBlocks)
@@ -199,17 +199,17 @@ object Backend {
       )
 
       val postOptimisticNaming = Namer.apply(
-        result.program,
+        result.methodBody,
         nodesToBlocks,
         allVertices2,
         log
       )
 
-      log(Renderer.renderSSA(result.program, postOptimisticNaming, nodesToBlocks))
+      log(Renderer.renderSSA(result.methodBody, postOptimisticNaming, nodesToBlocks))
     }
 
     log.println("================ REGISTERS ALLOCATED ================")
-    RegisterAllocator.apply(result.program, dominators2.immediateDominators)
+    RegisterAllocator.apply(result.methodBody, dominators2.immediateDominators)
 
     val nodesToBlocks = Scheduler.apply(
       loopTree2, dominators2, startBlock,
@@ -217,19 +217,19 @@ object Backend {
     )
 
     val postRegisterAllocNaming = Namer.apply(
-      result.program,
+      result.methodBody,
       nodesToBlocks,
-      result.program.getAllVertices(),
+      result.methodBody.getAllVertices(),
       log
     )
 
-    log(Renderer.renderSSA(result.program, postRegisterAllocNaming, nodesToBlocks))
+    log(Renderer.renderSSA(result.methodBody, postRegisterAllocNaming, nodesToBlocks))
 
     val (blockCode, finalInsns) = CodeGenMethod(
-      result.program,
+      result.methodBody,
       allVertices2,
       nodesToBlocks,
-      Analyzer.analyzeBlockStructure(result.program)._1,
+      Analyzer.analyzeBlockStructure(result.methodBody)._1,
       postRegisterAllocNaming,
       log
     )

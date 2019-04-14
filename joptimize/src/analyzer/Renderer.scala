@@ -4,7 +4,7 @@ import java.io.{PrintWriter, StringReader, StringWriter}
 import fansi.Str
 import joptimize.Util
 import joptimize.graph.HavlakLoopTree
-import joptimize.model.{Desc, JType, Program, SSA}
+import joptimize.model.{Desc, JType, MethodBody, SSA}
 import joptimize.viewer.model.LogMessage
 import org.objectweb.asm.tree.{AbstractInsnNode, InsnList}
 import org.objectweb.asm.util.{Textifier, TraceMethodVisitor}
@@ -135,7 +135,7 @@ object Renderer {
     fansi.Str.join(out:_*)
   }
 
-  def renderSSA(program: Program,
+  def renderSSA(methodBody: MethodBody,
                 naming: Namer.Result,
                 scheduledVals: Map[SSA.Val, SSA.Control] = Map.empty): fansi.Str = {
 
@@ -268,7 +268,7 @@ object Renderer {
     val out =
       if (scheduledVals.nonEmpty){
         renderGraph(
-          Renderer.findControlFlowGraph(program),
+          Renderer.findControlFlowGraph(methodBody),
           (l, rhs, indent) => fansi.Str.join(renderStmt(l, indent.length / 2).get:_*),
           (l, indent) => {
 
@@ -364,7 +364,7 @@ object Renderer {
   }
 
 
-  def findControlFlowGraph(program: Program) = {
+  def findControlFlowGraph(methodBody: MethodBody) = {
     val controlFlowEdges = mutable.Buffer.empty[(SSA.Control, SSA.Control)]
     val visited = mutable.LinkedHashSet.empty[SSA.Control]
 
@@ -377,17 +377,17 @@ object Renderer {
       }
     }
 
-    program.allTerminals.foreach(rec)
+    methodBody.allTerminals.foreach(rec)
     controlFlowEdges
   }
 
-  def dumpSvg(program: Program, naming: Namer.Result = null): LogMessage.Graph = {
+  def dumpSvg(methodBody: MethodBody, naming: Namer.Result = null): LogMessage.Graph = {
 
     def name(x: SSA.Node) = if (naming == null) "" else naming(x).getOrElse("")
 
-    val live = Util.breadthFirstSeen[SSA.Node](program.allTerminals.toSet)(_.upstream)
+    val live = Util.breadthFirstSeen[SSA.Node](methodBody.allTerminals.toSet)(_.upstream)
 
-    val (seen, terminals, allEdges) = Util.breadthFirstAggregation0[SSA.Node, Boolean](program.allTerminals.toSet)(
+    val (seen, terminals, allEdges) = Util.breadthFirstAggregation0[SSA.Node, Boolean](methodBody.allTerminals.toSet)(
       x => x.upstream.map(_ -> true) ++ x.downstreamList.map(_ -> false)
     )
 
