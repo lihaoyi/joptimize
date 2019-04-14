@@ -6,7 +6,6 @@ import joptimize.{Logger, Util}
 import joptimize.graph.HavlakLoopTree
 import joptimize.model._
 import joptimize.optimize._
-import org.objectweb.asm.tree._
 
 import scala.collection.mutable
 
@@ -17,7 +16,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
   val visitedMethods = mutable.LinkedHashMap.empty[(MethodSig, Seq[IType]), Analyzer.Result]
   val visitedResolved = mutable.LinkedHashMap.empty[(MethodSig, Seq[IType]), Analyzer.Properties]
   val visitedClasses = mutable.LinkedHashSet.empty[JType.Cls]
-  val callerGraph = mutable.LinkedHashMap[MethodSig, mutable.LinkedHashSet[MethodSig]]()
+  val callerGraph = mutable.LinkedHashMap[(MethodSig, Seq[IType]), mutable.LinkedHashSet[(MethodSig, Seq[IType])]]()
   def apply() = {
     for (ep <- entrypoints) computeMethodSig(ep, ep.desc.args, Nil)
     for(((sig, inferred), v) <- visitedMethods if !visitedResolved.contains((sig, inferred))){
@@ -181,15 +180,15 @@ class Analyzer(entrypoints: Seq[MethodSig],
           log.pprint(inferredPurity)
           log.pprint(inferredLiveArgs)
 
-          val allVertices2 = methodBody.getAllVertices()
-          val classes = allVertices2.collect{
+          val classes = optResult.inferred.keys.collect{
             case n: SSA.GetField => n.owner
             case n: SSA.PutField => n.owner
             case n: SSA.GetStatic => n.cls
             case n: SSA.PutStatic => n.cls
           }
-          val calledMethodSigs = allVertices2.collect{
-            case n: SSA.Invoke => n.sig
+          val calledMethodSigs = optResult.inferred.keys.collect{
+            case n: SSA.Invoke =>
+              (n.sig, n.srcs.map(optResult.inferred).drop(if(n.sig.static) 0 else 1))
           }
 
           for(cls <- Seq(originalSig.cls) ++ classes){
@@ -228,7 +227,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
 
           classes.foreach(visitedClasses.add)
           for (m <- calledMethodSigs) {
-            callerGraph.getOrElseUpdate(m, mutable.LinkedHashSet.empty).add(originalSig)
+            callerGraph.getOrElseUpdate(m, mutable.LinkedHashSet.empty).add((originalSig, inferredArgs))
           }
 
           result
