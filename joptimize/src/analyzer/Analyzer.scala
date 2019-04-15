@@ -36,7 +36,8 @@ class Analyzer(entrypoints: Seq[MethodSig],
       (sig, inferredArgs.drop(if (sig.static) 0 else 1)),
       if(frontend.loadClass(sig.cls).isEmpty) dummyResult(sig, optimistic = false).props
       else {
-        frontend.resolvePossibleSigs(sig, inferredArgs) match {
+        val resolved = frontend.resolvePossibleSigs(sig, inferredArgs)
+        resolved match {
           case None => dummyResult(sig, optimistic = false).props
           case Some(subSigs) =>
             val rets = for (subSig <- subSigs) yield {

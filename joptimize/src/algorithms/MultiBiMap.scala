@@ -10,6 +10,7 @@ import scala.collection.mutable
 trait MultiBiMap[K, V]{
   def containsValue(v: V): Boolean
   def lookupKey(k: K): Seq[V]
+  def lookupKeyOpt(k: K): Option[Seq[V]]
   def lookupValue(v: V): K
   def lookupValueOpt(v: V): Option[K]
   def add(k: K, v: V): Unit

@@ -1,17 +1,16 @@
 package joptimize.frontend
 
 import frontend.ConstructSSA
+import joptimize.algorithms.MultiBiMap
 import joptimize.{FileLogger, Logger, Util}
 import joptimize.analyzer.Renderer
-import joptimize.model.{IType, JType, MethodSig, MethodBody, SSA}
+import joptimize.model.{IType, JType, MethodBody, MethodSig, SSA}
 import org.objectweb.asm.tree.{ClassNode, MethodNode}
 import org.objectweb.asm.util.{Textifier, TraceMethodVisitor}
 
-import scala.collection.mutable
-
 class Frontend(val loadMethod: MethodSig => Option[MethodNode],
                val loadClass: JType.Cls => Option[ClassNode],
-               subtypeMap: mutable.LinkedHashMap[JType.Cls, List[JType.Cls]]) {
+               subtypeMap: MultiBiMap[JType.Cls, JType.Cls]) {
 
   def resolvePossibleSigs(sig: MethodSig, inferredArgs: Seq[IType]): Option[Seq[MethodSig]] = {
     if (sig.static) {
@@ -27,9 +26,12 @@ class Frontend(val loadMethod: MethodSig => Option[MethodNode],
       if (sig.name == "<clinit>") Some(Seq(sig))
       else rec(sig.cls).map(s => Seq(s))
     }else{
+//      pprint.log(subtypeMap.items().toMap)
       val subTypes = subtypeMap
-        .getOrElse(sig.cls, Nil)
+        .lookupKeyOpt(sig.cls)
+        .getOrElse(Nil)
         .map(c => sig.copy(cls = c))
+        .toList
 
       Some(sig :: subTypes)
     }

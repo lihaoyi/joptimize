@@ -94,6 +94,15 @@ public class Inheritance {
         s.append(" ----------------------- ");
         return s.toString();
     }
+
+    @joptimize.Test(inputs = {1, 2, 4, 8})
+    public static String implementLate(int n) {
+        Car car = new Honda();
+        String first = car.vStart();
+        car = new Toyota();
+        String second = car.vStart();
+        return "[".concat(first).concat("][").concat(second).concat("]");
+    }
 }
 
 interface ParentInterface {

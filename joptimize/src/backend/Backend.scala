@@ -1,7 +1,7 @@
 package joptimize.backend
 
 import joptimize.{FileLogger, Logger, Util}
-import joptimize.algorithms.{Dominator, Scheduler}
+import joptimize.algorithms.{Dominator, MultiBiMap, Scheduler}
 import joptimize.analyzer.{Analyzer, Namer, Renderer}
 import joptimize.graph.HavlakLoopTree
 import joptimize.model._
@@ -15,26 +15,26 @@ import scala.collection.mutable
 object Backend {
   def apply(visitedResolved: mutable.LinkedHashMap[(MethodSig, Seq[IType]), Analyzer.Properties],
             entrypoints: scala.Seq[MethodSig],
-            originalMethods: Map[MethodSig, MethodNode],
-            classNodeMap: Map[JType.Cls, ClassNode],
+            loadMethodCache: Map[MethodSig, MethodNode],
+            loadClassCache: Map[JType.Cls, ClassNode],
             visitedMethods: mutable.LinkedHashMap[(MethodSig, Seq[IType]), Analyzer.Result],
             eliminateOldMethods: Boolean,
             visitedClasses: mutable.LinkedHashSet[JType.Cls],
-            subtypeMap: mutable.LinkedHashMap[JType.Cls, scala.List[JType.Cls]],
+            subtypeMap: MultiBiMap[JType.Cls, JType.Cls],
             log: Logger.Global,
             merge: Seq[IType] => IType) = {
 
     val highestMethodDefiners = for{
       ((sig, inferredArgs), result) <- visitedMethods
-      if originalMethods.contains(sig)
+      if loadMethodCache.contains(sig)
     } yield {
       var parentClasses = List.empty[JType.Cls]
       var current = sig.cls
       while({
-        if (!classNodeMap.contains(current)) false
+        if (!loadClassCache.contains(current)) false
         else {
           parentClasses = current :: parentClasses
-          classNodeMap(current).superName match {
+          loadClassCache(current).superName match {
             case null => false
             case name =>
               current = JType.Cls(name)
@@ -56,7 +56,7 @@ object Backend {
 
     val newMethods = for{
       ((sig, inferredArgs), result) <- visitedMethods.toList
-      if originalMethods.contains(sig)
+      if loadMethodCache.contains(sig)
     } yield {
       val liveArgs =
         if (entrypoints.contains(sig)) (_: Int) => true
@@ -69,7 +69,7 @@ object Backend {
         }
       log.pprint(sig)
 
-      val originalNode = originalMethods(sig)
+      val originalNode = loadMethodCache(sig)
 
       val (mangledName, mangledDesc) =
         if (sig.name == "<init>") (sig.name, sig.desc)
@@ -94,10 +94,10 @@ object Backend {
           sig,
           result,
           log.inferredMethod(sig, inferredArgs),
-          classNodeMap.contains,
+          loadClassCache.contains,
           (originalSig, invokeSpecial, inferredArgs) => {
             val highestSig =
-              if (originalSig.static || !originalMethods.contains(originalSig)) originalSig
+              if (originalSig.static || !loadMethodCache.contains(originalSig)) originalSig
               else {
                 originalSig.copy(cls =
                   highestMethodDefiners((originalSig, inferredArgs.drop(if (originalSig.static) 0 else 1)))
@@ -111,19 +111,19 @@ object Backend {
       newNode.desc = mangledDesc.unparse
       newNode.tryCatchBlocks = Nil.asJava
 
-      classNodeMap(sig.cls) -> newNode
+      loadClassCache(sig.cls) -> newNode
     }
 
     if (eliminateOldMethods) {
-      for ((k, cn) <- classNodeMap) {
+      for ((k, cn) <- loadClassCache) {
         cn.methods.clear()
       }
     }
 
-    val visitedInterfaces = Util.findSeenInterfaces(classNodeMap, newMethods.map(_._1))
+    val visitedInterfaces = Util.findSeenInterfaces(loadClassCache, newMethods.map(_._1))
 
     val grouped =
-      (visitedInterfaces ++ visitedClasses.map(_.name)).filter(s => classNodeMap.contains(JType.Cls(s))).map(classNodeMap(_) -> Nil).toMap ++
+      (visitedInterfaces ++ visitedClasses.map(_.name)).filter(s => loadClassCache.contains(JType.Cls(s))).map(loadClassCache(_) -> Nil).toMap ++
         newMethods.groupBy(_._1).mapValues(_.map(_._2))
 
     for((cn, mns) <- grouped) yield {
@@ -139,15 +139,15 @@ object Backend {
 
     def findSupertypes(cls: JType.Cls) = {
       val output = mutable.Buffer(cls)
-      while(classNodeMap.contains(output.last) && classNodeMap(output.last).superName != null && !ignore(classNodeMap(output.last).superName)){
-        output.append(JType.Cls(classNodeMap(output.last).superName))
+      while(loadClassCache.contains(output.last) && loadClassCache(output.last).superName != null && !ignore(loadClassCache(output.last).superName)){
+        output.append(JType.Cls(loadClassCache(output.last).superName))
       }
       output
     }
     val outClasses = BytecodeDCE.apply(
       entrypoints,
       grouped.keys.toSeq,
-      findSubtypes = subtypeMap.getOrElse(_, Nil),
+      findSubtypes = subtypeMap.lookupKeyOpt(_).getOrElse(Nil),
       findSupertypes = findSupertypes,
       ignore = ignore
     )

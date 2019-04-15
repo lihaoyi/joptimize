@@ -1,6 +1,7 @@
 package joptimize
 
 import backend.Backend
+import joptimize.algorithms.MultiBiMap
 import joptimize.analyzer.Analyzer
 import joptimize.frontend.Frontend
 import joptimize.model._
@@ -15,31 +16,39 @@ object JOptimize{
           eliminateOldMethods: Boolean,
           log: Logger.Global): Map[String, Array[Byte]] = {
 
-    val classFileMap = for((k, v) <- classFiles) yield {
-      val cr = new ClassReader(v)
-      val cn = new ClassNode()
-      cr.accept(cn, ClassReader.SKIP_FRAMES)
-      (k, cn)
-    }
+    val subtypeMap = new MultiBiMap.Mutable[JType.Cls, JType.Cls]
 
-    val classNodeMap = classFileMap.map{case (k, v) => (JType.Cls(v.name), v)}
-    val subtypeMap = {
-      val map = mutable.LinkedHashMap.empty[JType.Cls, List[JType.Cls]]
-      for{
-        (k, v) <- classNodeMap
-        sup <- v.interfaces.asScala ++ Option(v.superName)
-      } map(sup) = v.name :: map.getOrElse(sup, Nil)
-      map
-    }
+    val loadClassCache = mutable.LinkedHashMap.empty[JType.Cls, Option[ClassNode]]
+    def loadClass(cls: JType.Cls): Option[ClassNode] = loadClassCache.getOrElseUpdate(
+      cls,
+      classFiles.get(cls.name + ".class").map { file =>
+        val cr = new ClassReader(file)
+        val cn = new ClassNode()
+        cr.accept(cn, ClassReader.SKIP_FRAMES)
+        val uppers = cn.interfaces.asScala ++ Option(cn.superName)
 
-    val originalMethods = for{
-      (k, cls) <- classNodeMap
-      m <- cls.methods.iterator().asScala
-    } yield (MethodSig(cls.name, m.name, Desc.read(m.desc), (m.access & Opcodes.ACC_STATIC) != 0), m)
+        for(up <- uppers){
+          subtypeMap.add(up, cls)
+        }
+
+        cn
+      }
+    )
+
+    val loadMethodCache = mutable.LinkedHashMap.empty[MethodSig, Option[MethodNode]]
+    def loadMethod(sig: MethodSig): Option[MethodNode] = loadMethodCache.getOrElseUpdate(
+      sig,
+      loadClass(sig.cls).flatMap { cls =>
+        cls.methods.iterator().asScala.find( mn =>
+          mn.name == sig.name && mn.desc == sig.desc.unparse
+        )
+      }
+    )
+
 
     def leastUpperBound(classes: Seq[JType.Cls]) = {
       Util.leastUpperBound(classes.toSet) { cls =>
-        classNodeMap.get(cls) match{
+        loadClass(cls) match{
           case None => Nil
           case Some(cn) => (cn.interfaces.asScala ++ Option(cn.superName)).map(JType.Cls(_))
         }
@@ -70,7 +79,7 @@ object JOptimize{
       else throw new Exception(flattened.toString)
     }
 
-    val frontend = new Frontend(originalMethods.get, classNodeMap.get, subtypeMap)
+    val frontend = new Frontend(loadMethod, loadClass, subtypeMap)
 
     val analyzer = new Analyzer(
       entrypoints,
@@ -86,8 +95,8 @@ object JOptimize{
     val outClasses = Backend.apply(
       visitedResolved,
       entrypoints,
-      originalMethods,
-      classNodeMap,
+      loadMethodCache.collect{case (k, Some(v)) => (k, v)}.toMap,
+      loadClassCache.collect{case (k, Some(v)) => (k, v)}.toMap,
       visitedMethods,
       eliminateOldMethods,
       visitedClasses,

@@ -16,7 +16,7 @@ import scala.collection.mutable
 object BytecodeDCE {
   def apply(entrypoints: scala.Seq[MethodSig],
             classNodes: Seq[ClassNode],
-            findSubtypes: JType.Cls => List[JType.Cls],
+            findSubtypes: JType.Cls => Seq[JType.Cls],
             findSupertypes: JType.Cls => Seq[JType.Cls],
             ignore: String => Boolean): Seq[ClassNode] = {
 
