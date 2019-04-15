@@ -26,4 +26,18 @@ class Optimistic {
         }
         return z - 1;
     }
+
+
+    @joptimize.Test(
+            inputs = {1, 2, 3, 4},
+            checkRemoved = "joptimize.examples.opt.Optimistic.recursivePureConstant0"
+    )
+    public static int recursivePureConstant(int x, int y) {
+        return recursivePureConstant0(x, y);
+    }
+
+    public static int recursivePureConstant0(int x, int y) {
+        if (x > 2) return 1;
+        else return recursivePureConstant0(3, y);
+    }
 }
