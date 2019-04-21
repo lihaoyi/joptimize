@@ -14,9 +14,14 @@ object JOptimize{
     val classManager = new ClassManager(classFiles.get)
     val frontend = new Frontend(classManager)
 
-    val analyzer = new Analyzer(entrypoints, classManager, log, frontend)
-
-    val analyzerRes = analyzer.apply()
+    var analyzerRes: Analyzer.GlobalResult = null
+    while({
+      val initialState = classManager.loadClassCache.keysIterator.toSet
+      val analyzer = new Analyzer(entrypoints, classManager, log, frontend)
+      analyzerRes = analyzer.apply()
+      val finalState = classManager.loadClassCache.keysIterator.toSet
+      finalState != initialState
+    })()
 
 //    log.pprint(analyzerRes.visitedMethods)
 

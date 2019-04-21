@@ -57,6 +57,7 @@ class ClassManager(getClassFile: String => Option[Array[Byte]]) extends ClassMan
       val upperClasses = uppers.map(clsName => JType.Cls(clsName))
       for(up <- upperClasses) {
         subtypeMap.add(up, cls)
+        loadClass(up)
       }
 
       cn
