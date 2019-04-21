@@ -1,5 +1,7 @@
 package joptimize.frontend
 
+import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream, ObjectOutputStream}
+
 import frontend.ConstructSSA
 import joptimize.algorithms.MultiBiMap
 import joptimize.{FileLogger, Logger, Util}
@@ -8,9 +10,27 @@ import joptimize.model.{IType, JType, MethodBody, MethodSig, SSA}
 import org.objectweb.asm.tree.{ClassNode, MethodNode}
 import org.objectweb.asm.util.{Textifier, TraceMethodVisitor}
 
+import scala.collection.mutable
+
 class Frontend(val classManager: ClassManager) {
 
+  val cachedMethodBodies = mutable.LinkedHashMap.empty[MethodSig, Option[Array[Byte]]]
   def loadMethodBody(originalSig: MethodSig, log: Logger.Method): Option[MethodBody] = {
+    cachedMethodBodies.getOrElseUpdate(
+      originalSig,
+      loadMethodBody0(originalSig, log).map{body =>
+        val boas = new ByteArrayOutputStream()
+        val oos = new ObjectOutputStream(boas)
+        oos.writeObject(body)
+        boas.toByteArray
+      }
+    ).map{bytes =>
+      val oin = new ObjectInputStream(new ByteArrayInputStream(bytes))
+      oin.readObject().asInstanceOf[MethodBody]
+    }
+  }
+
+  def loadMethodBody0(originalSig: MethodSig, log: Logger.Method) = {
     val printer = new Textifier
     val methodPrinter = new TraceMethodVisitor(printer)
     val mn = classManager.loadMethod(originalSig).getOrElse(throw new Exception("Unknown Sig: " + originalSig))
@@ -19,18 +39,18 @@ class Frontend(val classManager: ClassManager) {
       log.println("================ BYTECODE ================")
       log(Renderer.renderInsns(mn.instructions, printer, methodPrinter))
 
-      val program = ConstructSSA.apply(originalSig, mn, log)
+      val methodBody = ConstructSSA.apply(originalSig, mn, log)
 
-      log.graph(Renderer.dumpSvg(program))
-      log.check(program.checkLinks(checkDead = false))
-      program.removeDeadNodes()
-      log.check(program.checkLinks())
-      log.graph(Renderer.dumpSvg(program))
+      log.graph(Renderer.dumpSvg(methodBody))
+      log.check(methodBody.checkLinks(checkDead = false))
+      methodBody.removeDeadNodes()
+      log.check(methodBody.checkLinks())
+      log.graph(Renderer.dumpSvg(methodBody))
 
-      simplifyPhiMerges(program)
-      log.graph(Renderer.dumpSvg(program))
-      log.check(program.checkLinks())
-      Some(program)
+      simplifyPhiMerges(methodBody)
+      log.graph(Renderer.dumpSvg(methodBody))
+      log.check(methodBody.checkLinks())
+      Some(methodBody)
     }
   }
 

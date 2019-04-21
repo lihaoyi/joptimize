@@ -10,7 +10,7 @@ import scala.collection.mutable
   *
   * Can be a concrete JType, an intersection type, or a concrete value
   */
-trait IType extends Value{
+trait IType extends Value with java.io.Serializable{
   def size: Int
   def isRef: Boolean
   def internalName: String

@@ -33,11 +33,11 @@ object MainTestUtils {
       inputFileMap,
       Seq(MethodSig(s"joptimize/examples/${tp.value.dropRight(1).mkString("/")}", tp.value.last, methodDesc, static = true)),
       eliminateOldMethods = true,
-//      log = DummyLogger
-      log = new FileLogger.Global(
-        logRoot = outRoot / tp.value,
-        ignorePrefix = os.rel / 'joptimize / 'examples / tp.value.dropRight(2)
-      )
+      log = DummyLogger
+//      log = new FileLogger.Global(
+//        logRoot = outRoot / tp.value,
+//        ignorePrefix = os.rel / 'joptimize / 'examples / tp.value.dropRight(2)
+//      )
     )
 
 

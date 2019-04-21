@@ -1,5 +1,7 @@
 package joptimize.model
 
+import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream, ObjectOutputStream}
+
 import joptimize.Util
 
 import scala.collection.mutable

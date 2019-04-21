@@ -4,13 +4,12 @@ import org.objectweb.asm.{Handle, Opcodes}
 import scala.collection.immutable.SortedSet
 import scala.collection.mutable
 
-
 object SSA{
   class Swapper(self: Node, other: Node){
     def apply[T <: Node](value: T): T =
       if (value == self) other.asInstanceOf[T] else value
   }
-  trait Node{
+  trait Node extends java.io.Serializable{
     def replaceUpstream(swap: Swapper): Unit
     def replaceUpstream(self: SSA.Node, other: SSA.Node): Unit = replaceUpstream(new Swapper(self, other))
 
@@ -109,11 +108,19 @@ object SSA{
     def downstreamSize = 1 + nextPhis.length
   }
 
-  trait Codes{
-    private[this] val lookup0 = mutable.LinkedHashMap.empty[Int, Code]
-    class Code private[SSA] (val i: Int, val tpe: JType = JType.Prim.V)(implicit name: sourcecode.Name){
-      lookup0(i) = this
-      override def toString = name.value
+  case class Code[T] (i: Int, tpe: JType = JType.Prim.V)
+                     (implicit val name: sourcecode.Name) extends java.io.Serializable{
+
+    override def toString = name.value
+  }
+
+  trait Codes[T]{
+    private[SSA] val lookup0 = mutable.LinkedHashMap.empty[Int, Code]
+    type Code = SSA.Code[T]
+    def code(i: Int, tpe: JType = JType.Prim.V)(implicit name: sourcecode.Name) = {
+      val code = new Code(i, tpe)
+      lookup0(i) = code
+      code
     }
     def lookup(i: Int) = lookup0(i)
   }
@@ -210,44 +217,44 @@ object SSA{
     }
     override def toString = s"${super.toString()}($opcode)"
   }
-  object BinOp extends Codes{
-    val IADD = new Code(Opcodes.IADD, JType.Prim.I)
-    val ISUB = new Code(Opcodes.ISUB, JType.Prim.I)
-    val IMUL = new Code(Opcodes.IMUL, JType.Prim.I)
-    val IDIV = new Code(Opcodes.IDIV, JType.Prim.I)
-    val IREM = new Code(Opcodes.IREM, JType.Prim.I)
-    val ISHL = new Code(Opcodes.ISHL, JType.Prim.I)
-    val ISHR = new Code(Opcodes.ISHR, JType.Prim.I)
-    val IUSHR = new Code(Opcodes.IUSHR, JType.Prim.I)
-    val IAND = new Code(Opcodes.IAND, JType.Prim.I)
-    val IOR = new Code(Opcodes.IOR, JType.Prim.I)
-    val IXOR = new Code(Opcodes.IXOR, JType.Prim.I)
-    val FADD = new Code(Opcodes.FADD, JType.Prim.F)
-    val FSUB = new Code(Opcodes.FSUB, JType.Prim.F)
-    val FMUL = new Code(Opcodes.FMUL, JType.Prim.F)
-    val FDIV = new Code(Opcodes.FDIV, JType.Prim.F)
-    val FREM = new Code(Opcodes.FREM, JType.Prim.F)
-    val LCMP = new Code(Opcodes.LCMP, JType.Prim.I)
-    val FCMPL = new Code(Opcodes.FCMPL, JType.Prim.I)
-    val FCMPG = new Code(Opcodes.FCMPG, JType.Prim.I)
-    val DCMPL = new Code(Opcodes.DCMPL, JType.Prim.I)
-    val DCMPG = new Code(Opcodes.DCMPG, JType.Prim.I)
-    val LADD = new Code(Opcodes.LADD, JType.Prim.J)
-    val LSUB = new Code(Opcodes.LSUB, JType.Prim.J)
-    val LMUL = new Code(Opcodes.LMUL, JType.Prim.J)
-    val LDIV = new Code(Opcodes.LDIV, JType.Prim.J)
-    val LREM = new Code(Opcodes.LREM, JType.Prim.J)
-    val LSHL = new Code(Opcodes.LSHL, JType.Prim.J)
-    val LSHR = new Code(Opcodes.LSHR, JType.Prim.J)
-    val LUSHR = new Code(Opcodes.LUSHR, JType.Prim.J)
-    val LAND = new Code(Opcodes.LAND, JType.Prim.J)
-    val LOR = new Code(Opcodes.LOR, JType.Prim.J)
-    val LXOR = new Code(Opcodes.LXOR, JType.Prim.J)
-    val DADD = new Code(Opcodes.DADD, JType.Prim.D)
-    val DSUB = new Code(Opcodes.DSUB, JType.Prim.D)
-    val DMUL = new Code(Opcodes.DMUL, JType.Prim.D)
-    val DDIV = new Code(Opcodes.DDIV, JType.Prim.D)
-    val DREM = new Code(Opcodes.DREM, JType.Prim.D)
+  object BinOp extends Codes[BinOp]{
+    val IADD = code(Opcodes.IADD, JType.Prim.I)
+    val ISUB = code(Opcodes.ISUB, JType.Prim.I)
+    val IMUL = code(Opcodes.IMUL, JType.Prim.I)
+    val IDIV = code(Opcodes.IDIV, JType.Prim.I)
+    val IREM = code(Opcodes.IREM, JType.Prim.I)
+    val ISHL = code(Opcodes.ISHL, JType.Prim.I)
+    val ISHR = code(Opcodes.ISHR, JType.Prim.I)
+    val IUSHR = code(Opcodes.IUSHR, JType.Prim.I)
+    val IAND = code(Opcodes.IAND, JType.Prim.I)
+    val IOR = code(Opcodes.IOR, JType.Prim.I)
+    val IXOR = code(Opcodes.IXOR, JType.Prim.I)
+    val FADD = code(Opcodes.FADD, JType.Prim.F)
+    val FSUB = code(Opcodes.FSUB, JType.Prim.F)
+    val FMUL = code(Opcodes.FMUL, JType.Prim.F)
+    val FDIV = code(Opcodes.FDIV, JType.Prim.F)
+    val FREM = code(Opcodes.FREM, JType.Prim.F)
+    val LCMP = code(Opcodes.LCMP, JType.Prim.I)
+    val FCMPL = code(Opcodes.FCMPL, JType.Prim.I)
+    val FCMPG = code(Opcodes.FCMPG, JType.Prim.I)
+    val DCMPL = code(Opcodes.DCMPL, JType.Prim.I)
+    val DCMPG = code(Opcodes.DCMPG, JType.Prim.I)
+    val LADD = code(Opcodes.LADD, JType.Prim.J)
+    val LSUB = code(Opcodes.LSUB, JType.Prim.J)
+    val LMUL = code(Opcodes.LMUL, JType.Prim.J)
+    val LDIV = code(Opcodes.LDIV, JType.Prim.J)
+    val LREM = code(Opcodes.LREM, JType.Prim.J)
+    val LSHL = code(Opcodes.LSHL, JType.Prim.J)
+    val LSHR = code(Opcodes.LSHR, JType.Prim.J)
+    val LUSHR = code(Opcodes.LUSHR, JType.Prim.J)
+    val LAND = code(Opcodes.LAND, JType.Prim.J)
+    val LOR = code(Opcodes.LOR, JType.Prim.J)
+    val LXOR = code(Opcodes.LXOR, JType.Prim.J)
+    val DADD = code(Opcodes.DADD, JType.Prim.D)
+    val DSUB = code(Opcodes.DSUB, JType.Prim.D)
+    val DMUL = code(Opcodes.DMUL, JType.Prim.D)
+    val DDIV = code(Opcodes.DDIV, JType.Prim.D)
+    val DREM = code(Opcodes.DREM, JType.Prim.D)
   }
   class UnaOp(var a: Val, var opcode: UnaOp.Code) extends Val(opcode.tpe){
     def upstream = Seq(a)
@@ -256,26 +263,26 @@ object SSA{
     }
     override def toString = s"${super.toString()}($opcode)"
   }
-  object UnaOp extends Codes{
-    val INEG = new Code(Opcodes.INEG, JType.Prim.I)
-    val L2I = new Code(Opcodes.L2I, JType.Prim.I)
-    val F2I = new Code(Opcodes.F2I, JType.Prim.I)
-    val D2I = new Code(Opcodes.D2I, JType.Prim.I)
-    val I2B = new Code(Opcodes.I2B, JType.Prim.B)
-    val I2C = new Code(Opcodes.I2C, JType.Prim.C)
-    val I2S = new Code(Opcodes.I2S, JType.Prim.S)
-    val FNEG = new Code(Opcodes.FNEG, JType.Prim.F)
-    val I2F = new Code(Opcodes.I2F, JType.Prim.F)
-    val L2F = new Code(Opcodes.L2F, JType.Prim.F)
-    val D2F = new Code(Opcodes.D2F, JType.Prim.F)
-    val LNEG = new Code(Opcodes.LNEG, JType.Prim.J)
-    val I2L = new Code(Opcodes.I2L, JType.Prim.J)
-    val F2L = new Code(Opcodes.F2L, JType.Prim.J)
-    val D2L = new Code(Opcodes.D2L, JType.Prim.J)
-    val DNEG = new Code(Opcodes.DNEG, JType.Prim.D)
-    val I2D = new Code(Opcodes.I2D, JType.Prim.D)
-    val L2D = new Code(Opcodes.L2D, JType.Prim.D)
-    val F2D = new Code(Opcodes.F2D, JType.Prim.D)
+  object UnaOp extends Codes[UnaOp]{
+    val INEG = code(Opcodes.INEG, JType.Prim.I)
+    val L2I = code(Opcodes.L2I, JType.Prim.I)
+    val F2I = code(Opcodes.F2I, JType.Prim.I)
+    val D2I = code(Opcodes.D2I, JType.Prim.I)
+    val I2B = code(Opcodes.I2B, JType.Prim.B)
+    val I2C = code(Opcodes.I2C, JType.Prim.C)
+    val I2S = code(Opcodes.I2S, JType.Prim.S)
+    val FNEG = code(Opcodes.FNEG, JType.Prim.F)
+    val I2F = code(Opcodes.I2F, JType.Prim.F)
+    val L2F = code(Opcodes.L2F, JType.Prim.F)
+    val D2F = code(Opcodes.D2F, JType.Prim.F)
+    val LNEG = code(Opcodes.LNEG, JType.Prim.J)
+    val I2L = code(Opcodes.I2L, JType.Prim.J)
+    val F2L = code(Opcodes.F2L, JType.Prim.J)
+    val D2L = code(Opcodes.D2L, JType.Prim.J)
+    val DNEG = code(Opcodes.DNEG, JType.Prim.D)
+    val I2D = code(Opcodes.I2D, JType.Prim.D)
+    val L2D = code(Opcodes.L2D, JType.Prim.D)
+    val F2D = code(Opcodes.F2D, JType.Prim.D)
   }
 
   class UnaBranch(var state: State,
@@ -294,15 +301,15 @@ object SSA{
     def downstreamSize = 2
     override def toString = s"${super.toString()}($opcode)"
   }
-  object UnaBranch  extends Codes{
-    val IFEQ = new Code(Opcodes.IFEQ)
-    val IFNE = new Code(Opcodes.IFNE)
-    val IFLT = new Code(Opcodes.IFLT)
-    val IFGE = new Code(Opcodes.IFGE)
-    val IFGT = new Code(Opcodes.IFGT)
-    val IFLE = new Code(Opcodes.IFLE)
-    val IFNULL = new Code(Opcodes.IFNULL)
-    val IFNONNULL = new Code(Opcodes.IFNONNULL)
+  object UnaBranch  extends Codes[UnaBranch]{
+    val IFEQ = code(Opcodes.IFEQ)
+    val IFNE = code(Opcodes.IFNE)
+    val IFLT = code(Opcodes.IFLT)
+    val IFGE = code(Opcodes.IFGE)
+    val IFGT = code(Opcodes.IFGT)
+    val IFLE = code(Opcodes.IFLE)
+    val IFNULL = code(Opcodes.IFNULL)
+    val IFNONNULL = code(Opcodes.IFNONNULL)
   }
   class BinBranch(var state: State,
                   var block: Block,
@@ -323,15 +330,15 @@ object SSA{
     override def toString = s"${super.toString()}($opcode)"
   }
 
-  object BinBranch  extends Codes{
-    val IF_ICMPEQ = new Code(Opcodes.IF_ICMPEQ)
-    val IF_ICMPNE = new Code(Opcodes.IF_ICMPNE)
-    val IF_ICMPLT = new Code(Opcodes.IF_ICMPLT)
-    val IF_ICMPGE = new Code(Opcodes.IF_ICMPGE)
-    val IF_ICMPGT = new Code(Opcodes.IF_ICMPGT)
-    val IF_ICMPLE = new Code(Opcodes.IF_ICMPLE)
-    val IF_ACMPEQ = new Code(Opcodes.IF_ACMPEQ)
-    val IF_ACMPNE = new Code(Opcodes.IF_ACMPNE)
+  object BinBranch  extends Codes[BinBranch]{
+    val IF_ICMPEQ = code(Opcodes.IF_ICMPEQ)
+    val IF_ICMPNE = code(Opcodes.IF_ICMPNE)
+    val IF_ICMPLT = code(Opcodes.IF_ICMPLT)
+    val IF_ICMPGE = code(Opcodes.IF_ICMPGE)
+    val IF_ICMPGT = code(Opcodes.IF_ICMPGT)
+    val IF_ICMPLE = code(Opcodes.IF_ICMPLE)
+    val IF_ACMPEQ = code(Opcodes.IF_ACMPEQ)
+    val IF_ACMPNE = code(Opcodes.IF_ACMPNE)
   }
   class ReturnVal(var state: State, var block: Block, var src: Val) extends Jump() with Stateful{
     def upstream = Seq(state, block, src)
