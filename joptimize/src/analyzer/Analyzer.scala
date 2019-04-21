@@ -1,31 +1,70 @@
 package joptimize.analyzer
-
+import collection.JavaConverters._
 import joptimize.algorithms.{Dominator, MultiBiMap, Scheduler}
-import joptimize.frontend.Frontend
+import joptimize.frontend.{ClassManager, Frontend}
 import joptimize.{Logger, Util}
 import joptimize.graph.HavlakLoopTree
 import joptimize.model._
 import joptimize.optimize._
+import org.objectweb.asm.Opcodes
 
 import scala.collection.mutable
 
 class Analyzer(entrypoints: Seq[MethodSig],
-               merge: Seq[IType] => IType,
+               classManager: ClassManager,
                log: Logger.Global,
                frontend: Frontend){
   val visitedMethods = mutable.LinkedHashMap.empty[(MethodSig, Seq[IType]), Analyzer.Result]
   val visitedResolved = mutable.LinkedHashMap.empty[(MethodSig, Seq[IType]), Analyzer.Properties]
   val visitedClasses = mutable.LinkedHashSet.empty[JType.Cls]
-
-  val callerGraph = new MultiBiMap.Mutable[(MethodSig, Seq[IType]), (MethodSig, Seq[IType])]()
+  val invalidated = mutable.LinkedHashMap.empty[JType.Cls, Seq[MethodSig]]
+  val callerGraph = new MultiBiMap.Mutable[(MethodSig, Seq[IType], Boolean), (MethodSig, Seq[IType])]()
   def apply() = {
     for (ep <- entrypoints) computeMethodSig(ep, ep.desc.args, Nil)
+
+//    while(invalidated.nonEmpty){
+//      val (current, currentSigs) = invalidated.head
+//      invalidated.remove(current)
+//      for {
+//        ((relatedSig, relatedArgs), relatedProps) <- visitedMethods.toArray
+//        currentSig <- currentSigs
+//        if relatedSig == currentSig
+//      }{
+//        val resolvedSigs = frontend.resolvePossibleSigs(relatedSig, relatedArgs).get
+//        for(resolvedSig <- resolvedSigs){
+//
+//        }
+//      }
+//      for {
+//        ((relatedSig, relatedArgs), relatedProps) <- visitedMethods.toArray
+//        currentSig <- currentSigs
+//        if relatedSig == currentSig
+//      }{
+//        visitedMethods.remove((relatedSig, relatedArgs))
+//        walkMethod(
+//          relatedSig,
+//          (if (relatedSig.static) Nil else Seq(relatedSig.cls)) ++ relatedArgs,
+//          Nil,
+//          log.inferredMethod(relatedSig, relatedArgs)
+//        )
+//      }
+//    }
     for(((sig, inferred), v) <- visitedMethods if !visitedResolved.contains((sig, inferred))){
       computeMethodSig(sig, (if (!sig.static) Seq(sig.cls) else Nil) ++ inferred, Nil)
     }
-    (visitedMethods, visitedResolved, visitedClasses)
+    Analyzer.GlobalResult(visitedMethods, visitedResolved, visitedClasses)
   }
+  def onNew(cls: JType.Cls) = {
+    for(upperClassNode <- classManager.loadClass(cls)){
+      invalidated.put(
+        cls,
+        upperClassNode.methods.asScala.map(mn =>
+          MethodSig(cls, mn.name, Desc.read(mn.desc), (mn.access & Opcodes.ACC_STATIC) != 0)
+        )
+      )
+    }
 
+  }
 
   def computeMethodSig(sig: MethodSig,
                        inferredArgs: Seq[IType],
@@ -34,34 +73,38 @@ class Analyzer(entrypoints: Seq[MethodSig],
     visitedClasses.add(sig.cls)
     visitedResolved.getOrElseUpdate(
       (sig, inferredArgs.drop(if (sig.static) 0 else 1)),
-      if(frontend.loadClass(sig.cls).isEmpty) dummyResult(sig, optimistic = false).props
-      else {
-        val resolved = frontend.resolvePossibleSigs(sig, inferredArgs)
-        resolved match {
-          case None => dummyResult(sig, optimistic = false).props
-          case Some(subSigs) =>
-            val rets = for (subSig <- subSigs) yield {
-              if (frontend.loadMethod(subSig).isEmpty) dummyResult(sig, optimistic = false)
-              else walkMethod(
-                subSig,
-                inferredArgs,
-                callStack,
-                log.inferredMethod(sig, inferredArgs.drop(if (sig.static) 0 else 1))
-              )
-            }
-
-            val (retTypes, retPurity, retLiveArgs) = rets
-              .map(p => (p.props.inferredReturn, p.props.pure, p.props.liveArgs))
-              .unzip3
-
-            Analyzer.Properties(
-              merge(retTypes),
-              retPurity.forall(identity),
-              retLiveArgs.iterator.flatten.toSet
-            )
-        }
-      }
+      computeMethodSig0(sig, inferredArgs, callStack)
     )
+  }
+
+  def computeMethodSig0(sig: MethodSig, inferredArgs: Seq[IType], callStack: List[(MethodSig, Seq[IType])]) = {
+    if (classManager.loadClass(sig.cls).isEmpty) dummyResult(sig, optimistic = false).props
+    else {
+      val resolved = classManager.resolvePossibleSigs(sig, inferredArgs)
+      resolved match {
+        case None => dummyResult(sig, optimistic = false).props
+        case Some(subSigs) =>
+          val rets = for (subSig <- subSigs) yield {
+            if (classManager.loadMethod(subSig).isEmpty) dummyResult(sig, optimistic = false)
+            else walkMethod(
+              subSig,
+              inferredArgs,
+              callStack,
+              log.inferredMethod(sig, inferredArgs.drop(if (sig.static) 0 else 1))
+            )
+          }
+
+          val (retTypes, retPurity, retLiveArgs) = rets
+            .map(p => (p.props.inferredReturn, p.props.pure, p.props.liveArgs))
+            .unzip3
+
+          Analyzer.Properties(
+            classManager.merge(retTypes),
+            retPurity.forall(identity),
+            retLiveArgs.iterator.flatten.toSet
+          )
+      }
+    }
   }
 
   def computeMethodSigFor(sig: MethodSig,
@@ -103,7 +146,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
     visitedMethods.getOrElseUpdate(
       (originalSig, inferredArgs.drop(if (originalSig.static) 0 else 1)),
       // Unknown or external methods are treated pessimistically
-      if (frontend.loadMethod(originalSig).isEmpty) dummyResult(originalSig, optimistic = false)
+      if (classManager.loadMethod(originalSig).isEmpty) dummyResult(originalSig, optimistic = false)
       // Recursive calls to the same method are treated optimistically
       else if (callStack.contains(originalSig -> inferredArgs)) dummyResult(originalSig, optimistic = true)
       else frontend.loadMethodBody(originalSig, log.method(originalSig)) match{
@@ -171,7 +214,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
           //      pprint.log(retTypes)
           val inferredReturn =
             if (retTypes.isEmpty) JType.Prim.V
-            else merge(retTypes)
+            else classManager.merge(retTypes)
 
           val inferredPurity = computePurity(optResult, innerStack)
 
@@ -191,12 +234,16 @@ class Analyzer(entrypoints: Seq[MethodSig],
           }
           val calledMethodSigs = optResult.inferred.keys.collect{
             case n: SSA.Invoke =>
-              (n.sig, n.srcs.map(optResult.inferred).drop(if(n.sig.static) 0 else 1))
+              (
+                n.sig,
+                n.srcs.map(optResult.inferred).drop(if(n.sig.static) 0 else 1),
+                n.isInstanceOf[SSA.InvokeSpecial]
+              )
           }
 
           for(cls <- Seq(originalSig.cls) ++ classes){
             val clinit = MethodSig(cls, "<clinit>", Desc(Nil, JType.Prim.V), true)
-            if (frontend.loadMethod(clinit).isDefined) computeMethodSig(
+            if (classManager.loadMethod(clinit).isDefined) computeMethodSig(
               clinit,
               Nil,
               (originalSig -> inferredArgs) :: callStack
@@ -244,7 +291,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
       Map.empty,
       methodBody.getAllVertices().collect { case b: SSA.Block if b.upstream.isEmpty => b }.head,
       new ITypeLattice(
-        (x, y) => merge(Seq(x, y)),
+        (x, y) => classManager.merge(Seq(x, y)),
         computeMethodSigFor(_, _, _, innerStack).inferredReturn,
         inferredArgs.flatMap { i => Seq.fill(i.getSize)(i) }
       ),
@@ -273,7 +320,8 @@ class Analyzer(entrypoints: Seq[MethodSig],
       evaluateSwitch = {
         case CType.I(v) => Some(v)
         case _ => None
-      }
+      },
+      onNew
     )
   }
 
@@ -325,11 +373,13 @@ class Analyzer(entrypoints: Seq[MethodSig],
     }
   }
 
-  def checkSubclass(cls1: JType.Cls, cls2: JType.Cls) = merge(Seq(cls1, cls2)) == cls2
+  def checkSubclass(cls1: JType.Cls, cls2: JType.Cls) = classManager.merge(Seq(cls1, cls2)) == cls2
 }
 
 object Analyzer {
-
+  case class GlobalResult(visitedMethods: collection.Map[(MethodSig, Seq[IType]), Analyzer.Result],
+                          visitedResolved: collection.Map[(MethodSig, Seq[IType]), Analyzer.Properties],
+                          visitedClasses: collection.Set[JType.Cls])
   case class Result(methodBody: MethodBody,
                     inferred: mutable.LinkedHashMap[SSA.Val, IType],
                     liveBlocks: Set[SSA.Block],

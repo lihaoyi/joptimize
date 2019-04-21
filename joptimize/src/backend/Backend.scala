@@ -3,6 +3,7 @@ package joptimize.backend
 import joptimize.{FileLogger, Logger, Util}
 import joptimize.algorithms.{Dominator, MultiBiMap, Scheduler}
 import joptimize.analyzer.{Analyzer, Namer, Renderer}
+import joptimize.frontend.ClassManager
 import joptimize.graph.HavlakLoopTree
 import joptimize.model._
 import joptimize.optimize.OptimisticSimplify
@@ -13,19 +14,16 @@ import collection.JavaConverters._
 import scala.collection.mutable
 
 object Backend {
-  def apply(visitedResolved: mutable.LinkedHashMap[(MethodSig, Seq[IType]), Analyzer.Properties],
+  def apply(analyzerRes: Analyzer.GlobalResult,
             entrypoints: scala.Seq[MethodSig],
-            loadMethodCache: Map[MethodSig, MethodNode],
-            loadClassCache: Map[JType.Cls, ClassNode],
-            visitedMethods: mutable.LinkedHashMap[(MethodSig, Seq[IType]), Analyzer.Result],
+            classManager: ClassManager.ReadOnly,
             eliminateOldMethods: Boolean,
-            visitedClasses: mutable.LinkedHashSet[JType.Cls],
-            subtypeMap: MultiBiMap[JType.Cls, JType.Cls],
-            log: Logger.Global,
-            merge: Seq[IType] => IType) = {
+            log: Logger.Global) = {
 
+    val loadMethodCache = classManager.loadMethodCache.collect{case (k, Some(v)) => (k, v)}.toMap
+    val loadClassCache = classManager.loadClassCache.collect{case (k, Some(v)) => (k, v)}.toMap
     val highestMethodDefiners = for{
-      ((sig, inferredArgs), result) <- visitedMethods
+      ((sig, inferredArgs), result) <- analyzerRes.visitedMethods
       if loadMethodCache.contains(sig)
     } yield {
       var parentClasses = List.empty[JType.Cls]
@@ -46,7 +44,7 @@ object Backend {
       val highestCls = parentClasses
         .find{ cls =>
           val key = (sig.copy(cls = cls), inferredArgs)
-          val res = visitedMethods.contains(key)
+          val res = analyzerRes.visitedMethods.contains(key)
           res
         }
         .get
@@ -55,7 +53,7 @@ object Backend {
     }
 
     val newMethods = for{
-      ((sig, inferredArgs), result) <- visitedMethods.toList
+      ((sig, inferredArgs), result) <- analyzerRes.visitedMethods.toList
       if loadMethodCache.contains(sig)
     } yield {
       val liveArgs =
@@ -65,7 +63,7 @@ object Backend {
             if (sig.static) sig
             else sig.copy(cls = highestMethodDefiners((sig, inferredArgs)))
 
-          visitedResolved((highestSig, inferredArgs)).liveArgs
+          analyzerRes.visitedResolved((highestSig, inferredArgs)).liveArgs
         }
       log.pprint(sig)
 
@@ -103,7 +101,7 @@ object Backend {
                   highestMethodDefiners((originalSig, inferredArgs.drop(if (originalSig.static) 0 else 1)))
                 )
               }
-            visitedResolved(highestSig, inferredArgs.drop(if (originalSig.static) 0 else 1))
+            analyzerRes.visitedResolved(highestSig, inferredArgs.drop(if (originalSig.static) 0 else 1))
           },
           argMapping
         )
@@ -123,7 +121,7 @@ object Backend {
     val visitedInterfaces = Util.findSeenInterfaces(loadClassCache, newMethods.map(_._1))
 
     val grouped =
-      (visitedInterfaces ++ visitedClasses.map(_.name)).filter(s => loadClassCache.contains(JType.Cls(s))).map(loadClassCache(_) -> Nil).toMap ++
+      (visitedInterfaces ++ analyzerRes.visitedClasses.map(_.name)).filter(s => loadClassCache.contains(JType.Cls(s))).map(loadClassCache(_) -> Nil).toMap ++
         newMethods.groupBy(_._1).mapValues(_.map(_._2))
 
     for((cn, mns) <- grouped) yield {
@@ -147,7 +145,7 @@ object Backend {
     val outClasses = BytecodeDCE.apply(
       entrypoints,
       grouped.keys.toSeq,
-      findSubtypes = subtypeMap.lookupKeyOpt(_).getOrElse(Nil),
+      findSubtypes = classManager.subtypeMap.lookupKeyOpt(_).getOrElse(Nil),
       findSupertypes = findSupertypes,
       ignore = ignore
     )

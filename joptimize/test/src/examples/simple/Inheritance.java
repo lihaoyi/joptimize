@@ -95,13 +95,29 @@ public class Inheritance {
         return s.toString();
     }
 
-    @joptimize.Test(inputs = {1, 2, 4, 8})
-    public static String implementLate(int n) {
-        Car car = new Honda();
-        String first = car.vStart();
-        car = new Toyota();
-        String second = car.vStart();
-        return "[".concat(first).concat("][").concat(second).concat("]");
+    @joptimize.Test(
+            inputs = {1, 2, 4, 8}
+//            addedNumConst = {123, 456}
+    )
+    public static int implementLate(int n) {
+        Foo foo = new Bar();
+        int first = foo.call();
+        foo = new Qux();
+        int second = foo.call();
+        return first + second;
+    }
+    static abstract class Foo{
+        abstract int call();
+    }
+    static class Bar extends Foo{
+        int call(){
+            return 1;
+        }
+    }
+    static class Qux extends Foo{
+        int call(){
+            return 2;
+        }
     }
 }
 

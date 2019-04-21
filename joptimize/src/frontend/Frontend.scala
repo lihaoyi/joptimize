@@ -8,39 +8,12 @@ import joptimize.model.{IType, JType, MethodBody, MethodSig, SSA}
 import org.objectweb.asm.tree.{ClassNode, MethodNode}
 import org.objectweb.asm.util.{Textifier, TraceMethodVisitor}
 
-class Frontend(val loadMethod: MethodSig => Option[MethodNode],
-               val loadClass: JType.Cls => Option[ClassNode],
-               subtypeMap: MultiBiMap[JType.Cls, JType.Cls]) {
-
-  def resolvePossibleSigs(sig: MethodSig, inferredArgs: Seq[IType]): Option[Seq[MethodSig]] = {
-    if (sig.static) {
-      def rec(currentCls: JType.Cls): Option[MethodSig] = {
-        val currentSig = sig.copy(cls = currentCls)
-        if (loadMethod(currentSig).nonEmpty) Some(currentSig)
-        else loadClass(currentCls) match {
-          case None => None
-          case Some(cls) => rec(JType.Cls(cls.superName))
-        }
-      }
-
-      if (sig.name == "<clinit>") Some(Seq(sig))
-      else rec(sig.cls).map(s => Seq(s))
-    }else{
-//      pprint.log(subtypeMap.items().toMap)
-      val subTypes = subtypeMap
-        .lookupKeyOpt(sig.cls)
-        .getOrElse(Nil)
-        .map(c => sig.copy(cls = c))
-        .toList
-
-      Some(sig :: subTypes)
-    }
-  }
+class Frontend(val classManager: ClassManager) {
 
   def loadMethodBody(originalSig: MethodSig, log: Logger.Method): Option[MethodBody] = {
     val printer = new Textifier
     val methodPrinter = new TraceMethodVisitor(printer)
-    val mn = loadMethod(originalSig).getOrElse(throw new Exception("Unknown Sig: " + originalSig))
+    val mn = classManager.loadMethod(originalSig).getOrElse(throw new Exception("Unknown Sig: " + originalSig))
     if(mn.instructions.size() == 0) None
     else {
       log.println("================ BYTECODE ================")

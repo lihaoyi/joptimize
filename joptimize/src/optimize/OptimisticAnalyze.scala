@@ -39,7 +39,8 @@ object OptimisticAnalyze {
                log: Logger.InferredMethod,
                evaluateUnaBranch: (T, SSA.UnaBranch.Code) => Option[Boolean],
                evaluateBinBranch: (T, T, SSA.BinBranch.Code) => Option[Boolean],
-               evaluateSwitch: T => Option[Int]): Result[T] = {
+               evaluateSwitch: T => Option[Int],
+               onNew: JType.Cls => Unit): Result[T] = {
 
     val inferredBlocks = mutable.Set(initialBlock)
 
@@ -52,6 +53,9 @@ object OptimisticAnalyze {
         v,
         v match {
           case phi: SSA.Phi => evaluated(phi)
+          case n: SSA.New =>
+            onNew(n.cls)
+            lattice.transferValue(v, evaluate)
           case _ => lattice.transferValue(v, evaluate)
         }
       )
