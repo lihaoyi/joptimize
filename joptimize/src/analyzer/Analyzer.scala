@@ -81,13 +81,29 @@ class Analyzer(entrypoints: Seq[MethodSig],
             optimisticResult.liveBlocks,
             props
           )
+          val classes = Seq(originalSig.cls) ++ optimisticResult.inferred.keys.collect {
+            case n: SSA.GetField => n.owner
+            case n: SSA.PutField => n.owner
+            case n: SSA.GetStatic => n.cls
+            case n: SSA.PutStatic => n.cls
+          }
+          classes.foreach(visitedClasses.add)
+
+          val clinits = for {
+            cls <- classes
+            val clinit = MethodSig(cls, "<clinit>", Desc(Nil, JType.Prim.V), true)
+            if classManager.loadMethod(clinit).isDefined
+            if !analyses.contains((clinit, Nil))
+          } yield {
+            ((clinit, Nil, (_: Analyzer.Properties) => ()) :: currentStack, currentStack.length)
+          }
 
 
           inferredLog.pprint(optimisticResult.inferred)
           inferredLog.pprint(optimisticResult.liveBlocks)
           returnCallback(props)
-          if (currentStack.tail.length > currentStackStartDepth) Seq(currentStack.tail -> currentStackStartDepth)
-          else Nil
+          if (currentStack.tail.length > currentStackStartDepth) clinits ++ Seq(currentStack.tail -> currentStackStartDepth)
+          else clinits ++ Nil
 
         case OptimisticAnalyze.Step.ComputeSig(calledSig, invoke, calledInferred, callback) =>
           if (currentStack.exists(t => t._1 == calledSig && t._2 == calledInferred)) {
@@ -173,6 +189,8 @@ class Analyzer(entrypoints: Seq[MethodSig],
     for(((sig, inferred), v) <- visitedMethods if !visitedResolved.contains((sig, inferred))){
       visitedResolved((sig, inferred)) = v.props
     }
+
+
     Analyzer.GlobalResult(visitedMethods, visitedResolved, visitedClasses)
 
   }

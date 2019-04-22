@@ -113,8 +113,8 @@ object MainTests extends TestSuite{
         'shadowedInheritedGet - annotatedTest
         'shadowedInheritedSet - annotatedTest
         'superMethod - annotatedTest
-//        'staticInheritance - annotatedTest
-//        'staticInheritanceMethod - annotatedTest
+        'staticInheritance - annotatedTest
+        'staticInheritanceMethod - annotatedTest
 //        'writeMatrixTest - annotatedTest
 //        'implementLate - annotatedTest
       }
