@@ -665,7 +665,6 @@ object SSA{
   class PutArray(var state: State, var array: Val, var indexSrc: Val, var src: Val)
     extends Val(JType.Prim.V) with Stateful{
     def upstream = Seq(state, array, indexSrc, src)
-    override def upstreamVals = Seq(array, indexSrc, src)
     def replaceUpstream(swap: Swapper): Unit = {
       state = swap(state)
       array = swap(array)
@@ -676,7 +675,6 @@ object SSA{
   class GetArray(var state: State, var array: Val, var indexSrc: Val, var tpe: JType)
     extends Val(tpe) with Stateful{
     def upstream = Seq(state, array, indexSrc)
-    override def upstreamVals = Seq(array, indexSrc)
     def replaceUpstream(swap: Swapper): Unit = {
       state = swap(state)
       array = swap(array)

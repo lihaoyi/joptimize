@@ -1,6 +1,7 @@
 package joptimize.optimize
 
 import joptimize.analyzer.Namer
+import joptimize.graph.TarjansStronglyConnectedComponents
 import joptimize.model._
 import joptimize.{FileLogger, Logger, Util}
 
@@ -48,18 +49,6 @@ object OptimisticAnalyze {
 
     val evaluated = mutable.LinkedHashMap.empty[SSA.Val, T]
 
-    def evaluate(v: SSA.Val): T = {
-      evaluated.getOrElseUpdate(
-        v,
-        v match {
-          case phi: SSA.Phi => evaluated(phi)
-          case n: SSA.New =>
-            onNew(n.cls)
-            lattice.transferValue(v, evaluate)
-          case _ => lattice.transferValue(v, evaluate)
-        }
-      )
-    }
 
     val inferredReturns = mutable.Buffer.empty[T]
     while(workList.nonEmpty){
@@ -67,35 +56,38 @@ object OptimisticAnalyze {
       val currentBlock = workList.head
       inferredBlocks.add(currentBlock)
       workList.remove(currentBlock)
-//      log.pprint(currentBlock)
+      log.pprint(currentBlock)
       val Seq(nextControl) = currentBlock.downstreamList.collect{case n: SSA.Control => n}
-//      log.pprint(nextControl)
-//      log.pprint(inferredBlocks)
-//      log.pprint(workList)
 
       def queueNextBlock(nextBlock: SSA.Block) = {
-//        log.pprint(nextBlock)
+        log.pprint(nextBlock)
         val nextPhis = nextBlock
           .downstreamList
           .collect{case p: SSA.Phi => p}
           .filter(phi => phi.block == nextBlock)
 
-        val newPhiMapping = nextPhis
+        val newPhiExpressions = nextPhis
           .map{phi =>
             val Seq(expr) = phi
               .incoming
               .collect{case (k, v) if k == currentBlock => v}
               .toSeq
-            val res = evaluate(expr)
-            (phi, res)
+
+            (phi, expr)
           }
-          .toMap
+
+        topoSort(newPhiExpressions.map(_._2).toSet.filter(!_.isInstanceOf[SSA.Phi])).foreach{  v =>
+          evaluated(v) = lattice.transferValue(v, evaluated)
+        }
+
+        val newPhiValues = newPhiExpressions
+          .map{case (phi, expr) => phi -> evaluated(expr)}
 
         var continueNextBlock = !inferredBlocks(nextBlock)
 
         val invalidatedPhis = mutable.Set.empty[SSA.Phi]
 
-        for((k, v) <- newPhiMapping) {
+        for((k, v) <- newPhiValues) {
           evaluated.get(k) match{
             case None =>
               continueNextBlock = true
@@ -133,8 +125,11 @@ object OptimisticAnalyze {
 
       }
 
+      val sorted = topoSort(nextControl.upstreamVals.toSet.filter(!_.isInstanceOf[SSA.Phi]))
+      sorted.foreach{  v =>
+        evaluated(v) = lattice.transferValue(v, evaluated)
+      }
 
-      nextControl.upstream.collect{case v: SSA.Val => evaluate(v)}
       nextControl match{
         case nextBlock: SSA.Block => queueNextBlock(nextBlock)
 
@@ -146,7 +141,7 @@ object OptimisticAnalyze {
               inferredReturns.append(evaluated(r.src))
               inferredReturns.append(evaluated(r.state))
             case n: SSA.UnaBranch =>
-              val valueA = evaluate(n.a)
+              val valueA = evaluated(n.a)
               val doBranch = evaluateUnaBranch(valueA, n.opcode)
 
               doBranch match{
@@ -159,8 +154,8 @@ object OptimisticAnalyze {
                   else queueNextBlock(n.downstreamList.collect{ case t: SSA.False => t}.head)
               }
             case n: SSA.BinBranch =>
-              val valueA = evaluate(n.a)
-              val valueB = evaluate(n.b)
+              val valueA = evaluated(n.a)
+              val valueB = evaluated(n.b)
               val doBranch = evaluateBinBranch(valueA, valueB, n.opcode)
               doBranch match{
                 case None =>
@@ -172,7 +167,7 @@ object OptimisticAnalyze {
                   else queueNextBlock(n.downstreamList.collect{ case t: SSA.False => t}.head)
               }
             case n: SSA.TableSwitch =>
-              val value = evaluate(n.src)
+              val value = evaluated(n.src)
               val cases = n.cases.values
               val default = n.default
               val doBranch = value match{
@@ -189,7 +184,7 @@ object OptimisticAnalyze {
               }
             case n: SSA.LookupSwitch =>
 
-              val value = evaluate(n.src)
+              val value = evaluated(n.src)
               val cases = n.cases.values
               val default = n.default
               val doBranch = evaluateSwitch(value)
@@ -212,5 +207,19 @@ object OptimisticAnalyze {
       evaluated,
       inferredBlocks.toSet
     )
+  }
+
+  def topoSort[T](set: Set[SSA.Val]) = {
+    val agg = Util.breadthFirstSeen(set)(
+      v => v.upstreamVals.filter(!_.isInstanceOf[SSA.Phi])
+    )
+
+    val aggArray = agg.toArray
+    val aggIndices = aggArray.zipWithIndex.toMap
+    val edges = aggArray.map(_.upstreamVals.collect(aggIndices))
+
+    val topoSorted = TarjansStronglyConnectedComponents(edges)
+    val res = topoSorted.map { case Seq(x) => aggArray(x) }
+    res
   }
 }
