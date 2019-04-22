@@ -3,17 +3,11 @@ package joptimize.optimize
 import joptimize.analyzer.Namer
 import joptimize.graph.TarjansStronglyConnectedComponents
 import joptimize.model._
-import joptimize.optimize.OptimisticAnalyze.{Result, topoSort}
+import joptimize.optimize.OptimisticAnalyze.{Result, State, Step, topoSort}
 import joptimize.{FileLogger, Logger, Util}
 
 import scala.collection.mutable
-sealed trait State
-object State{
-  case class HandleBlock() extends State
-  case class HandleVal() extends State
-  case class HandleControl() extends State
-  case class HandleControlVals() extends State
-}
+
 class OptimisticAnalyze[T](methodBody: MethodBody,
                            initialValues: Map[SSA.Val, T],
                            initialBlock: SSA.Block,
@@ -128,22 +122,43 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
     }
   }
 
-  def evaluateVals(onFinish: => Unit) = {
+  def evaluateVals(onFinish: => Unit): Step[T] = {
     valWorkList.headOption match{
       case Some(v) =>
         valWorkList.remove(v)
-        evaluated(v) = lattice.transferValue(v, evaluated)
-        true
+        v match{
+          case n: SSA.InvokeStatic =>
+            Step.ComputeSig[T] { computeMethodSig =>
+              evaluated(v) = computeMethodSig(n.sig, false, n.srcs.map(evaluated))
+            }
+
+          case n: SSA.InvokeSpecial =>
+            Step.ComputeSig[T] { computeMethodSig =>
+              evaluated(v) = computeMethodSig(n.sig, true, n.srcs.map(evaluated))
+            }
+
+          case n: SSA.InvokeVirtual =>
+            Step.ComputeSig[T] { computeMethodSig =>
+              evaluated(v) = computeMethodSig(n.sig, false, n.srcs.map(evaluated))
+            }
+          case n: SSA.InvokeInterface =>
+            Step.ComputeSig[T] { computeMethodSig =>
+              evaluated(v) = computeMethodSig(n.sig, false, n.srcs.map(evaluated))
+            }
+          case _ =>
+            evaluated(v) = lattice.transferValue(v, evaluated)
+            Step.Continue()
+        }
       case None =>
         onFinish
-        true
+        Step.Continue()
     }
   }
 
-  def step(): Boolean = state match{
+  def step(): OptimisticAnalyze.Step[T] = state match{
     case State.HandleBlock() =>
       blockWorkList.headOption match{
-        case None => false
+        case None => Step.Done()
         case Some(currentBlock0) =>
           currentBlock = currentBlock0
           inferredBlocks.add(currentBlock)
@@ -153,7 +168,7 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
           nextControl = nextControl0
           topoSort(nextControl.upstreamVals.toSet.filter(!_.isInstanceOf[SSA.Phi])).foreach(valWorkList.add)
           state = State.HandleVal()
-          true
+          Step.Continue()
       }
     case State.HandleVal() =>
       evaluateVals{
@@ -208,7 +223,7 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
       }
 
       state = State.HandleControlVals()
-      true
+      Step.Continue()
 
     case State.HandleControlVals() =>
       evaluateVals{
@@ -241,8 +256,6 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
     * When the worklist is empty, inference is complete and the algorithm exits
     */
   def apply(): Result[T] = {
-    while(step())()
-
     Result(
       inferredReturns,
       evaluated,
@@ -251,6 +264,19 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
   }
 }
 object OptimisticAnalyze {
+  sealed trait Step[T]
+  object Step{
+    case class Continue[T]() extends Step[T]
+    case class Done[T]() extends Step[T]
+    case class ComputeSig[T](f: ((MethodSig, Boolean, Seq[T]) => T) => Unit) extends Step[T]
+  }
+  sealed trait State
+  object State{
+    case class HandleBlock() extends State
+    case class HandleVal() extends State
+    case class HandleControl() extends State
+    case class HandleControlVals() extends State
+  }
   case class Result[T](inferredReturns: Seq[T],
                        inferred: mutable.LinkedHashMap[SSA.Val, T],
                        liveBlocks: Set[SSA.Block])

@@ -238,7 +238,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
   }
 
   def optimisticAnalyze(inferredArgs: Seq[IType], log: Logger.InferredMethod, methodBody: MethodBody, innerStack: List[(MethodSig, Seq[IType])]) = {
-    new OptimisticAnalyze[IType](
+    val opt = new OptimisticAnalyze[IType](
       methodBody,
       Map.empty,
       methodBody.getAllVertices().collect { case b: SSA.Block if b.upstream.isEmpty => b }.head,
@@ -271,8 +271,20 @@ class Analyzer(entrypoints: Seq[MethodSig],
       evaluateSwitch = {
         case CType.I(v) => Some(v)
         case _ => None
+      },
+    )
+
+    while({
+      opt.step() match{
+        case OptimisticAnalyze.Step.Continue() => true
+        case OptimisticAnalyze.Step.Done() => false
+        case OptimisticAnalyze.Step.ComputeSig(f) =>
+          f(computeMethodSigFor(_, _, _, innerStack).inferredReturn)
+          true
+
       }
-    ).apply()
+    })()
+    opt.apply()
   }
 
   def computePurity(optResult: OptimisticAnalyze.Result[IType],
