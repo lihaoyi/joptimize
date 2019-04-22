@@ -18,16 +18,8 @@ class Frontend(val classManager: ClassManager) {
   def loadMethodBody(originalSig: MethodSig, log: Logger.Method): Option[MethodBody] = {
     cachedMethodBodies.getOrElseUpdate(
       originalSig,
-      loadMethodBody0(originalSig, log)/*.map{body =>
-        val boas = new ByteArrayOutputStream()
-        val oos = new ObjectOutputStream(boas)
-        oos.writeObject(body)
-        boas.toByteArray
-      }*/
-    )/*.map{bytes =>
-      val oin = new ObjectInputStream(new ByteArrayInputStream(bytes))
-      oin.readObject().asInstanceOf[MethodBody]
-    }*/
+      loadMethodBody0(originalSig, log)
+    )
   }
 
   def loadMethodBody0(originalSig: MethodSig, log: Logger.Method) = {
