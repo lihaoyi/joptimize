@@ -12,7 +12,7 @@ import scala.collection.mutable
 
 class Analyzer(entrypoints: Seq[MethodSig],
                classManager: ClassManager,
-               log: Logger.Global,
+               globalLog: Logger.Global,
                frontend: Frontend){
   val visitedMethods = mutable.LinkedHashMap.empty[(MethodSig, Seq[IType]), Analyzer.Result]
   val visitedResolved = mutable.LinkedHashMap.empty[(MethodSig, Seq[IType]), Analyzer.Properties]
@@ -28,16 +28,75 @@ class Analyzer(entrypoints: Seq[MethodSig],
     (MethodSig, Seq[IType], SSA.Invoke),
     (MethodSig, Seq[IType])
   ]()
+
   val analyses = mutable.LinkedHashMap.empty[(MethodSig, Seq[IType]), OptimisticAnalyze[IType]]
 
-  def apply() = {
-    for (ep <- entrypoints) computeMethodSig(ep, ep.desc.args, Nil)
+  val stacks = mutable.Buffer.empty[List[(MethodSig, Seq[IType], IType => Unit)]]
 
-    for(((sig, inferred), v) <- visitedMethods if !visitedResolved.contains((sig, inferred))){
-      computeMethodSig(sig, (if (!sig.static) Seq(sig.cls) else Nil) ++ inferred, Nil)
+  def apply() = {
+
+    for (ep <- entrypoints) {
+      stacks.append(List((ep, ep.desc.args, _ => ())))
     }
+
+    while(stacks.nonEmpty){
+      val currentStack = stacks(0)
+      pprint.log(currentStack)
+      val (originalSig, inferred, returnCallback) = currentStack.head
+      val methodLog = globalLog.method(originalSig)
+      val inferredLog = globalLog.inferredMethod(originalSig, inferred)
+      val methodBody = frontend.loadMethodBody(originalSig, methodLog).get
+      val currentAnalysis = analyses.getOrElseUpdate(
+        (originalSig, inferred),
+        optimisticAnalyze(inferred, inferredLog, methodBody, Nil)
+      )
+
+      val step = currentAnalysis.step()
+      pprint.log(step)
+      val newCurrent: List[(MethodSig, Seq[IType], IType => Unit)] = step match{
+        case OptimisticAnalyze.Step.Continue() => currentStack
+
+        case OptimisticAnalyze.Step.Done() =>
+          val optimisticResult = currentAnalysis.apply()
+          val inferredReturn = classManager.merge(currentAnalysis.apply().inferredReturns.filter(_ != JType.Prim.V))
+          val props = Analyzer.Properties(
+            inferredReturn,
+            true,
+            optimisticResult.inferred.collect { case (a: SSA.Arg, _) => a.index }.toSet
+          )
+
+          visitedMethods((originalSig, inferred)) = Analyzer.Result(
+            methodBody,
+            optimisticResult.inferred,
+            optimisticResult.liveBlocks,
+            props
+          )
+          visitedResolved((originalSig, inferred)) = props
+
+          inferredLog.pprint(optimisticResult.inferred)
+          inferredLog.pprint(optimisticResult.liveBlocks)
+          returnCallback(inferredReturn)
+          currentStack.tail
+
+        case OptimisticAnalyze.Step.ComputeSig(calledSig, invoke, calledInferred, callback) =>
+          val subLog = globalLog.inferredMethod(calledSig, calledInferred)
+
+          subLog.println("================ INITIAL ================")
+          subLog.graph(Renderer.dumpSvg(frontend.loadMethodBody(calledSig, globalLog.method(calledSig)).get))
+          (calledSig, calledInferred, callback) :: currentStack
+      }
+
+      if (newCurrent.isEmpty) stacks.remove(0)
+      else stacks(0) = newCurrent
+    }
+
+//    for(((sig, inferred), v) <- visitedMethods if !visitedResolved.contains((sig, inferred))){
+//      computeMethodSig(sig, (if (!sig.static) Seq(sig.cls) else Nil) ++ inferred, Nil)
+//    }
     Analyzer.GlobalResult(visitedMethods, visitedResolved, visitedClasses)
+
   }
+
   def onNew(cls: JType.Cls) = {
     for(upperClassNode <- classManager.loadClass(cls)){
       invalidated.put(
@@ -74,7 +133,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
               subSig,
               inferredArgs,
               callStack,
-              log.inferredMethod(sig, inferredArgs.drop(if (sig.static) 0 else 1))
+              globalLog.inferredMethod(sig, inferredArgs.drop(if (sig.static) 0 else 1))
             )
           }
 
@@ -102,7 +161,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
         sig,
         inferredArgs,
         callStack,
-        log.inferredMethod(sig, inferredArgs.drop(if (sig.static) 0 else 1))
+        globalLog.inferredMethod(sig, inferredArgs.drop(if (sig.static) 0 else 1))
       ).props
     }
     else {
