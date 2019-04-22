@@ -131,7 +131,7 @@ object MainTests extends TestSuite{
       'Sudoku - {
         'quick - annotatedTest
         'quick2 - annotatedTest
-//        'run - annotatedTest
+        'run - annotatedTest
       }
     }
     'opt - {
