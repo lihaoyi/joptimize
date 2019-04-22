@@ -49,7 +49,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
       val (originalSig, inferred, returnCallback) = currentStack.head
       val methodLog = globalLog.method(originalSig)
       val inferredLog = globalLog.inferredMethod(originalSig, inferred)
-      val methodBody = frontend.loadMethodBody(originalSig, methodLog).get
+      val methodBody = frontend.loadMethodBody(originalSig, inferred.drop(if (originalSig.static) 0 else 1), methodLog).get
       val currentAnalysis = analyses.getOrElseUpdate(
         (originalSig, inferred),
         optimisticAnalyze(inferred, inferredLog, methodBody, Nil)
@@ -117,7 +117,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
               val subLog = globalLog.inferredMethod(calledSig, calledInferred)
               subLog.println("================ INITIAL ================")
 
-              subLog.graph(Renderer.dumpSvg(frontend.loadMethodBody(calledSig, globalLog.method(calledSig)).get))
+              subLog.graph(Renderer.dumpSvg(frontend.loadMethodBody(calledSig, calledInferred.drop(if (calledSig.static) 0 else 1), globalLog.method(calledSig)).get))
               Seq(
                 Tuple2(
                   (calledSig, calledInferred, (props: Analyzer.Properties) => callback(props.inferredReturn)) :: currentStack,
@@ -289,7 +289,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
     if (classManager.loadMethod(originalSig).isEmpty) Analyzer.dummyResult(originalSig, optimistic = false)
     // Recursive calls to the same method are treated optimistically
     else if (callStack.contains(originalSig -> inferredArgs)) Analyzer.dummyResult(originalSig, optimistic = true)
-    else frontend.loadMethodBody(originalSig, log.method(originalSig)) match {
+    else frontend.loadMethodBody(originalSig, inferredArgs.drop(if (originalSig.static) 0 else 1), log.method(originalSig)) match {
       case None => Analyzer.dummyResult(originalSig, optimistic = true)
       case Some(methodBody) =>
         log.global().println(

@@ -14,10 +14,10 @@ import scala.collection.mutable
 
 class Frontend(val classManager: ClassManager) {
 
-  val cachedMethodBodies = mutable.LinkedHashMap.empty[MethodSig, Option[MethodBody]]
-  def loadMethodBody(originalSig: MethodSig, log: Logger.Method): Option[MethodBody] = {
+  val cachedMethodBodies = mutable.LinkedHashMap.empty[(MethodSig, Seq[IType]), Option[MethodBody]]
+  def loadMethodBody(originalSig: MethodSig, inferred: Seq[IType], log: Logger.Method): Option[MethodBody] = {
     cachedMethodBodies.getOrElseUpdate(
-      originalSig,
+      (originalSig, inferred),
       loadMethodBody0(originalSig, log)
     )
   }

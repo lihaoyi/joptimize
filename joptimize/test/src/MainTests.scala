@@ -206,11 +206,11 @@ object MainTests extends TestSuite{
 //        'recursivePureConstant - annotatedTest
       }
       'ConstantMethod - {
-//        'intMain0 - annotatedTest
-//        'intMain - annotatedTest
+        'intMain0 - annotatedTest
+        'intMain - annotatedTest
         'nonFoldedIntMain - annotatedTest
-//        'boolMain - annotatedTest
-//        'impureMain - annotatedTest
+        'boolMain - annotatedTest
+        'impureMain - annotatedTest
       }
       'BooleanJumpFlatten - {
         'simpleTrue - annotatedTest
@@ -230,14 +230,14 @@ object MainTests extends TestSuite{
       }
       'InstanceDce - {
         'simple1 - annotatedTest
-//        'simple2 - annotatedTest
-//        'simple3 - annotatedTest
-//
-//        'single1 - annotatedTest
-//        'single2 - annotatedTest
-//        'single3 - annotatedTest
-//        'single4 - annotatedTest
-//
+        'simple2 - annotatedTest
+        'simple3 - annotatedTest
+
+        'single1 - annotatedTest
+        'single2 - annotatedTest
+        'single3 - annotatedTest
+        'single4 - annotatedTest
+
 //        'unknown1 - annotatedTest
 //        'unknown2 - annotatedTest
 //        'unknown3 - annotatedTest
@@ -257,13 +257,13 @@ object MainTests extends TestSuite{
         'longUnusedRight - annotatedTest
         'longUnusedLeft - annotatedTest
 
-//        'simple - annotatedTest
-//        'simple2a - annotatedTest
-//        'simple2b - annotatedTest
+        'simple - annotatedTest
+        'simple2a - annotatedTest
+        'simple2b - annotatedTest
 
-//        'chained - annotatedTest
-//        'chained2a - annotatedTest
-//        'chained2b - annotatedTest
+        'chained - annotatedTest
+        'chained2a - annotatedTest
+        'chained2b - annotatedTest
 
         'implement0 - annotatedTest
         'implement1 - annotatedTest
