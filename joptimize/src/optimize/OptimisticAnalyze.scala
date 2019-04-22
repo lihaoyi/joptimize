@@ -36,7 +36,6 @@ object OptimisticAnalyze {
                initialValues: Map[SSA.Val, T],
                initialBlock: SSA.Block,
                lattice: Lattice[T],
-               naming: Namer.Result,
                log: Logger.InferredMethod,
                evaluateUnaBranch: (T, SSA.UnaBranch.Code) => Option[Boolean],
                evaluateBinBranch: (T, T, SSA.BinBranch.Code) => Option[Boolean],

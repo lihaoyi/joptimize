@@ -149,42 +149,14 @@ class Analyzer(entrypoints: Seq[MethodSig],
         log.graph(Renderer.dumpSvg(methodBody))
         log.println("================ INITIAL ================")
 
-        val preScheduleNaming = Namer.apply(methodBody, Map.empty, methodBody.getAllVertices(), log = log)
-
-        log(Renderer.renderSSA(methodBody, preScheduleNaming))
-
         log.check(methodBody.checkLinks())
-        val (controlFlowEdges, startBlock, allBlocks, blockEdges) =
-          Analyzer.analyzeBlockStructure(methodBody)
 
-        log.println("")
-        log(Renderer.renderControlFlowGraph(controlFlowEdges, preScheduleNaming.savedLocals))
-
-        val loopTree = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)
-
-        log.println("")
-        log(Renderer.renderLoopTree(loopTree, preScheduleNaming.savedLocals))
-
-        log.println("================ SCHEDULED ================")
-
-        val dominators = Dominator.findDominators(blockEdges, allBlocks)
-
-        // Just for debugging
-        val nodesToBlocks2 = Scheduler.apply(
-          loopTree, dominators, startBlock,
-          methodBody.getAllVertices()
-        )
-
-        val postScheduleNaming = Namer.apply(methodBody, nodesToBlocks2, methodBody.getAllVertices(), log = log)
-
-        log(Renderer.renderSSA(methodBody, postScheduleNaming, nodesToBlocks2))
-
-        log.graph(Renderer.dumpSvg(methodBody, postScheduleNaming))
+        log.graph(Renderer.dumpSvg(methodBody))
         log.println("================ OPTIMISTIC ================")
 
         val innerStack = (originalSig -> inferredArgs) :: callStack
 
-        val optResult = optimisticAnalyze(inferredArgs, log, methodBody, postScheduleNaming, innerStack)
+        val optResult = optimisticAnalyze(inferredArgs, log, methodBody, innerStack)
 
         val blockEnds = optResult.liveBlocks.map(_.next)
         val canThrow = blockEnds.exists(_.isInstanceOf[SSA.AThrow])
@@ -265,7 +237,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
     }
   }
 
-  def optimisticAnalyze(inferredArgs: Seq[IType], log: Logger.InferredMethod, methodBody: MethodBody, postScheduleNaming: Namer.Result, innerStack: List[(MethodSig, Seq[IType])]) = {
+  def optimisticAnalyze(inferredArgs: Seq[IType], log: Logger.InferredMethod, methodBody: MethodBody, innerStack: List[(MethodSig, Seq[IType])]) = {
     OptimisticAnalyze.apply[IType](
       methodBody,
       Map.empty,
@@ -275,7 +247,6 @@ class Analyzer(entrypoints: Seq[MethodSig],
         computeMethodSigFor(_, _, _, innerStack).inferredReturn,
         inferredArgs.flatMap { i => Seq.fill(i.getSize)(i) }
       ),
-      postScheduleNaming,
       log,
       evaluateUnaBranch = {
         case (CType.I(v), SSA.UnaBranch.IFNE) => Some(v != 0)
