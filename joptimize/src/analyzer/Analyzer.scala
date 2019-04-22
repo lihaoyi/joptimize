@@ -22,33 +22,6 @@ class Analyzer(entrypoints: Seq[MethodSig],
   def apply() = {
     for (ep <- entrypoints) computeMethodSig(ep, ep.desc.args, Nil)
 
-//    while(invalidated.nonEmpty){
-//      val (current, currentSigs) = invalidated.head
-//      invalidated.remove(current)
-//      for {
-//        ((relatedSig, relatedArgs), relatedProps) <- visitedMethods.toArray
-//        currentSig <- currentSigs
-//        if relatedSig == currentSig
-//      }{
-//        val resolvedSigs = frontend.resolvePossibleSigs(relatedSig, relatedArgs).get
-//        for(resolvedSig <- resolvedSigs){
-//
-//        }
-//      }
-//      for {
-//        ((relatedSig, relatedArgs), relatedProps) <- visitedMethods.toArray
-//        currentSig <- currentSigs
-//        if relatedSig == currentSig
-//      }{
-//        visitedMethods.remove((relatedSig, relatedArgs))
-//        walkMethod(
-//          relatedSig,
-//          (if (relatedSig.static) Nil else Seq(relatedSig.cls)) ++ relatedArgs,
-//          Nil,
-//          log.inferredMethod(relatedSig, relatedArgs)
-//        )
-//      }
-//    }
     for(((sig, inferred), v) <- visitedMethods if !visitedResolved.contains((sig, inferred))){
       computeMethodSig(sig, (if (!sig.static) Seq(sig.cls) else Nil) ++ inferred, Nil)
     }
@@ -145,144 +118,151 @@ class Analyzer(entrypoints: Seq[MethodSig],
                  log: Logger.InferredMethod): Analyzer.Result = {
     visitedMethods.getOrElseUpdate(
       (originalSig, inferredArgs.drop(if (originalSig.static) 0 else 1)),
-      // Unknown or external methods are treated pessimistically
-      if (classManager.loadMethod(originalSig).isEmpty) dummyResult(originalSig, optimistic = false)
-      // Recursive calls to the same method are treated optimistically
-      else if (callStack.contains(originalSig -> inferredArgs)) dummyResult(originalSig, optimistic = true)
-      else frontend.loadMethodBody(originalSig, log.method(originalSig)) match{
-        case None => dummyResult(originalSig, optimistic = true)
-        case Some(methodBody) =>
-          log.global().println(
-            "  " * callStack.length +
-              "+" + Util.mangleName(originalSig, inferredArgs.drop(if(originalSig.static) 0 else 1))
-          )
-          log.pprint(callStack)
-          log.pprint(inferredArgs)
-          log.check(assert(
-            Util.isValidationCompatible(inferredArgs.drop(if(originalSig.static) 0 else 1), originalSig, checkSubclass),
-            s"Inferred param types [${inferredArgs.mkString(", ")}] is not compatible " +
-              s"with declared param types [${originalSig.desc.args.mkString(", ")}]"
-          ))
-
-
-          log.graph(Renderer.dumpSvg(methodBody))
-          log.println("================ INITIAL ================")
-
-          val preScheduleNaming = Namer.apply(methodBody, Map.empty, methodBody.getAllVertices(), log = log)
-
-          log(Renderer.renderSSA(methodBody, preScheduleNaming))
-
-          log.check(methodBody.checkLinks())
-          val (controlFlowEdges, startBlock, allBlocks, blockEdges) =
-            Analyzer.analyzeBlockStructure(methodBody)
-
-          log.println("")
-          log(Renderer.renderControlFlowGraph(controlFlowEdges, preScheduleNaming.savedLocals))
-
-          val loopTree = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)
-
-          log.println("")
-          log(Renderer.renderLoopTree(loopTree, preScheduleNaming.savedLocals))
-
-          log.println("================ SCHEDULED ================")
-
-          val dominators = Dominator.findDominators(blockEdges, allBlocks)
-
-          // Just for debugging
-          val nodesToBlocks2 = Scheduler.apply(
-            loopTree, dominators, startBlock,
-            methodBody.getAllVertices()
-          )
-
-          val postScheduleNaming = Namer.apply(methodBody, nodesToBlocks2, methodBody.getAllVertices(), log = log)
-
-          log(Renderer.renderSSA(methodBody, postScheduleNaming, nodesToBlocks2))
-
-          log.graph(Renderer.dumpSvg(methodBody, postScheduleNaming))
-          log.println("================ OPTIMISTIC ================")
-
-          val innerStack = (originalSig -> inferredArgs) :: callStack
-
-          val optResult = optimisticAnalyze(inferredArgs, log, methodBody, postScheduleNaming, innerStack)
-
-          val blockEnds = optResult.liveBlocks.map(_.next)
-          val canThrow = blockEnds.exists(_.isInstanceOf[SSA.AThrow])
-
-          //      pprint.log(optResult.inferredReturns)
-          val retTypes0 = optResult.inferredReturns
-          val retTypes = retTypes0.filter(_ != JType.Prim.V)
-          //      pprint.log(retTypes)
-          val inferredReturn =
-            if (retTypes.isEmpty) JType.Prim.V
-            else classManager.merge(retTypes)
-
-          val inferredPurity = computePurity(optResult, innerStack)
-
-          val inferredLiveArgs = optResult.inferred.collect{case (a: SSA.Arg, _) => a.index}
-
-          log.pprint(optResult.inferred)
-          log.pprint(optResult.liveBlocks)
-          log.pprint(inferredReturn)
-          log.pprint(inferredPurity)
-          log.pprint(inferredLiveArgs)
-
-          val classes = optResult.inferred.keys.collect{
-            case n: SSA.GetField => n.owner
-            case n: SSA.PutField => n.owner
-            case n: SSA.GetStatic => n.cls
-            case n: SSA.PutStatic => n.cls
-          }
-          val calledMethodSigs = optResult.inferred.keys.collect{
-            case n: SSA.Invoke =>
-              (
-                n.sig,
-                n.srcs.map(optResult.inferred).drop(if(n.sig.static) 0 else 1),
-                n.isInstanceOf[SSA.InvokeSpecial]
-              )
-          }
-
-          for(cls <- Seq(originalSig.cls) ++ classes){
-            val clinit = MethodSig(cls, "<clinit>", Desc(Nil, JType.Prim.V), true)
-            if (classManager.loadMethod(clinit).isDefined) computeMethodSig(
-              clinit,
-              Nil,
-              (originalSig -> inferredArgs) :: callStack
-            )
-          }
-
-
-          log.check(assert(
-            Util.isValidationCompatible0(inferredReturn, originalSig.desc.ret, checkSubclass),
-            s"Inferred return type [${inferredReturn}] is not compatible " +
-              s"with declared return type [${originalSig.desc.ret}]"
-          ))
-
-
-          log.global().println(
-            "  " * callStack.length +
-              "-" + Util.mangleName(originalSig, inferredArgs.drop(if(originalSig.static) 0 else 1))
-          )
-
-
-          val result = Analyzer.Result(
-            methodBody,
-            optResult.inferred,
-            optResult.liveBlocks,
-            Analyzer.Properties(
-              inferredReturn,
-              !canThrow && inferredPurity,
-              inferredLiveArgs.toSet
-            )
-          )
-
-          classes.foreach(visitedClasses.add)
-          for (m <- calledMethodSigs) {
-            callerGraph.add(m, (originalSig, inferredArgs))
-          }
-
-          result
-      }
+      walkMethod0(originalSig, inferredArgs, callStack, log)
     )
+  }
+
+  def walkMethod0(originalSig: MethodSig,
+                  inferredArgs: Seq[IType],
+                  callStack: List[(MethodSig, Seq[IType])],
+                  log: Logger.InferredMethod): Analyzer.Result = {
+    // Unknown or external methods are treated pessimistically
+    if (classManager.loadMethod(originalSig).isEmpty) dummyResult(originalSig, optimistic = false)
+    // Recursive calls to the same method are treated optimistically
+    else if (callStack.contains(originalSig -> inferredArgs)) dummyResult(originalSig, optimistic = true)
+    else frontend.loadMethodBody(originalSig, log.method(originalSig)) match {
+      case None => dummyResult(originalSig, optimistic = true)
+      case Some(methodBody) =>
+        log.global().println(
+          "  " * callStack.length +
+            "+" + Util.mangleName(originalSig, inferredArgs.drop(if (originalSig.static) 0 else 1))
+        )
+        log.pprint(callStack)
+        log.pprint(inferredArgs)
+        log.check(assert(
+          Util.isValidationCompatible(inferredArgs.drop(if (originalSig.static) 0 else 1), originalSig, checkSubclass),
+          s"Inferred param types [${inferredArgs.mkString(", ")}] is not compatible " +
+            s"with declared param types [${originalSig.desc.args.mkString(", ")}]"
+        ))
+
+
+        log.graph(Renderer.dumpSvg(methodBody))
+        log.println("================ INITIAL ================")
+
+        val preScheduleNaming = Namer.apply(methodBody, Map.empty, methodBody.getAllVertices(), log = log)
+
+        log(Renderer.renderSSA(methodBody, preScheduleNaming))
+
+        log.check(methodBody.checkLinks())
+        val (controlFlowEdges, startBlock, allBlocks, blockEdges) =
+          Analyzer.analyzeBlockStructure(methodBody)
+
+        log.println("")
+        log(Renderer.renderControlFlowGraph(controlFlowEdges, preScheduleNaming.savedLocals))
+
+        val loopTree = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)
+
+        log.println("")
+        log(Renderer.renderLoopTree(loopTree, preScheduleNaming.savedLocals))
+
+        log.println("================ SCHEDULED ================")
+
+        val dominators = Dominator.findDominators(blockEdges, allBlocks)
+
+        // Just for debugging
+        val nodesToBlocks2 = Scheduler.apply(
+          loopTree, dominators, startBlock,
+          methodBody.getAllVertices()
+        )
+
+        val postScheduleNaming = Namer.apply(methodBody, nodesToBlocks2, methodBody.getAllVertices(), log = log)
+
+        log(Renderer.renderSSA(methodBody, postScheduleNaming, nodesToBlocks2))
+
+        log.graph(Renderer.dumpSvg(methodBody, postScheduleNaming))
+        log.println("================ OPTIMISTIC ================")
+
+        val innerStack = (originalSig -> inferredArgs) :: callStack
+
+        val optResult = optimisticAnalyze(inferredArgs, log, methodBody, postScheduleNaming, innerStack)
+
+        val blockEnds = optResult.liveBlocks.map(_.next)
+        val canThrow = blockEnds.exists(_.isInstanceOf[SSA.AThrow])
+
+        //      pprint.log(optResult.inferredReturns)
+        val retTypes0 = optResult.inferredReturns
+        val retTypes = retTypes0.filter(_ != JType.Prim.V)
+        //      pprint.log(retTypes)
+        val inferredReturn =
+          if (retTypes.isEmpty) JType.Prim.V
+          else classManager.merge(retTypes)
+
+        val inferredPurity = computePurity(optResult, innerStack)
+
+        val inferredLiveArgs = optResult.inferred.collect { case (a: SSA.Arg, _) => a.index }
+
+        log.pprint(optResult.inferred)
+        log.pprint(optResult.liveBlocks)
+        log.pprint(inferredReturn)
+        log.pprint(inferredPurity)
+        log.pprint(inferredLiveArgs)
+
+        val classes = optResult.inferred.keys.collect {
+          case n: SSA.GetField => n.owner
+          case n: SSA.PutField => n.owner
+          case n: SSA.GetStatic => n.cls
+          case n: SSA.PutStatic => n.cls
+        }
+        val calledMethodSigs = optResult.inferred.keys.collect {
+          case n: SSA.Invoke =>
+            (
+              n.sig,
+              n.srcs.map(optResult.inferred).drop(if (n.sig.static) 0 else 1),
+              n.isInstanceOf[SSA.InvokeSpecial]
+            )
+        }
+
+        for (cls <- Seq(originalSig.cls) ++ classes) {
+          val clinit = MethodSig(cls, "<clinit>", Desc(Nil, JType.Prim.V), true)
+          if (classManager.loadMethod(clinit).isDefined) computeMethodSig(
+            clinit,
+            Nil,
+            (originalSig -> inferredArgs) :: callStack
+          )
+        }
+
+
+        log.check(assert(
+          Util.isValidationCompatible0(inferredReturn, originalSig.desc.ret, checkSubclass),
+          s"Inferred return type [${inferredReturn}] is not compatible " +
+            s"with declared return type [${originalSig.desc.ret}]"
+        ))
+
+
+        log.global().println(
+          "  " * callStack.length +
+            "-" + Util.mangleName(originalSig, inferredArgs.drop(if (originalSig.static) 0 else 1))
+        )
+
+
+        val result = Analyzer.Result(
+          methodBody,
+          optResult.inferred,
+          optResult.liveBlocks,
+          Analyzer.Properties(
+            inferredReturn,
+            !canThrow && inferredPurity,
+            inferredLiveArgs.toSet
+          )
+        )
+
+        classes.foreach(visitedClasses.add)
+        for (m <- calledMethodSigs) {
+          callerGraph.add(m, (originalSig, inferredArgs))
+        }
+
+        result
+    }
   }
 
   def optimisticAnalyze(inferredArgs: Seq[IType], log: Logger.InferredMethod, methodBody: MethodBody, postScheduleNaming: Namer.Result, innerStack: List[(MethodSig, Seq[IType])]) = {
