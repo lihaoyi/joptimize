@@ -18,7 +18,18 @@ class Analyzer(entrypoints: Seq[MethodSig],
   val visitedResolved = mutable.LinkedHashMap.empty[(MethodSig, Seq[IType]), Analyzer.Properties]
   val visitedClasses = mutable.LinkedHashSet.empty[JType.Cls]
   val invalidated = mutable.LinkedHashMap.empty[JType.Cls, Seq[MethodSig]]
-  val callerGraph = new MultiBiMap.Mutable[(MethodSig, Seq[IType], Boolean), (MethodSig, Seq[IType])]()
+
+  /**
+    * Edges from the caller to the called
+    *
+    * This is kept up to date on a node-by-node basis during the traversal
+    */
+  val callerGraph = new MultiBiMap.Mutable[
+    (MethodSig, Seq[IType], SSA.Invoke),
+    (MethodSig, Seq[IType])
+  ]()
+  val analyses = mutable.LinkedHashMap.empty[(MethodSig, Seq[IType]), OptimisticAnalyze[IType]]
+
   def apply() = {
     for (ep <- entrypoints) computeMethodSig(ep, ep.desc.args, Nil)
 
@@ -156,7 +167,26 @@ class Analyzer(entrypoints: Seq[MethodSig],
 
         val innerStack = (originalSig -> inferredArgs) :: callStack
 
-        val optResult = optimisticAnalyze(inferredArgs, log, methodBody, innerStack)
+        val analysis = optimisticAnalyze(inferredArgs, log, methodBody, innerStack)
+
+        analyses((originalSig, inferredArgs.drop(if (originalSig.static) 0 else 1))) = analysis
+        while({
+          analysis.step() match{
+            case OptimisticAnalyze.Step.Continue() => true
+            case OptimisticAnalyze.Step.Done() => false
+            case OptimisticAnalyze.Step.ComputeSig(calledSig, invoke, calledInferred, callback) =>
+
+              val res = computeMethodSigFor(calledSig, invoke.isInstanceOf[SSA.InvokeSpecial], calledInferred, innerStack).inferredReturn
+              callerGraph.add(
+                (originalSig, inferredArgs.drop(if (originalSig.static) 0 else 1), invoke),
+                (calledSig, calledInferred.drop(if (originalSig.static) 0 else 1))
+              )
+              callback(res)
+              true
+
+          }
+        })()
+        val optResult = analysis.apply()
 
         val blockEnds = optResult.liveBlocks.map(_.next)
         val canThrow = blockEnds.exists(_.isInstanceOf[SSA.AThrow])
@@ -184,14 +214,6 @@ class Analyzer(entrypoints: Seq[MethodSig],
           case n: SSA.PutField => n.owner
           case n: SSA.GetStatic => n.cls
           case n: SSA.PutStatic => n.cls
-        }
-        val calledMethodSigs = optResult.inferred.keys.collect {
-          case n: SSA.Invoke =>
-            (
-              n.sig,
-              n.srcs.map(optResult.inferred).drop(if (n.sig.static) 0 else 1),
-              n.isInstanceOf[SSA.InvokeSpecial]
-            )
         }
 
         for (cls <- Seq(originalSig.cls) ++ classes) {
@@ -229,16 +251,12 @@ class Analyzer(entrypoints: Seq[MethodSig],
         )
 
         classes.foreach(visitedClasses.add)
-        for (m <- calledMethodSigs) {
-          callerGraph.add(m, (originalSig, inferredArgs))
-        }
-
         result
     }
   }
 
   def optimisticAnalyze(inferredArgs: Seq[IType], log: Logger.InferredMethod, methodBody: MethodBody, innerStack: List[(MethodSig, Seq[IType])]) = {
-    val opt = new OptimisticAnalyze[IType](
+    new OptimisticAnalyze[IType](
       methodBody,
       Map.empty,
       methodBody.getAllVertices().collect { case b: SSA.Block if b.upstream.isEmpty => b }.head,
@@ -273,18 +291,6 @@ class Analyzer(entrypoints: Seq[MethodSig],
         case _ => None
       },
     )
-
-    while({
-      opt.step() match{
-        case OptimisticAnalyze.Step.Continue() => true
-        case OptimisticAnalyze.Step.Done() => false
-        case OptimisticAnalyze.Step.ComputeSig(f) =>
-          f(computeMethodSigFor(_, _, _, innerStack).inferredReturn)
-          true
-
-      }
-    })()
-    opt.apply()
   }
 
   def computePurity(optResult: OptimisticAnalyze.Result[IType],

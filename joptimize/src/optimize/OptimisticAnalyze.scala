@@ -127,24 +127,7 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
       case Some(v) =>
         valWorkList.remove(v)
         v match{
-          case n: SSA.InvokeStatic =>
-            Step.ComputeSig[T] { computeMethodSig =>
-              evaluated(v) = computeMethodSig(n.sig, false, n.srcs.map(evaluated))
-            }
-
-          case n: SSA.InvokeSpecial =>
-            Step.ComputeSig[T] { computeMethodSig =>
-              evaluated(v) = computeMethodSig(n.sig, true, n.srcs.map(evaluated))
-            }
-
-          case n: SSA.InvokeVirtual =>
-            Step.ComputeSig[T] { computeMethodSig =>
-              evaluated(v) = computeMethodSig(n.sig, false, n.srcs.map(evaluated))
-            }
-          case n: SSA.InvokeInterface =>
-            Step.ComputeSig[T] { computeMethodSig =>
-              evaluated(v) = computeMethodSig(n.sig, false, n.srcs.map(evaluated))
-            }
+          case n: SSA.Invoke => Step.ComputeSig[T](n.sig, n, n.srcs.map(evaluated), evaluated(v) = _)
           case _ =>
             evaluated(v) = lattice.transferValue(v, evaluated)
             Step.Continue()
@@ -268,7 +251,7 @@ object OptimisticAnalyze {
   object Step{
     case class Continue[T]() extends Step[T]
     case class Done[T]() extends Step[T]
-    case class ComputeSig[T](f: ((MethodSig, Boolean, Seq[T]) => T) => Unit) extends Step[T]
+    case class ComputeSig[T](sig: MethodSig, invoke: SSA.Invoke, inferred: Seq[T], callback: T => Unit) extends Step[T]
   }
   sealed trait State
   object State{
