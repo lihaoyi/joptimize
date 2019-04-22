@@ -21,7 +21,7 @@ class ClassManager(getClassFile: String => Option[Array[Byte]]) extends ClassMan
   val loadClassCache = mutable.LinkedHashMap.empty[JType.Cls, Option[ClassNode]]
   val loadMethodCache = mutable.LinkedHashMap.empty[MethodSig, Option[MethodNode]]
 
-  def resolvePossibleSigs(sig: MethodSig, inferredArgs: Seq[IType]): Option[Seq[MethodSig]] = {
+  def resolvePossibleSigs(sig: MethodSig): Option[Seq[MethodSig]] = {
     if (sig.static) {
       def rec(currentCls: JType.Cls): Option[MethodSig] = {
         val currentSig = sig.copy(cls = currentCls)

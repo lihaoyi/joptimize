@@ -40,6 +40,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
     }
 
     while(stacks.nonEmpty){
+
       val currentStack = stacks(0)
 
       val (originalSig, inferred, returnCallback) = currentStack.head
@@ -53,8 +54,8 @@ class Analyzer(entrypoints: Seq[MethodSig],
 
       val step = currentAnalysis.step()
 
-      val newCurrent: List[(MethodSig, Seq[IType], IType => Unit)] = step match{
-        case OptimisticAnalyze.Step.Continue() => currentStack
+      val newCurrent: Seq[List[(MethodSig, Seq[IType], IType => Unit)]] = step match{
+        case OptimisticAnalyze.Step.Continue() => Seq(currentStack)
 
         case OptimisticAnalyze.Step.Done() =>
           val optimisticResult = currentAnalysis.apply()
@@ -69,78 +70,84 @@ class Analyzer(entrypoints: Seq[MethodSig],
             optimisticResult.inferred.collect { case (a: SSA.Arg, _) => a.index }.toSet
           )
 
-          visitedMethods((originalSig, inferred)) = Analyzer.Result(
+          visitedMethods((originalSig, inferred.drop(if (originalSig.static) 0 else 1))) = Analyzer.Result(
             methodBody,
             optimisticResult.inferred,
             optimisticResult.liveBlocks,
             props
           )
-          visitedResolved((originalSig, inferred)) = props
+
 
           inferredLog.pprint(optimisticResult.inferred)
           inferredLog.pprint(optimisticResult.liveBlocks)
           returnCallback(inferredReturn)
-          currentStack.tail
+          if (currentStack.tail.nonEmpty) Seq(currentStack.tail)
+          else Nil
 
         case OptimisticAnalyze.Step.ComputeSig(calledSig, invoke, calledInferred, callback) =>
-//          if (invoke.isInstanceOf[SSA.InvokeSpecial]){
-
-            if (currentStack.exists(t => t._1 == calledSig && t._2 == calledInferred)) {
-              callback(Analyzer.dummyResult(originalSig, optimistic = true).props.inferredReturn)
-              currentStack
-            } else if(classManager.loadClass(calledSig.cls).isEmpty){
-              callback(Analyzer.dummyResult(originalSig, optimistic = false).props.inferredReturn)
-              currentStack
+          if (currentStack.exists(t => t._1 == calledSig && t._2 == calledInferred)) {
+            callback(Analyzer.dummyResult(calledSig, optimistic = true).props.inferredReturn)
+            Seq(currentStack)
+          } else if (invoke.isInstanceOf[SSA.InvokeSpecial]){
+            if(classManager.loadClass(calledSig.cls).isEmpty){
+              callback(Analyzer.dummyResult(calledSig, optimistic = false).props.inferredReturn)
+              Seq(currentStack)
             } else{
               val subLog = globalLog.inferredMethod(calledSig, calledInferred)
               subLog.println("================ INITIAL ================")
-              pprint.log(calledSig)
+
               subLog.graph(Renderer.dumpSvg(frontend.loadMethodBody(calledSig, globalLog.method(calledSig)).get))
-              (calledSig, calledInferred, callback) :: currentStack
+              Seq((calledSig, calledInferred, callback) :: currentStack)
             }
-//          }else{
-//            if (classManager.loadClass(calledSig.cls).isEmpty) {
-//              callback(Analyzer.dummyResult(originalSig, optimistic = false).props.inferredReturn)
-//              currentStack
-//            } else {
-//              val resolved = classManager.resolvePossibleSigs(calledSig, calledInferred)
-//              resolved match {
-//                case None =>
-//                  callback(Analyzer.dummyResult(originalSig, optimistic = false).props.inferredReturn)
-//                  currentStack
-//                case Some(subSigs) =>
-//                  val rets = for (subSig <- subSigs) yield {
-//                    if (classManager.loadMethod(subSig).isEmpty) Analyzer.dummyResult(sig, optimistic = false)
-//                    else walkMethod(
-//                      subSig,
-//                      inferredArgs,
-//                      callStack,
-//                      globalLog.inferredMethod(sig, inferredArgs.drop(if (sig.static) 0 else 1))
-//                    )
-//                  }
-//
-//                  val (retTypes, retPurity, retLiveArgs) = rets
-//                    .map(p => (p.props.inferredReturn, p.props.pure, p.props.liveArgs))
-//                    .unzip3
-//
-//                  Analyzer.Properties(
-//                    classManager.merge(retTypes),
-//                    retPurity.forall(identity),
-//                    retLiveArgs.iterator.flatten.toSet
-//                  )
-//              }
-//            }
-//          }
+          }else{
+            if (classManager.loadClass(calledSig.cls).isEmpty) {
+              visitedResolved((calledSig, calledInferred.drop(if (calledSig.static) 0 else 1))) = Analyzer.dummyResult(calledSig, optimistic = false).props
+              callback(Analyzer.dummyResult(calledSig, optimistic = false).props.inferredReturn)
+              Seq(currentStack)
+            } else {
+              val resolved = classManager.resolvePossibleSigs(calledSig)
+              resolved match {
+                case None =>
+                  visitedResolved((calledSig, calledInferred.drop(if (calledSig.static) 0 else 1))) = Analyzer.dummyResult(calledSig, optimistic = false).props
+                  callback(Analyzer.dummyResult(calledSig, optimistic = false).props.inferredReturn)
+                  Seq(currentStack)
+                case Some(subSigs0) =>
+                  val subSigs = subSigs0
+                    .filter(subSig => frontend.loadMethodBody(subSig, globalLog.method(subSig)).nonEmpty)
+
+                  var agg = List.empty[IType]
+                  val rets = for (subSig <- subSigs) yield {
+
+                    val subCallback = (i: IType) => {
+                      agg ::= i
+
+                      if (agg.length == subSigs.length){
+                        visitedResolved((calledSig, calledInferred.drop(if (calledSig.static) 0 else 1))) =
+                          Analyzer.dummyResult(calledSig, optimistic = false)
+                            .props
+                            .copy(inferredReturn = classManager.merge(agg))
+                        callback(classManager.merge(agg))
+                      }
+
+                      stacks.remove(0)
+                      ()
+                    }
+                    (subSig, calledInferred, subCallback) :: currentStack
+                  }
+                  rets.toList ::: List(currentStack)
+              }
+            }
+          }
 
       }
 
-      if (newCurrent.isEmpty) stacks.remove(0)
-      else stacks(0) = newCurrent
+      stacks.remove(0)
+      stacks.insertAll(0, newCurrent)
     }
 
-//    for(((sig, inferred), v) <- visitedMethods if !visitedResolved.contains((sig, inferred))){
-//      computeMethodSig(sig, (if (!sig.static) Seq(sig.cls) else Nil) ++ inferred, Nil)
-//    }
+    for(((sig, inferred), v) <- visitedMethods if !visitedResolved.contains((sig, inferred))){
+      visitedResolved((sig, inferred)) = v.props
+    }
     Analyzer.GlobalResult(visitedMethods, visitedResolved, visitedClasses)
 
   }
@@ -171,7 +178,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
   def computeMethodSig0(sig: MethodSig, inferredArgs: Seq[IType], callStack: List[(MethodSig, Seq[IType])]) = {
     if (classManager.loadClass(sig.cls).isEmpty) Analyzer.dummyResult(sig, optimistic = false).props
     else {
-      val resolved = classManager.resolvePossibleSigs(sig, inferredArgs)
+      val resolved = classManager.resolvePossibleSigs(sig)
       resolved match {
         case None => Analyzer.dummyResult(sig, optimistic = false).props
         case Some(subSigs) =>

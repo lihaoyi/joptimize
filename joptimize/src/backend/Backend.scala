@@ -22,8 +22,11 @@ object Backend {
 
     val loadMethodCache = classManager.loadMethodCache.collect{case (k, Some(v)) => (k, v)}.toMap
     val loadClassCache = classManager.loadClassCache.collect{case (k, Some(v)) => (k, v)}.toMap
+//    pprint.log(analyzerRes.visitedMethods.keys)
+//    pprint.log(analyzerRes.visitedResolved.keys)
+//    pprint.log(loadMethodCache.keys)
     val highestMethodDefiners = for{
-      ((sig, inferredArgs), result) <- analyzerRes.visitedMethods
+      ((sig, inferredArgs), result) <- analyzerRes.visitedMethods ++ analyzerRes.visitedResolved
       if loadMethodCache.contains(sig)
     } yield {
       var parentClasses = List.empty[JType.Cls]
@@ -44,13 +47,14 @@ object Backend {
       val highestCls = parentClasses
         .find{ cls =>
           val key = (sig.copy(cls = cls), inferredArgs)
-          val res = analyzerRes.visitedMethods.contains(key)
+          val res = analyzerRes.visitedResolved.contains(key)
           res
         }
         .get
 
       ((sig, inferredArgs), highestCls)
     }
+//    pprint.log(highestMethodDefiners.keys)
 
     val newMethods = for{
       ((sig, inferredArgs), result) <- analyzerRes.visitedMethods.toList
@@ -94,18 +98,26 @@ object Backend {
           log.inferredMethod(sig, inferredArgs),
           loadClassCache.contains,
           (originalSig, invokeSpecial, inferredArgs) => {
-            val highestSig =
-              if (originalSig.static || !loadMethodCache.contains(originalSig)) originalSig
-              else {
-                originalSig.copy(cls =
-                  highestMethodDefiners((originalSig, inferredArgs.drop(if (originalSig.static) 0 else 1)))
-                )
-              }
+            if (invokeSpecial){
+              analyzerRes.visitedMethods.getOrElse(
+                (originalSig, inferredArgs.drop(if (originalSig.static) 0 else 1)),
+                Analyzer.dummyResult(originalSig, optimistic = false)
+              ).props
+            }else{
 
-            analyzerRes.visitedResolved.getOrElse(
-              (highestSig, inferredArgs.drop(if (originalSig.static) 0 else 1)),
-              Analyzer.dummyResult(highestSig, optimistic = false).props
-            )
+              val highestSig =
+                if (originalSig.static || !loadMethodCache.contains(originalSig)) originalSig
+                else {
+                  originalSig.copy(cls =
+                    highestMethodDefiners((originalSig, inferredArgs.drop(if (originalSig.static) 0 else 1)))
+                  )
+                }
+
+              analyzerRes.visitedResolved.getOrElse(
+                (highestSig, inferredArgs.drop(if (originalSig.static) 0 else 1)),
+                Analyzer.dummyResult(highestSig, optimistic = false).props
+              )
+            }
           },
           argMapping
         )
