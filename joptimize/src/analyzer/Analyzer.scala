@@ -52,16 +52,20 @@ class Analyzer(entrypoints: Seq[MethodSig],
       )
 
       val step = currentAnalysis.step()
-      pprint.log(step)
+
       val newCurrent: List[(MethodSig, Seq[IType], IType => Unit)] = step match{
         case OptimisticAnalyze.Step.Continue() => currentStack
 
         case OptimisticAnalyze.Step.Done() =>
           val optimisticResult = currentAnalysis.apply()
-          val inferredReturn = classManager.merge(currentAnalysis.apply().inferredReturns.filter(_ != JType.Prim.V))
+          val retTypes = currentAnalysis.apply().inferredReturns.filter(_ != JType.Prim.V)
+          val inferredReturn =
+            if (retTypes.isEmpty) JType.Prim.V
+            else classManager.merge(retTypes)
+
           val props = Analyzer.Properties(
             inferredReturn,
-            true,
+            computePurity(optimisticResult, Nil),
             optimisticResult.inferred.collect { case (a: SSA.Arg, _) => a.index }.toSet
           )
 
