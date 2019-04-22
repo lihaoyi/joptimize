@@ -41,7 +41,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
 
     while(stacks.nonEmpty){
       val currentStack = stacks(0)
-      pprint.log(currentStack)
+
       val (originalSig, inferred, returnCallback) = currentStack.head
       val methodLog = globalLog.method(originalSig)
       val inferredLog = globalLog.inferredMethod(originalSig, inferred)
@@ -83,11 +83,16 @@ class Analyzer(entrypoints: Seq[MethodSig],
           currentStack.tail
 
         case OptimisticAnalyze.Step.ComputeSig(calledSig, invoke, calledInferred, callback) =>
-          val subLog = globalLog.inferredMethod(calledSig, calledInferred)
+          if (currentStack.exists(t => t._1 == calledSig && t._2 == calledInferred)) {
+            callback(dummyResult(originalSig, optimistic = true).props.inferredReturn)
+            currentStack
+          } else{
+            val subLog = globalLog.inferredMethod(calledSig, calledInferred)
+            subLog.println("================ INITIAL ================")
+            subLog.graph(Renderer.dumpSvg(frontend.loadMethodBody(calledSig, globalLog.method(calledSig)).get))
+            (calledSig, calledInferred, callback) :: currentStack
+          }
 
-          subLog.println("================ INITIAL ================")
-          subLog.graph(Renderer.dumpSvg(frontend.loadMethodBody(calledSig, globalLog.method(calledSig)).get))
-          (calledSig, calledInferred, callback) :: currentStack
       }
 
       if (newCurrent.isEmpty) stacks.remove(0)
@@ -325,7 +330,6 @@ class Analyzer(entrypoints: Seq[MethodSig],
       methodBody.getAllVertices().collect { case b: SSA.Block if b.upstream.isEmpty => b }.head,
       new ITypeLattice(
         (x, y) => classManager.merge(Seq(x, y)),
-        computeMethodSigFor(_, _, _, innerStack).inferredReturn,
         inferredArgs.flatMap { i => Seq.fill(i.getSize)(i) }
       ),
       log,

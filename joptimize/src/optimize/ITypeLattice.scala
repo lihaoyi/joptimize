@@ -3,7 +3,6 @@ package joptimize.optimize
 import joptimize.model._
 
 class ITypeLattice(merge: (IType, IType) => IType,
-                   computeMethodSig: (MethodSig, Boolean, Seq[IType]) => IType,
                    inferredArgs: Seq[IType]) extends Lattice[IType]{
   def transferValue(node: SSA.Val, inferences: SSA.Val => IType) = {
     node.upstream.collect{case v: SSA.Val => inferences(v)}
@@ -161,10 +160,6 @@ class ITypeLattice(merge: (IType, IType) => IType,
           case _ => n.opcode.tpe
         }
 
-      case n: SSA.InvokeStatic => computeMethodSig(n.sig, false, n.srcs.map(inferences))
-      case n: SSA.InvokeSpecial => computeMethodSig(n.sig, true, n.srcs.map(inferences))
-      case n: SSA.InvokeVirtual => computeMethodSig(n.sig, false, n.srcs.map(inferences))
-      case n: SSA.InvokeInterface => computeMethodSig(n.sig, false, n.srcs.map(inferences))
       //    case n: SSA.InvokeDynamic => computeMethodSig(n, n.srcs.map(inferences))
     }
   }

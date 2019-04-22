@@ -128,10 +128,9 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
         valWorkList.remove(v)
         v match{
           case n: SSA.Invoke =>
-            Step.ComputeSig[T](n.sig, n, n.srcs.map(evaluated), res => {
-              pprint.log(res)
+            Step.ComputeSig[T](n.sig, n, n.srcs.map(evaluated), res =>
               evaluated(v) = res
-            })
+            )
           case _ =>
             evaluated(v) = lattice.transferValue(v, evaluated)
             Step.Continue()
