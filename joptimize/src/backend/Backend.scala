@@ -59,6 +59,7 @@ object Backend {
     val newMethods = for{
       ((sig, inferredArgs), result) <- combined.toList
       if loadClassCache.contains(sig.cls)
+      if loadMethodCache.contains(sig)
     } yield {
       val liveArgs =
         if (entrypoints.contains(sig)) (_: Int) => true
@@ -71,6 +72,7 @@ object Backend {
         }
       log.pprint(sig)
 
+      pprint.log(sig)
       val originalNode = loadMethodCache(sig)
 
       val props = result match{

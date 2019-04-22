@@ -70,10 +70,10 @@ public class Inheritance {
     }
 
     @joptimize.Test()
-    public static int writeMatrixTest() {
-        return writeMatrix(new int[9][9]).length();
+    public static int moreStrings() {
+        return moreStrings0(new int[9][9]).length();
     }
-    public static String writeMatrix(int[][] solution) {
+    public static String moreStrings0(int[][] solution) {
 
         StringBuilder s = new StringBuilder("\n");
         for (int i = 0; i < 9; ++i) {

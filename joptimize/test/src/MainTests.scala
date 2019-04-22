@@ -56,8 +56,8 @@ object MainTests extends TestSuite{
         'bigSparseSwitch - annotatedTest
         'charSwitch - annotatedTest
         'byteSwitch - annotatedTest
-//        'stringSwitch - annotatedTest
-//        'stringSwitchTwo - annotatedTest
+        'stringSwitch - annotatedTest
+        'stringSwitchTwo - annotatedTest
       }
       'Statics - {
         'helloWorld - annotatedTest
@@ -115,7 +115,7 @@ object MainTests extends TestSuite{
         'superMethod - annotatedTest
         'staticInheritance - annotatedTest
         'staticInheritanceMethod - annotatedTest
-//        'writeMatrixTest - annotatedTest
+        'moreStrings - annotatedTest
 //        'implementLate - annotatedTest
       }
 //      'Exceptions - {
