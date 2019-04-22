@@ -22,7 +22,6 @@ object Backend {
 
     val loadMethodCache = classManager.loadMethodCache.collect{case (k, Some(v)) => (k, v)}.toMap
     val loadClassCache = classManager.loadClassCache.collect{case (k, Some(v)) => (k, v)}.toMap
-    pprint.log(loadClassCache)
     //    pprint.log(loadMethodCache.keys)
     val combined = analyzerRes.visitedResolved.mapValues(Right(_)) ++ analyzerRes.visitedMethods.mapValues(Left(_))
     val highestMethodDefiners = for{
@@ -72,7 +71,6 @@ object Backend {
         }
       log.pprint(sig)
 
-      pprint.log(sig)
       val originalNode = loadMethodCache(sig)
 
       val props = result match{

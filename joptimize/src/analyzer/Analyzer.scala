@@ -43,7 +43,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
 
     while(stacks.nonEmpty){
 
-      pprint.log(stacks.map(_._1.map(_._1.toString)))
+//      pprint.log(stacks.map(_._1.map(_._1.toString)))
       val (currentStack, currentStackStartDepth) = stacks(0)
 
       val (originalSig, inferred, returnCallback) = currentStack.head
@@ -61,8 +61,8 @@ class Analyzer(entrypoints: Seq[MethodSig],
         case OptimisticAnalyze.Step.Continue() => Seq(currentStack -> currentStackStartDepth)
 
         case OptimisticAnalyze.Step.Done() =>
-          println("DONE")
-          pprint.log(originalSig.toString)
+//          println("DONE")
+//          pprint.log(originalSig.toString)
           val optimisticResult = currentAnalysis.apply()
           val retTypes = currentAnalysis.apply().inferredReturns.filter(_ != JType.Prim.V)
           val inferredReturn =
@@ -181,7 +181,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
 
       }
 
-      pprint.log(newCurrent.map(_._1.map(_._1.toString)))
+//      pprint.log(newCurrent.map(_._1.map(_._1.toString)))
       stacks.remove(0)
       stacks.insertAll(0, newCurrent)
     }

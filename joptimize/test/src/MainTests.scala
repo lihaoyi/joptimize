@@ -128,108 +128,108 @@ object MainTests extends TestSuite{
 //        'nullPointer - annotatedTest
 //        'arrayIndexOutOfBounds - annotatedTest
 //      }
-//      'Sudoku - {
-//        'quick - annotatedTest
-//        'quick2 - annotatedTest
+      'Sudoku - {
+        'quick - annotatedTest
+        'quick2 - annotatedTest
 //        'run - annotatedTest
-//      }
+      }
     }
-//    'opt - {
-//      'Folding - {
-//        'iadd - annotatedTest
-//        'isub - annotatedTest
-//        'imul - annotatedTest
-//        'idiv - annotatedTest
-//        'irem - annotatedTest
-//        'ishl - annotatedTest
-//        'ishr - annotatedTest
-//        'iushr - annotatedTest
-//        'iand - annotatedTest
-//        'ior - annotatedTest
-//        'ixor - annotatedTest
-//
-//        'jadd - annotatedTest
-//        'jsub - annotatedTest
-//        'jmul - annotatedTest
-//        'jdiv - annotatedTest
-//        'jrem - annotatedTest
-//        'jshl - annotatedTest
-//        'jshr - annotatedTest
-//        'jushr - annotatedTest
-//        'jand - annotatedTest
-//        'jor - annotatedTest
-//        'jxor - annotatedTest
-//
-//        'fadd - annotatedTest
-//        'fsub - annotatedTest
-//        'fmul - annotatedTest
-//        'fdiv - annotatedTest
-//        'frem - annotatedTest
-//
-//        'dadd - annotatedTest
-//        'dsub - annotatedTest
-//        'dmul - annotatedTest
-//        'ddiv - annotatedTest
-//        'drem - annotatedTest
-//
-//        'lcmp0 - annotatedTest
-//        'lcmp1 - annotatedTest
-//        'lcmp2 - annotatedTest
-//
-//        'fcmp0 - annotatedTest
-//        'fcmp1 - annotatedTest
-//        'fcmp2 - annotatedTest
-//
-//        'dcmp0 - annotatedTest
-//        'dcmp1 - annotatedTest
-//        'dcmp2 - annotatedTest
-//
-//        'jump0 - annotatedTest
-//        'jump1 - annotatedTest
-//        'jump2 - annotatedTest
-//        'jump3 - annotatedTest
-//
-//        'switch0 - annotatedTest
-//        'switch1 - annotatedTest
-//        'switch2 - annotatedTest
-//        'switch3 - annotatedTest
-//      }
-//      'SimpleDce - {
-//        'main - annotatedTest
-//        'deadLoopVariable - annotatedTest
-//        'deadLocal - annotatedTest
-//      }
-//      'Optimistic - {
-//        'trivial - annotatedTest
-//        'loopConstant - annotatedTest
-//        'branchConstant - annotatedTest
+    'opt - {
+      'Folding - {
+        'iadd - annotatedTest
+        'isub - annotatedTest
+        'imul - annotatedTest
+        'idiv - annotatedTest
+        'irem - annotatedTest
+        'ishl - annotatedTest
+        'ishr - annotatedTest
+        'iushr - annotatedTest
+        'iand - annotatedTest
+        'ior - annotatedTest
+        'ixor - annotatedTest
+
+        'jadd - annotatedTest
+        'jsub - annotatedTest
+        'jmul - annotatedTest
+        'jdiv - annotatedTest
+        'jrem - annotatedTest
+        'jshl - annotatedTest
+        'jshr - annotatedTest
+        'jushr - annotatedTest
+        'jand - annotatedTest
+        'jor - annotatedTest
+        'jxor - annotatedTest
+
+        'fadd - annotatedTest
+        'fsub - annotatedTest
+        'fmul - annotatedTest
+        'fdiv - annotatedTest
+        'frem - annotatedTest
+
+        'dadd - annotatedTest
+        'dsub - annotatedTest
+        'dmul - annotatedTest
+        'ddiv - annotatedTest
+        'drem - annotatedTest
+
+        'lcmp0 - annotatedTest
+        'lcmp1 - annotatedTest
+        'lcmp2 - annotatedTest
+
+        'fcmp0 - annotatedTest
+        'fcmp1 - annotatedTest
+        'fcmp2 - annotatedTest
+
+        'dcmp0 - annotatedTest
+        'dcmp1 - annotatedTest
+        'dcmp2 - annotatedTest
+
+        'jump0 - annotatedTest
+        'jump1 - annotatedTest
+        'jump2 - annotatedTest
+        'jump3 - annotatedTest
+
+        'switch0 - annotatedTest
+        'switch1 - annotatedTest
+        'switch2 - annotatedTest
+        'switch3 - annotatedTest
+      }
+      'SimpleDce - {
+        'main - annotatedTest
+        'deadLoopVariable - annotatedTest
+        'deadLocal - annotatedTest
+      }
+      'Optimistic - {
+        'trivial - annotatedTest
+        'loopConstant - annotatedTest
+        'branchConstant - annotatedTest
 //        'recursivePureConstant - annotatedTest
-//      }
-//      'ConstantMethod - {
+      }
+      'ConstantMethod - {
 //        'intMain0 - annotatedTest
 //        'intMain - annotatedTest
-//        'nonFoldedIntMain - annotatedTest
+        'nonFoldedIntMain - annotatedTest
 //        'boolMain - annotatedTest
 //        'impureMain - annotatedTest
-//      }
-//      'BooleanJumpFlatten - {
-//        'simpleTrue - annotatedTest
-//        'simpleFalse - annotatedTest
-//      }
-//
-//      'InstanceofJumpFlatten - {
-//        'simpleBar - annotatedTest
-//        'simpleBaz - annotatedTest
-//        'simpleQux - annotatedTest
-//        'simpleBarMatch - annotatedTest
-//        'simpleBazMatch - annotatedTest
-//        'simpleQuxMatch - annotatedTest
-//      }
-//      'BooleanWidening - {
-//        'simple - annotatedTest
-//      }
-//      'InstanceDce - {
-//        'simple1 - annotatedTest
+      }
+      'BooleanJumpFlatten - {
+        'simpleTrue - annotatedTest
+        'simpleFalse - annotatedTest
+      }
+
+      'InstanceofJumpFlatten - {
+        'simpleBar - annotatedTest
+        'simpleBaz - annotatedTest
+        'simpleQux - annotatedTest
+        'simpleBarMatch - annotatedTest
+        'simpleBazMatch - annotatedTest
+        'simpleQuxMatch - annotatedTest
+      }
+      'BooleanWidening - {
+        'simple - annotatedTest
+      }
+      'InstanceDce - {
+        'simple1 - annotatedTest
 //        'simple2 - annotatedTest
 //        'simple3 - annotatedTest
 //
@@ -241,70 +241,70 @@ object MainTests extends TestSuite{
 //        'unknown1 - annotatedTest
 //        'unknown2 - annotatedTest
 //        'unknown3 - annotatedTest
-//      }
-//      'InterfacePreservation - {
-//        'shallow - annotatedTest
-//        'deep - annotatedTest
-//      }
-//
-//
-//      'Liveness - {
-//        'entrypointUnused0 - annotatedTest
-//        'entrypointUnused1 - annotatedTest
-//        'entrypointUnused2 - annotatedTest
-//
-//        'trivialUnused - annotatedTest
-//        'longUnusedRight - annotatedTest
-//        'longUnusedLeft - annotatedTest
-//
+      }
+      'InterfacePreservation - {
+        'shallow - annotatedTest
+        'deep - annotatedTest
+      }
+
+
+      'Liveness - {
+        'entrypointUnused0 - annotatedTest
+        'entrypointUnused1 - annotatedTest
+        'entrypointUnused2 - annotatedTest
+
+        'trivialUnused - annotatedTest
+        'longUnusedRight - annotatedTest
+        'longUnusedLeft - annotatedTest
+
 //        'simple - annotatedTest
 //        'simple2a - annotatedTest
 //        'simple2b - annotatedTest
-//
+
 //        'chained - annotatedTest
 //        'chained2a - annotatedTest
 //        'chained2b - annotatedTest
-//
-//        'implement0 - annotatedTest
-//        'implement1 - annotatedTest
-//        'implement2a - annotatedTest
-//        'implement2b - annotatedTest
-//        'implement3 - annotatedTest
-//
-//        'override0 - annotatedTest
-//        'override1 - annotatedTest
-//        'override2 - annotatedTest
-////        'override3 - annotatedTest
-//
-//        'deadLoopCounter - annotatedTest
-//      }
-//
-////      'Optimistic - {
-////        'simple - annotatedTest
-////      }
-//    }
 
-//    'narrow - {
-//      'Supertype - {
-//        'main - annotatedTest
+        'implement0 - annotatedTest
+        'implement1 - annotatedTest
+        'implement2a - annotatedTest
+        'implement2b - annotatedTest
+        'implement3 - annotatedTest
+
+        'override0 - annotatedTest
+        'override1 - annotatedTest
+        'override2 - annotatedTest
+//        'override3 - annotatedTest
+
+        'deadLoopCounter - annotatedTest
+      }
+
+//      'Optimistic - {
+//        'simple - annotatedTest
+//      }
+    }
+
+    'narrow - {
+      'Supertype - {
+        'main - annotatedTest
 //        'mainDeep - annotatedTest
-//      }
-//      'Parametric - {
-//        'main - annotatedTest
+      }
+      'Parametric - {
+        'main - annotatedTest
 //        'mainDeep - annotatedTest
-//      }
-//      'NarrowReturn - {
+      }
+      'NarrowReturn - {
+        'main - annotatedTest
+      }
+      'MergeReturn - {
+        'main - annotatedTest
+      }
+//      'IntersectionReturn - {
 //        'main - annotatedTest
 //      }
-//      'MergeReturn - {
-//        'main - annotatedTest
-//      }
-////      'IntersectionReturn - {
-////        'main - annotatedTest
-////      }
 //      'ForceWide - {
 //        'main - annotatedTest
 //      }
-//    }
+    }
   }
 }

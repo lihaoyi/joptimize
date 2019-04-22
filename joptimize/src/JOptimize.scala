@@ -25,7 +25,7 @@ object JOptimize{
 
 //    log.pprint(analyzerRes.visitedMethods)
 
-    pprint.log(analyzerRes.visitedClasses)
+//    pprint.log(analyzerRes.visitedClasses)
     val outClasses = Backend.apply(
       analyzerRes,
       entrypoints,
