@@ -112,21 +112,39 @@ class Analyzer(entrypoints: Seq[MethodSig],
                   callback(Analyzer.dummyResult(calledSig, optimistic = false).props.inferredReturn)
                   Seq(currentStack)
                 case Some(subSigs0) =>
-                  val subSigs = subSigs0
-                    .filter(subSig => frontend.loadMethodBody(subSig, globalLog.method(subSig)).nonEmpty)
+                  val (subSigs, abstractSubSigs) = subSigs0
+                    .partition(subSig => frontend.loadMethodBody(subSig, globalLog.method(subSig)).nonEmpty)
 
-                  var agg = List.empty[IType]
+
+                  var agg = List.empty[(MethodSig, IType)]
+
+                  pprint.log(subSigs)
                   val rets = for (subSig <- subSigs) yield {
 
                     val subCallback = (i: IType) => {
-                      agg ::= i
+                      agg ::= (subSig, i)
 
                       if (agg.length == subSigs.length){
-                        visitedResolved((calledSig, calledInferred.drop(if (calledSig.static) 0 else 1))) =
-                          Analyzer.dummyResult(calledSig, optimistic = false)
-                            .props
-                            .copy(inferredReturn = classManager.merge(agg))
-                        callback(classManager.merge(agg))
+                        for(subSig <- subSigs0){
+
+                          visitedResolved((subSig, calledInferred.drop(if (calledSig.static) 0 else 1))) =
+                            Analyzer.dummyResult(calledSig, optimistic = false)
+                              .props
+                              .copy(inferredReturn =
+                                classManager.merge(
+                                  agg.collect{
+                                    case (s, i) if classManager.merge(Seq(s.cls, subSig.cls)) == subSig.cls =>
+                                      i
+                                  }
+                                )
+                              )
+                        }
+
+
+                        callback(
+                          visitedResolved((calledSig, calledInferred.drop(if (calledSig.static) 0 else 1)))
+                            .inferredReturn
+                        )
                       }
 
                       stacks.remove(0)
@@ -468,7 +486,8 @@ object Analyzer {
     Analyzer.Properties(
       originalSig.desc.ret,
       optimistic,
-      if (optimistic) Set.empty else originalSig.desc.args.indices.toSet
+      if (optimistic) Set.empty
+      else Range.inclusive(0, originalSig.desc.args.length + (if (originalSig.static) 0 else 1)).toSet
     )
   )
 
