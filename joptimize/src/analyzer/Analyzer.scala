@@ -31,7 +31,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
 
   val analyses = mutable.LinkedHashMap.empty[(MethodSig, Seq[IType]), OptimisticAnalyze[IType]]
 
-  val stacks = mutable.Buffer.empty[List[(MethodSig, Seq[IType], IType => Unit)]]
+  val stacks = mutable.Buffer.empty[List[(MethodSig, Seq[IType], Analyzer.Properties => Unit)]]
 
   def apply() = {
 
@@ -54,7 +54,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
 
       val step = currentAnalysis.step()
 
-      val newCurrent: Seq[List[(MethodSig, Seq[IType], IType => Unit)]] = step match{
+      val newCurrent: Seq[List[(MethodSig, Seq[IType], Analyzer.Properties => Unit)]] = step match{
         case OptimisticAnalyze.Step.Continue() => Seq(currentStack)
 
         case OptimisticAnalyze.Step.Done() =>
@@ -80,7 +80,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
 
           inferredLog.pprint(optimisticResult.inferred)
           inferredLog.pprint(optimisticResult.liveBlocks)
-          returnCallback(inferredReturn)
+          returnCallback(props)
           if (currentStack.tail.nonEmpty) Seq(currentStack.tail)
           else Nil
 
@@ -97,7 +97,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
               subLog.println("================ INITIAL ================")
 
               subLog.graph(Renderer.dumpSvg(frontend.loadMethodBody(calledSig, globalLog.method(calledSig)).get))
-              Seq((calledSig, calledInferred, callback) :: currentStack)
+              Seq((calledSig, calledInferred, (props: Analyzer.Properties) => callback(props.inferredReturn)) :: currentStack)
             }
           }else{
             if (classManager.loadClass(calledSig.cls).isEmpty) {
@@ -116,28 +116,25 @@ class Analyzer(entrypoints: Seq[MethodSig],
                     .partition(subSig => frontend.loadMethodBody(subSig, globalLog.method(subSig)).nonEmpty)
 
 
-                  var agg = List.empty[(MethodSig, IType)]
+                  var agg = List.empty[(MethodSig, Analyzer.Properties)]
 
                   pprint.log(subSigs)
                   val rets = for (subSig <- subSigs) yield {
 
-                    val subCallback = (i: IType) => {
+                    val subCallback = (i: Analyzer.Properties) => {
                       agg ::= (subSig, i)
 
                       if (agg.length == subSigs.length){
                         for(subSig <- subSigs0){
-
+                          val subAgg = agg.collect{
+                            case (s, i) if classManager.merge(Seq(s.cls, subSig.cls)) == subSig.cls => i
+                          }
                           visitedResolved((subSig, calledInferred.drop(if (calledSig.static) 0 else 1))) =
-                            Analyzer.dummyResult(calledSig, optimistic = false)
-                              .props
-                              .copy(inferredReturn =
-                                classManager.merge(
-                                  agg.collect{
-                                    case (s, i) if classManager.merge(Seq(s.cls, subSig.cls)) == subSig.cls =>
-                                      i
-                                  }
-                                )
-                              )
+                            Analyzer.Properties(
+                              inferredReturn = classManager.merge(subAgg.map(_.inferredReturn)),
+                              pure = subAgg.forall(_.pure),
+                              liveArgs = subAgg.flatMap(_.liveArgs).toSet
+                            )
                         }
 
 

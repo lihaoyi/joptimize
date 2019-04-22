@@ -60,7 +60,7 @@ val combined = analyzerRes.visitedResolved.mapValues(Right(_)) ++ analyzerRes.vi
       if loadClassCache.contains(sig.cls)
     } yield {
       val liveArgs =
-        if (true || entrypoints.contains(sig)) (_: Int) => true
+        if (entrypoints.contains(sig)) (_: Int) => true
         else{
           val highestSig =
             if (sig.static) sig
