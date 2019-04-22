@@ -284,13 +284,16 @@ object SSA{
     val L2D = code(Opcodes.L2D, JType.Prim.D)
     val F2D = code(Opcodes.F2D, JType.Prim.D)
   }
-
+  trait Branch extends Jump{
+    def trueBranch: SSA.True
+    def falseBranch: SSA.False
+  }
   class UnaBranch(var state: State,
                   var block: Block,
                   var a: Val,
                   var opcode: UnaBranch.Code,
                   var trueBranch: SSA.True,
-                  var falseBranch: SSA.False) extends Jump(){
+                  var falseBranch: SSA.False) extends Branch{
     def upstream = Seq(state, block, a)
     def replaceUpstream(swap: Swapper): Unit = {
       state = swap(state)
@@ -317,7 +320,7 @@ object SSA{
                   var b: Val,
                   var opcode: BinBranch.Code,
                   var trueBranch: SSA.True,
-                  var falseBranch: SSA.False) extends Jump(){
+                  var falseBranch: SSA.False) extends Branch{
     def upstream = Seq(state, block, a, b)
     def replaceUpstream(swap: Swapper): Unit = {
       state = swap(state)
@@ -369,13 +372,18 @@ object SSA{
     def downstreamList = Nil
     def downstreamSize = 0
   }
+  trait Switch extends Jump{
+    def src: SSA.Val
+    def default: SSA.Default
+    def cases: mutable.LinkedHashMap[Int, SSA.Case]
+  }
   class TableSwitch(var state: State,
                     var block: Block,
                     var src: Val,
                     var min: Int,
                     var max: Int,
                     var cases: mutable.LinkedHashMap[Int, SSA.Case],
-                    var default: SSA.Default) extends Jump() {
+                    var default: SSA.Default) extends Switch {
     def upstream = Seq(state, block, src)
     def replaceUpstream(swap: Swapper): Unit = {
       state = swap(state)
@@ -390,7 +398,7 @@ object SSA{
                      var src: Val,
                      var keys: Seq[Int],
                      var cases: mutable.LinkedHashMap[Int, SSA.Case],
-                     var default: SSA.Default) extends Jump(){
+                     var default: SSA.Default) extends Switch {
     def upstream = Seq(state, block, src)
     def replaceUpstream(swap: Swapper): Unit = {
       state = swap(state)

@@ -3,14 +3,222 @@ package joptimize.optimize
 import joptimize.analyzer.Namer
 import joptimize.graph.TarjansStronglyConnectedComponents
 import joptimize.model._
+import joptimize.optimize.OptimisticAnalyze.{Result, topoSort}
 import joptimize.{FileLogger, Logger, Util}
 
 import scala.collection.mutable
+sealed trait State
+object State{
+  case class HandleBlock() extends State
+  case class HandleVal() extends State
+  case class HandleControl() extends State
+  case class HandleControlVals() extends State
+}
+class OptimisticAnalyze[T](methodBody: MethodBody,
+                           initialValues: Map[SSA.Val, T],
+                           initialBlock: SSA.Block,
+                           lattice: Lattice[T],
+                           log: Logger.InferredMethod,
+                           evaluateUnaBranch: (T, SSA.UnaBranch.Code) => Option[Boolean],
+                           evaluateBinBranch: (T, T, SSA.BinBranch.Code) => Option[Boolean],
+                           evaluateSwitch: T => Option[Int]){
 
-object OptimisticAnalyze {
-  case class Result[T](inferredReturns: Seq[T],
-                       inferred: mutable.LinkedHashMap[SSA.Val, T],
-                       liveBlocks: Set[SSA.Block])
+  val inferredBlocks = mutable.Set(initialBlock)
+
+  val blockWorkList = mutable.LinkedHashSet(initialBlock)
+
+  val valWorkList = mutable.LinkedHashSet.empty[SSA.Val]
+  val evaluated = mutable.LinkedHashMap.empty[SSA.Val, T]
+
+  val inferredReturns = mutable.Buffer.empty[T]
+  var state: State = State.HandleBlock()
+  var currentBlock: SSA.Block = null
+  var nextControl: SSA.Control = null
+  var nextBlocks: Seq[SSA.Block] = null
+
+  def getNewPhiExpressions(nextBlock: SSA.Block) = {
+    log.pprint(nextBlock)
+    val nextPhis = nextBlock
+      .downstreamList
+      .collect { case p: SSA.Phi => p }
+      .filter(phi => phi.block == nextBlock)
+
+    val newPhiExpressions = nextPhis
+      .map { phi =>
+        val Seq(expr) = phi
+          .incoming
+          .collect { case (k, v) if k == currentBlock => v }
+          .toSeq
+
+        (phi, expr)
+      }
+    newPhiExpressions
+  }
+
+
+  def queueNextBlockTwo(nextBlock: SSA.Block) = {
+    val newPhiValues = getNewPhiExpressions(nextBlock)
+      .map { case (phi, expr) => phi -> evaluated(expr) }
+
+    var continueNextBlock = !inferredBlocks(nextBlock)
+
+    val invalidatedPhis = mutable.Set.empty[SSA.Phi]
+
+    for ((k, v) <- newPhiValues) {
+      evaluated.get(k) match {
+        case None =>
+          continueNextBlock = true
+          evaluated(k) = v
+        case Some(old) =>
+          if (old != v) {
+
+            val merged = lattice.join(old, v)
+            if (merged != old) {
+              continueNextBlock = true
+              //                  log.pprint((k, old, v, merged))
+              invalidatedPhis.add(k)
+              evaluated(k) = merged
+            }
+          }
+      }
+    }
+
+    //        log.pprint(invalidatedPhis)
+    //        log.pprint(continueNextBlock)
+    if (continueNextBlock) {
+
+      blockWorkList.add(nextBlock)
+      val invalidated = Util.breadthFirstSeen[SSA.Node](invalidatedPhis.toSet)(_.downstreamList.filter(!_.isInstanceOf[SSA.Phi]))
+        .filter(!_.isInstanceOf[SSA.Phi])
+
+      //          log.pprint(invalidated)
+      invalidated.foreach {
+        case removed: SSA.Block => inferredBlocks.remove(removed)
+        case removed: SSA.Jump => inferredBlocks.remove(removed.block)
+        case removed: SSA.Val => evaluated.remove(removed)
+        case _ => // do nothing
+      }
+    }
+  }
+
+
+  def queueNextBlock(nextBlock: SSA.Block) = {
+    val newPhiExpressions = getNewPhiExpressions(nextBlock)
+
+    topoSort(newPhiExpressions.map(_._2).toSet.filter(!_.isInstanceOf[SSA.Phi])).foreach{  v =>
+      valWorkList.add(v)
+    }
+  }
+
+
+  def queueBranchBlock(n: SSA.Branch, doBranch: Option[Boolean]) = {
+    doBranch match {
+      case None =>
+        queueNextBlock(n.trueBranch)
+        queueNextBlock(n.falseBranch)
+        nextBlocks = Seq(n.trueBranch, n.falseBranch)
+      case Some(bool) =>
+        if (bool) {
+          queueNextBlock(n.trueBranch)
+          nextBlocks = Seq(n.trueBranch)
+        } else {
+          queueNextBlock(n.falseBranch)
+          nextBlocks = Seq(n.falseBranch)
+        }
+    }
+  }
+
+  def evaluateVals(onFinish: => Unit) = {
+    valWorkList.headOption match{
+      case Some(v) =>
+        valWorkList.remove(v)
+        evaluated(v) = lattice.transferValue(v, evaluated)
+        true
+      case None =>
+        onFinish
+        true
+    }
+  }
+
+  def step(): Boolean = state match{
+    case State.HandleBlock() =>
+      blockWorkList.headOption match{
+        case None => false
+        case Some(currentBlock0) =>
+          currentBlock = currentBlock0
+          inferredBlocks.add(currentBlock)
+          blockWorkList.remove(currentBlock)
+          log.pprint(currentBlock)
+          val Seq(nextControl0) = currentBlock.downstreamList.collect{case n: SSA.Control => n}
+          nextControl = nextControl0
+          topoSort(nextControl.upstreamVals.toSet.filter(!_.isInstanceOf[SSA.Phi])).foreach(valWorkList.add)
+          state = State.HandleVal()
+          true
+      }
+    case State.HandleVal() =>
+      evaluateVals{
+        state = State.HandleControl()
+      }
+
+    case State.HandleControl() =>
+
+      nextControl match{
+        case nextBlock: SSA.Block =>
+          queueNextBlock(nextBlock)
+          nextBlocks = Seq(nextBlock)
+
+        case n: SSA.Jump =>
+          n match{
+            case r: SSA.Return =>
+              inferredReturns.append(evaluated(r.state))
+              nextBlocks = Nil
+            case r: SSA.ReturnVal =>
+              inferredReturns.append(evaluated(r.src))
+              inferredReturns.append(evaluated(r.state))
+              nextBlocks = Nil
+            case n: SSA.UnaBranch =>
+              val valueA = evaluated(n.a)
+              val doBranch = evaluateUnaBranch(valueA, n.opcode)
+
+              queueBranchBlock(n, doBranch)
+            case n: SSA.BinBranch =>
+              val valueA = evaluated(n.a)
+              val valueB = evaluated(n.b)
+              val doBranch = evaluateBinBranch(valueA, valueB, n.opcode)
+              queueBranchBlock(n, doBranch)
+
+            case n: SSA.Switch =>
+              val value = evaluated(n.src)
+              val cases = n.cases.values
+              val default = n.default
+              val doBranch = evaluateSwitch(value)
+
+              doBranch match{
+                case None =>
+                  for(dest <- cases) queueNextBlock(dest)
+                  queueNextBlock(default)
+
+                  nextBlocks = cases.toSeq :+ default
+                case Some(destValue) =>
+                  val dest = cases.find(_.n == destValue).getOrElse(default)
+                  queueNextBlock(dest)
+                  nextBlocks = Seq(dest)
+              }
+          }
+      }
+
+      state = State.HandleControlVals()
+      true
+
+    case State.HandleControlVals() =>
+      evaluateVals{
+        for(nextBlock <- nextBlocks){
+          queueNextBlockTwo(nextBlock)
+        }
+        state = State.HandleBlock()
+      }
+  }
+
   /**
     * Performs an optimistic analysis on the given method body.
     *
@@ -32,174 +240,8 @@ object OptimisticAnalyze {
     * modified, the respective blocks are added to the worklist for processing.
     * When the worklist is empty, inference is complete and the algorithm exits
     */
-  def apply[T](methodBody: MethodBody,
-               initialValues: Map[SSA.Val, T],
-               initialBlock: SSA.Block,
-               lattice: Lattice[T],
-               log: Logger.InferredMethod,
-               evaluateUnaBranch: (T, SSA.UnaBranch.Code) => Option[Boolean],
-               evaluateBinBranch: (T, T, SSA.BinBranch.Code) => Option[Boolean],
-               evaluateSwitch: T => Option[Int],
-               onNew: JType.Cls => Unit): Result[T] = {
-
-    val inferredBlocks = mutable.Set(initialBlock)
-
-    val workList = mutable.LinkedHashSet(initialBlock)
-
-    val evaluated = mutable.LinkedHashMap.empty[SSA.Val, T]
-
-
-    val inferredReturns = mutable.Buffer.empty[T]
-    while(workList.nonEmpty){
-
-      val currentBlock = workList.head
-      inferredBlocks.add(currentBlock)
-      workList.remove(currentBlock)
-      log.pprint(currentBlock)
-      val Seq(nextControl) = currentBlock.downstreamList.collect{case n: SSA.Control => n}
-
-      def queueNextBlock(nextBlock: SSA.Block) = {
-        log.pprint(nextBlock)
-        val nextPhis = nextBlock
-          .downstreamList
-          .collect{case p: SSA.Phi => p}
-          .filter(phi => phi.block == nextBlock)
-
-        val newPhiExpressions = nextPhis
-          .map{phi =>
-            val Seq(expr) = phi
-              .incoming
-              .collect{case (k, v) if k == currentBlock => v}
-              .toSeq
-
-            (phi, expr)
-          }
-
-        topoSort(newPhiExpressions.map(_._2).toSet.filter(!_.isInstanceOf[SSA.Phi])).foreach{  v =>
-          evaluated(v) = lattice.transferValue(v, evaluated)
-        }
-
-        val newPhiValues = newPhiExpressions
-          .map{case (phi, expr) => phi -> evaluated(expr)}
-
-        var continueNextBlock = !inferredBlocks(nextBlock)
-
-        val invalidatedPhis = mutable.Set.empty[SSA.Phi]
-
-        for((k, v) <- newPhiValues) {
-          evaluated.get(k) match{
-            case None =>
-              continueNextBlock = true
-              evaluated(k) = v
-            case Some(old) =>
-              if (old != v){
-
-                val merged = lattice.join(old, v)
-                if (merged != old){
-                  continueNextBlock = true
-//                  log.pprint((k, old, v, merged))
-                  invalidatedPhis.add(k)
-                  evaluated(k) = merged
-                }
-              }
-          }
-        }
-
-//        log.pprint(invalidatedPhis)
-//        log.pprint(continueNextBlock)
-        if (continueNextBlock) {
-
-          workList.add(nextBlock)
-          val invalidated = Util.breadthFirstSeen[SSA.Node](invalidatedPhis.toSet)(_.downstreamList.filter(!_.isInstanceOf[SSA.Phi]))
-            .filter(!_.isInstanceOf[SSA.Phi])
-
-//          log.pprint(invalidated)
-          invalidated.foreach{
-            case removed: SSA.Block => inferredBlocks.remove(removed)
-            case removed: SSA.Jump => inferredBlocks.remove(removed.block)
-            case removed: SSA.Val => evaluated.remove(removed)
-            case _ => // do nothing
-          }
-        }
-
-      }
-
-      val sorted = topoSort(nextControl.upstreamVals.toSet.filter(!_.isInstanceOf[SSA.Phi]))
-      sorted.foreach{  v =>
-        evaluated(v) = lattice.transferValue(v, evaluated)
-      }
-
-      nextControl match{
-        case nextBlock: SSA.Block => queueNextBlock(nextBlock)
-
-        case n: SSA.Jump =>
-          n match{
-            case r: SSA.Return =>
-              inferredReturns.append(evaluated(r.state))
-            case r: SSA.ReturnVal =>
-              inferredReturns.append(evaluated(r.src))
-              inferredReturns.append(evaluated(r.state))
-            case n: SSA.UnaBranch =>
-              val valueA = evaluated(n.a)
-              val doBranch = evaluateUnaBranch(valueA, n.opcode)
-
-              doBranch match{
-                case None =>
-                  queueNextBlock(n.downstreamList.collect{ case t: SSA.True => t}.head)
-                  queueNextBlock(n.downstreamList.collect{ case t: SSA.False => t}.head)
-
-                case Some(bool) =>
-                  if (bool) queueNextBlock(n.downstreamList.collect{ case t: SSA.True => t}.head)
-                  else queueNextBlock(n.downstreamList.collect{ case t: SSA.False => t}.head)
-              }
-            case n: SSA.BinBranch =>
-              val valueA = evaluated(n.a)
-              val valueB = evaluated(n.b)
-              val doBranch = evaluateBinBranch(valueA, valueB, n.opcode)
-              doBranch match{
-                case None =>
-                  queueNextBlock(n.downstreamList.collect{ case t: SSA.True => t}.head)
-                  queueNextBlock(n.downstreamList.collect{ case t: SSA.False => t}.head)
-
-                case Some(bool) =>
-                  if (bool) queueNextBlock(n.downstreamList.collect{ case t: SSA.True => t}.head)
-                  else queueNextBlock(n.downstreamList.collect{ case t: SSA.False => t}.head)
-              }
-            case n: SSA.TableSwitch =>
-              val value = evaluated(n.src)
-              val cases = n.cases.values
-              val default = n.default
-              val doBranch = value match{
-                case (CType.I(v), _) => Some(cases.find(_.n == v).getOrElse(default))
-                case _ => None
-              }
-
-              doBranch match{
-                case None =>
-                  for(dest <- cases) queueNextBlock(dest)
-                  queueNextBlock(default)
-
-                case Some(dest) => queueNextBlock(dest)
-              }
-            case n: SSA.LookupSwitch =>
-
-              val value = evaluated(n.src)
-              val cases = n.cases.values
-              val default = n.default
-              val doBranch = evaluateSwitch(value)
-
-              doBranch match{
-                case None =>
-                  for(dest <- cases) queueNextBlock(dest)
-                  queueNextBlock(default)
-
-                case Some(destValue) =>
-                  val dest = cases.find(_.n == destValue).getOrElse(default)
-                  queueNextBlock(dest)
-              }
-          }
-      }
-    }
+  def apply(): Result[T] = {
+    while(step())()
 
     Result(
       inferredReturns,
@@ -207,6 +249,12 @@ object OptimisticAnalyze {
       inferredBlocks.toSet
     )
   }
+}
+object OptimisticAnalyze {
+  case class Result[T](inferredReturns: Seq[T],
+                       inferred: mutable.LinkedHashMap[SSA.Val, T],
+                       liveBlocks: Set[SSA.Block])
+
 
   def topoSort[T](set: Set[SSA.Val]) = {
     val agg = Util.breadthFirstSeen(set)(
