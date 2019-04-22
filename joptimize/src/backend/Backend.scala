@@ -101,7 +101,11 @@ object Backend {
                   highestMethodDefiners((originalSig, inferredArgs.drop(if (originalSig.static) 0 else 1)))
                 )
               }
-            analyzerRes.visitedResolved(highestSig, inferredArgs.drop(if (originalSig.static) 0 else 1))
+
+            analyzerRes.visitedResolved.getOrElse(
+              (highestSig, inferredArgs.drop(if (originalSig.static) 0 else 1)),
+              Analyzer.dummyResult(highestSig, optimistic = false).props
+            )
           },
           argMapping
         )

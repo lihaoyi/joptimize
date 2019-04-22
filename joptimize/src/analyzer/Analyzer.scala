@@ -83,15 +83,54 @@ class Analyzer(entrypoints: Seq[MethodSig],
           currentStack.tail
 
         case OptimisticAnalyze.Step.ComputeSig(calledSig, invoke, calledInferred, callback) =>
-          if (currentStack.exists(t => t._1 == calledSig && t._2 == calledInferred)) {
-            callback(dummyResult(originalSig, optimistic = true).props.inferredReturn)
-            currentStack
-          } else{
-            val subLog = globalLog.inferredMethod(calledSig, calledInferred)
-            subLog.println("================ INITIAL ================")
-            subLog.graph(Renderer.dumpSvg(frontend.loadMethodBody(calledSig, globalLog.method(calledSig)).get))
-            (calledSig, calledInferred, callback) :: currentStack
-          }
+//          if (invoke.isInstanceOf[SSA.InvokeSpecial]){
+
+            if (currentStack.exists(t => t._1 == calledSig && t._2 == calledInferred)) {
+              callback(Analyzer.dummyResult(originalSig, optimistic = true).props.inferredReturn)
+              currentStack
+            } else if(classManager.loadClass(calledSig.cls).isEmpty){
+              callback(Analyzer.dummyResult(originalSig, optimistic = false).props.inferredReturn)
+              currentStack
+            } else{
+              val subLog = globalLog.inferredMethod(calledSig, calledInferred)
+              subLog.println("================ INITIAL ================")
+              pprint.log(calledSig)
+              subLog.graph(Renderer.dumpSvg(frontend.loadMethodBody(calledSig, globalLog.method(calledSig)).get))
+              (calledSig, calledInferred, callback) :: currentStack
+            }
+//          }else{
+//            if (classManager.loadClass(calledSig.cls).isEmpty) {
+//              callback(Analyzer.dummyResult(originalSig, optimistic = false).props.inferredReturn)
+//              currentStack
+//            } else {
+//              val resolved = classManager.resolvePossibleSigs(calledSig, calledInferred)
+//              resolved match {
+//                case None =>
+//                  callback(Analyzer.dummyResult(originalSig, optimistic = false).props.inferredReturn)
+//                  currentStack
+//                case Some(subSigs) =>
+//                  val rets = for (subSig <- subSigs) yield {
+//                    if (classManager.loadMethod(subSig).isEmpty) Analyzer.dummyResult(sig, optimistic = false)
+//                    else walkMethod(
+//                      subSig,
+//                      inferredArgs,
+//                      callStack,
+//                      globalLog.inferredMethod(sig, inferredArgs.drop(if (sig.static) 0 else 1))
+//                    )
+//                  }
+//
+//                  val (retTypes, retPurity, retLiveArgs) = rets
+//                    .map(p => (p.props.inferredReturn, p.props.pure, p.props.liveArgs))
+//                    .unzip3
+//
+//                  Analyzer.Properties(
+//                    classManager.merge(retTypes),
+//                    retPurity.forall(identity),
+//                    retLiveArgs.iterator.flatten.toSet
+//                  )
+//              }
+//            }
+//          }
 
       }
 
@@ -130,14 +169,14 @@ class Analyzer(entrypoints: Seq[MethodSig],
   }
 
   def computeMethodSig0(sig: MethodSig, inferredArgs: Seq[IType], callStack: List[(MethodSig, Seq[IType])]) = {
-    if (classManager.loadClass(sig.cls).isEmpty) dummyResult(sig, optimistic = false).props
+    if (classManager.loadClass(sig.cls).isEmpty) Analyzer.dummyResult(sig, optimistic = false).props
     else {
       val resolved = classManager.resolvePossibleSigs(sig, inferredArgs)
       resolved match {
-        case None => dummyResult(sig, optimistic = false).props
+        case None => Analyzer.dummyResult(sig, optimistic = false).props
         case Some(subSigs) =>
           val rets = for (subSig <- subSigs) yield {
-            if (classManager.loadMethod(subSig).isEmpty) dummyResult(sig, optimistic = false)
+            if (classManager.loadMethod(subSig).isEmpty) Analyzer.dummyResult(sig, optimistic = false)
             else walkMethod(
               subSig,
               inferredArgs,
@@ -176,20 +215,11 @@ class Analyzer(entrypoints: Seq[MethodSig],
     else {
       computeMethodSig(sig, inferredArgs, callStack)
       if (visitedMethods.contains(key))  visitedResolved((sig, inferredArgs.drop(if (sig.static) 0 else 1)))
-      else dummyResult(sig, false).props
+      else Analyzer.dummyResult(sig, false).props
     }
   }
 
-  def dummyResult(originalSig: MethodSig, optimistic: Boolean) = Analyzer.Result(
-    new MethodBody(Nil, Nil),
-    mutable.LinkedHashMap.empty,
-    Set.empty,
-    Analyzer.Properties(
-      originalSig.desc.ret,
-      optimistic,
-      if (optimistic) Set.empty else originalSig.desc.args.indices.toSet
-    )
-  )
+
 
   def walkMethod(originalSig: MethodSig,
                  inferredArgs: Seq[IType],
@@ -206,11 +236,11 @@ class Analyzer(entrypoints: Seq[MethodSig],
                   callStack: List[(MethodSig, Seq[IType])],
                   log: Logger.InferredMethod): Analyzer.Result = {
     // Unknown or external methods are treated pessimistically
-    if (classManager.loadMethod(originalSig).isEmpty) dummyResult(originalSig, optimistic = false)
+    if (classManager.loadMethod(originalSig).isEmpty) Analyzer.dummyResult(originalSig, optimistic = false)
     // Recursive calls to the same method are treated optimistically
-    else if (callStack.contains(originalSig -> inferredArgs)) dummyResult(originalSig, optimistic = true)
+    else if (callStack.contains(originalSig -> inferredArgs)) Analyzer.dummyResult(originalSig, optimistic = true)
     else frontend.loadMethodBody(originalSig, log.method(originalSig)) match {
-      case None => dummyResult(originalSig, optimistic = true)
+      case None => Analyzer.dummyResult(originalSig, optimistic = true)
       case Some(methodBody) =>
         log.global().println(
           "  " * callStack.length +
@@ -423,6 +453,17 @@ object Analyzer {
   case class Properties(inferredReturn: IType,
                         pure: Boolean,
                         liveArgs: Set[Int])
+
+  def dummyResult(originalSig: MethodSig, optimistic: Boolean) = Analyzer.Result(
+    new MethodBody(Nil, Nil),
+    mutable.LinkedHashMap.empty,
+    Set.empty,
+    Analyzer.Properties(
+      originalSig.desc.ret,
+      optimistic,
+      if (optimistic) Set.empty else originalSig.desc.args.indices.toSet
+    )
+  )
 
   def analyzeBlockStructure(methodBody: MethodBody) = {
     val controlFlowEdges = Renderer.findControlFlowGraph(methodBody)
