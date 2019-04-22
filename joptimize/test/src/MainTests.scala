@@ -203,7 +203,7 @@ object MainTests extends TestSuite{
         'trivial - annotatedTest
         'loopConstant - annotatedTest
         'branchConstant - annotatedTest
-//        'recursivePureConstant - annotatedTest
+        'recursivePureConstant - annotatedTest
       }
       'ConstantMethod - {
         'intMain0 - annotatedTest
