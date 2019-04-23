@@ -206,6 +206,7 @@ object MainTests extends TestSuite{
         'branchConstant - annotatedTest
         'recursivePureConstant - annotatedTest
         'mutualRecursivePureConstant - annotatedTest
+        'generalRecursive - annotatedTest
 
         // These tests cannot pass until we have optimistic inter-procedural
         // liveness analysis, rather than the simple intra-procedural liveness

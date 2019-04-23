@@ -65,6 +65,23 @@ class Optimistic {
 
 
     @joptimize.Test(
+            inputs = {1, 2, 3, 4}
+    )
+    public static int generalRecursive(int x, int y) {
+        return generalRecursive0(x, y);
+    }
+
+    public static int generalRecursive0(int x, int y) {
+        if (x == 0) return y;
+        else {
+            int z = generalRecursive0(x - 1, y) + generalRecursive0(x - 1, y);
+
+            return z;
+        }
+    }
+
+
+    @joptimize.Test(
             inputs = {1, 2, 3, 4},
             removedNumConst = {123},
             addedNumConst = {456}

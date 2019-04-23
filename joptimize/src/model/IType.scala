@@ -18,7 +18,7 @@ trait IType extends java.io.Serializable{
 }
 
 object IType{
-  object Bottom extends IType{
+  case object Bottom extends IType{
     def name = "Bottom"
     def widen = ???
     def isConstant = false
