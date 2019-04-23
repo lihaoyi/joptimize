@@ -89,7 +89,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
 
           val props = Analyzer.Properties(
             inferredReturn,
-            computePurity(optimisticResult, Nil) &&
+            computePurity(optimisticResult, currentStack.map{case (k, v, cb) => (k, v)}) &&
             !(originalSig.static && classManager.loadMethod(MethodSig(originalSig.cls, "<clinit>", Desc(Nil, JType.Prim.V), true)).nonEmpty),
             optimisticResult.inferred.collect { case (a: SSA.Arg, _) => a.index }.toSet
           )
@@ -297,10 +297,12 @@ class Analyzer(entrypoints: Seq[MethodSig],
         }
       case n: SSA.UnaOp => true
 
-      case n: SSA.InvokeStatic => visitedResolved.get((n.sig, n.srcs.drop(1).map(optResult.inferred))).fold(false)(_.pure)
-      case n: SSA.InvokeSpecial => visitedMethods.get((n.sig, n.srcs.map(optResult.inferred))).fold(false)(_.props.pure)
-      case n: SSA.InvokeVirtual => visitedResolved.get((n.sig, n.srcs.map(optResult.inferred))).fold(false)(_.pure)
-      case n: SSA.InvokeInterface => visitedResolved.get((n.sig, n.srcs.map(optResult.inferred))).fold(false)(_.pure)
+      case n: SSA.Invoke =>
+        val key = (n.sig, n.srcs.drop(if (n.sig.static) 0 else 1).map(optResult.inferred))
+        val default = innerStack.contains(key)
+        if (n.isInstanceOf[SSA.InvokeSpecial]) visitedMethods.get(key).fold(default)(_.props.pure)
+        else visitedResolved.get(key).fold(default)(_.pure)
+
       //    case n: SSA.InvokeDynamic => computeMethodSig(n, n.srcs.map(inferences))
       case p: SSA.Phi => true
     }
