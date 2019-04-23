@@ -5,8 +5,9 @@ import joptimize.model._
 class ITypeLattice(merge: (IType, IType) => IType,
                    inferredArgs: Seq[IType]) extends Lattice[IType]{
   def transferValue(node: SSA.Val, inferences: SSA.Val => IType) = {
-    node.upstream.collect{case v: SSA.Val => inferences(v)}
-    node match{
+    val upstream = node.upstream.collect{case v: SSA.Val => inferences(v)}
+    if (upstream.contains(IType.Bottom)) IType.Bottom
+    else node match{
       case n: SSA.New => n.cls
       case n: SSA.CheckCast => n.desc
       case n: SSA.InstanceOf =>
