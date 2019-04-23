@@ -296,7 +296,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
       case n: SSA.UnaOp => true
 
       case n: SSA.Invoke =>
-        val key = InferredSig(n.sig, n.srcs.drop(if (n.sig.static) 0 else 1).map(optResult.inferred))
+        val key = n.inferredSig(optResult.inferred)
         val default = innerStack.contains(key)
         if (n.isInstanceOf[SSA.InvokeSpecial]) visitedMethods.get(key).fold(default)(_.props.pure)
         else visitedResolved.get(key).fold(default)(_.pure)

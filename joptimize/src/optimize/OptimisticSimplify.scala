@@ -14,7 +14,7 @@ object OptimisticSimplify {
             liveBlocks: Set[SSA.Block],
             log: Logger.InferredMethod,
             classExists: JType.Cls => Boolean,
-            resolvedProperties: (MethodSig, Boolean, Seq[IType]) => Analyzer.Properties) = {
+            resolvedProperties: (InferredSig, Boolean) => Analyzer.Properties) = {
 
     log.pprint(methodBody.args -> argMapping)
     methodBody.args = methodBody.args.filter(a => argMapping.contains(a.index) || (a.index == 0 && !isStatic))
@@ -47,7 +47,7 @@ object OptimisticSimplify {
                    classExists: JType.Cls => Boolean,
                    log: Logger.InferredMethod,
                    liveBlocks: Set[SSA.Block],
-                   resolvedProperties: (MethodSig, Boolean, Seq[IType]) => Analyzer.Properties,
+                   resolvedProperties: (InferredSig, Boolean) => Analyzer.Properties,
                    argMapping: Map[Int, Int]) = node match {
     case p: SSA.ChangedState =>
 //      log.pprint(inferred.contains(p))
@@ -56,21 +56,21 @@ object OptimisticSimplify {
 //      log.pprint(unInferred)
     // do nothing
     case n: SSA.Invoke =>
-      val inferredArgs0 = n.srcs.map(inferred(_))
-      val properties = resolvedProperties(n.sig, n.isInstanceOf[SSA.InvokeSpecial], inferredArgs0)
+      val inferredSig = n.inferredSig(inferred)
+      val properties = resolvedProperties(
+        inferredSig,
+        n.isInstanceOf[SSA.InvokeSpecial]
+      )
       //      log.pprint(n)
       val (mangledName, mangledDesc, liveArgsOpt) =
         if (n.name == "<init>" || !classExists(n.cls)) (n.name, n.desc, None)
         else {
-
-
           log.pprint(properties.liveArgs)
-          val inferredArgs = inferredArgs0.drop(if(n.sig.static) 0 else 1)
           //          log.pprint(n.sig)
 //          log.pprint(inferredArgs)
 //          log.pprint(liveArgs)
           val (name, desc) = Util.mangle(
-            InferredSig(n.sig, inferredArgs),
+  inferredSig,
             inferred.getOrElseUpdate(n, n.desc.ret),
             properties.liveArgs
           )

@@ -501,6 +501,9 @@ object SSA{
     def desc_=(v: Desc): Unit
 
     def sig = MethodSig(cls, name, desc, this.isInstanceOf[InvokeStatic])
+    def inferredSig(inferred: SSA.Val => IType) = {
+      InferredSig(sig, srcs.drop(if (sig.static) 0 else 1).map(inferred))
+    }
   }
   class InvokeStatic(var state: State,
                           var srcs: Seq[Val],

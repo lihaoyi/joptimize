@@ -128,10 +128,7 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
         valWorkList.remove(v)
         v match{
           case n: SSA.Invoke =>
-            val isig = InferredSig(
-              n.sig,
-              n.srcs.map(evaluated(_).asInstanceOf[IType]).drop(if (n.sig.static) 0 else 1)
-            )
+            val isig = n.inferredSig(evaluated(_).asInstanceOf[IType])
             Step.ComputeSig[T](isig, n, res => {
               evaluated(v) = res
             })

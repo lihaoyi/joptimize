@@ -103,18 +103,18 @@ object Backend {
             res,
             log.inferredMethod(isig),
             loadClassCache.contains,
-            (originalSig, invokeSpecial, inferredArgs) => {
-              val invokedSig = InferredSig(originalSig, inferredArgs.drop(if (originalSig.static) 0 else 1))
+            (invokedSig, invokeSpecial) => {
+
               if (invokeSpecial){
                 analyzerRes.visitedMethods.getOrElse(
                   invokedSig,
-                  Analyzer.dummyResult(originalSig, optimistic = false)
+                  Analyzer.dummyResult(invokedSig.method, optimistic = false)
                 ).props
               }else{
 
                 val highestSig =
-                  if (originalSig.static || !loadMethodCache.contains(originalSig)) originalSig
-                  else originalSig.copy(cls = highestMethodDefiners(invokedSig))
+                  if (invokedSig.method.static || !loadMethodCache.contains(invokedSig.method)) invokedSig.method
+                  else invokedSig.method.copy(cls = highestMethodDefiners(invokedSig))
 
 
                 val res = analyzerRes.visitedResolved.getOrElse(
@@ -183,7 +183,7 @@ object Backend {
                         result: Analyzer.Result,
                         log: Logger.InferredMethod,
                         classExists: JType.Cls => Boolean,
-                        resolvedProperties: (MethodSig, Boolean, Seq[IType]) => Analyzer.Properties,
+                        resolvedProperties: (InferredSig, Boolean) => Analyzer.Properties,
                         argMapping: Map[Int, Int]) = {
 
 
