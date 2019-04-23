@@ -297,7 +297,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
         }
       case n: SSA.UnaOp => true
 
-      case n: SSA.InvokeStatic => visitedResolved.get((n.sig, n.srcs.map(optResult.inferred.drop(1)))).fold(false)(_.pure)
+      case n: SSA.InvokeStatic => visitedResolved.get((n.sig, n.srcs.drop(1).map(optResult.inferred))).fold(false)(_.pure)
       case n: SSA.InvokeSpecial => visitedMethods.get((n.sig, n.srcs.map(optResult.inferred))).fold(false)(_.props.pure)
       case n: SSA.InvokeVirtual => visitedResolved.get((n.sig, n.srcs.map(optResult.inferred))).fold(false)(_.pure)
       case n: SSA.InvokeInterface => visitedResolved.get((n.sig, n.srcs.map(optResult.inferred))).fold(false)(_.pure)
