@@ -59,7 +59,8 @@ object BytecodeDCE {
               queue.enqueue(targetSig)
             }
           case current: MethodInsnNode if !ignore(current.owner) =>
-
+            val clinitMethod = MethodSig(current.owner, "<clinit>", Desc.read("()V"), true)
+            if (methodSigMap.contains(clinitMethod)) queue.enqueue(clinitMethod)
             val sig = MethodSig(
               current.owner, current.name,
               Desc.read(current.desc), current.getOpcode == Opcodes.INVOKESTATIC

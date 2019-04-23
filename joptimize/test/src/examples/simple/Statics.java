@@ -86,4 +86,26 @@ public class Statics {
             return fibonacci(n - 1) + fibonacci(n - 2);
         }
     }
+
+    @joptimize.Test(inputs = {1})
+    public static int staticInit(int n) {
+        int x = staticInitValue;
+        int y = StaticInit.get();
+        int z = staticInitValue;
+        return n + x + y + z;
+
+    }
+    static int staticInitValue = 10;
+    static class StaticInit{
+        static int dummy = 123;
+
+        static int get(){
+            return 100;
+        }
+
+        static{
+            System.out.println("Hello!");
+            Statics.staticInitValue = 1000;
+        }
+    }
 }

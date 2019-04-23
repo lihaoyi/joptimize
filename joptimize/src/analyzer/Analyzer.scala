@@ -58,7 +58,25 @@ class Analyzer(entrypoints: Seq[MethodSig],
       val step = currentAnalysis.step()
 
       val newCurrent: Seq[(List[(MethodSig, Seq[IType], Analyzer.Properties => Unit)], Int)] = step match{
-        case OptimisticAnalyze.Step.Continue() => Seq(currentStack -> currentStackStartDepth)
+        case OptimisticAnalyze.Step.Continue(nodeOpt) =>
+          val addedCls = nodeOpt match{
+            case Some(n: SSA.GetField) => Some(n.owner)
+            case Some(n: SSA.PutField) => Some(n.owner)
+            case Some(n: SSA.GetStatic) => Some(n.cls)
+            case Some(n: SSA.PutStatic) => Some(n.cls)
+            case _ => None
+          }
+          addedCls.foreach(visitedClasses.add)
+          val clinits = for {
+            cls <- addedCls.toSeq
+            val clinit = MethodSig(cls, "<clinit>", Desc(Nil, JType.Prim.V), true)
+            if classManager.loadMethod(clinit).isDefined
+            if !analyses.contains((clinit, Nil))
+          } yield {
+            ((clinit, Nil, (_: Analyzer.Properties) => ()) :: currentStack, currentStack.length)
+          }
+
+          clinits ++ Seq(currentStack -> currentStackStartDepth)
 
         case OptimisticAnalyze.Step.Done() =>
 //          println("DONE")
@@ -71,7 +89,8 @@ class Analyzer(entrypoints: Seq[MethodSig],
 
           val props = Analyzer.Properties(
             inferredReturn,
-            computePurity(optimisticResult, Nil),
+            computePurity(optimisticResult, Nil) &&
+            !(originalSig.static && classManager.loadMethod(MethodSig(originalSig.cls, "<clinit>", Desc(Nil, JType.Prim.V), true)).nonEmpty),
             optimisticResult.inferred.collect { case (a: SSA.Arg, _) => a.index }.toSet
           )
 
@@ -81,29 +100,12 @@ class Analyzer(entrypoints: Seq[MethodSig],
             optimisticResult.liveBlocks,
             props
           )
-          val classes = Seq(originalSig.cls) ++ optimisticResult.inferred.keys.collect {
-            case n: SSA.GetField => n.owner
-            case n: SSA.PutField => n.owner
-            case n: SSA.GetStatic => n.cls
-            case n: SSA.PutStatic => n.cls
-          }
-          classes.foreach(visitedClasses.add)
-
-          val clinits = for {
-            cls <- classes
-            val clinit = MethodSig(cls, "<clinit>", Desc(Nil, JType.Prim.V), true)
-            if classManager.loadMethod(clinit).isDefined
-            if !analyses.contains((clinit, Nil))
-          } yield {
-            ((clinit, Nil, (_: Analyzer.Properties) => ()) :: currentStack, currentStack.length)
-          }
-
 
           inferredLog.pprint(optimisticResult.inferred)
           inferredLog.pprint(optimisticResult.liveBlocks)
           returnCallback(props)
-          if (currentStack.tail.length > currentStackStartDepth) clinits ++ Seq(currentStack.tail -> currentStackStartDepth)
-          else clinits ++ Nil
+          if (currentStack.tail.length > currentStackStartDepth) Seq(currentStack.tail -> currentStackStartDepth)
+          else Nil
 
         case OptimisticAnalyze.Step.ComputeSig(calledSig, invoke, calledInferred, callback) =>
           if (currentStack.exists(t => t._1 == calledSig && t._2 == calledInferred)) {
@@ -144,7 +146,6 @@ class Analyzer(entrypoints: Seq[MethodSig],
                       classManager.loadMethod(subSig).exists(_.instructions.size() != 0)
                     }
 
-
                   var agg = List.empty[(MethodSig, Analyzer.Properties)]
 
                   val rets = for (subSig <- subSigs) yield {
@@ -172,9 +173,22 @@ class Analyzer(entrypoints: Seq[MethodSig],
 
                       ()
                     }
-                    ((subSig, calledInferred, subCallback) :: currentStack, currentStack.length)
+                    val classes = Seq(subSig.cls)
+                    classes.foreach(visitedClasses.add)
+
+                    val clinits = for {
+                      cls <- classes
+                      val clinit = MethodSig(cls, "<clinit>", Desc(Nil, JType.Prim.V), true)
+                      if classManager.loadMethod(clinit).isDefined
+                      if !analyses.contains((clinit, Nil))
+                    } yield {
+                      ((clinit, Nil, (_: Analyzer.Properties) => ()) :: currentStack, currentStack.length)
+                    }
+
+                    val x = Seq(((subSig, calledInferred, subCallback) :: currentStack, currentStack.length))
+                    clinits ++ x
                   }
-                  rets.toList ::: List(currentStack -> currentStackStartDepth)
+                  rets.flatten.toList ::: List(currentStack -> currentStackStartDepth)
               }
             }
           }
@@ -205,202 +219,6 @@ class Analyzer(entrypoints: Seq[MethodSig],
       )
     }
 
-  }
-
-  def computeMethodSig(sig: MethodSig,
-                       inferredArgs: Seq[IType],
-                       callStack: List[(MethodSig, Seq[IType])]) = {
-
-    visitedClasses.add(sig.cls)
-    visitedResolved.getOrElseUpdate(
-      (sig, inferredArgs.drop(if (sig.static) 0 else 1)),
-      computeMethodSig0(sig, inferredArgs, callStack)
-    )
-  }
-
-  def computeMethodSig0(sig: MethodSig, inferredArgs: Seq[IType], callStack: List[(MethodSig, Seq[IType])]) = {
-    if (classManager.loadClass(sig.cls).isEmpty) Analyzer.dummyResult(sig, optimistic = false).props
-    else {
-      val resolved = classManager.resolvePossibleSigs(sig)
-      resolved match {
-        case None => Analyzer.dummyResult(sig, optimistic = false).props
-        case Some(subSigs) =>
-          val rets = for (subSig <- subSigs) yield {
-            if (classManager.loadMethod(subSig).isEmpty) Analyzer.dummyResult(sig, optimistic = false)
-            else walkMethod(
-              subSig,
-              inferredArgs,
-              callStack,
-              globalLog.inferredMethod(sig, inferredArgs.drop(if (sig.static) 0 else 1))
-            )
-          }
-
-          val (retTypes, retPurity, retLiveArgs) = rets
-            .map(p => (p.props.inferredReturn, p.props.pure, p.props.liveArgs))
-            .unzip3
-
-          Analyzer.Properties(
-            classManager.merge(retTypes),
-            retPurity.forall(identity),
-            retLiveArgs.iterator.flatten.toSet
-          )
-      }
-    }
-  }
-
-  def computeMethodSigFor(sig: MethodSig,
-                          invokeSpecial: Boolean,
-                          inferredArgs: Seq[IType],
-                          callStack: List[(MethodSig, Seq[IType])]): Analyzer.Properties = {
-
-    val key = (sig, inferredArgs.drop(if (sig.static) 0 else 1))
-    if (invokeSpecial) {
-      walkMethod(
-        sig,
-        inferredArgs,
-        callStack,
-        globalLog.inferredMethod(sig, inferredArgs.drop(if (sig.static) 0 else 1))
-      ).props
-    }
-    else {
-      computeMethodSig(sig, inferredArgs, callStack)
-      if (visitedMethods.contains(key))  visitedResolved((sig, inferredArgs.drop(if (sig.static) 0 else 1)))
-      else Analyzer.dummyResult(sig, false).props
-    }
-  }
-
-
-
-  def walkMethod(originalSig: MethodSig,
-                 inferredArgs: Seq[IType],
-                 callStack: List[(MethodSig, Seq[IType])],
-                 log: Logger.InferredMethod): Analyzer.Result = {
-    visitedMethods.getOrElseUpdate(
-      (originalSig, inferredArgs.drop(if (originalSig.static) 0 else 1)),
-      walkMethod0(originalSig, inferredArgs, callStack, log)
-    )
-  }
-
-  def walkMethod0(originalSig: MethodSig,
-                  inferredArgs: Seq[IType],
-                  callStack: List[(MethodSig, Seq[IType])],
-                  log: Logger.InferredMethod): Analyzer.Result = {
-    // Unknown or external methods are treated pessimistically
-    if (classManager.loadMethod(originalSig).isEmpty) Analyzer.dummyResult(originalSig, optimistic = false)
-    // Recursive calls to the same method are treated optimistically
-    else if (callStack.contains(originalSig -> inferredArgs)) Analyzer.dummyResult(originalSig, optimistic = true)
-    else frontend.loadMethodBody(originalSig, inferredArgs.drop(if (originalSig.static) 0 else 1), log.method(originalSig)) match {
-      case None => Analyzer.dummyResult(originalSig, optimistic = true)
-      case Some(methodBody) =>
-        log.global().println(
-          "  " * callStack.length +
-            "+" + Util.mangleName(originalSig, inferredArgs.drop(if (originalSig.static) 0 else 1))
-        )
-        log.pprint(callStack)
-        log.pprint(inferredArgs)
-        log.check(assert(
-          Util.isValidationCompatible(inferredArgs.drop(if (originalSig.static) 0 else 1), originalSig, checkSubclass),
-          s"Inferred param types [${inferredArgs.mkString(", ")}] is not compatible " +
-            s"with declared param types [${originalSig.desc.args.mkString(", ")}]"
-        ))
-
-
-        log.graph(Renderer.dumpSvg(methodBody))
-        log.println("================ INITIAL ================")
-
-        log.check(methodBody.checkLinks())
-
-        log.graph(Renderer.dumpSvg(methodBody))
-        log.println("================ OPTIMISTIC ================")
-
-        val innerStack = (originalSig -> inferredArgs) :: callStack
-
-        val analysis = optimisticAnalyze(inferredArgs, log, methodBody, innerStack)
-
-        analyses((originalSig, inferredArgs.drop(if (originalSig.static) 0 else 1))) = analysis
-        while({
-          analysis.step() match{
-            case OptimisticAnalyze.Step.Continue() => true
-            case OptimisticAnalyze.Step.Done() => false
-            case OptimisticAnalyze.Step.ComputeSig(calledSig, invoke, calledInferred, callback) =>
-
-              val res = computeMethodSigFor(calledSig, invoke.isInstanceOf[SSA.InvokeSpecial], calledInferred, innerStack).inferredReturn
-              callerGraph.add(
-                (originalSig, inferredArgs.drop(if (originalSig.static) 0 else 1), invoke),
-                (calledSig, calledInferred.drop(if (originalSig.static) 0 else 1))
-              )
-              callback(res)
-              true
-
-          }
-        })()
-        val optResult = analysis.apply()
-
-        val blockEnds = optResult.liveBlocks.map(_.next)
-        val canThrow = blockEnds.exists(_.isInstanceOf[SSA.AThrow])
-
-        //      pprint.log(optResult.inferredReturns)
-        val retTypes0 = optResult.inferredReturns
-        val retTypes = retTypes0.filter(_ != JType.Prim.V)
-        //      pprint.log(retTypes)
-        val inferredReturn =
-          if (retTypes.isEmpty) JType.Prim.V
-          else classManager.merge(retTypes)
-
-        val inferredPurity = computePurity(optResult, innerStack)
-
-        val inferredLiveArgs = optResult.inferred.collect { case (a: SSA.Arg, _) => a.index }
-
-        log.pprint(optResult.inferred)
-        log.pprint(optResult.liveBlocks)
-        log.pprint(inferredReturn)
-        log.pprint(inferredPurity)
-        log.pprint(inferredLiveArgs)
-
-        val classes = optResult.inferred.keys.collect {
-          case n: SSA.GetField => n.owner
-          case n: SSA.PutField => n.owner
-          case n: SSA.GetStatic => n.cls
-          case n: SSA.PutStatic => n.cls
-        }
-
-        for (cls <- Seq(originalSig.cls) ++ classes) {
-          val clinit = MethodSig(cls, "<clinit>", Desc(Nil, JType.Prim.V), true)
-          if (classManager.loadMethod(clinit).isDefined) computeMethodSig(
-            clinit,
-            Nil,
-            (originalSig -> inferredArgs) :: callStack
-          )
-        }
-
-
-        log.check(assert(
-          Util.isValidationCompatible0(inferredReturn, originalSig.desc.ret, checkSubclass),
-          s"Inferred return type [${inferredReturn}] is not compatible " +
-            s"with declared return type [${originalSig.desc.ret}]"
-        ))
-
-
-        log.global().println(
-          "  " * callStack.length +
-            "-" + Util.mangleName(originalSig, inferredArgs.drop(if (originalSig.static) 0 else 1))
-        )
-
-
-        val result = Analyzer.Result(
-          methodBody,
-          optResult.inferred,
-          optResult.liveBlocks,
-          Analyzer.Properties(
-            inferredReturn,
-            !canThrow && inferredPurity,
-            inferredLiveArgs.toSet
-          )
-        )
-
-        classes.foreach(visitedClasses.add)
-        result
-    }
   }
 
   def optimisticAnalyze(inferredArgs: Seq[IType], log: Logger.InferredMethod, methodBody: MethodBody, innerStack: List[(MethodSig, Seq[IType])]) = {
@@ -479,10 +297,10 @@ class Analyzer(entrypoints: Seq[MethodSig],
         }
       case n: SSA.UnaOp => true
 
-      case n: SSA.InvokeStatic => computeMethodSigFor(n.sig, false, n.srcs.map(optResult.inferred), innerStack).pure
-      case n: SSA.InvokeSpecial => computeMethodSigFor(n.sig, true, n.srcs.map(optResult.inferred), innerStack).pure
-      case n: SSA.InvokeVirtual => computeMethodSigFor(n.sig, false, n.srcs.map(optResult.inferred), innerStack).pure
-      case n: SSA.InvokeInterface => computeMethodSigFor(n.sig, false, n.srcs.map(optResult.inferred), innerStack).pure
+      case n: SSA.InvokeStatic => visitedResolved.get((n.sig, n.srcs.map(optResult.inferred.drop(1)))).fold(false)(_.pure)
+      case n: SSA.InvokeSpecial => visitedMethods.get((n.sig, n.srcs.map(optResult.inferred))).fold(false)(_.props.pure)
+      case n: SSA.InvokeVirtual => visitedResolved.get((n.sig, n.srcs.map(optResult.inferred))).fold(false)(_.pure)
+      case n: SSA.InvokeInterface => visitedResolved.get((n.sig, n.srcs.map(optResult.inferred))).fold(false)(_.pure)
       //    case n: SSA.InvokeDynamic => computeMethodSig(n, n.srcs.map(inferences))
       case p: SSA.Phi => true
     }

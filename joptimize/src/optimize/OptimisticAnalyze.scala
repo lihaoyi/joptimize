@@ -128,16 +128,16 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
         valWorkList.remove(v)
         v match{
           case n: SSA.Invoke =>
-            Step.ComputeSig[T](n.sig, n, n.srcs.map(evaluated), res =>
+            Step.ComputeSig[T](n.sig, n, n.srcs.map(evaluated), res => {
               evaluated(v) = res
-            )
+            })
           case _ =>
             evaluated(v) = lattice.transferValue(v, evaluated)
-            Step.Continue()
+            Step.Continue(Some(v))
         }
       case None =>
         onFinish
-        Step.Continue()
+        Step.Continue(None)
     }
   }
 
@@ -154,7 +154,7 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
           nextControl = nextControl0
           topoSort(nextControl.upstreamVals.toSet.filter(!_.isInstanceOf[SSA.Phi])).foreach(valWorkList.add)
           state = State.HandleVal()
-          Step.Continue()
+          Step.Continue(None)
       }
     case State.HandleVal() =>
       evaluateVals{
@@ -209,7 +209,7 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
       }
 
       state = State.HandleControlVals()
-      Step.Continue()
+      Step.Continue(None)
 
     case State.HandleControlVals() =>
       evaluateVals{
@@ -252,7 +252,7 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
 object OptimisticAnalyze {
   sealed trait Step[T]
   object Step{
-    case class Continue[T]() extends Step[T]
+    case class Continue[T](node: Option[SSA.Val]) extends Step[T]
     case class Done[T]() extends Step[T]
     case class ComputeSig[T](sig: MethodSig, invoke: SSA.Invoke, inferred: Seq[T], callback: T => Unit) extends Step[T]
   }

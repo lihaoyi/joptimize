@@ -71,6 +71,7 @@ object MainTests extends TestSuite{
         'tailFactorialLong - annotatedTest
         'tailFactorialVoid - annotatedTest
         'fibonacci - annotatedTest
+        'staticInit - annotatedTest
 
       }
       'Arrays - {
@@ -300,9 +301,9 @@ object MainTests extends TestSuite{
 //      'IntersectionReturn - {
 //        'main - annotatedTest
 //      }
-//      'ForceWide - {
-//        'main - annotatedTest
-//      }
+      'ForceWide - {
+        'main - annotatedTest
+      }
     }
   }
 }
