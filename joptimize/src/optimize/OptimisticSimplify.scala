@@ -70,8 +70,7 @@ object OptimisticSimplify {
 //          log.pprint(inferredArgs)
 //          log.pprint(liveArgs)
           val (name, desc) = Util.mangle(
-            n.sig,
-            inferredArgs,
+            InferredSig(n.sig, inferredArgs),
             inferred.getOrElseUpdate(n, n.desc.ret),
             properties.liveArgs
           )

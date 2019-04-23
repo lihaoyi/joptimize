@@ -128,7 +128,11 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
         valWorkList.remove(v)
         v match{
           case n: SSA.Invoke =>
-            Step.ComputeSig[T](n.sig, n, n.srcs.map(evaluated), res => {
+            val isig = InferredSig(
+              n.sig,
+              n.srcs.map(evaluated(_).asInstanceOf[IType]).drop(if (n.sig.static) 0 else 1)
+            )
+            Step.ComputeSig[T](isig, n, res => {
               evaluated(v) = res
             })
           case _ =>
@@ -254,7 +258,7 @@ object OptimisticAnalyze {
   object Step{
     case class Continue[T](node: Option[SSA.Val]) extends Step[T]
     case class Done[T]() extends Step[T]
-    case class ComputeSig[T](sig: MethodSig, invoke: SSA.Invoke, inferred: Seq[T], callback: T => Unit) extends Step[T]
+    case class ComputeSig[T](isig: InferredSig, invoke: SSA.Invoke, callback: T => Unit) extends Step[T]
   }
   sealed trait State
   object State{

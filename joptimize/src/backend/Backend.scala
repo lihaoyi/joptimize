@@ -24,12 +24,13 @@ object Backend {
     val loadClassCache = classManager.loadClassCache.collect{case (k, Some(v)) => (k, v)}.toMap
     //    pprint.log(loadMethodCache.keys)
     val combined = analyzerRes.visitedResolved.mapValues(Right(_)) ++ analyzerRes.visitedMethods.mapValues(Left(_))
+
     val highestMethodDefiners = for{
-      ((sig, inferredArgs), _) <- combined
-      if loadMethodCache.contains(sig)
+      (isig, _) <- combined
+      if loadMethodCache.contains(isig.method)
     } yield {
       var parentClasses = List.empty[JType.Cls]
-      var current = sig.cls
+      var current = isig.method.cls
       while({
         if (!loadClassCache.contains(current)) false
         else {
@@ -45,41 +46,43 @@ object Backend {
 
       val highestCls = parentClasses
         .find{ cls =>
-          val key = (sig.copy(cls = cls), inferredArgs)
+
+          val key = isig.copy(method = isig.method.copy(cls = cls))
           val res = analyzerRes.visitedResolved.contains(key)
           res
         }
         .get
 
-      ((sig, inferredArgs), highestCls)
+      (isig, highestCls)
     }
 //    pprint.log(highestMethodDefiners.keys)
 
     val newMethods = for{
-      ((sig, inferredArgs), result) <- combined.toList
-      if loadClassCache.contains(sig.cls)
-      if loadMethodCache.contains(sig)
+      (isig, result) <- combined.toList
+      if loadClassCache.contains(isig.method.cls)
+      if loadMethodCache.contains(isig.method)
     } yield {
       val liveArgs =
-        if (entrypoints.contains(sig)) (_: Int) => true
+        if (entrypoints.contains(isig.method)) (_: Int) => true
         else{
           val highestSig =
-            if (sig.static) sig
-            else sig.copy(cls = highestMethodDefiners((sig, inferredArgs)))
+            if (isig.method.static) isig.method
+            else isig.method.copy(cls = highestMethodDefiners(isig))
 
-          analyzerRes.visitedResolved((highestSig, inferredArgs)).liveArgs
+          analyzerRes.visitedResolved(isig.copy(method = highestSig)).liveArgs
         }
-      log.pprint(sig)
 
-      val originalNode = loadMethodCache(sig)
+      log.pprint(isig.method)
+
+      val originalNode = loadMethodCache(isig.method)
 
       val props = result match{
         case Left(res) => res.props
         case Right(props) => props
       }
       val (mangledName, mangledDesc) =
-        if (sig.name == "<init>") (sig.name, sig.desc)
-        else Util.mangle(sig, inferredArgs, props.inferredReturn, liveArgs)
+        if (isig.method.name == "<init>") (isig.method.name, isig.method.desc)
+        else Util.mangle(isig, props.inferredReturn, liveArgs)
 
       val newNode = new MethodNode(
         Opcodes.ASM6,
@@ -93,32 +96,29 @@ object Backend {
       result match{
         case Right(props) => newNode.instructions = new InsnList()
         case Left(res) =>
-          val argMapping = Util.argMapping(sig, liveArgs)
+          val argMapping = Util.argMapping(isig.method, liveArgs)
 
           newNode.instructions = processMethodBody(
-            sig,
+            isig.method,
             res,
-            log.inferredMethod(sig, inferredArgs),
+            log.inferredMethod(isig),
             loadClassCache.contains,
             (originalSig, invokeSpecial, inferredArgs) => {
+              val invokedSig = InferredSig(originalSig, inferredArgs.drop(if (originalSig.static) 0 else 1))
               if (invokeSpecial){
                 analyzerRes.visitedMethods.getOrElse(
-                  (originalSig, inferredArgs.drop(if (originalSig.static) 0 else 1)),
+                  invokedSig,
                   Analyzer.dummyResult(originalSig, optimistic = false)
                 ).props
               }else{
 
                 val highestSig =
                   if (originalSig.static || !loadMethodCache.contains(originalSig)) originalSig
-                  else {
-                    originalSig.copy(cls =
-                      highestMethodDefiners((originalSig, inferredArgs.drop(if (originalSig.static) 0 else 1)))
-                    )
-                  }
+                  else originalSig.copy(cls = highestMethodDefiners(invokedSig))
 
 
                 val res = analyzerRes.visitedResolved.getOrElse(
-                  (highestSig, inferredArgs.drop(if (originalSig.static) 0 else 1)),
+                  invokedSig.copy(method = highestSig),
                   Analyzer.dummyResult(highestSig, optimistic = false).props
                 )
 
@@ -133,7 +133,7 @@ object Backend {
       newNode.desc = mangledDesc.unparse
       newNode.tryCatchBlocks = Nil.asJava
 
-      loadClassCache(sig.cls) -> newNode
+      loadClassCache(isig.method.cls) -> newNode
     }
 
     if (eliminateOldMethods) {
@@ -166,6 +166,7 @@ object Backend {
       }
       output
     }
+
     val outClasses = BytecodeDCE.apply(
       entrypoints,
       grouped.keys.toSeq,

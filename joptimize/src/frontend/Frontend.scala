@@ -6,7 +6,7 @@ import frontend.ConstructSSA
 import joptimize.algorithms.MultiBiMap
 import joptimize.{FileLogger, Logger, Util}
 import joptimize.analyzer.Renderer
-import joptimize.model.{IType, JType, MethodBody, MethodSig, SSA}
+import joptimize.model.{IType, InferredSig, JType, MethodBody, MethodSig, SSA}
 import org.objectweb.asm.tree.{ClassNode, MethodNode}
 import org.objectweb.asm.util.{Textifier, TraceMethodVisitor}
 
@@ -14,12 +14,9 @@ import scala.collection.mutable
 
 class Frontend(val classManager: ClassManager) {
 
-  val cachedMethodBodies = mutable.LinkedHashMap.empty[(MethodSig, Seq[IType]), Option[MethodBody]]
-  def loadMethodBody(originalSig: MethodSig, inferred: Seq[IType], log: Logger.Method): Option[MethodBody] = {
-    cachedMethodBodies.getOrElseUpdate(
-      (originalSig, inferred),
-      loadMethodBody0(originalSig, log)
-    )
+  val cachedMethodBodies = mutable.LinkedHashMap.empty[InferredSig, Option[MethodBody]]
+  def loadMethodBody(isig: InferredSig, log: Logger.Method): Option[MethodBody] = {
+    cachedMethodBodies.getOrElseUpdate(isig, loadMethodBody0(isig.method, log))
   }
 
   def loadMethodBody0(originalSig: MethodSig, log: Logger.Method) = {

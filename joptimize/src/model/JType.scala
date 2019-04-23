@@ -291,3 +291,7 @@ case class MethodSig(cls: JType.Cls, name: String, desc: Desc, static: Boolean){
     cls.javaName + (if (static) "." else "#") + name + desc.unparse
   }
 }
+
+case class InferredSig(method: MethodSig, inferred: Seq[IType]){
+  assert(method.desc.args.length == inferred.length)
+}

@@ -1,6 +1,6 @@
 package joptimize
 import fansi.Str
-import joptimize.model.{IType, MethodSig}
+import joptimize.model.{IType, InferredSig, MethodSig}
 import joptimize.viewer.model.LogMessage
 import sourcecode.{File, Line, Text}
 
@@ -17,7 +17,7 @@ trait Logger{
   def method(originalSig: MethodSig): Logger.Method
   def check(action: => Unit): Unit
   def global(): Logger.Global
-  def inferredMethod(originalSig: MethodSig, inferredArgs: Seq[IType]): Logger.InferredMethod
+  def inferredMethod(isig: InferredSig): Logger.InferredMethod
 }
 
 object Logger{
@@ -41,7 +41,7 @@ object DummyLogger extends Logger with Logger.Global with Logger.Method with Log
 
   def global() = this
 
-  def inferredMethod(originalSig: MethodSig, inferredArgs: Seq[IType]) = this
+  def inferredMethod(isig: InferredSig) = this
 }
 
 abstract class FileLogger(logRoot: os.Path, ignorePrefix: os.RelPath, segments: Seq[String], name: String) extends Logger {
@@ -91,7 +91,7 @@ abstract class FileLogger(logRoot: os.Path, ignorePrefix: os.RelPath, segments: 
 
   def method(originalSig: MethodSig) = new FileLogger.Method(logRoot, ignorePrefix, originalSig)
   def global() = new FileLogger.Global(logRoot, ignorePrefix)
-  def inferredMethod(originalSig: MethodSig, inferredArgs: Seq[IType]) = new FileLogger.InferredMethod(logRoot, ignorePrefix, originalSig, inferredArgs)
+  def inferredMethod(isig: InferredSig) = new FileLogger.InferredMethod(logRoot, ignorePrefix, isig.method, isig.inferred)
 }
 
 object FileLogger{

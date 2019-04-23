@@ -19,29 +19,28 @@ object Util{
     }
   }
 
-  def mangle(originalSig: MethodSig,
-             inferredTypes: Seq[IType],
+  def mangle(isig: InferredSig,
              narrowReturnType: IType,
              liveArgs: Int => Boolean) = {
 
-    if (isManglingCompatible(inferredTypes, originalSig.desc.args)) {
+    if (isManglingCompatible(isig.inferred, isig.method.desc.args)) {
 
       val narrowedDesc = Desc(
-        mangleLiveArgList(originalSig.desc.args, originalSig.static, liveArgs),
-        originalSig.desc.ret
+        mangleLiveArgList(isig.method.desc.args, isig.method.static, liveArgs),
+        isig.method.desc.ret
       )
 
-      (originalSig.name, narrowedDesc)
+      (isig.method.name, narrowedDesc)
     }
     else{
-      val mangledName = mangleName0(originalSig, inferredTypes)
-      val jTypeRet = CType.toJType(narrowReturnType, originalSig.desc.ret)
-      val jTypeArgs = inferredTypes
-        .zip(originalSig.desc.args)
+      val mangledName = mangleName0(isig.method, isig.inferred)
+      val jTypeRet = CType.toJType(narrowReturnType, isig.method.desc.ret)
+      val jTypeArgs = isig.inferred
+        .zip(isig.method.desc.args)
         .map(t => CType.toJType(t._1, t._2))
 
       val mangledJTypeDesc = Desc(
-        mangleLiveArgList(jTypeArgs, originalSig.static, liveArgs),
+        mangleLiveArgList(jTypeArgs, isig.method.static, liveArgs),
         jTypeRet
       )
       (mangledName, mangledJTypeDesc)
