@@ -74,7 +74,7 @@ class ClassManager(getClassFile: String => Option[Array[Byte]]) extends ClassMan
   )
 
 
-  def leastUpperBound(classes: Seq[JType.Cls]) = {
+  def mergeClasses(classes: Seq[JType.Cls]) = {
     Util.leastUpperBound(classes.toSet) { cls =>
       loadClass(cls) match{
         case None => Nil
@@ -82,28 +82,42 @@ class ClassManager(getClassFile: String => Option[Array[Byte]]) extends ClassMan
       }
     }.toSeq
   }
-
-  def merge(itypes: Seq[IType]): IType = {
+  def mergeTypes(itypes: Seq[IType]): IType = {
+    mergeTypes0(itypes).getOrElse(throw new Exception(itypes.toString))
+  }
+  def mergeTypes0(itypes: Seq[IType]): Option[IType] = {
     val flattened = itypes.flatMap{
       case CType.Intersect(values) => values
       case j => Seq(j)
     }.distinct
-    if (flattened.length == 1) flattened.head
-    else if (flattened.forall(_.isRef)){
-      if (flattened.exists(_.isInstanceOf[JType.Arr])) JType.Cls("java/lang/Object")
-      else leastUpperBound(flattened.map(_.asInstanceOf[JType.Cls])) match{
-        case Seq(single) => single
-        case many => CType.Intersect(many)
+    if (flattened.length == 1) Some(flattened.head)
+    else if(flattened.forall(_.widen == JType.Prim.I)) Some(JType.Prim.I)
+    else if(flattened.forall(_.widen == JType.Prim.F)) Some(JType.Prim.F)
+    else if(flattened.forall(_.widen == JType.Prim.J)) Some(JType.Prim.J)
+    else if(flattened.forall(_.widen == JType.Prim.D)) Some(JType.Prim.D)
+    else if(flattened.forall(x => x.widen == JType.Prim.Z || x.getClass == classOf[CType.I])) Some(JType.Prim.Z)
+    else if(flattened.forall(x => x.widen == JType.Prim.B || x.getClass == classOf[CType.I])) Some(JType.Prim.B)
+    else if(flattened.forall(x => x.widen == JType.Prim.C || x.getClass == classOf[CType.I])) Some(JType.Prim.C)
+    else if(flattened.forall(x => x.widen == JType.Prim.S || x.getClass == classOf[CType.I])) Some(JType.Prim.S)
+    else if (flattened.forall(_.isInstanceOf[JType.Cls])) {
+      mergeClasses(flattened.map(_.asInstanceOf[JType.Cls])) match {
+        case Seq(single) => Some(single)
+        case many => Some(CType.Intersect(many))
       }
     }
-    else if(flattened.forall(_.widen == JType.Prim.I)) JType.Prim.I
-    else if(flattened.forall(_.widen == JType.Prim.F)) JType.Prim.F
-    else if(flattened.forall(_.widen == JType.Prim.J)) JType.Prim.J
-    else if(flattened.forall(_.widen == JType.Prim.D)) JType.Prim.D
-    else if(flattened.forall(x => x.widen == JType.Prim.Z || x.getClass == classOf[CType.I])) JType.Prim.Z
-    else if(flattened.forall(x => x.widen == JType.Prim.B || x.getClass == classOf[CType.I])) JType.Prim.B
-    else if(flattened.forall(x => x.widen == JType.Prim.C || x.getClass == classOf[CType.I])) JType.Prim.C
-    else if(flattened.forall(x => x.widen == JType.Prim.S || x.getClass == classOf[CType.I])) JType.Prim.S
-    else throw new Exception(flattened.toString)
+    else if (flattened.forall(_.isInstanceOf[JType.Arr])){
+      Some(
+
+        mergeTypes0(flattened.map{case a: JType.Arr => a.innerType}) match{
+          case None => JType.Cls("java.lang.Object")
+          case Some(merged) =>
+            merged match{
+              case j: JType => JType.Arr(j)
+              case _ => JType.Arr(JType.Cls("java.lang.Object"))
+            }
+        }
+      )
+    }
+    else None
   }
 }

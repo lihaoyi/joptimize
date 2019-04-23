@@ -1,20 +1,12 @@
 package joptimize.model
 
-import org.objectweb.asm.tree.AbstractInsnNode
-import org.objectweb.asm.tree.analysis.Value
-
-import scala.collection.mutable
-
 /**
   * Represents an inferred type in the joptimize type system.
   *
   * Can be a concrete JType, an intersection type, or a concrete value
   */
-trait IType extends Value with java.io.Serializable{
-  def size: Int
-  def isRef: Boolean
-  def internalName: String
-  def getSize: Int = size
+trait IType extends java.io.Serializable{
+
   def name: String
 
   /**

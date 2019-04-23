@@ -82,7 +82,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
           val retTypes = currentAnalysis.apply().inferredReturns.filter(_ != JType.Prim.V)
           val inferredReturn =
             if (retTypes.isEmpty) JType.Prim.V
-            else classManager.merge(retTypes)
+            else classManager.mergeTypes(retTypes)
 
           val props = Analyzer.Properties(
             inferredReturn,
@@ -143,7 +143,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
 
                       visitedResolved(calledSig) =
                         Analyzer.Properties(
-                          inferredReturn = classManager.merge(agg.map(_._2.inferredReturn)),
+                          inferredReturn = classManager.mergeTypes(agg.map(_._2.inferredReturn)),
                           pure = agg.forall(_._2.pure),
                           liveArgs = agg.flatMap(_._2.liveArgs).toSet
                         )
@@ -224,10 +224,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
       methodBody,
       Map.empty,
       methodBody.getAllVertices().collect { case b: SSA.Block if b.upstream.isEmpty => b }.head,
-      new ITypeLattice(
-        (x, y) => classManager.merge(Seq(x, y)),
-        inferredArgs.flatMap { i => Seq.fill(i.getSize)(i) }
-      ),
+      new ITypeLattice((x, y) => classManager.mergeTypes(Seq(x, y)), inferredArgs),
       log,
       evaluateUnaBranch = {
         case (CType.I(v), SSA.UnaBranch.IFNE) => Some(v != 0)
@@ -306,7 +303,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
     }
   }
 
-  def checkSubclass(cls1: JType.Cls, cls2: JType.Cls) = classManager.merge(Seq(cls1, cls2)) == cls2
+  def checkSubclass(cls1: JType.Cls, cls2: JType.Cls) = classManager.mergeTypes(Seq(cls1, cls2)) == cls2
 }
 
 object Analyzer {
