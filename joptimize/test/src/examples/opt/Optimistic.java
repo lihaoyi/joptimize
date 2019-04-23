@@ -38,6 +38,6 @@ class Optimistic {
 
     public static int recursivePureConstant0(int x, int y) {
         if (x > 2) return 1;
-        else return recursivePureConstant0(3, y);
+        else return recursivePureConstant0(x + 1, y);
     }
 }
