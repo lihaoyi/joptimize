@@ -324,7 +324,7 @@ object Analyzer {
     mutable.LinkedHashMap.empty,
     Set.empty,
     Analyzer.Properties(
-      originalSig.desc.ret,
+      if (optimistic) IType.Bottom else originalSig.desc.ret,
       optimistic,
       if (optimistic) Set.empty
       else Range.inclusive(0, originalSig.desc.args.length + (if (originalSig.static) 0 else 1)).toSet
