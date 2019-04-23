@@ -116,7 +116,7 @@ object MainTests extends TestSuite{
         'staticInheritance - annotatedTest
         'staticInheritanceMethod - annotatedTest
         'moreStrings - annotatedTest
-//        'implementLate - annotatedTest
+        'implementLate - annotatedTest
       }
 //      'Exceptions - {
 //        'throwCatch0 - annotatedTest
@@ -274,14 +274,12 @@ object MainTests extends TestSuite{
         'override0 - annotatedTest
         'override1 - annotatedTest
         'override2 - annotatedTest
-//        'override3 - annotatedTest
+        'override3 - annotatedTest
+        'override4 - annotatedTest
 
         'deadLoopCounter - annotatedTest
       }
 
-//      'Optimistic - {
-//        'simple - annotatedTest
-//      }
     }
 
     'narrow - {

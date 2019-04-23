@@ -295,7 +295,8 @@ class Liveness {
 
     @joptimize.Test(
             inputs = {1, 2, 3, 4, 5, 6, 7, 8},
-            addedNumConst = {123, 456}
+            addedNumConst = {123},
+            removedNumConst = {456}
     )
     static int override3(int i) {
         BarOverride3 x = new BarOverride3();
@@ -309,6 +310,32 @@ class Liveness {
     static class BarOverride3 extends FooOverride3{
         int choose(int x, int y){
             return x;
+        }
+    }
+
+
+
+    @joptimize.Test(
+            inputs = {1, 2, 3, 4, 5, 6, 7, 8},
+            addedNumConst = {123, 456}
+    )
+    static int override4(int i) {
+        FooOverride4 x = (i % 2 == 0 ? new BarOverride4() : new QuxOverride4());
+        return x.choose(i + 123, i + 456);
+    }
+    static abstract class FooOverride4{
+        int choose(int x, int y){
+            return y;
+        }
+    }
+    static class BarOverride4 extends FooOverride4{
+        int choose(int x, int y){
+            return x;
+        }
+    }
+    static class QuxOverride4 extends FooOverride4{
+        int choose(int x, int y){
+            return y;
         }
     }
 
