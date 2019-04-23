@@ -65,7 +65,10 @@ class Optimistic {
 
 
     @joptimize.Test(
-            inputs = {1, 2, 3, 4}
+            inputs = {1, 2, 3, 4},
+            checkPresent = {
+                    "joptimize.examples.opt.Optimistic.generalRecursiveHelper"
+            }
     )
     public static int generalRecursive(int x, int y) {
         return generalRecursive0(x, y);
@@ -74,10 +77,12 @@ class Optimistic {
     public static int generalRecursive0(int x, int y) {
         if (x == 0) return y;
         else {
-            int z = generalRecursive0(x - 1, y) + generalRecursive0(x - 1, y);
-
-            return z;
+            int z = generalRecursive0(x - 1, y * 2);
+            return generalRecursiveHelper(z);
         }
+    }
+    public static int generalRecursiveHelper(int z) {
+        return z * z;
     }
 
 

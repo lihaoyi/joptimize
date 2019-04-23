@@ -126,12 +126,14 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
     valWorkList.headOption match{
       case Some(v) =>
         valWorkList.remove(v)
-        v match{
+        val upstream = v.upstream.collect{case v: SSA.Val => evaluated(v)}
+        if (upstream.contains(IType.Bottom)) {
+          evaluated(v) = IType.Bottom.asInstanceOf[T]
+          Step.Continue(Some(v))
+        } else v match{
           case n: SSA.Invoke =>
             val isig = n.inferredSig(evaluated(_).asInstanceOf[IType])
-            Step.ComputeSig[T](isig, n, res => {
-              evaluated(v) = res
-            })
+            Step.ComputeSig[T](isig, n, evaluated(v) = _)
           case _ =>
             evaluated(v) = lattice.transferValue(v, evaluated)
             Step.Continue(Some(v))
