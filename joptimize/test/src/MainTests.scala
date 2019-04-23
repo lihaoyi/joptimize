@@ -285,11 +285,11 @@ object MainTests extends TestSuite{
     'narrow - {
       'Supertype - {
         'main - annotatedTest
-//        'mainDeep - annotatedTest
+        'mainDeep - annotatedTest
       }
       'Parametric - {
         'main - annotatedTest
-//        'mainDeep - annotatedTest
+        'mainDeep - annotatedTest
       }
       'NarrowReturn - {
         'main - annotatedTest
