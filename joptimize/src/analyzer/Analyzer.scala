@@ -66,15 +66,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
             case Some(n: SSA.PutStatic) => Some(n.cls)
             case _ => None
           }
-          addedCls.foreach(visitedClasses.add)
-          val clinits = for {
-            cls <- addedCls.toSeq
-            val clinit = MethodSig(cls, "<clinit>", Desc(Nil, JType.Prim.V), true)
-            if classManager.loadMethod(clinit).isDefined
-            if !analyses.contains((clinit, Nil))
-          } yield {
-            ((clinit, Nil, (_: Analyzer.Properties) => ()) :: currentStack, currentStack.length)
-          }
+          val clinits = analyzeClinits(currentStack, addedCls.toSeq)
 
           clinits ++ Seq(currentStack -> currentStackStartDepth)
 
@@ -109,87 +101,63 @@ class Analyzer(entrypoints: Seq[MethodSig],
 
         case OptimisticAnalyze.Step.ComputeSig(calledSig, invoke, calledInferred, callback) =>
           if (currentStack.exists(t => t._1 == calledSig && t._2 == calledInferred)) {
-            callback(Analyzer.dummyResult(calledSig, optimistic = true).props.inferredReturn)
-            Seq(currentStack -> currentStackStartDepth)
+            analyzeDummy(currentStack, currentStackStartDepth, calledSig, callback, optimistic = true)
+          } else if(classManager.loadClass(calledSig.cls).isEmpty){
+            analyzeDummy(currentStack, currentStackStartDepth, calledSig, callback, optimistic = false)
           } else if (invoke.isInstanceOf[SSA.InvokeSpecial]){
-            if(classManager.loadClass(calledSig.cls).isEmpty){
-              callback(Analyzer.dummyResult(calledSig, optimistic = false).props.inferredReturn)
-              Seq(currentStack -> currentStackStartDepth)
-            } else{
-              val subLog = globalLog.inferredMethod(calledSig, calledInferred)
-              subLog.println("================ INITIAL ================")
+            val subLog = globalLog.inferredMethod(calledSig, calledInferred)
+            subLog.println("================ INITIAL ================")
 
-              subLog.graph(Renderer.dumpSvg(frontend.loadMethodBody(calledSig, calledInferred.drop(if (calledSig.static) 0 else 1), globalLog.method(calledSig)).get))
-              Seq(
-                Tuple2(
-                  (calledSig, calledInferred, (props: Analyzer.Properties) => callback(props.inferredReturn)) :: currentStack,
-                  currentStackStartDepth
-                )
+            subLog.graph(Renderer.dumpSvg(frontend.loadMethodBody(calledSig, calledInferred.drop(if (calledSig.static) 0 else 1), globalLog.method(calledSig)).get))
+            Seq(
+              Tuple2(
+                (calledSig, calledInferred, (props: Analyzer.Properties) => callback(props.inferredReturn)) :: currentStack,
+                currentStackStartDepth
               )
-            }
+            )
           }else{
-            if (classManager.loadClass(calledSig.cls).isEmpty) {
-              visitedResolved((calledSig, calledInferred.drop(if (calledSig.static) 0 else 1))) = Analyzer.dummyResult(calledSig, optimistic = false).props
-              callback(Analyzer.dummyResult(calledSig, optimistic = false).props.inferredReturn)
-              Seq(currentStack -> currentStackStartDepth)
-            } else {
-              val resolved = classManager.resolvePossibleSigs(calledSig)
-              resolved match {
-                case None =>
-                  visitedResolved((calledSig, calledInferred.drop(if (calledSig.static) 0 else 1))) = Analyzer.dummyResult(calledSig, optimistic = false).props
-                  callback(Analyzer.dummyResult(calledSig, optimistic = false).props.inferredReturn)
-                  Seq(currentStack -> currentStackStartDepth)
-                case Some(subSigs0) =>
+            val resolved = classManager.resolvePossibleSigs(calledSig)
+            resolved match {
+              case None =>
+                analyzeDummy(currentStack, currentStackStartDepth, calledSig, callback, optimistic = false)
+              case Some(subSigs0) =>
 
-                  val (subSigs, abstractSubSigs) = subSigs0
-                    .partition{ subSig =>
-                      classManager.loadMethod(subSig).exists(_.instructions.size() != 0)
-                    }
-
-                  var agg = List.empty[(MethodSig, Analyzer.Properties)]
-
-                  val rets = for (subSig <- subSigs) yield {
-
-                    val subCallback = (i: Analyzer.Properties) => {
-                      agg ::= (subSig, i)
-
-                      if (agg.length == subSigs.length){
-
-
-                        visitedResolved((calledSig, calledInferred.drop(if (calledSig.static) 0 else 1))) =
-                          Analyzer.Properties(
-                            inferredReturn = classManager.merge(agg.map(_._2.inferredReturn)),
-                            pure = agg.forall(_._2.pure),
-                            liveArgs = agg.flatMap(_._2.liveArgs).toSet
-                          )
-
-
-
-                        callback(
-                          visitedResolved((calledSig, calledInferred.drop(if (calledSig.static) 0 else 1)))
-                            .inferredReturn
-                        )
-                      }
-
-                      ()
-                    }
-                    val classes = Seq(subSig.cls)
-                    classes.foreach(visitedClasses.add)
-
-                    val clinits = for {
-                      cls <- classes
-                      val clinit = MethodSig(cls, "<clinit>", Desc(Nil, JType.Prim.V), true)
-                      if classManager.loadMethod(clinit).isDefined
-                      if !analyses.contains((clinit, Nil))
-                    } yield {
-                      ((clinit, Nil, (_: Analyzer.Properties) => ()) :: currentStack, currentStack.length)
-                    }
-
-                    val x = Seq(((subSig, calledInferred, subCallback) :: currentStack, currentStack.length))
-                    clinits ++ x
+                val (subSigs, abstractSubSigs) = subSigs0
+                  .partition{ subSig =>
+                    classManager.loadMethod(subSig).exists(_.instructions.size() != 0)
                   }
-                  rets.flatten.toList ::: List(currentStack -> currentStackStartDepth)
-              }
+
+                var agg = List.empty[(MethodSig, Analyzer.Properties)]
+
+                val rets = for (subSig <- subSigs) yield {
+
+                  val subCallback = (i: Analyzer.Properties) => {
+                    agg ::= (subSig, i)
+
+                    if (agg.length == subSigs.length){
+
+
+                      visitedResolved((calledSig, calledInferred.drop(if (calledSig.static) 0 else 1))) =
+                        Analyzer.Properties(
+                          inferredReturn = classManager.merge(agg.map(_._2.inferredReturn)),
+                          pure = agg.forall(_._2.pure),
+                          liveArgs = agg.flatMap(_._2.liveArgs).toSet
+                        )
+
+                      callback(
+                        visitedResolved((calledSig, calledInferred.drop(if (calledSig.static) 0 else 1)))
+                          .inferredReturn
+                      )
+                    }
+
+                    ()
+                  }
+                  val clinits = analyzeClinits(currentStack, Seq(subSig.cls))
+
+                  val x = Seq(((subSig, calledInferred, subCallback) :: currentStack, currentStack.length))
+                  clinits ++ x
+                }
+                rets.flatten.toList ::: List(currentStack -> currentStackStartDepth)
             }
           }
 
@@ -207,6 +175,29 @@ class Analyzer(entrypoints: Seq[MethodSig],
 
     Analyzer.GlobalResult(visitedMethods, visitedResolved, visitedClasses)
 
+  }
+
+  def analyzeDummy(currentStack: List[(MethodSig, Seq[IType], Analyzer.Properties => Unit)],
+                   currentStackStartDepth: Int,
+                   calledSig: MethodSig,
+                   callback: IType => Unit,
+                   optimistic: Boolean) = {
+    callback(Analyzer.dummyResult(calledSig, optimistic).props.inferredReturn)
+    Seq(currentStack -> currentStackStartDepth)
+  }
+
+  def analyzeClinits(currentStack: List[(MethodSig, Seq[IType], Analyzer.Properties => Unit)], classes: Seq[JType.Cls]) = {
+    classes.foreach(visitedClasses.add)
+
+    val clinits = for {
+      cls <- classes
+      val clinit = MethodSig(cls, "<clinit>", Desc(Nil, JType.Prim.V), true)
+      if classManager.loadMethod(clinit).isDefined
+      if !analyses.contains((clinit, Nil))
+    } yield {
+      ((clinit, Nil, (_: Analyzer.Properties) => ()) :: currentStack, currentStack.length)
+    }
+    clinits
   }
 
   def onNew(cls: JType.Cls) = {
