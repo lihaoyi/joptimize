@@ -40,4 +40,61 @@ class Optimistic {
         if (x > 2) return 1;
         else return recursivePureConstant0(x + 1, y);
     }
+
+
+    @joptimize.Test(
+            inputs = {1, 2, 3, 4},
+            checkRemoved = {
+                    "joptimize.examples.opt.Optimistic.mutualRecursivePureConstant1",
+                    "joptimize.examples.opt.Optimistic.mutualRecursivePureConstant2"
+            }
+    )
+    public static int mutualRecursivePureConstant(int x, int y) {
+        return mutualRecursivePureConstant1(x, y);
+    }
+
+    public static int mutualRecursivePureConstant1(int x, int y) {
+        if (x > 2) return 1;
+        else return mutualRecursivePureConstant2(x + 1, y);
+    }
+
+    public static int mutualRecursivePureConstant2(int x, int y) {
+        if (x > 2) return 1;
+        else return mutualRecursivePureConstant1(x + 1, y);
+    }
+
+
+    @joptimize.Test(
+            inputs = {1, 2, 3, 4},
+            removedNumConst = {123},
+            addedNumConst = {456}
+    )
+    public static int recursivePureDeadArg(int x) {
+        return recursivePureDeadArg0(x, 123, 456);
+    }
+
+    public static int recursivePureDeadArg0(int x, int y, int z) {
+        if (x > 2) return x + z;
+        else return recursivePureDeadArg0(x + 1, y, z);
+    }
+
+
+    @joptimize.Test(
+            inputs = {1, 2, 3, 4},
+            removedNumConst = {123},
+            addedNumConst = {456}
+    )
+    public static int mutualRecursivePureDeadArg(int x) {
+        return mutualRecursivePureDeadArg1(x, 123, 456);
+    }
+
+    public static int mutualRecursivePureDeadArg1(int x, int y, int z) {
+        if (x > 2) return x + z;
+        else return mutualRecursivePureDeadArg2(x + 1, y, z);
+    }
+
+    public static int mutualRecursivePureDeadArg2(int x, int y, int z) {
+        if (x > 2) return x + z;
+        else return mutualRecursivePureDeadArg1(x + 1, y, z);
+    }
 }

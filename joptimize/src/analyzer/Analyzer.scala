@@ -76,8 +76,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
           clinits ++ Seq(currentStack -> currentStackStartDepth)
 
         case OptimisticAnalyze.Step.Done() =>
-//          println("DONE")
-//          pprint.log(originalSig.toString)
+
           val optimisticResult = currentAnalysis.apply()
           val retTypes = currentAnalysis.apply().inferredReturns.filter(_ != JType.Prim.V)
           val inferredReturn =
