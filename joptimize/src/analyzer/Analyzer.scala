@@ -24,10 +24,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
     *
     * This is kept up to date on a node-by-node basis during the traversal
     */
-  val callerGraph = new MultiBiMap.Mutable[
-    (InferredSig, SSA.Invoke),
-    InferredSig
-  ]()
+  var callerGraph = List.empty[(InferredSig, SSA.Invoke, InferredSig)]
 
   val analyses = mutable.LinkedHashMap.empty[InferredSig, OptimisticAnalyze[IType]]
 
@@ -105,8 +102,10 @@ class Analyzer(entrypoints: Seq[MethodSig],
 
         case OptimisticAnalyze.Step.ComputeSig(calledSig, invoke, callback) =>
           if (currentStack.exists(t => t._1 == calledSig)) {
+            callerGraph ::= (calledSig, invoke, isig)
             analyzeDummy(currentStack, currentStackStartDepth, calledSig.method, callback, optimistic = true)
           } else if(classManager.loadClass(calledSig.method.cls).isEmpty){
+            callerGraph ::= (calledSig, invoke, isig)
             analyzeDummy(currentStack, currentStackStartDepth, calledSig.method, callback, optimistic = false)
           } else if (invoke.isInstanceOf[SSA.InvokeSpecial]){
             val subLog = globalLog.inferredMethod(calledSig)
@@ -123,6 +122,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
             val resolved = classManager.resolvePossibleSigs(calledSig.method)
             resolved match {
               case None =>
+                callerGraph ::= (calledSig, invoke, isig)
                 analyzeDummy(currentStack, currentStackStartDepth, calledSig.method, callback, optimistic = false)
               case Some(subSigs0) =>
 
@@ -136,6 +136,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
 
                   val subCallback = (i: Analyzer.Properties) => {
                     agg ::= (subSig, i)
+                    callerGraph ::= (calledSig.copy(method = subSig), invoke, isig)
 
                     if (agg.length == subSigs.length){
 
