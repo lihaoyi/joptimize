@@ -309,7 +309,8 @@ class Analyzer(entrypoints: Seq[MethodSig],
       case n: SSA.Invoke =>
         val key = n.inferredSig(optResult.inferred)
         val default = callSet(key)
-        if (n.isInstanceOf[SSA.InvokeSpecial]) methodProps.get(key).fold(default)(_.pure)
+        if (classManager.loadClass(key.method.cls).isEmpty) false
+        else if (n.isInstanceOf[SSA.InvokeSpecial]) methodProps.get(key).fold(default)(_.pure)
         else resolveProps(key).fold(default)(_.pure)
 
       //    case n: SSA.InvokeDynamic => computeMethodSig(n, n.srcs.map(inferences))
