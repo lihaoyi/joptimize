@@ -79,6 +79,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
 
           if (clinits.isEmpty) Seq(isig)
           else{
+            clinits.foreach(clinit => callerGraph ::= Analyzer.CallEdge(isig, None, clinit))
             clinits.foreach(addToCallSet(_, currentCallSet))
             clinits
           }
@@ -100,8 +101,8 @@ class Analyzer(entrypoints: Seq[MethodSig],
             optimisticResult.inferred.collect { case (a: SSA.Arg, _) => a.index }.toSet
           )
 
-//          pprint.log(props)
-          if (methodProps.get(isig).contains(props)) Nil
+          val unchanged = methodProps.get(isig).contains(props)
+          if (unchanged) Nil
           else {
             methodProps(isig) = props
 
@@ -110,38 +111,43 @@ class Analyzer(entrypoints: Seq[MethodSig],
 
             val returnEdges = callerGraph.filter(_.called == isig)
             for (edge <- returnEdges) {
-
-              analyses(edge.caller).evaluated(edge.node) = props.inferredReturn
+              for(node <- edge.node){
+                analyses(edge.caller).evaluated(node) = props.inferredReturn
+              }
             }
             val filtered = returnEdges.map(_.caller)
-            //          pprint.log(filtered)
             filtered
           }
 
         case OptimisticAnalyze.Step.ComputeSig(calledSig, invoke) =>
-          calledSignatures.add(calledSig)
+
           if (currentCallSet(calledSig)) {
-            callerGraph ::= Analyzer.CallEdge(calledSig, invoke, isig)
+            calledSignatures.add(calledSig)
+            callerGraph ::= Analyzer.CallEdge(calledSig, Some(invoke), isig)
             addToCallSet(calledSig, currentCallSet)
             analyses(isig).evaluated(invoke) = IType.Bottom
             methodProps(calledSig) = Analyzer.dummyProps(calledSig.method, true)
 
             Seq(isig)
           } else if(classManager.loadClass(calledSig.method.cls).isEmpty){
-            callerGraph ::= Analyzer.CallEdge(calledSig, invoke, isig)
-            addToCallSet(calledSig, currentCallSet)
+//            callerGraph ::= Analyzer.CallEdge(calledSig, Some(invoke), isig)
+            analyses(isig).evaluated(invoke) = calledSig.method.desc.ret
+//            addToCallSet(calledSig, currentCallSet)
             Seq(isig)
           } else if (invoke.isInstanceOf[SSA.InvokeSpecial]){
+            calledSignatures.add(calledSig)
             val subLog = globalLog.inferredMethod(calledSig)
             subLog.println("================ INITIAL ================")
             addToCallSet(calledSig, currentCallSet)
             Seq(calledSig)
           }else classManager.resolvePossibleSigs(calledSig.method) match {
             case None =>
-              callerGraph ::= Analyzer.CallEdge(calledSig, invoke, isig)
+              calledSignatures.add(calledSig)
+              callerGraph ::= Analyzer.CallEdge(calledSig, Some(invoke), isig)
               addToCallSet(calledSig, currentCallSet)
               Seq(isig)
             case Some(subSigs0) =>
+              calledSignatures.add(calledSig)
               val subSigs = subSigs0.filter{ subSig =>
                 classManager.loadMethod(subSig).exists(_.instructions.size() != 0)
               }
@@ -152,7 +158,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
                 clinits ++ Seq(InferredSig(subSig, calledSig.inferred))
               }
 
-              rets.foreach(ret => callerGraph ::= Analyzer.CallEdge(isig, invoke, ret))
+              rets.foreach(ret => callerGraph ::= Analyzer.CallEdge(isig, Some(invoke), ret))
 
               rets.foreach(addToCallSet(_, currentCallSet))
               rets
@@ -190,8 +196,8 @@ class Analyzer(entrypoints: Seq[MethodSig],
 
   def resolveProps(isig: InferredSig) = {
     classManager.resolvePossibleSigs(isig.method).map{ resolved =>
-//      pprint.log(resolved)
-      val resolvedProps = resolved.map(m => methodProps(isig.copy(method = m)))
+      val copied = resolved.map(m => isig.copy(method = m))
+      val resolvedProps = copied.map(methodProps(_))
       Analyzer.Properties(
         classManager.mergeTypes(resolvedProps.map(_.inferredReturn)),
         resolvedProps.forall(_.pure),
@@ -315,7 +321,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
 }
 
 object Analyzer {
-  case class CallEdge(caller: InferredSig, node: SSA.Invoke, called: InferredSig)
+  case class CallEdge(caller: InferredSig, node: Option[SSA.Invoke], called: InferredSig)
   case class GlobalResult(visitedMethods: collection.Map[InferredSig, Analyzer.Result],
                           visitedResolved: collection.Map[InferredSig, Analyzer.Properties],
                           visitedClasses: collection.Set[JType.Cls])
