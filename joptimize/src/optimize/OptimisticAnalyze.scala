@@ -15,7 +15,8 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
                            log: Logger.InferredMethod,
                            evaluateUnaBranch: (T, SSA.UnaBranch.Code) => Option[Boolean],
                            evaluateBinBranch: (T, T, SSA.BinBranch.Code) => Option[Boolean],
-                           evaluateSwitch: T => Option[Int]){
+                           evaluateSwitch: T => Option[Int],
+                           methodProps: InferredSig => T){
 
   val inferredBlocks = mutable.Set(initialBlock)
 
@@ -130,7 +131,7 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
         } else v match{
           case n: SSA.Invoke =>
             val isig = n.inferredSig(evaluated(_).asInstanceOf[IType])
-            Step.ComputeSig[T](isig, n, evaluated(v) = _)
+            Step.ComputeSig[T](isig, n)
           case _ =>
             evaluated(v) = lattice.transferValue(v, evaluated)
             Step.Continue(Some(v))
@@ -251,7 +252,7 @@ object OptimisticAnalyze {
   object Step{
     case class Continue[T](node: Option[SSA.Val]) extends Step[T]
     case class Done[T]() extends Step[T]
-    case class ComputeSig[T](isig: InferredSig, invoke: SSA.Invoke, callback: T => Unit) extends Step[T]
+    case class ComputeSig[T](isig: InferredSig, invoke: SSA.Invoke) extends Step[T]
   }
   sealed trait State
   object State{

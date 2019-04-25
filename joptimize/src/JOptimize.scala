@@ -17,6 +17,8 @@ object JOptimize{
     val analyzer = new Analyzer(entrypoints, classManager, log, frontend)
     val analyzerRes = analyzer.apply()
 
+//    pprint.log(analyzerRes.visitedMethods)
+//    pprint.log(analyzerRes.visitedResolved)
 //    pprint.log(analyzerRes.visitedMethods.mapValues(_.inferred))
     val outClasses = Backend.apply(
       analyzerRes,

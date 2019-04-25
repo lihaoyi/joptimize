@@ -83,7 +83,7 @@ class ClassManager(getClassFile: String => Option[Array[Byte]]) extends ClassMan
     }.toSeq
   }
   def mergeTypes(itypes: Seq[IType]): IType = {
-    mergeTypes0(itypes).getOrElse(throw new Exception(itypes.toString))
+    mergeTypes0(itypes).getOrElse(IType.Bottom)
   }
   def mergeTypes0(itypes: Seq[IType]): Option[IType] = {
     val flattened = itypes.flatMap{
