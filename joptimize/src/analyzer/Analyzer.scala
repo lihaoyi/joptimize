@@ -47,7 +47,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
 
     while(current.nonEmpty){
 
-//      pprint.log(current.map(_.method.name))
+//      println(current.map(_.method))
       val isig = current.maxBy(callSets(_).size)
       val currentCallSet = callSets(isig) ++ Set(isig)
 
@@ -102,6 +102,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
           )
 
           val unchanged = methodProps.get(isig).contains(props)
+
           if (unchanged) Nil
           else {
             methodProps(isig) = props
@@ -110,12 +111,14 @@ class Analyzer(entrypoints: Seq[MethodSig],
             inferredLog.pprint(optimisticResult.liveBlocks)
 
             val returnEdges = callerGraph.filter(_.called == isig)
+
             for (edge <- returnEdges) {
               for(node <- edge.node){
                 analyses(edge.caller).evaluated(node) = props.inferredReturn
               }
             }
             val filtered = returnEdges.map(_.caller)
+
             filtered
           }
 
@@ -136,14 +139,13 @@ class Analyzer(entrypoints: Seq[MethodSig],
             Seq(isig)
           } else if (invoke.isInstanceOf[SSA.InvokeSpecial]){
             calledSignatures.add(calledSig)
-            val subLog = globalLog.inferredMethod(calledSig)
-            subLog.println("================ INITIAL ================")
+            callerGraph ::= Analyzer.CallEdge(isig, Some(invoke), calledSig)
             addToCallSet(calledSig, currentCallSet)
             Seq(calledSig)
           }else classManager.resolvePossibleSigs(calledSig.method) match {
             case None =>
               calledSignatures.add(calledSig)
-              callerGraph ::= Analyzer.CallEdge(calledSig, Some(invoke), isig)
+              callerGraph ::= Analyzer.CallEdge(isig, Some(invoke), calledSig)
               addToCallSet(calledSig, currentCallSet)
               Seq(isig)
             case Some(subSigs0) =>
@@ -197,7 +199,8 @@ class Analyzer(entrypoints: Seq[MethodSig],
   def resolveProps(isig: InferredSig) = {
     classManager.resolvePossibleSigs(isig.method).map{ resolved =>
       val copied = resolved.map(m => isig.copy(method = m))
-      val resolvedProps = copied.map(methodProps(_))
+
+      val resolvedProps = copied.flatMap(methodProps.get)
       Analyzer.Properties(
         classManager.mergeTypes(resolvedProps.map(_.inferredReturn)),
         resolvedProps.forall(_.pure),
