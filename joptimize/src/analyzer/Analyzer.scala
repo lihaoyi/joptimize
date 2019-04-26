@@ -93,8 +93,6 @@ class Analyzer(entrypoints: Seq[MethodSig],
             else classManager.mergeTypes(retTypes)
 
           println("DONE")
-          pprint.log(optimisticResult.inferred)
-//          pprint.log(isig.method.toString)
           val props = Analyzer.Properties(
             inferredReturn,
             computePurity(optimisticResult, currentCallSet) &&
@@ -114,6 +112,11 @@ class Analyzer(entrypoints: Seq[MethodSig],
           for (edge <- returnEdges) {
             for(node <- edge.node){
               analyses(edge.caller).evaluated(node) = props.inferredReturn
+              if (!unchanged){
+                analyses(edge.caller).workList.add(
+                  OptimisticAnalyze.WorkItem.ForceInvalidate(node)
+                )
+              }
             }
           }
           val filtered =

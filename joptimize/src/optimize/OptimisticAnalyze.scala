@@ -30,6 +30,7 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
 
     if (workList.nonEmpty){
       val item = workList.head
+      println(pprint.apply(item))
       workList.remove(item)
       item match{
         case WorkItem.Val(v) =>
@@ -51,10 +52,43 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
         case WorkItem.Transition(currentBlock, nextBlock) =>
           queueNextBlockTwo(currentBlock, nextBlock)
           Step.Continue(None)
+        case WorkItem.ForceInvalidate(v) =>
+          invalidateDownstream(v)
+          Step.Continue(None)
+        case WorkItem.Invalidate(v) =>
+          invalidateValue(v)
       }
 
     }else {
       Step.Done()
+    }
+  }
+  def invalidateDownstream(v: SSA.Val) = {
+    v.downstreamList.foreach {
+      case nextV: SSA.Val => workList.add(WorkItem.Invalidate(nextV))
+      case j: SSA.Jump => workList.add(WorkItem.BlockJump(j.block))
+    }
+  }
+  def invalidateValue(v: SSA.Val): OptimisticAnalyze.Step[T] = {
+    val upstream = v.upstream.collect{case v: SSA.Val => evaluated.getOrElse(v, IType.Bottom)}
+
+    if (upstream.contains(IType.Bottom)) Step.Continue(None)
+    else v match{
+      case n: SSA.Invoke => Step.ComputeSig[T](n.inferredSig(evaluated(_).asInstanceOf[IType]), n)
+      case _ =>
+        v match{
+          case p: SSA.Phi =>
+            for((srcBlock, srcVal) <- p.incoming if srcVal == v){
+              workList.add(WorkItem.Transition(srcBlock, p.block))
+            }
+          case _ =>
+            val newValue = lattice.transferValue(v, evaluated)
+            if (evaluated(v) != newValue){
+              evaluated(v) = newValue
+              invalidateDownstream(v)
+            }
+        }
+        Step.Continue(None)
     }
   }
 
@@ -249,6 +283,8 @@ object OptimisticAnalyze {
     case class Block(value: SSA.Block) extends WorkItem
     case class BlockJump(value: SSA.Block) extends WorkItem
     case class Transition(src: SSA.Block, dest: SSA.Block) extends WorkItem
+    case class ForceInvalidate(src: SSA.Invoke) extends WorkItem
+    case class Invalidate(src: SSA.Val) extends WorkItem
   }
 
   sealed trait Step[T]
