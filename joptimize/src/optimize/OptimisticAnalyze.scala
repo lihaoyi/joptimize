@@ -3,17 +3,11 @@ package joptimize.optimize
 import joptimize.analyzer.Namer
 import joptimize.graph.TarjansStronglyConnectedComponents
 import joptimize.model._
-import joptimize.optimize.OptimisticAnalyze.{Result, State, Step, topoSort}
+import joptimize.optimize.OptimisticAnalyze.{Result, Step, WorkItem, topoSort}
 import joptimize.{FileLogger, Logger, Util}
 
 import scala.collection.mutable
 
-sealed trait WorkItem
-object WorkItem{
-  case class Block(value: SSA.Block) extends WorkItem
-  case class BlockJump(value: SSA.Block) extends WorkItem
-  case class Transition(src: SSA.Block, dest: SSA.Block) extends WorkItem
-}
 class OptimisticAnalyze[T](methodBody: MethodBody,
                            initialValues: Map[SSA.Val, T],
                            initialBlock: SSA.Block,
@@ -35,88 +29,82 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
   val evaluated = mutable.LinkedHashMap.empty[SSA.Val, T]
 
   val inferredReturns = mutable.Buffer.empty[T]
-  var state: State = State.HandleBlock()
 
-  def step(): OptimisticAnalyze.Step[T] = state match{
-    case State.HandleBlock() =>
-      if (blockWorkList.isEmpty) Step.Done()
-      else {
-        val item = blockWorkList.head
-        blockWorkList.remove(item)
-        item match{
-          case WorkItem.Block(currentBlock) =>
-            inferredBlocks.add(currentBlock)
-            log.pprint(currentBlock)
-            topoSort(currentBlock.next.upstreamVals.toSet.filter(!_.isInstanceOf[SSA.Phi])).foreach(valWorkList.add)
-            state = State.HandleVal()
-            blockWorkList.add(WorkItem.BlockJump(currentBlock))
-            Step.Continue(None)
+  def step(): OptimisticAnalyze.Step[T] = {
+    if (valWorkList.nonEmpty) evaluateVal()
+    else if (blockWorkList.nonEmpty){
+      val item = blockWorkList.head
+      blockWorkList.remove(item)
+      item match{
+        case WorkItem.Block(currentBlock) =>
+          inferredBlocks.add(currentBlock)
+          log.pprint(currentBlock)
+          topoSort(currentBlock.next.upstreamVals.toSet.filter(!_.isInstanceOf[SSA.Phi])).foreach(valWorkList.add)
+          blockWorkList.add(WorkItem.BlockJump(currentBlock))
+          Step.Continue(None)
 
-          case WorkItem.BlockJump(currentBlock) =>
-            val nextBlocks = currentBlock.next match{
-              case nextBlock: SSA.Block =>
-                queueNextBlock(currentBlock, nextBlock)
-                Seq(nextBlock)
-
-              case n: SSA.Jump =>
-                n match{
-                  case r: SSA.Return =>
-                    inferredReturns.append(evaluated(r.state))
-                    Nil
-                  case r: SSA.ReturnVal =>
-                    inferredReturns.append(evaluated(r.src))
-                    inferredReturns.append(evaluated(r.state))
-                    Nil
-                  case n: SSA.UnaBranch =>
-                    val valueA = evaluated(n.a)
-                    val doBranch = evaluateUnaBranch(valueA, n.opcode)
-
-                    queueBranchBlock(currentBlock, n, doBranch)
-                  case n: SSA.BinBranch =>
-                    val valueA = evaluated(n.a)
-                    val valueB = evaluated(n.b)
-                    val doBranch = evaluateBinBranch(valueA, valueB, n.opcode)
-                    queueBranchBlock(currentBlock, n, doBranch)
-
-                  case n: SSA.Switch =>
-                    val value = evaluated(n.src)
-                    val cases = n.cases.values
-                    val default = n.default
-                    val doBranch = evaluateSwitch(value)
-
-                    doBranch match{
-                      case None =>
-                        for(dest <- cases) queueNextBlock(currentBlock, dest)
-                        queueNextBlock(currentBlock, default)
-
-                        cases.toSeq :+ default
-                      case Some(destValue) =>
-                        val dest = cases.find(_.n == destValue).getOrElse(default)
-                        queueNextBlock(currentBlock, dest)
-                        Seq(dest)
-                    }
-                }
-            }
-            state = State.HandleControlVals(currentBlock, nextBlocks)
-            Step.Continue(None)
-        }
-      }
-
-    case State.HandleVal() =>
-      evaluateVals{
-
-        state = State.HandleBlock()
-      }
-
-    case State.HandleControlVals(currentBlock, nextBlocks) =>
-      evaluateVals{
-        for(nextBlock <- nextBlocks){
+        case WorkItem.BlockJump(currentBlock) =>
+          val nextBlocks = computeNextBlocks(currentBlock)
+          for(nextBlock <- nextBlocks){
+            blockWorkList.add(WorkItem.Transition(currentBlock, nextBlock))
+          }
+          Step.Continue(None)
+        case WorkItem.Transition(currentBlock, nextBlock) =>
           queueNextBlockTwo(currentBlock, nextBlock)
-        }
-        state = State.HandleBlock()
+          Step.Continue(None)
       }
+
+    }else {
+      Step.Done()
+    }
   }
 
+  def computeNextBlocks(currentBlock: SSA.Block) = {
+    currentBlock.next match {
+      case nextBlock: SSA.Block =>
+        queueNextBlock(currentBlock, nextBlock)
+        Seq(nextBlock)
+
+      case n: SSA.Jump =>
+        n match {
+          case r: SSA.Return =>
+            inferredReturns.append(evaluated(r.state))
+            Nil
+          case r: SSA.ReturnVal =>
+            inferredReturns.append(evaluated(r.src))
+            inferredReturns.append(evaluated(r.state))
+            Nil
+          case n: SSA.UnaBranch =>
+            val valueA = evaluated(n.a)
+            val doBranch = evaluateUnaBranch(valueA, n.opcode)
+
+            queueBranchBlock(currentBlock, n, doBranch)
+          case n: SSA.BinBranch =>
+            val valueA = evaluated(n.a)
+            val valueB = evaluated(n.b)
+            val doBranch = evaluateBinBranch(valueA, valueB, n.opcode)
+            queueBranchBlock(currentBlock, n, doBranch)
+
+          case n: SSA.Switch =>
+            val value = evaluated(n.src)
+            val cases = n.cases.values
+            val default = n.default
+            val doBranch = evaluateSwitch(value)
+
+            doBranch match {
+              case None =>
+                for (dest <- cases) queueNextBlock(currentBlock, dest)
+                queueNextBlock(currentBlock, default)
+
+                cases.toSeq :+ default
+              case Some(destValue) =>
+                val dest = cases.find(_.n == destValue).getOrElse(default)
+                queueNextBlock(currentBlock, dest)
+                Seq(dest)
+            }
+        }
+    }
+  }
 
   def getNewPhiExpressions(currentBlock: SSA.Block, nextBlock: SSA.Block) = {
     log.pprint(nextBlock)
@@ -210,7 +198,7 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
     }
   }
 
-  def evaluateVals(onFinish: => Unit): Step[T] = {
+  def evaluateVal(): Step[T] = {
     valWorkList.headOption match{
       case Some(v) =>
         valWorkList.remove(v)
@@ -226,9 +214,7 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
             evaluated(v) = lattice.transferValue(v, evaluated)
             Step.Continue(Some(v))
         }
-      case None =>
-        onFinish
-        Step.Continue(None)
+      case None => Step.Continue(None)
     }
   }
 
@@ -262,18 +248,19 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
   }
 }
 object OptimisticAnalyze {
+
+  sealed trait WorkItem
+  object WorkItem{
+    case class Block(value: SSA.Block) extends WorkItem
+    case class BlockJump(value: SSA.Block) extends WorkItem
+    case class Transition(src: SSA.Block, dest: SSA.Block) extends WorkItem
+  }
+
   sealed trait Step[T]
   object Step{
     case class Continue[T](node: Option[SSA.Val]) extends Step[T]
     case class Done[T]() extends Step[T]
     case class ComputeSig[T](isig: InferredSig, invoke: SSA.Invoke) extends Step[T]
-  }
-  sealed trait State
-  object State{
-    case class HandleBlock() extends State
-    case class HandleVal() extends State
-    case class HandleControlVals(currentBlock: SSA.Block,
-                                 nextBlocks: Seq[SSA.Block]) extends State
   }
   case class Result[T](inferredReturns: Seq[T],
                        inferred: mutable.LinkedHashMap[SSA.Val, T],
