@@ -111,12 +111,15 @@ class Analyzer(entrypoints: Seq[MethodSig],
 
           for (edge <- returnEdges) {
             for(node <- edge.node){
+              if (analyses(edge.caller).evaluated.contains(node)){
+                analyses(edge.caller).workList.add(
+                  OptimisticAnalyze.WorkItem.ForceInvalidate(node)
+                )
+              }
               analyses(edge.caller).evaluated(node) = classManager.mergeTypes(
                 analyses(edge.caller).evaluated.get(node).toSeq ++ Seq(props.inferredReturn)
               )
-              analyses(edge.caller).workList.add(
-                OptimisticAnalyze.WorkItem.ForceInvalidate(node)
-              )
+
             }
           }
           val filtered =
