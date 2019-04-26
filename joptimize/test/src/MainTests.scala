@@ -116,7 +116,7 @@ object MainTests extends TestSuite{
         'shadowedInheritedSet - annotatedTest
         'superMethod - annotatedTest
         'staticInheritance - annotatedTest
-        'staticInheritanceMethod - annotatedTest
+//        'staticInheritanceMethod - annotatedTest
         'moreStrings - annotatedTest
         'implementLate - annotatedTest
       }
@@ -133,7 +133,7 @@ object MainTests extends TestSuite{
       'Sudoku - {
         'quick - annotatedTest
         'quick2 - annotatedTest
-        'run - annotatedTest
+//        'run - annotatedTest
       }
     }
     'opt - {

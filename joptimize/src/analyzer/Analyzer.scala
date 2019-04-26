@@ -93,7 +93,6 @@ class Analyzer(entrypoints: Seq[MethodSig],
             if (retTypes.isEmpty) JType.Prim.V
             else classManager.mergeTypes(retTypes)
 
-          println("DONE")
           val props = Analyzer.Properties(
             inferredReturn,
             computePurity(optimisticResult, currentCallSet) &&
@@ -112,35 +111,24 @@ class Analyzer(entrypoints: Seq[MethodSig],
 
           for (edge <- returnEdges) {
             for(node <- edge.node){
-              val seenBefore = analyses(edge.caller).evaluated.contains(node)
-              if (!seenBefore){
-                analyses(edge.caller).evaluated(node) = props.inferredReturn
-              }else{
-                analyses(edge.caller).evaluated(node) = classManager.mergeTypes(
-                  Seq(analyses(edge.caller).evaluated(node), props.inferredReturn)
-                )
-              }
-              if (!unchanged || !seenBefore){
-                analyses(edge.caller).workList.add(
-                  OptimisticAnalyze.WorkItem.ForceInvalidate(node)
-                )
-              }
+              analyses(edge.caller).evaluated(node) = classManager.mergeTypes(
+                analyses(edge.caller).evaluated.get(node).toSeq ++ Seq(props.inferredReturn)
+              )
+              analyses(edge.caller).workList.add(
+                OptimisticAnalyze.WorkItem.ForceInvalidate(node)
+              )
             }
           }
-          pprint.log(returnEdges)
           val filtered =
             if (!unchanged) returnEdges.map(_.caller)
             else returnEdges.map(_.caller).filter(!methodProps.contains(_))
 
-          pprint.log(filtered)
           filtered
 
 
         case OptimisticAnalyze.Step.ComputeSig(calledSig, invoke) =>
 
-          println("A")
           if (currentCallSet(calledSig)) {
-            println("B")
             calledSignatures.add(calledSig)
             callerGraph ::= Analyzer.CallEdge(calledSig, Some(invoke), isig)
             addToCallSet(calledSig, currentCallSet)
@@ -149,26 +137,20 @@ class Analyzer(entrypoints: Seq[MethodSig],
 
             Seq(isig)
           } else if(classManager.loadClass(calledSig.method.cls).isEmpty){
-            println("C")
-//            callerGraph ::= Analyzer.CallEdge(calledSig, Some(invoke), isig)
             analyses(isig).evaluated(invoke) = calledSig.method.desc.ret
-//            addToCallSet(calledSig, currentCallSet)
             Seq(isig)
           } else if (invoke.isInstanceOf[SSA.InvokeSpecial]){
-            println("D")
             calledSignatures.add(calledSig)
             callerGraph ::= Analyzer.CallEdge(isig, Some(invoke), calledSig)
             addToCallSet(calledSig, currentCallSet)
             Seq(calledSig)
           }else classManager.resolvePossibleSigs(calledSig.method) match {
             case None =>
-              println("E")
               calledSignatures.add(calledSig)
               callerGraph ::= Analyzer.CallEdge(isig, Some(invoke), calledSig)
               addToCallSet(calledSig, currentCallSet)
               Seq(isig).filter(!methodProps.contains(_))
             case Some(subSigs0) =>
-              println("F")
               calledSignatures.add(calledSig)
               val subSigs = subSigs0.filter{ subSig =>
                 classManager.loadMethod(subSig).exists(_.instructions.size() != 0)
@@ -176,33 +158,39 @@ class Analyzer(entrypoints: Seq[MethodSig],
 
               assert(subSigs.nonEmpty)
 
-              val rets = subSigs.flatMap{subSig =>
-                val clinits = analyzeClinits(Seq(subSig.cls))
-                clinits ++ Seq(InferredSig(subSig, calledSig.inferred))
-              }.filter(!methodProps.contains(_))
+              val (clinitss, subss) = subSigs
+                .map{subSig =>
+                  val clinits = analyzeClinits(Seq(subSig.cls))
+                  (clinits, Seq(InferredSig(subSig, calledSig.inferred)))
+                }
+                .unzip
+              val clinits = clinitss.flatten
+              val subs = subss.flatten
 
-              if (rets.isEmpty) {
-                analyses(isig).evaluated(invoke) = classManager.mergeTypes(
-                  subSigs.map(x => calledSig.copy(method = x)).map(methodProps(_).inferredReturn)
-                )
-                Seq(isig)
-              }
+              val rets = (clinits ++ subs).filter(!methodProps.contains(_))
+
+              analyses(isig).evaluated(invoke) = classManager.mergeTypes(
+                analyses(isig).evaluated.get(invoke).toSeq ++
+                subs.flatMap(methodProps.get).map(_.inferredReturn)
+              )
+              if (rets.isEmpty) Seq(isig)
               else {
-
                 rets.foreach(ret => callerGraph ::= Analyzer.CallEdge(isig, Some(invoke), ret))
 
                 rets.foreach(addToCallSet(_, currentCallSet))
-                println(rets)
                 rets
               }
 
           }
       }
 
-      println(pprint.apply(newCurrent.map(_.method.toString)))
       current.remove(isig)
       newCurrent.foreach(current.add)
     }
+
+    pprint.log(
+      analyses.filterKeys(_.method.name == "implementLate").mapValues(_.evaluated)
+    )
 
     for(m <- methodProps.keysIterator){
       calledSignatures.add(m)
