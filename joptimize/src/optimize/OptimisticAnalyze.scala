@@ -15,8 +15,7 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
                            log: Logger.InferredMethod,
                            evaluateUnaBranch: (T, SSA.UnaBranch.Code) => Option[Boolean],
                            evaluateBinBranch: (T, T, SSA.BinBranch.Code) => Option[Boolean],
-                           evaluateSwitch: T => Option[Int],
-                           methodProps: InferredSig => T){
+                           evaluateSwitch: T => Option[Int]){
 
   val inferredBlocks = mutable.Set(initialBlock)
 
