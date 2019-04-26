@@ -111,8 +111,9 @@ class Analyzer(entrypoints: Seq[MethodSig],
 
           for (edge <- returnEdges) {
             for(node <- edge.node){
+              val seenBefore = analyses(edge.caller).evaluated.contains(node)
               analyses(edge.caller).evaluated(node) = props.inferredReturn
-              if (!unchanged){
+              if (!unchanged && seenBefore){
                 analyses(edge.caller).workList.add(
                   OptimisticAnalyze.WorkItem.ForceInvalidate(node)
                 )
