@@ -96,14 +96,16 @@ public class Inheritance {
     }
 
     @joptimize.Test(
-            inputs = {1, 2, 4, 8}
-//            addedNumConst = {123, 456}
+            inputs = {1, 2, 4, 8},
+            // These numbers should *not* get constant folded, because `call`
+            // should return an `Int` and not a constant 1 or 2
+            addedNumConst = {456}
     )
     public static int implementLate(int n) {
         Foo foo = new Bar();
-        int first = foo.call();
+        int first = foo.call() + 123;
         foo = new Qux();
-        int second = foo.call();
+        int second = foo.call() + 456;
         return first + second;
     }
     static abstract class Foo{
