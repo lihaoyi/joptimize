@@ -47,7 +47,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
 
     while(current.nonEmpty){
 
-//      println(current.map(_.method))
+//      println(pprint.apply(current.map(_.method.toString.stripPrefix("joptimize.examples.simple."))))
       val isig = current.maxBy(callSets(_).size)
       val currentCallSet = callSets(isig) ++ Set(isig)
 
@@ -92,8 +92,8 @@ class Analyzer(entrypoints: Seq[MethodSig],
             if (retTypes.isEmpty) JType.Prim.V
             else classManager.mergeTypes(retTypes)
 
-//          pprint.log("DONE")
-//          pprint.log(isig)
+//          println("DONE")
+//          pprint.log(isig.method.toString)
           val props = Analyzer.Properties(
             inferredReturn,
             computePurity(optimisticResult, currentCallSet) &&
@@ -103,24 +103,24 @@ class Analyzer(entrypoints: Seq[MethodSig],
 
           val unchanged = methodProps.get(isig).contains(props)
 
-          if (unchanged) Nil
-          else {
-            methodProps(isig) = props
+          methodProps(isig) = props
 
-            inferredLog.pprint(optimisticResult.inferred)
-            inferredLog.pprint(optimisticResult.liveBlocks)
+          inferredLog.pprint(optimisticResult.inferred)
+          inferredLog.pprint(optimisticResult.liveBlocks)
 
-            val returnEdges = callerGraph.filter(_.called == isig)
+          val returnEdges = callerGraph.filter(_.called == isig)
 
-            for (edge <- returnEdges) {
-              for(node <- edge.node){
-                analyses(edge.caller).evaluated(node) = props.inferredReturn
-              }
+          for (edge <- returnEdges) {
+            for(node <- edge.node){
+              analyses(edge.caller).evaluated(node) = props.inferredReturn
             }
-            val filtered = returnEdges.map(_.caller)
-
-            filtered
           }
+          val filtered =
+            if (!unchanged) returnEdges.map(_.caller)
+            else returnEdges.map(_.caller).filter(!methodProps.contains(_))
+
+          filtered
+
 
         case OptimisticAnalyze.Step.ComputeSig(calledSig, invoke) =>
 
