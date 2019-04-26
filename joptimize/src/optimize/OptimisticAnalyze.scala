@@ -20,7 +20,7 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
 
   val inferredBlocks = mutable.Set(initialBlock)
 
-  val blockWorkList = mutable.LinkedHashSet(initialBlock)
+  val blockWorkList = mutable.LinkedHashSet(initialBlock -> false)
 
   val valWorkList = mutable.LinkedHashSet.empty[SSA.Val]
   val evaluated = mutable.LinkedHashMap.empty[SSA.Val, T]
@@ -79,7 +79,7 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
     //        log.pprint(continueNextBlock)
     if (continueNextBlock) {
 
-      blockWorkList.add(nextBlock)
+      blockWorkList.add((nextBlock, false))
       val invalidated = Util.breadthFirstSeen[SSA.Node](invalidatedPhis.toSet)(_.downstreamList.filter(!_.isInstanceOf[SSA.Phi]))
         .filter(!_.isInstanceOf[SSA.Phi])
 
@@ -146,68 +146,67 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
     case State.HandleBlock() =>
       blockWorkList.headOption match{
         case None => Step.Done()
-        case Some(currentBlock) =>
+        case Some((currentBlock, false)) =>
           inferredBlocks.add(currentBlock)
-          blockWorkList.remove(currentBlock)
+          blockWorkList.remove((currentBlock, false))
           log.pprint(currentBlock)
           topoSort(currentBlock.next.upstreamVals.toSet.filter(!_.isInstanceOf[SSA.Phi])).foreach(valWorkList.add)
           state = State.HandleVal(currentBlock)
           Step.Continue(None)
+        case Some((currentBlock, true)) =>
+          blockWorkList.remove((currentBlock, true))
+          val nextBlocks = currentBlock.next match{
+            case nextBlock: SSA.Block =>
+              queueNextBlock(currentBlock, nextBlock)
+              Seq(nextBlock)
+
+            case n: SSA.Jump =>
+              n match{
+                case r: SSA.Return =>
+                  inferredReturns.append(evaluated(r.state))
+                  Nil
+                case r: SSA.ReturnVal =>
+                  inferredReturns.append(evaluated(r.src))
+                  inferredReturns.append(evaluated(r.state))
+                  Nil
+                case n: SSA.UnaBranch =>
+                  val valueA = evaluated(n.a)
+                  val doBranch = evaluateUnaBranch(valueA, n.opcode)
+
+                  queueBranchBlock(currentBlock, n, doBranch)
+                case n: SSA.BinBranch =>
+                  val valueA = evaluated(n.a)
+                  val valueB = evaluated(n.b)
+                  val doBranch = evaluateBinBranch(valueA, valueB, n.opcode)
+                  queueBranchBlock(currentBlock, n, doBranch)
+
+                case n: SSA.Switch =>
+                  val value = evaluated(n.src)
+                  val cases = n.cases.values
+                  val default = n.default
+                  val doBranch = evaluateSwitch(value)
+
+                  doBranch match{
+                    case None =>
+                      for(dest <- cases) queueNextBlock(currentBlock, dest)
+                      queueNextBlock(currentBlock, default)
+
+                      cases.toSeq :+ default
+                    case Some(destValue) =>
+                      val dest = cases.find(_.n == destValue).getOrElse(default)
+                      queueNextBlock(currentBlock, dest)
+                      Seq(dest)
+                  }
+              }
+          }
+          state = State.HandleControlVals(currentBlock, nextBlocks)
+          Step.Continue(None)
       }
     case State.HandleVal(currentBlock) =>
       evaluateVals{
-        state = State.HandleControl(currentBlock)
+        blockWorkList.add((currentBlock, true))
+        state = State.HandleBlock()
       }
-
-    case State.HandleControl(currentBlock) =>
-
-      val nextBlocks = currentBlock.next match{
-        case nextBlock: SSA.Block =>
-          queueNextBlock(currentBlock, nextBlock)
-          Seq(nextBlock)
-
-        case n: SSA.Jump =>
-          n match{
-            case r: SSA.Return =>
-              inferredReturns.append(evaluated(r.state))
-              Nil
-            case r: SSA.ReturnVal =>
-              inferredReturns.append(evaluated(r.src))
-              inferredReturns.append(evaluated(r.state))
-              Nil
-            case n: SSA.UnaBranch =>
-              val valueA = evaluated(n.a)
-              val doBranch = evaluateUnaBranch(valueA, n.opcode)
-
-              queueBranchBlock(currentBlock, n, doBranch)
-            case n: SSA.BinBranch =>
-              val valueA = evaluated(n.a)
-              val valueB = evaluated(n.b)
-              val doBranch = evaluateBinBranch(valueA, valueB, n.opcode)
-              queueBranchBlock(currentBlock, n, doBranch)
-
-            case n: SSA.Switch =>
-              val value = evaluated(n.src)
-              val cases = n.cases.values
-              val default = n.default
-              val doBranch = evaluateSwitch(value)
-
-              doBranch match{
-                case None =>
-                  for(dest <- cases) queueNextBlock(currentBlock, dest)
-                  queueNextBlock(currentBlock, default)
-
-                  cases.toSeq :+ default
-                case Some(destValue) =>
-                  val dest = cases.find(_.n == destValue).getOrElse(default)
-                  queueNextBlock(currentBlock, dest)
-                  Seq(dest)
-              }
-          }
-      }
-
-      state = State.HandleControlVals(currentBlock, nextBlocks)
-      Step.Continue(None)
 
     case State.HandleControlVals(currentBlock, nextBlocks) =>
       evaluateVals{
@@ -258,7 +257,6 @@ object OptimisticAnalyze {
   object State{
     case class HandleBlock() extends State
     case class HandleVal(currentBlock: SSA.Block) extends State
-    case class HandleControl(currentBlock: SSA.Block) extends State
     case class HandleControlVals(currentBlock: SSA.Block,
                                  nextBlocks: Seq[SSA.Block]) extends State
   }

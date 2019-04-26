@@ -147,7 +147,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
               calledSignatures.add(calledSig)
               callerGraph ::= Analyzer.CallEdge(isig, Some(invoke), calledSig)
               addToCallSet(calledSig, currentCallSet)
-              Seq(isig)
+              Seq(isig).filter(!methodProps.contains(_))
             case Some(subSigs0) =>
               calledSignatures.add(calledSig)
               val subSigs = subSigs0.filter{ subSig =>
@@ -158,7 +158,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
               val rets = subSigs.flatMap{subSig =>
                 val clinits = analyzeClinits(Seq(subSig.cls))
                 clinits ++ Seq(InferredSig(subSig, calledSig.inferred))
-              }
+              }.filter(!methodProps.contains(_))
 
               rets.foreach(ret => callerGraph ::= Analyzer.CallEdge(isig, Some(invoke), ret))
 
