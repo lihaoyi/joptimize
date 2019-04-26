@@ -20,16 +20,16 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
 
   val inferredBlocks = mutable.Set(initialBlock)
 
-  val workList = mutable.LinkedHashSet[WorkItem](WorkItem.Block(initialBlock))
+  val workList = mutable.Queue[WorkItem](WorkItem.Block(initialBlock))
 
   val evaluated = mutable.LinkedHashMap.empty[SSA.Val, T]
 
   val inferredReturns = mutable.Buffer.empty[T]
 
   def step(): OptimisticAnalyze.Step[T] = {
+
     if (workList.nonEmpty){
-      val item = workList.head
-      workList.remove(item)
+      val item = workList.dequeue()
       item match{
         case WorkItem.Val(v) =>
           evaluateVal(v)
@@ -37,14 +37,14 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
           inferredBlocks.add(currentBlock)
           log.pprint(currentBlock)
           topoSort(currentBlock.next.upstreamVals.toSet.filter(!_.isInstanceOf[SSA.Phi]))
-            .foreach(v => workList.add(WorkItem.Val(v)))
-          workList.add(WorkItem.BlockJump(currentBlock))
+            .foreach(v => workList.enqueue(WorkItem.Val(v)))
+          workList.enqueue(WorkItem.BlockJump(currentBlock))
           Step.Continue(None)
 
         case WorkItem.BlockJump(currentBlock) =>
           val nextBlocks = computeNextBlocks(currentBlock)
           for(nextBlock <- nextBlocks){
-            workList.add(WorkItem.Transition(currentBlock, nextBlock))
+            workList.enqueue(WorkItem.Transition(currentBlock, nextBlock))
           }
           Step.Continue(None)
         case WorkItem.Transition(currentBlock, nextBlock) =>
@@ -155,7 +155,7 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
     //        log.pprint(continueNextBlock)
     if (continueNextBlock) {
 
-      workList.add(WorkItem.Block(nextBlock))
+      workList.enqueue(WorkItem.Block(nextBlock))
       val invalidated = Util.breadthFirstSeen[SSA.Node](invalidatedPhis.toSet)(_.downstreamList.filter(!_.isInstanceOf[SSA.Phi]))
         .filter(!_.isInstanceOf[SSA.Phi])
 
@@ -174,7 +174,7 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
     val newPhiExpressions = getNewPhiExpressions(currentBlock, nextBlock)
 
     topoSort(newPhiExpressions.map(_._2).toSet.filter(!_.isInstanceOf[SSA.Phi])).foreach{  v =>
-      workList.add(WorkItem.Val(v))
+      workList.enqueue(WorkItem.Val(v))
     }
   }
 
