@@ -20,33 +20,31 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
 
   val inferredBlocks = mutable.Set(initialBlock)
 
-  // blocks that have not yet been processed
-  // false -> start processing this block
-  // true -> block has been fully processed, start processing next control (block or jump)
-  val blockWorkList = mutable.LinkedHashSet[WorkItem](WorkItem.Block(initialBlock))
+  val workList = mutable.LinkedHashSet[WorkItem](WorkItem.Block(initialBlock))
 
-  val valWorkList = mutable.LinkedHashSet.empty[SSA.Val]
   val evaluated = mutable.LinkedHashMap.empty[SSA.Val, T]
 
   val inferredReturns = mutable.Buffer.empty[T]
 
   def step(): OptimisticAnalyze.Step[T] = {
-    if (valWorkList.nonEmpty) evaluateVal()
-    else if (blockWorkList.nonEmpty){
-      val item = blockWorkList.head
-      blockWorkList.remove(item)
+    if (workList.nonEmpty){
+      val item = workList.head
+      workList.remove(item)
       item match{
+        case WorkItem.Val(v) =>
+          evaluateVal(v)
         case WorkItem.Block(currentBlock) =>
           inferredBlocks.add(currentBlock)
           log.pprint(currentBlock)
-          topoSort(currentBlock.next.upstreamVals.toSet.filter(!_.isInstanceOf[SSA.Phi])).foreach(valWorkList.add)
-          blockWorkList.add(WorkItem.BlockJump(currentBlock))
+          topoSort(currentBlock.next.upstreamVals.toSet.filter(!_.isInstanceOf[SSA.Phi]))
+            .foreach(v => workList.add(WorkItem.Val(v)))
+          workList.add(WorkItem.BlockJump(currentBlock))
           Step.Continue(None)
 
         case WorkItem.BlockJump(currentBlock) =>
           val nextBlocks = computeNextBlocks(currentBlock)
           for(nextBlock <- nextBlocks){
-            blockWorkList.add(WorkItem.Transition(currentBlock, nextBlock))
+            workList.add(WorkItem.Transition(currentBlock, nextBlock))
           }
           Step.Continue(None)
         case WorkItem.Transition(currentBlock, nextBlock) =>
@@ -157,7 +155,7 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
     //        log.pprint(continueNextBlock)
     if (continueNextBlock) {
 
-      blockWorkList.add(WorkItem.Block(nextBlock))
+      workList.add(WorkItem.Block(nextBlock))
       val invalidated = Util.breadthFirstSeen[SSA.Node](invalidatedPhis.toSet)(_.downstreamList.filter(!_.isInstanceOf[SSA.Phi]))
         .filter(!_.isInstanceOf[SSA.Phi])
 
@@ -176,7 +174,7 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
     val newPhiExpressions = getNewPhiExpressions(currentBlock, nextBlock)
 
     topoSort(newPhiExpressions.map(_._2).toSet.filter(!_.isInstanceOf[SSA.Phi])).foreach{  v =>
-      valWorkList.add(v)
+      workList.add(WorkItem.Val(v))
     }
   }
 
@@ -198,23 +196,18 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
     }
   }
 
-  def evaluateVal(): Step[T] = {
-    valWorkList.headOption match{
-      case Some(v) =>
-        valWorkList.remove(v)
-        val upstream = v.upstream.collect{case v: SSA.Val => evaluated(v)}
-        if (upstream.contains(IType.Bottom)) {
-          evaluated(v) = IType.Bottom.asInstanceOf[T]
-          Step.Continue(Some(v))
-        } else v match{
-          case n: SSA.Invoke =>
-            val isig = n.inferredSig(evaluated(_).asInstanceOf[IType])
-            Step.ComputeSig[T](isig, n)
-          case _ =>
-            evaluated(v) = lattice.transferValue(v, evaluated)
-            Step.Continue(Some(v))
-        }
-      case None => Step.Continue(None)
+  def evaluateVal(v: SSA.Val): Step[T] = {
+    val upstream = v.upstream.collect{case v: SSA.Val => evaluated(v)}
+    if (upstream.contains(IType.Bottom)) {
+      evaluated(v) = IType.Bottom.asInstanceOf[T]
+      Step.Continue(Some(v))
+    } else v match{
+      case n: SSA.Invoke =>
+        val isig = n.inferredSig(evaluated(_).asInstanceOf[IType])
+        Step.ComputeSig[T](isig, n)
+      case _ =>
+        evaluated(v) = lattice.transferValue(v, evaluated)
+        Step.Continue(Some(v))
     }
   }
 
@@ -251,6 +244,7 @@ object OptimisticAnalyze {
 
   sealed trait WorkItem
   object WorkItem{
+    case class Val(value: SSA.Val) extends WorkItem
     case class Block(value: SSA.Block) extends WorkItem
     case class BlockJump(value: SSA.Block) extends WorkItem
     case class Transition(src: SSA.Block, dest: SSA.Block) extends WorkItem
