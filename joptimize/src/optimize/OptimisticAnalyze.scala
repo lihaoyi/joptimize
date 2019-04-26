@@ -28,10 +28,10 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
   val inferredReturns = mutable.Buffer.empty[T]
 
   def step(): OptimisticAnalyze.Step[T] = {
-
+    pprint.log(workList)
     if (workList.nonEmpty){
       val item = workList.head
-      println(pprint.apply(item))
+
       workList.remove(item)
       item match{
         case WorkItem.Val(v) =>
@@ -39,8 +39,7 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
         case WorkItem.Block(currentBlock) =>
           inferredBlocks.add(currentBlock)
           log.pprint(currentBlock)
-          topoSort(currentBlock.next.upstreamVals.toSet.filter(!_.isInstanceOf[SSA.Phi]))
-            .foreach(v => workList.add(WorkItem.Val(v)))
+          queueSortedUpstreams(currentBlock.next.upstreamVals.toSet)
           workList.add(WorkItem.BlockJump(currentBlock))
           Step.Continue(None)
 
@@ -215,11 +214,15 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
   def queueNextBlock(currentBlock: SSA.Block, nextBlock: SSA.Block) = {
     val newPhiExpressions = getNewPhiExpressions(currentBlock, nextBlock)
 
-    topoSort(newPhiExpressions.map(_._2).toSet.filter(!_.isInstanceOf[SSA.Phi])).foreach{  v =>
+    queueSortedUpstreams(newPhiExpressions.map(_._2).toSet)
+  }
+
+
+  def queueSortedUpstreams(set: Set[SSA.Val]) = {
+    topoSort(set.filter(!_.isInstanceOf[SSA.Phi])).foreach { v =>
       workList.add(WorkItem.Val(v))
     }
   }
-
 
   def queueBranchBlock(currentBlock: SSA.Block, n: SSA.Branch, doBranch: Option[Boolean]) = {
     doBranch match {

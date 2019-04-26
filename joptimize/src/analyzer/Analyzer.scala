@@ -47,6 +47,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
 
     while(current.nonEmpty){
 
+      println()
       println(pprint.apply(current.map(_.method.toString.stripPrefix("joptimize.examples.simple."))))
       val isig = current.maxBy(callSets(_).size)
       val currentCallSet = callSets(isig) ++ Set(isig)
@@ -172,7 +173,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
           }
       }
 
-//      pprint.log(newCurrent.map(_._1.map(_._1.toString)))
+      println(pprint.apply(newCurrent.map(_.method.toString)))
       current.remove(isig)
       newCurrent.foreach(current.add)
     }
