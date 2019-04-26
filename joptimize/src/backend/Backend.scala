@@ -167,16 +167,16 @@ object Backend {
       output
     }
 
-//    val outClasses = BytecodeDCE.apply(
-//      entrypoints,
-//      grouped.keys.toSeq,
-//      findSubtypes = classManager.subtypeMap.lookupKeyOpt(_).getOrElse(Nil),
-//      findSupertypes = findSupertypes,
-//      ignore = ignore
-//    )
-//
-//    outClasses
-    grouped.keys
+    val outClasses = BytecodeDCE.apply(
+      entrypoints,
+      grouped.keys.toSeq,
+      findSubtypes = classManager.subtypeMap.lookupKeyOpt(_).getOrElse(Nil),
+      findSupertypes = findSupertypes,
+      ignore = ignore
+    )
+
+    outClasses
+//    grouped.keys
   }
 
   def processMethodBody(originalSig: MethodSig,
