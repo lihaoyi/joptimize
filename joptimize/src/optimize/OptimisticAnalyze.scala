@@ -22,6 +22,7 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
 
   val workList = mutable.LinkedHashSet[WorkItem](WorkItem.Block(initialBlock))
 
+  val seenJumps = mutable.LinkedHashSet.empty[SSA.Jump]
   val evaluated = mutable.LinkedHashMap.empty[SSA.Val, T]
 
   val inferredReturns = mutable.Buffer.empty[T]
@@ -64,10 +65,15 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
     }
   }
   def invalidateDownstream(v: SSA.Val) = {
-    v.downstreamList.foreach {
-      case nextV: SSA.Val => workList.add(WorkItem.Invalidate(nextV))
-      case j: SSA.Jump => workList.add(WorkItem.BlockJump(j.block))
-    }
+    v.downstreamList
+      .filter{
+        case v: SSA.Val => evaluated.contains(v)
+        case j: SSA.Jump => seenJumps.contains(j)
+      }
+      .foreach {
+        case nextV: SSA.Val => workList.add(WorkItem.Invalidate(nextV))
+        case j: SSA.Jump => workList.add(WorkItem.BlockJump(j.block))
+      }
   }
   def invalidateValue(v: SSA.Val): OptimisticAnalyze.Step[T] = {
     val upstream = v.upstream.collect{case v: SSA.Val => evaluated.getOrElse(v, IType.Bottom)}
@@ -99,6 +105,7 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
         Seq(nextBlock)
 
       case n: SSA.Jump =>
+        seenJumps.add(n)
         n match {
           case r: SSA.Return =>
             inferredReturns.append(evaluated(r.state))

@@ -314,11 +314,15 @@ class Analyzer(entrypoints: Seq[MethodSig],
       case n: SSA.UnaOp => true
 
       case n: SSA.Invoke =>
-        val key = n.inferredSig(optResult.inferred)
-        val default = callSet(key)
-        if (classManager.loadClass(key.method.cls).isEmpty) false
-        else if (n.isInstanceOf[SSA.InvokeSpecial]) methodProps.get(key).fold(default)(_.pure)
-        else resolveProps(key).fold(default)(_.pure)
+        if (n.srcs.exists(!optResult.inferred.contains(_))) true
+        else {
+
+          val key = n.inferredSig(optResult.inferred)
+          val default = callSet(key)
+          if (classManager.loadClass(key.method.cls).isEmpty) false
+          else if (n.isInstanceOf[SSA.InvokeSpecial]) methodProps.get(key).fold(default)(_.pure)
+          else resolveProps(key).fold(default)(_.pure)
+        }
 
       //    case n: SSA.InvokeDynamic => computeMethodSig(n, n.srcs.map(inferences))
       case p: SSA.Phi => true
