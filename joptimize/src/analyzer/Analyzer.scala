@@ -47,7 +47,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
 
     while(current.nonEmpty){
 
-//      println(pprint.apply(current.map(_.method.toString.stripPrefix("joptimize.examples.simple."))))
+      println(pprint.apply(current.map(_.method.toString.stripPrefix("joptimize.examples.simple."))))
       val isig = current.maxBy(callSets(_).size)
       val currentCallSet = callSets(isig) ++ Set(isig)
 
@@ -92,7 +92,8 @@ class Analyzer(entrypoints: Seq[MethodSig],
             if (retTypes.isEmpty) JType.Prim.V
             else classManager.mergeTypes(retTypes)
 
-//          println("DONE")
+          println("DONE")
+          pprint.log(optimisticResult.inferred)
 //          pprint.log(isig.method.toString)
           val props = Analyzer.Properties(
             inferredReturn,

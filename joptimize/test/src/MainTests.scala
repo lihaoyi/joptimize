@@ -72,6 +72,7 @@ object MainTests extends TestSuite{
         'tailFactorialVoid - annotatedTest
         'fibonacci - annotatedTest
         'staticInit - annotatedTest
+        'regression - annotatedTest
 
       }
       'Arrays - {

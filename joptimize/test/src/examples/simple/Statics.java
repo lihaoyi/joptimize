@@ -87,25 +87,36 @@ public class Statics {
         }
     }
 
-    @joptimize.Test(inputs = {1})
-    public static int staticInit(int n) {
-        int x = staticInitValue;
-        int y = StaticInit.get();
-        int z = staticInitValue;
-        return n + x + y + z;
+//    @joptimize.Test(inputs = {1})
+//    public static int staticInit(int n) {
+//        int x = staticInitValue;
+//        int y = StaticInit.get();
+//        int z = staticInitValue;
+//        return n + x + y + z;
+//
+//    }
+//    static int staticInitValue = 10;
+//    static class StaticInit{
+//        static int dummy = 123;
+//
+//        static int get(){
+//            return 100;
+//        }
+//
+//        static{
+//            System.out.println("Hello!");
+//            Statics.staticInitValue = 1000;
+//        }
+//    }
+//
 
+    @joptimize.Test(inputs = {0, 1})
+    static int regression(int b) {
+        boolean bool = b != 0;
+        return callInt();
     }
-    static int staticInitValue = 10;
-    static class StaticInit{
-        static int dummy = 123;
 
-        static int get(){
-            return 100;
-        }
-
-        static{
-            System.out.println("Hello!");
-            Statics.staticInitValue = 1000;
-        }
+    static int callInt() {
+        return 1;
     }
 }
