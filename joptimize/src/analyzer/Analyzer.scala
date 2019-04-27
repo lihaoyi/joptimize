@@ -48,6 +48,10 @@ class Analyzer(entrypoints: Seq[MethodSig],
       step()
     }
 
+    for((k, v) <- analyses){
+      assert(v.evaluateList.isEmpty, (k, v.evaluateList))
+      assert(v.invalidations.isEmpty, (k, v.invalidations))
+    }
     for(m <- methodProps.keysIterator){
       calledSignatures.add(m)
     }
@@ -175,21 +179,22 @@ class Analyzer(entrypoints: Seq[MethodSig],
 
     for (edge <- returnEdges) {
       for (node <- edge.node) {
-        if (analyses(edge.caller).evaluated.contains(node)) {
-          analyses(edge.caller).invalidations.add(
-            OptimisticAnalyze.Invalidate.Invoke(node)
-          )
-        }
-        analyses(edge.caller).evaluated(node) = classManager.mergeTypes(
+        val mergedType = classManager.mergeTypes(
           analyses(edge.caller).evaluated.get(node).toSeq ++ Seq(props.inferredReturn)
         )
 
+        if (!analyses(edge.caller).evaluated.get(node).contains(props.inferredReturn)) {
+          analyses(edge.caller).invalidations.add(OptimisticAnalyze.Invalidate.Invoke(node))
+        }
+
+        analyses(edge.caller).evaluated(node) = mergedType
       }
     }
     val filtered =
       if (!unchanged) returnEdges.map(_.caller)
       else returnEdges.map(_.caller).filter(!methodProps.contains(_))
 
+//    pprint.log(filtered)
     filtered
   }
 
