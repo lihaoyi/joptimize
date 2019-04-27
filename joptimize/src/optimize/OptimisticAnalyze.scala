@@ -71,6 +71,11 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
         case j: SSA.Jump => seenJumps.contains(j)
       }
       .foreach {
+        case phi: SSA.Phi =>
+          if (evaluated(v) != evaluated(phi)){
+            evaluated(phi) = lattice.join(evaluated(v), evaluated(phi))
+            workList.add(WorkItem.ForceInvalidate(phi))
+          }
         case nextV: SSA.Val => workList.add(WorkItem.Invalidate(nextV))
         case j: SSA.Jump => workList.add(WorkItem.BlockJump(j.block))
       }
@@ -82,17 +87,10 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
     else v match{
       case n: SSA.Invoke =>
       case _ =>
-        v match{
-          case p: SSA.Phi =>
-            for((srcBlock, srcVal) <- p.incoming if srcVal == v){
-              workList.add(WorkItem.Transition(srcBlock, p.block))
-            }
-          case _ =>
-            val newValue = lattice.transferValue(v, evaluated)
-            if (evaluated(v) != newValue){
-              evaluated(v) = newValue
-              invalidateDownstream(v)
-            }
+        val newValue = lattice.transferValue(v, evaluated)
+        if (evaluated(v) != newValue){
+          evaluated(v) = newValue
+          invalidateDownstream(v)
         }
     }
     Step.Continue(Some(v))
