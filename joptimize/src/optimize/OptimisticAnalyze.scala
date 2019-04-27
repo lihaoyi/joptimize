@@ -35,7 +35,8 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
       workList.remove(item)
       item match{
         case WorkItem.Val(v) =>
-          evaluateVal(v)
+          if (!evaluated.contains(v)) evaluateVal(v)
+          else Step.Continue(None)
         case WorkItem.Block(currentBlock) =>
           pprint.log(currentBlock)
 
