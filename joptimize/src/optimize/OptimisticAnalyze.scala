@@ -169,44 +169,28 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
     val newPhiValues = getNewPhiExpressions(currentBlock, nextBlock)
       .map { case (phi, expr) => phi -> evaluated(expr) }
 
-    var continueNextBlock = !inferredBlocks(nextBlock)
+    val continueNextBlock = !inferredBlocks(nextBlock)
 
-    val invalidatedPhis = mutable.Set.empty[SSA.Phi]
-
-    for ((k, v) <- newPhiValues) {
-      evaluated.get(k) match {
-        case None =>
-          continueNextBlock = true
-          evaluated(k) = v
-        case Some(old) =>
-          if (old != v) {
-
-            val merged = lattice.join(old, v)
-            if (merged != old) {
-              continueNextBlock = true
-              //                  log.pprint((k, old, v, merged))
-              invalidatedPhis.add(k)
-              evaluated(k) = merged
-            }
-          }
-      }
-    }
-
-    //        log.pprint(invalidatedPhis)
-    //        log.pprint(continueNextBlock)
     if (continueNextBlock) {
-
-      workList.add(WorkItem.Block(nextBlock))
-      val invalidated = Util.breadthFirstSeen[SSA.Node](invalidatedPhis.toSet)(_.downstreamList.filter(!_.isInstanceOf[SSA.Phi]))
-        .filter(!_.isInstanceOf[SSA.Phi])
-
-      //          log.pprint(invalidated)
-      invalidated.foreach {
-        case removed: SSA.Block => inferredBlocks.remove(removed)
-        case removed: SSA.Jump => inferredBlocks.remove(removed.block)
-        case removed: SSA.Val => evaluated.remove(removed)
-        case _ => // do nothing
+      for ((k, v) <- newPhiValues) {
+        evaluated(k) = v
       }
+      workList.add(WorkItem.Block(nextBlock))
+    }else{
+      for ((k, v) <- newPhiValues) {
+        val old = evaluated(k)
+        if (old != v) {
+
+          val merged = lattice.join(old, v)
+          if (merged != old) {
+            //              continueNextBlock = true
+            //                  log.pprint((k, old, v, merged))
+            workList.add(WorkItem.ForceInvalidate(k))
+            evaluated(k) = merged
+          }
+        }
+      }
+
     }
   }
 
@@ -288,7 +272,7 @@ object OptimisticAnalyze {
     case class Block(value: SSA.Block) extends WorkItem
     case class BlockJump(value: SSA.Block) extends WorkItem
     case class Transition(src: SSA.Block, dest: SSA.Block) extends WorkItem
-    case class ForceInvalidate(src: SSA.Invoke) extends WorkItem
+    case class ForceInvalidate(src: SSA.Val) extends WorkItem
     case class Invalidate(src: SSA.Val) extends WorkItem
   }
 
