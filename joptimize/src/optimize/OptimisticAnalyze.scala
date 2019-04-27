@@ -3,7 +3,7 @@ package joptimize.optimize
 import joptimize.analyzer.Namer
 import joptimize.graph.TarjansStronglyConnectedComponents
 import joptimize.model._
-import joptimize.optimize.OptimisticAnalyze.{Invalidate, Result, Step, WorkItem, topoSort}
+import joptimize.optimize.OptimisticAnalyze.{Invalidate, Result, Step, Evaluate, topoSort}
 import joptimize.{FileLogger, Logger, Util}
 
 import scala.collection.mutable
@@ -20,7 +20,7 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
   val inferredBlocks = mutable.LinkedHashSet(initialBlock)
 
   val invalidations = mutable.LinkedHashSet[Invalidate]()
-  val workList = mutable.LinkedHashSet[WorkItem](WorkItem.Block(initialBlock))
+  val evaluateList = mutable.LinkedHashSet[Evaluate](Evaluate.Block(initialBlock))
 
   val seenJumps = mutable.LinkedHashSet.empty[SSA.Jump]
   val evaluated = mutable.LinkedHashMap.empty[SSA.Val, T]
@@ -37,27 +37,29 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
         case Invalidate.Invoke(v) => invalidateDownstream(v)
         case Invalidate.Incremental(v) => invalidateValue(v)
       }
-    } else if (workList.nonEmpty){
-      val item = workList.head
-      workList.remove(item)
+    } else if (evaluateList.nonEmpty){
+      val item = evaluateList.head
+      evaluateList.remove(item)
       item match{
-        case WorkItem.Val(v) =>
+        case Evaluate.Val(v) =>
           if (!evaluated.contains(v)) evaluateVal(v)
           else Step.Continue(Nil)
-        case WorkItem.Block(currentBlock) =>
+
+        case Evaluate.Block(currentBlock) =>
 
           log.pprint(currentBlock)
           queueSortedUpstreams(currentBlock.next.upstreamVals.toSet)
-          workList.add(WorkItem.BlockJump(currentBlock))
+          evaluateList.add(Evaluate.BlockJump(currentBlock))
           Step.Continue(Nil)
 
-        case WorkItem.BlockJump(currentBlock) =>
+        case Evaluate.BlockJump(currentBlock) =>
           val nextBlocks = computeNextBlocks(currentBlock)
           for(nextBlock <- nextBlocks){
-            workList.add(WorkItem.Transition(currentBlock, nextBlock))
+            evaluateList.add(Evaluate.Transition(currentBlock, nextBlock))
           }
           Step.Continue(Nil)
-        case WorkItem.Transition(currentBlock, nextBlock) =>
+
+        case Evaluate.Transition(currentBlock, nextBlock) =>
           queueNextBlockTwo(currentBlock, nextBlock)
           Step.Continue(Nil)
       }
@@ -80,7 +82,7 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
         }
       case i: SSA.Invoke => invalidations.add(Invalidate.Invoke(i))
       case nextV: SSA.Val => invalidations.add(Invalidate.Incremental(nextV))
-      case j: SSA.Jump => workList.add(WorkItem.BlockJump(j.block))
+      case j: SSA.Jump => evaluateList.add(Evaluate.BlockJump(j.block))
     }
     Step.Continue(downstreams.collect{case v: SSA.Val => v})
   }
@@ -178,7 +180,7 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
         evaluated(k) = v
       }
       inferredBlocks.add(nextBlock)
-      workList.add(WorkItem.Block(nextBlock))
+      evaluateList.add(Evaluate.Block(nextBlock))
     }else{
       for ((k, v) <- newPhiValues) {
         val old = evaluated(k)
@@ -205,7 +207,7 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
 
   def queueSortedUpstreams(set: Set[SSA.Val]) = {
     topoSort(set.filter(!_.isInstanceOf[SSA.Phi])).foreach { v =>
-      workList.add(WorkItem.Val(v))
+      evaluateList.add(Evaluate.Val(v))
     }
   }
 
@@ -276,12 +278,12 @@ object OptimisticAnalyze {
       assert(!src.isInstanceOf[SSA.Invoke] && !src.isInstanceOf[SSA.Phi])
     }
   }
-  sealed trait WorkItem
-  object WorkItem{
-    case class Val(value: SSA.Val) extends WorkItem
-    case class Block(value: SSA.Block) extends WorkItem
-    case class BlockJump(value: SSA.Block) extends WorkItem
-    case class Transition(src: SSA.Block, dest: SSA.Block) extends WorkItem
+  sealed trait Evaluate
+  object Evaluate{
+    case class Val(value: SSA.Val) extends Evaluate
+    case class Block(value: SSA.Block) extends Evaluate
+    case class BlockJump(value: SSA.Block) extends Evaluate
+    case class Transition(src: SSA.Block, dest: SSA.Block) extends Evaluate
 
   }
 
