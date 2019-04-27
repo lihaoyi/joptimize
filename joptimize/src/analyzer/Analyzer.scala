@@ -23,7 +23,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
     *
     * This is kept up to date on a node-by-node basis during the traversal
     */
-  var callerGraph = List.empty[Analyzer.CallEdge]
+  val callerGraph = mutable.LinkedHashSet.empty[Analyzer.CallEdge]
 
   val analyses = mutable.LinkedHashMap.empty[InferredSig, OptimisticAnalyze[IType]]
 
@@ -143,7 +143,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
       if classManager.mergeTypes(Seq(node.cls, msig.cls)) == node.cls
     } yield {
       analyses(edge.caller).invalidations.add(OptimisticAnalyze.Invalidate.Invoke(node))
-      callerGraph ::= Analyzer.CallEdge(edge.caller, Some(node), edge.called.copy(method = msig))
+      callerGraph.add(Analyzer.CallEdge(edge.caller, Some(node), edge.called.copy(method = msig)))
       addToCallSet(edge.called.copy(method = msig), callSets(edge.caller))
       edge.called.copy(method = msig)
     }
@@ -175,7 +175,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
     inferredLog.pprint(optimisticResult.inferred)
     inferredLog.pprint(optimisticResult.liveBlocks)
 
-    val returnEdges = callerGraph.filter(_.called == isig)
+    val returnEdges = callerGraph.iterator.filter(_.called == isig).toArray
 
     for (edge <- returnEdges) {
       for (node <- edge.node) {
@@ -205,7 +205,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
 
     if (clinits.isEmpty) Seq(isig)
     else {
-      clinits.foreach(clinit => callerGraph ::= Analyzer.CallEdge(isig, None, clinit))
+      clinits.foreach(clinit => callerGraph.add(Analyzer.CallEdge(isig, None, clinit)))
       clinits.foreach(addToCallSet(_, currentCallSet))
       clinits
     }
@@ -219,7 +219,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
 
     if (currentCallSet(calledSig)) {
       calledSignatures.add(calledSig)
-      callerGraph ::= Analyzer.CallEdge(calledSig, Some(invoke), isig)
+      callerGraph.add(Analyzer.CallEdge(calledSig, Some(invoke), isig))
       addToCallSet(calledSig, currentCallSet)
       analyses(isig).evaluated(invoke) = IType.Bottom
       methodProps(calledSig) = Analyzer.dummyProps(calledSig.method, true)
@@ -230,13 +230,13 @@ class Analyzer(entrypoints: Seq[MethodSig],
       Seq(isig)
     } else if (invoke.isInstanceOf[SSA.InvokeSpecial]) {
       calledSignatures.add(calledSig)
-      callerGraph ::= Analyzer.CallEdge(isig, Some(invoke), calledSig)
+      callerGraph.add(Analyzer.CallEdge(isig, Some(invoke), calledSig))
       addToCallSet(calledSig, currentCallSet)
       Seq(calledSig)
     } else classManager.resolvePossibleSigs(calledSig.method) match {
       case None =>
         calledSignatures.add(calledSig)
-        callerGraph ::= Analyzer.CallEdge(isig, Some(invoke), calledSig)
+        callerGraph.add(Analyzer.CallEdge(isig, Some(invoke), calledSig))
         addToCallSet(calledSig, currentCallSet)
         Seq(isig).filter(!methodProps.contains(_))
       case Some(subSigs0) =>
@@ -264,7 +264,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
         )
         if (rets.isEmpty) Seq(isig)
         else {
-          rets.foreach(ret => callerGraph ::= Analyzer.CallEdge(isig, Some(invoke), ret))
+          rets.foreach(ret => callerGraph.add(Analyzer.CallEdge(isig, Some(invoke), ret)))
 
           rets.foreach(addToCallSet(_, currentCallSet))
           rets
