@@ -1,9 +1,7 @@
 package joptimize.analyzer
 import collection.JavaConverters._
-import joptimize.algorithms.{Dominator, MultiBiMap, Scheduler}
 import joptimize.frontend.{ClassManager, Frontend}
-import joptimize.{Logger, Util}
-import joptimize.graph.HavlakLoopTree
+import joptimize.Logger
 import joptimize.model._
 import joptimize.optimize._
 import org.objectweb.asm.Opcodes
@@ -14,25 +12,61 @@ class Analyzer(entrypoints: Seq[MethodSig],
                classManager: ClassManager,
                globalLog: Logger.Global,
                frontend: Frontend){
+
+  /**
+    * The current queue of methods to analyze. Can have multiple methods in it at the same
+    * time, e.g. an analyzed method may call multiple other methods, or upon returning may
+    * enqueue both the caller method as well as any methods that were invalidated.
+    */
+  val current = mutable.LinkedHashSet.empty[InferredSig]
+
+  /**
+    * The currently set of properties known for each analyzed method. May be invalidated
+    * and recomputed for a method if new classes are loaded or recursive calls complete
+    */
   val methodProps = mutable.LinkedHashMap.empty[InferredSig, Analyzer.Properties]
+
+  /**
+    * The set of all called method signatures. Used to compute which methods need to be
+    * invalidated whenever a new `SSA.New` node is seen.
+    */
   val calledSignatures = mutable.LinkedHashSet.empty[InferredSig]
+
+  /**
+    * Aggregate the list of classes who have static fields loaded separately from the
+    * method analysis, since this is the one way you can reference a class and force
+    * it to be loaded without calling a method or constructor
+    */
   val staticFieldReferencedClasses = mutable.LinkedHashSet.empty[JType.Cls]
 
   /**
-    * Edges from the caller to the called
+    * Edges from the caller to the called. Used to guide the traversal from an analyzed
+    * method to others that depend on it.
     *
-    * This is kept up to date on a node-by-node basis during the traversal
+    * This is constructed dynamically as the program is traversed, and the set of edges
+    * grows monotonically.
     */
   val callerGraph = mutable.LinkedHashSet.empty[Analyzer.CallEdge]
 
+  /**
+    * Work in progress optimistic analyses of the various methods in play. These analyses
+    * may not be complete, as they may be awaiting the metadata of called functions to
+    * proceed or may be invalidated and re-visited if a called function widens its
+    * signature
+    */
   val analyses = mutable.LinkedHashMap.empty[InferredSig, OptimisticAnalyze[IType]]
 
-  val current = mutable.LinkedHashSet.empty[InferredSig]
+  /**
+    * An aggregation of the various call stacks that can reach a particular method. Grows
+    * monotonically, and used to check for recursion. We do not care which call stack
+    * reaching a method indicates it is recursive, only that some call stack does so we
+    * can treat that recursive call optimistically
+    */
+  val callStackSets = mutable.Map.empty[InferredSig, Set[InferredSig]]
 
-  val callSets = mutable.Map.empty[InferredSig, Set[InferredSig]]
   def addToCallSet(k: InferredSig, v: Set[InferredSig]) = {
-    if (callSets.contains(k)) callSets(k) ++= v
-    else callSets(k) = v
+    if (callStackSets.contains(k)) callStackSets(k) ++= v
+    else callStackSets(k) = v
   }
 
   def apply() = {
@@ -40,7 +74,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
     for (ep <- entrypoints) {
       val isig = InferredSig(ep, ep.desc.args)
       current.add(isig)
-      callSets(isig) = Set()
+      callStackSets(isig) = Set()
       calledSignatures.add(isig)
     }
 
@@ -79,8 +113,8 @@ class Analyzer(entrypoints: Seq[MethodSig],
   def step() = {
 //    println()
 //    println(pprint.apply(current.map(_.method.toString.stripPrefix("joptimize.examples.simple."))))
-    val isig = current.maxBy(callSets(_).size)
-    val currentCallSet = callSets(isig) ++ Set(isig)
+    val isig = current.maxBy(callStackSets(_).size)
+    val currentCallSet = callStackSets(isig) ++ Set(isig)
 
     val methodLog = globalLog.method(isig.method)
     val inferredLog = globalLog.inferredMethod(isig)
@@ -144,7 +178,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
     } yield {
       analyses(edge.caller).invalidations.add(OptimisticAnalyze.Invalidate.Invoke(node))
       callerGraph.add(Analyzer.CallEdge(edge.caller, Some(node), edge.called.copy(method = msig)))
-      addToCallSet(edge.called.copy(method = msig), callSets(edge.caller))
+      addToCallSet(edge.called.copy(method = msig), callStackSets(edge.caller))
       edge.called.copy(method = msig)
     }
     newMethodOverrides
