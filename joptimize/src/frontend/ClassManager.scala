@@ -9,18 +9,27 @@ import collection.JavaConverters._
 import scala.collection.mutable
 object ClassManager{
   trait ReadOnly{
-    def subtypeMap: MultiBiMap[JType.Cls, JType.Cls]
+    def subtypeMap: mutable.LinkedHashMap[JType.Cls, List[JType.Cls]]
+    def supertypeMap: mutable.LinkedHashMap[JType.Cls, List[JType.Cls]]
     def loadClassCache: collection.Map[JType.Cls, Option[ClassNode]]
     def loadMethodCache: collection.Map[MethodSig, Option[MethodNode]]
   }
 }
 class ClassManager(getClassFile: String => Option[Array[Byte]]) extends ClassManager.ReadOnly {
 
-  val subtypeMap = new MultiBiMap.Mutable[JType.Cls, JType.Cls]
+  val subtypeMap = mutable.LinkedHashMap.empty[JType.Cls, List[JType.Cls]]
+  val supertypeMap = mutable.LinkedHashMap.empty[JType.Cls, List[JType.Cls]]
+
 
   val loadClassCache = mutable.LinkedHashMap.empty[JType.Cls, Option[ClassNode]]
   val loadMethodCache = mutable.LinkedHashMap.empty[MethodSig, Option[MethodNode]]
 
+//  def resolveSuperTypes(current0: JType.Cls) = {
+//
+//    val all = mutable.Buffer.empty[JType.Cls]
+//
+//    Seq(current0) ++ resolveSuperTypes(c)
+//  }
   def resolvePossibleSigs(sig: MethodSig): Option[Seq[MethodSig]] = {
     if (sig.static) {
       def rec(currentCls: JType.Cls): Option[MethodSig] = {
@@ -37,10 +46,8 @@ class ClassManager(getClassFile: String => Option[Array[Byte]]) extends ClassMan
     }else{
       //      pprint.log(subtypeMap.items().toMap)
       val subTypes = subtypeMap
-        .lookupKeyOpt(sig.cls)
-        .getOrElse(Nil)
+        .getOrElse(sig.cls, Nil)
         .map(c => sig.copy(cls = c))
-        .toList
 
       Some(sig :: subTypes)
     }
@@ -56,7 +63,8 @@ class ClassManager(getClassFile: String => Option[Array[Byte]]) extends ClassMan
       val uppers = cn.interfaces.asScala ++ Option(cn.superName)
       val upperClasses = uppers.map(clsName => JType.Cls(clsName))
       for(up <- upperClasses) {
-        subtypeMap.add(up, cls)
+        subtypeMap(up) = cls :: subtypeMap.getOrElse(up, Nil)
+        supertypeMap(cls) = up :: supertypeMap.getOrElse(cls, Nil)
         loadClass(up)
       }
 

@@ -17,7 +17,6 @@ class Analyzer(entrypoints: Seq[MethodSig],
   val methodProps = mutable.LinkedHashMap.empty[InferredSig, Analyzer.Properties]
   val calledSignatures = mutable.LinkedHashSet.empty[InferredSig]
   val visitedClasses = mutable.LinkedHashSet.empty[JType.Cls]
-  val invalidated = mutable.LinkedHashMap.empty[JType.Cls, Seq[MethodSig]]
 
   /**
     * Edges from the caller to the called
@@ -105,6 +104,17 @@ class Analyzer(entrypoints: Seq[MethodSig],
           case Some(n: SSA.PutField) => handleFieldReference(isig, currentCallSet, n.owner)
           case Some(n: SSA.GetStatic) => handleFieldReference(isig, currentCallSet, n.cls)
           case Some(n: SSA.PutStatic) => handleFieldReference(isig, currentCallSet, n.cls)
+//          case Some(n: SSA.New) =>
+//            val superClasses = classManager.
+//            val newMethodOverrides = for{
+//              loadedClsNode <- classManager.loadClass(n.cls).toSeq
+//              mn <- loadedClsNode.methods.asScala
+//              msig = MethodSig(n.cls, mn.name, Desc.read(mn.desc), (mn.access & Opcodes.ACC_STATIC) != 0)
+//              if
+//            } yield {
+//
+//            }
+//            newMethodOverrides ++ Seq(isig)
           case Some(invoke: SSA.Invoke) => handleInvoke(isig, currentCallSet, currentAnalysis, invoke)
           case _ => Seq(isig)
         }

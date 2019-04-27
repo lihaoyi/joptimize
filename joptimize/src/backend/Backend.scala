@@ -170,7 +170,7 @@ object Backend {
     val outClasses = BytecodeDCE.apply(
       entrypoints,
       grouped.keys.toSeq,
-      findSubtypes = classManager.subtypeMap.lookupKeyOpt(_).getOrElse(Nil),
+      findSubtypes = classManager.subtypeMap.getOrElse(_, Nil),
       findSupertypes = findSupertypes,
       ignore = ignore
     )
