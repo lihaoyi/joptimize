@@ -3,7 +3,7 @@ package joptimize.optimize
 import joptimize.analyzer.Namer
 import joptimize.graph.TarjansStronglyConnectedComponents
 import joptimize.model._
-import joptimize.optimize.OptimisticAnalyze.{Result, Step, WorkItem, topoSort}
+import joptimize.optimize.OptimisticAnalyze.{Invalidate, Result, Step, WorkItem, topoSort}
 import joptimize.{FileLogger, Logger, Util}
 
 import scala.collection.mutable
@@ -19,6 +19,7 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
 
   val inferredBlocks = mutable.LinkedHashSet(initialBlock)
 
+  val invalidations = mutable.LinkedHashSet[Invalidate]()
   val workList = mutable.LinkedHashSet[WorkItem](WorkItem.Block(initialBlock))
 
   val seenJumps = mutable.LinkedHashSet.empty[SSA.Jump]
@@ -28,17 +29,24 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
 
   def step(): OptimisticAnalyze.Step[T] = {
 //    pprint.log(workList)
-    if (workList.nonEmpty){
+    if (invalidations.nonEmpty){
+      val item = invalidations.head
+      invalidations.remove(item)
+      item match {
+        case Invalidate.Force(v) =>
+          invalidateDownstream(v)
+          Step.Continue(None)
+        case Invalidate.Incremental(v) =>
+          invalidateValue(v)
+      }
+    } else if (workList.nonEmpty){
       val item = workList.head
-
-      println(pprint.apply(item))
       workList.remove(item)
       item match{
         case WorkItem.Val(v) =>
           if (!evaluated.contains(v)) evaluateVal(v)
           else Step.Continue(None)
         case WorkItem.Block(currentBlock) =>
-          pprint.log(currentBlock)
 
           log.pprint(currentBlock)
           queueSortedUpstreams(currentBlock.next.upstreamVals.toSet)
@@ -54,11 +62,6 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
         case WorkItem.Transition(currentBlock, nextBlock) =>
           queueNextBlockTwo(currentBlock, nextBlock)
           Step.Continue(None)
-        case WorkItem.ForceInvalidate(v) =>
-          invalidateDownstream(v)
-          Step.Continue(None)
-        case WorkItem.Invalidate(v) =>
-          invalidateValue(v)
       }
 
     }else {
@@ -75,9 +78,9 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
         case phi: SSA.Phi =>
           if (evaluated(v) != evaluated(phi)){
             evaluated(phi) = lattice.join(evaluated(v), evaluated(phi))
-            workList.add(WorkItem.ForceInvalidate(phi))
+            invalidations.add(Invalidate.Force(phi))
           }
-        case nextV: SSA.Val => workList.add(WorkItem.Invalidate(nextV))
+        case nextV: SSA.Val => invalidations.add(Invalidate.Incremental(nextV))
         case j: SSA.Jump => workList.add(WorkItem.BlockJump(j.block))
       }
   }
@@ -184,8 +187,7 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
 
           val merged = lattice.join(old, v)
           if (merged != old) {
-
-            workList.add(WorkItem.ForceInvalidate(k))
+            invalidations.add(Invalidate.Force(k))
             evaluated(k) = merged
           }
         }
@@ -267,15 +269,18 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
   }
 }
 object OptimisticAnalyze {
-
+  sealed trait Invalidate
+  object Invalidate{
+    case class Force(src: SSA.Val) extends Invalidate
+    case class Incremental(src: SSA.Val) extends Invalidate
+  }
   sealed trait WorkItem
   object WorkItem{
     case class Val(value: SSA.Val) extends WorkItem
     case class Block(value: SSA.Block) extends WorkItem
     case class BlockJump(value: SSA.Block) extends WorkItem
     case class Transition(src: SSA.Block, dest: SSA.Block) extends WorkItem
-    case class ForceInvalidate(src: SSA.Val) extends WorkItem
-    case class Invalidate(src: SSA.Val) extends WorkItem
+
   }
 
   sealed trait Step[T]

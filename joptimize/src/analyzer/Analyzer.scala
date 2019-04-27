@@ -73,8 +73,8 @@ class Analyzer(entrypoints: Seq[MethodSig],
   }
 
   def step() = {
-    println()
-    println(pprint.apply(current.map(_.method.toString.stripPrefix("joptimize.examples.simple."))))
+//    println()
+//    println(pprint.apply(current.map(_.method.toString.stripPrefix("joptimize.examples.simple."))))
     val isig = current.maxBy(callSets(_).size)
     val currentCallSet = callSets(isig) ++ Set(isig)
 
@@ -122,7 +122,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
               if edge.called.method.desc == msig.desc
               if classManager.mergeTypes(Seq(node.cls, msig.cls)) == node.cls
             } yield {
-              analyses(edge.caller).workList.add(OptimisticAnalyze.WorkItem.ForceInvalidate(node))
+              analyses(edge.caller).invalidations.add(OptimisticAnalyze.Invalidate.Force(node))
               callerGraph ::= Analyzer.CallEdge(edge.caller, Some(node), edge.called.copy(method = msig))
               addToCallSet(edge.called.copy(method = msig), callSets(edge.caller))
               edge.called.copy(method = msig)
@@ -135,7 +135,6 @@ class Analyzer(entrypoints: Seq[MethodSig],
 
 
       case OptimisticAnalyze.Step.Done() =>
-        println("DONE")
         handleReturn(isig, currentCallSet, inferredLog, currentAnalysis)
     }
 
@@ -145,7 +144,10 @@ class Analyzer(entrypoints: Seq[MethodSig],
     }
   }
 
-  def handleReturn(isig: InferredSig, currentCallSet: Set[InferredSig], inferredLog: Logger.InferredMethod, currentAnalysis: OptimisticAnalyze[IType]) = {
+  def handleReturn(isig: InferredSig,
+                   currentCallSet: Set[InferredSig],
+                   inferredLog: Logger.InferredMethod,
+                   currentAnalysis: OptimisticAnalyze[IType]) = {
 //    println("DONE")
     val optimisticResult = currentAnalysis.apply()
     val retTypes = currentAnalysis.apply().inferredReturns.filter(_ != JType.Prim.V)
@@ -172,8 +174,8 @@ class Analyzer(entrypoints: Seq[MethodSig],
     for (edge <- returnEdges) {
       for (node <- edge.node) {
         if (analyses(edge.caller).evaluated.contains(node)) {
-          analyses(edge.caller).workList.add(
-            OptimisticAnalyze.WorkItem.ForceInvalidate(node)
+          analyses(edge.caller).invalidations.add(
+            OptimisticAnalyze.Invalidate.Force(node)
           )
         }
         analyses(edge.caller).evaluated(node) = classManager.mergeTypes(
