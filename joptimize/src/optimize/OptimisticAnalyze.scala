@@ -33,8 +33,8 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
       val item = invalidations.head
       invalidations.remove(item)
       item match {
-        case Invalidate.Phi(v) => invalidateDownstream(v)
-        case Invalidate.Invoke(v) => invalidateDownstream(v)
+        case Invalidate.Phi(v) => queueDownstreamInvalidations(v)
+        case Invalidate.Invoke(v) => queueDownstreamInvalidations(v)
         case Invalidate.Incremental(v) => invalidateValue(v)
       }
     } else if (evaluateList.nonEmpty){
@@ -69,7 +69,7 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
     }
   }
 
-  def invalidateDownstream(v: SSA.Val): Step.Continue[T] = {
+  def queueDownstreamInvalidations(v: SSA.Val): Step.Continue[T] = {
     val downstreams = v.downstreamList.filter{
       case v: SSA.Val => evaluated.contains(v)
       case j: SSA.Jump => seenJumps.contains(j)
@@ -96,7 +96,7 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
       if (evaluated(v) == newValue) Step.Continue(Seq(v))
       else{
         evaluated(v) = newValue
-        invalidateDownstream(v)
+        queueDownstreamInvalidations(v)
       }
     }
   }
