@@ -83,8 +83,8 @@ class Analyzer(entrypoints: Seq[MethodSig],
     }
 
     for((k, v) <- analyses){
-      assert(v.evaluateList.isEmpty, (k, v.evaluateList))
-      assert(v.invalidations.isEmpty, (k, v.invalidations))
+      assert(v.evaluateWorkList.isEmpty, (k, v.evaluateWorkList))
+      assert(v.invalidateWorkList.isEmpty, (k, v.invalidateWorkList))
     }
     for(m <- methodProps.keysIterator){
       calledSignatures.add(m)
@@ -99,7 +99,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
       visitedMethods(k) = Analyzer.Result(
         frontend.cachedMethodBodies(k).get,
         analyses(k).evaluated,
-        analyses(k).inferredBlocks.toSet,
+        analyses(k).liveBlocks.toSet,
         props
       )
     }
@@ -176,7 +176,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
       if edge.called.method.desc == msig.desc
       if classManager.mergeTypes(Seq(node.cls, msig.cls)) == node.cls
     } yield {
-      analyses(edge.caller).invalidations.add(OptimisticAnalyze.Invalidate.Invoke(node))
+      analyses(edge.caller).invalidateWorkList.add(OptimisticAnalyze.Invalidate.Invoke(node))
       callerGraph.add(Analyzer.CallEdge(edge.caller, Some(node), edge.called.copy(method = msig)))
       addToCallSet(edge.called.copy(method = msig), callStackSets(edge.caller))
       edge.called.copy(method = msig)
@@ -190,7 +190,12 @@ class Analyzer(entrypoints: Seq[MethodSig],
                    currentAnalysis: OptimisticAnalyze[IType]) = {
 //    println("DONE")
     val optimisticResult = currentAnalysis.apply()
-    val retTypes = currentAnalysis.apply().inferredReturns.filter(_ != JType.Prim.V)
+    val retTypes = currentAnalysis.apply()
+      .inferredReturns
+      .flatMap(_._2)
+      .filter(_ != JType.Prim.V)
+      .toSeq
+
     val inferredReturn =
       if (retTypes.isEmpty) JType.Prim.V
       else classManager.mergeTypes(retTypes)
@@ -218,7 +223,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
         )
 
         if (!analyses(edge.caller).evaluated.get(node).contains(props.inferredReturn)) {
-          analyses(edge.caller).invalidations.add(OptimisticAnalyze.Invalidate.Invoke(node))
+          analyses(edge.caller).invalidateWorkList.add(OptimisticAnalyze.Invalidate.Invoke(node))
         }
 
         analyses(edge.caller).evaluated(node) = mergedType
@@ -342,30 +347,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
       methodBody.getAllVertices().collect { case b: SSA.Block if b.upstream.isEmpty => b }.head,
       new ITypeLattice((x, y) => classManager.mergeTypes(Seq(x, y)), inferredArgs),
       log,
-      evaluateUnaBranch = {
-        case (CType.I(v), SSA.UnaBranch.IFNE) => Some(v != 0)
-        case (CType.I(v), SSA.UnaBranch.IFEQ) => Some(v == 0)
-        case (CType.I(v), SSA.UnaBranch.IFLE) => Some(v <= 0)
-        case (CType.I(v), SSA.UnaBranch.IFLT) => Some(v < 0)
-        case (CType.I(v), SSA.UnaBranch.IFGE) => Some(v >= 0)
-        case (CType.I(v), SSA.UnaBranch.IFGT) => Some(v > 0)
-        case (JType.Null, SSA.UnaBranch.IFNULL) => Some(true)
-        case (JType.Null, SSA.UnaBranch.IFNONNULL) => Some(false)
-        case _ => None
-      },
-      evaluateBinBranch = {
-        case (CType.I(v1), CType.I(v2), SSA.BinBranch.IF_ICMPEQ) => Some(v1 == v2)
-        case (CType.I(v1), CType.I(v2), SSA.BinBranch.IF_ICMPNE) => Some(v1 != v2)
-        case (CType.I(v1), CType.I(v2), SSA.BinBranch.IF_ICMPLT) => Some(v1 < v2)
-        case (CType.I(v1), CType.I(v2), SSA.BinBranch.IF_ICMPGE) => Some(v1 >= v2)
-        case (CType.I(v1), CType.I(v2), SSA.BinBranch.IF_ICMPGT) => Some(v1 > v2)
-        case (CType.I(v1), CType.I(v2), SSA.BinBranch.IF_ICMPLE) => Some(v1 <= v2)
-        case _ => None
-      },
-      evaluateSwitch = {
-        case CType.I(v) => Some(v)
-        case _ => None
-      }
+      ITypeBrancher
     )
   }
 

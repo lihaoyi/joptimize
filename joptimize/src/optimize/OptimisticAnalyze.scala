@@ -3,7 +3,7 @@ package joptimize.optimize
 import joptimize.analyzer.Namer
 import joptimize.graph.TarjansStronglyConnectedComponents
 import joptimize.model._
-import joptimize.optimize.OptimisticAnalyze.{Invalidate, Result, Step, Evaluate, topoSort}
+import joptimize.optimize.OptimisticAnalyze.{Evaluate, Invalidate, Result, Step, topoSort}
 import joptimize.{FileLogger, Logger, Util}
 
 import scala.collection.mutable
@@ -13,33 +13,56 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
                            initialBlock: SSA.Block,
                            lattice: Lattice[T],
                            log: Logger.InferredMethod,
-                           evaluateUnaBranch: (T, SSA.UnaBranch.Code) => Option[Boolean],
-                           evaluateBinBranch: (T, T, SSA.BinBranch.Code) => Option[Boolean],
-                           evaluateSwitch: T => Option[Int]){
+                           brancher: Brancher[T]){
 
-  val inferredBlocks = mutable.LinkedHashSet(initialBlock)
+  /**
+    * A queue of tasks to perform when traversing new previously-unseen code.
+    */
+  val evaluateWorkList = mutable.LinkedHashSet[Evaluate](Evaluate.Block(initialBlock))
+  /**
+    * A queue of tasks to perform when traversing invalidated already-seen code. Takes
+    * priority over [[evaluateWorkList]] during traversal, as we would like to complete
+    * invalidations as early as possible to minimize the amount of code that gets
+    * invalidated
+    */
+  val invalidateWorkList = mutable.LinkedHashSet[Invalidate]()
 
-  val invalidations = mutable.LinkedHashSet[Invalidate]()
-  val evaluateList = mutable.LinkedHashSet[Evaluate](Evaluate.Block(initialBlock))
-
-  val seenJumps = mutable.LinkedHashSet.empty[SSA.Jump]
+  /**
+    * The primary set of things being inferred over the values of the program.
+    */
   val evaluated = mutable.LinkedHashMap.empty[SSA.Val, T]
 
-  val inferredReturns = mutable.Buffer.empty[T]
+  /**
+    * The set of live blocks that have been visited in the course of this method body's
+    * traversal. Grows monotonically
+    */
+  val liveBlocks = mutable.LinkedHashSet(initialBlock)
+
+  /**
+    * The set of jump instructions that have been seen in the course of this method body's
+    * traversal. Grows monotonically
+    */
+  val seenJumps = mutable.LinkedHashSet.empty[SSA.Jump]
+
+  /**
+    * The set of return instructions that have been seen in the course of this method body's
+    * traversal, and their returned values. Grows monotonically
+    */
+  val inferredReturns = mutable.LinkedHashMap.empty[SSA.Jump, Seq[T]]
 
   def step(): OptimisticAnalyze.Step[T] = {
 //    pprint.log(workList)
-    if (invalidations.nonEmpty){
-      val item = invalidations.head
-      invalidations.remove(item)
+    if (invalidateWorkList.nonEmpty){
+      val item = invalidateWorkList.head
+      invalidateWorkList.remove(item)
       item match {
         case Invalidate.Phi(v) => queueDownstreamInvalidations(v)
         case Invalidate.Invoke(v) => queueDownstreamInvalidations(v)
         case Invalidate.Incremental(v) => invalidateValue(v)
       }
-    } else if (evaluateList.nonEmpty){
-      val item = evaluateList.head
-      evaluateList.remove(item)
+    } else if (evaluateWorkList.nonEmpty){
+      val item = evaluateWorkList.head
+      evaluateWorkList.remove(item)
       item match{
         case Evaluate.Val(v) =>
           if (!evaluated.contains(v)) evaluateVal(v)
@@ -49,13 +72,13 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
 
           log.pprint(currentBlock)
           queueSortedUpstreams(currentBlock.next.upstreamVals.toSet)
-          evaluateList.add(Evaluate.BlockJump(currentBlock))
+          evaluateWorkList.add(Evaluate.BlockJump(currentBlock))
           Step.Continue(Nil)
 
         case Evaluate.BlockJump(currentBlock) =>
           val nextBlocks = computeNextBlocks(currentBlock)
           for(nextBlock <- nextBlocks){
-            evaluateList.add(Evaluate.Transition(currentBlock, nextBlock))
+            evaluateWorkList.add(Evaluate.Transition(currentBlock, nextBlock))
           }
           Step.Continue(Nil)
 
@@ -78,11 +101,11 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
       case phi: SSA.Phi =>
         if (evaluated(v) != evaluated(phi)){
           evaluated(phi) = lattice.join(evaluated(v), evaluated(phi))
-          invalidations.add(Invalidate.Phi(phi))
+          invalidateWorkList.add(Invalidate.Phi(phi))
         }
-      case i: SSA.Invoke => invalidations.add(Invalidate.Invoke(i))
-      case nextV: SSA.Val => invalidations.add(Invalidate.Incremental(nextV))
-      case j: SSA.Jump => evaluateList.add(Evaluate.BlockJump(j.block))
+      case i: SSA.Invoke => invalidateWorkList.add(Invalidate.Invoke(i))
+      case nextV: SSA.Val => invalidateWorkList.add(Invalidate.Incremental(nextV))
+      case j: SSA.Jump => evaluateWorkList.add(Evaluate.BlockJump(j.block))
     }
     Step.Continue(downstreams.collect{case v: SSA.Val => v})
   }
@@ -111,28 +134,27 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
         seenJumps.add(n)
         n match {
           case r: SSA.Return =>
-            inferredReturns.append(evaluated(r.state))
+            inferredReturns(r) = Seq(evaluated(r.state))
             Nil
           case r: SSA.ReturnVal =>
-            inferredReturns.append(evaluated(r.src))
-            inferredReturns.append(evaluated(r.state))
+            inferredReturns(r) = Seq(evaluated(r.src), evaluated(r.state))
             Nil
           case n: SSA.UnaBranch =>
             val valueA = evaluated(n.a)
-            val doBranch = evaluateUnaBranch(valueA, n.opcode)
+            val doBranch = brancher.evaluateUnaBranch(valueA, n.opcode)
 
             queueBranchBlock(currentBlock, n, doBranch)
           case n: SSA.BinBranch =>
             val valueA = evaluated(n.a)
             val valueB = evaluated(n.b)
-            val doBranch = evaluateBinBranch(valueA, valueB, n.opcode)
+            val doBranch = brancher.evaluateBinBranch(valueA, valueB, n.opcode)
             queueBranchBlock(currentBlock, n, doBranch)
 
           case n: SSA.Switch =>
             val value = evaluated(n.src)
             val cases = n.cases.values
             val default = n.default
-            val doBranch = evaluateSwitch(value)
+            val doBranch = brancher.evaluateSwitch(value)
 
             doBranch match {
               case None =>
@@ -173,14 +195,14 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
     val newPhiValues = getNewPhiExpressions(currentBlock, nextBlock)
       .map { case (phi, expr) => phi -> evaluated(expr) }
 
-    val continueNextBlock = !inferredBlocks(nextBlock)
+    val continueNextBlock = !liveBlocks(nextBlock)
 
     if (continueNextBlock) {
       for ((k, v) <- newPhiValues) {
         evaluated(k) = v
       }
-      inferredBlocks.add(nextBlock)
-      evaluateList.add(Evaluate.Block(nextBlock))
+      liveBlocks.add(nextBlock)
+      evaluateWorkList.add(Evaluate.Block(nextBlock))
     }else{
       for ((k, v) <- newPhiValues) {
         val old = evaluated(k)
@@ -188,7 +210,7 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
 
           val merged = lattice.join(old, v)
           if (merged != old) {
-            invalidations.add(Invalidate.Phi(k))
+            invalidateWorkList.add(Invalidate.Phi(k))
             evaluated(k) = merged
           }
         }
@@ -207,7 +229,7 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
 
   def queueSortedUpstreams(set: Set[SSA.Val]) = {
     topoSort(set.filter(!_.isInstanceOf[SSA.Phi])).foreach { v =>
-      evaluateList.add(Evaluate.Val(v))
+      evaluateWorkList.add(Evaluate.Val(v))
     }
   }
 
@@ -265,7 +287,7 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
     Result(
       inferredReturns,
       evaluated,
-      inferredBlocks.toSet
+      liveBlocks.toSet
     )
   }
 }
@@ -292,7 +314,7 @@ object OptimisticAnalyze {
     case class Continue[T](node: Seq[SSA.Val]) extends Step[T]
     case class Done[T]() extends Step[T]
   }
-  case class Result[T](inferredReturns: Seq[T],
+  case class Result[T](inferredReturns: mutable.LinkedHashMap[SSA.Jump, Seq[T]],
                        inferred: mutable.LinkedHashMap[SSA.Val, T],
                        liveBlocks: Set[SSA.Block])
 
