@@ -118,8 +118,6 @@ object MainTests extends TestSuite{
         'staticInheritance - annotatedTest
         'staticInheritanceMethod - annotatedTest
         'moreStrings - annotatedTest
-        'implementLate - annotatedTest
-        'implementLate0 - annotatedTest
       }
 //      'Exceptions - {
 //        'throwCatch0 - annotatedTest
@@ -210,6 +208,10 @@ object MainTests extends TestSuite{
         'mutualRecursivePureConstant - annotatedTest
         'generalRecursive - annotatedTest
 
+        'implementLate1 - annotatedTest
+        'implementLate2 - annotatedTest
+        'implementLate3 - annotatedTest
+        'implementLate4 - annotatedTest
         // These tests cannot pass until we have optimistic inter-procedural
         // liveness analysis, rather than the simple intra-procedural liveness
         // analysis that we have now

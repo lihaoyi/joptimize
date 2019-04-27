@@ -119,4 +119,69 @@ class Optimistic {
         if (x > 2) return x + z;
         else return mutualRecursivePureDeadArg1(x + 1, y, z);
     }
+
+
+
+    @joptimize.Test(
+            // These numbers should *not* get constant folded, as there are two
+            // subtypes of `Foo` and we do not know which one `.call` is called on
+            addedNumConst = {123, 456}
+    )
+    public static int implementLate1() {
+        Foo foo = new Bar();
+        int first = foo.call() + 123;
+        foo = new Qux();
+        int second = foo.call() + 456;
+        return first + second;
+    }
+
+    @joptimize.Test(
+            // These numbers should *not* get constant folded, as there are two
+            // subtypes of `Foo` and we do not know which one `.call` is called on
+            addedNumConst = {123}
+    )
+    public static int implementLate2() {
+        Foo foo = new Bar();
+        int first = foo.call() + 123;
+        foo = new Qux();
+        return first;
+    }
+
+
+    @joptimize.Test(
+            // These numbers should *not* get constant folded, as there are two
+            // subtypes of `Foo` and we do not know which one `.call` is called on
+            addedNumConst = {123}
+    )
+    public static int implementLate3() {
+        Foo foo = new Bar();
+        foo = new Qux();
+        int first = foo.call() + 123;
+        return first;
+    }
+
+    @joptimize.Test(
+            // Make sure that in this case, since `Bar` is the only subtype
+            // instantiated, we can constant fold `1 + 123` into `124`
+            removedNumConst = {123},
+            addedNumConst = {124}
+    )
+    public static int implementLate4() {
+        Foo foo = new Bar();
+        int first = foo.call() + 123;
+        return first;
+    }
+    static abstract class Foo{
+        abstract int call();
+    }
+    static class Bar extends Foo{
+        int call(){
+            return 1;
+        }
+    }
+    static class Qux extends Foo{
+        int call(){
+            return 2;
+        }
+    }
 }
