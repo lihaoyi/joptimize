@@ -3,17 +3,17 @@ package joptimize.optimize
 import joptimize.analyzer.Namer
 import joptimize.graph.TarjansStronglyConnectedComponents
 import joptimize.model._
-import joptimize.optimize.OptimisticAnalyze.{Evaluate, Invalidate, Result, Step, topoSort}
+import joptimize.optimize.MethodAnalyzer.{Evaluate, Invalidate, Result, Step, topoSort}
 import joptimize.{FileLogger, Logger, Util}
 
 import scala.collection.mutable
 
-class OptimisticAnalyze[T](methodBody: MethodBody,
-                           initialValues: Map[SSA.Val, T],
-                           initialBlock: SSA.Block,
-                           lattice: Lattice[T],
-                           log: Logger.InferredMethod,
-                           brancher: Brancher[T]){
+class MethodAnalyzer[T](methodBody: MethodBody,
+                        initialValues: Map[SSA.Val, T],
+                        initialBlock: SSA.Block,
+                        lattice: Lattice[T],
+                        log: Logger.InferredMethod,
+                        brancher: Brancher[T]){
 
   /**
     * A queue of tasks to perform when traversing new previously-unseen code.
@@ -50,7 +50,7 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
     */
   val inferredReturns = mutable.LinkedHashMap.empty[SSA.Jump, Seq[T]]
 
-  def step(): OptimisticAnalyze.Step[T] = {
+  def step(): MethodAnalyzer.Step[T] = {
 //    pprint.log(workList)
     if (invalidateWorkList.nonEmpty){
       val item = invalidateWorkList.head
@@ -110,7 +110,7 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
     Step.Continue(downstreams.collect{case v: SSA.Val => v})
   }
 
-  def invalidateValue(v: SSA.Val): OptimisticAnalyze.Step[T] = {
+  def invalidateValue(v: SSA.Val): MethodAnalyzer.Step[T] = {
     val upstream = v.upstream.collect{case v: SSA.Val => evaluated.getOrElse(v, IType.Bottom)}
 
     if (upstream.contains(IType.Bottom)) Step.Continue(Seq(v)) // do nothing
@@ -291,7 +291,7 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
     )
   }
 }
-object OptimisticAnalyze {
+object MethodAnalyzer {
   sealed trait Invalidate
   object Invalidate{
     case class Phi(src: SSA.Phi) extends Invalidate

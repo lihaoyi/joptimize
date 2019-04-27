@@ -8,10 +8,10 @@ import org.objectweb.asm.Opcodes
 
 import scala.collection.mutable
 
-class Analyzer(entrypoints: Seq[MethodSig],
-               classManager: ClassManager,
-               globalLog: Logger.Global,
-               frontend: Frontend){
+class ProgramAnalyzer(entrypoints: Seq[MethodSig],
+                      classManager: ClassManager,
+                      globalLog: Logger.Global,
+                      frontend: Frontend){
 
   /**
     * The current queue of methods to analyze. Can have multiple methods in it at the same
@@ -24,7 +24,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
     * The currently set of properties known for each analyzed method. May be invalidated
     * and recomputed for a method if new classes are loaded or recursive calls complete
     */
-  val methodProps = mutable.LinkedHashMap.empty[InferredSig, Analyzer.Properties]
+  val methodProps = mutable.LinkedHashMap.empty[InferredSig, ProgramAnalyzer.Properties]
 
   /**
     * The set of all called method signatures. Used to compute which methods need to be
@@ -46,7 +46,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
     * This is constructed dynamically as the program is traversed, and the set of edges
     * grows monotonically.
     */
-  val callerGraph = mutable.LinkedHashSet.empty[Analyzer.CallEdge]
+  val callerGraph = mutable.LinkedHashSet.empty[ProgramAnalyzer.CallEdge]
 
   /**
     * Work in progress optimistic analyses of the various methods in play. These analyses
@@ -54,7 +54,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
     * proceed or may be invalidated and re-visited if a called function widens its
     * signature
     */
-  val analyses = mutable.LinkedHashMap.empty[InferredSig, OptimisticAnalyze[IType]]
+  val analyses = mutable.LinkedHashMap.empty[InferredSig, MethodAnalyzer[IType]]
 
   /**
     * An aggregation of the various call stacks that can reach a particular method. Grows
@@ -94,16 +94,16 @@ class Analyzer(entrypoints: Seq[MethodSig],
       resolved <- resolveProps(isig)
     } yield (isig, resolved)
 
-    val visitedMethods = mutable.LinkedHashMap.empty[InferredSig, Analyzer.Result]
+    val visitedMethods = mutable.LinkedHashMap.empty[InferredSig, ProgramAnalyzer.Result]
     for((k, props) <- methodProps) {
-      visitedMethods(k) = Analyzer.Result(
+      visitedMethods(k) = ProgramAnalyzer.Result(
         frontend.cachedMethodBodies(k).get,
         analyses(k).evaluated,
         analyses(k).liveBlocks.toSet,
         props
       )
     }
-    Analyzer.GlobalResult(
+    ProgramAnalyzer.GlobalResult(
       visitedMethods,
       visitedResolved.toMap,
       staticFieldReferencedClasses
@@ -132,7 +132,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
     val step = currentAnalysis.step()
 
     val newCurrent: Seq[InferredSig] = step match {
-      case OptimisticAnalyze.Step.Continue(nodes) =>
+      case MethodAnalyzer.Step.Continue(nodes) =>
         val flat = nodes.flatMap{
           case n: SSA.GetField => handleFieldReference(isig, currentCallSet, n.owner, static = false)
           case n: SSA.PutField => handleFieldReference(isig, currentCallSet, n.owner, static = false)
@@ -146,7 +146,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
 
         if (flat.nonEmpty) flat else Seq(isig)
 
-      case OptimisticAnalyze.Step.Done() =>
+      case MethodAnalyzer.Step.Done() =>
         handleReturn(isig, currentCallSet, inferredLog, currentAnalysis)
     }
 
@@ -176,8 +176,8 @@ class Analyzer(entrypoints: Seq[MethodSig],
       if edge.called.method.desc == msig.desc
       if classManager.mergeTypes(Seq(node.cls, msig.cls)) == node.cls
     } yield {
-      analyses(edge.caller).invalidateWorkList.add(OptimisticAnalyze.Invalidate.Invoke(node))
-      callerGraph.add(Analyzer.CallEdge(edge.caller, Some(node), edge.called.copy(method = msig)))
+      analyses(edge.caller).invalidateWorkList.add(MethodAnalyzer.Invalidate.Invoke(node))
+      callerGraph.add(ProgramAnalyzer.CallEdge(edge.caller, Some(node), edge.called.copy(method = msig)))
       addToCallSet(edge.called.copy(method = msig), callStackSets(edge.caller))
       edge.called.copy(method = msig)
     }
@@ -187,7 +187,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
   def handleReturn(isig: InferredSig,
                    currentCallSet: Set[InferredSig],
                    inferredLog: Logger.InferredMethod,
-                   currentAnalysis: OptimisticAnalyze[IType]) = {
+                   currentAnalysis: MethodAnalyzer[IType]) = {
 //    println("DONE")
     val optimisticResult = currentAnalysis.apply()
     val retTypes = currentAnalysis.apply()
@@ -200,7 +200,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
       if (retTypes.isEmpty) JType.Prim.V
       else classManager.mergeTypes(retTypes)
 
-    val props = Analyzer.Properties(
+    val props = ProgramAnalyzer.Properties(
       inferredReturn,
       computePurity(optimisticResult, currentCallSet) &&
         !(isig.method.static && classManager.loadMethod(MethodSig(isig.method.cls, "<clinit>", Desc(Nil, JType.Prim.V), true)).nonEmpty),
@@ -223,7 +223,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
         )
 
         if (!analyses(edge.caller).evaluated.get(node).contains(props.inferredReturn)) {
-          analyses(edge.caller).invalidateWorkList.add(OptimisticAnalyze.Invalidate.Invoke(node))
+          analyses(edge.caller).invalidateWorkList.add(MethodAnalyzer.Invalidate.Invoke(node))
         }
 
         analyses(edge.caller).evaluated(node) = mergedType
@@ -246,7 +246,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
 
     if (clinits.isEmpty) Seq(isig)
     else {
-      clinits.foreach(clinit => callerGraph.add(Analyzer.CallEdge(isig, None, clinit)))
+      clinits.foreach(clinit => callerGraph.add(ProgramAnalyzer.CallEdge(isig, None, clinit)))
       clinits.foreach(addToCallSet(_, currentCallSet))
       clinits
     }
@@ -254,16 +254,16 @@ class Analyzer(entrypoints: Seq[MethodSig],
 
   def handleInvoke(isig: InferredSig,
                    currentCallSet: Set[InferredSig],
-                   currentAnalysis: OptimisticAnalyze[IType],
+                   currentAnalysis: MethodAnalyzer[IType],
                    invoke: SSA.Invoke) = {
     val calledSig = invoke.inferredSig(currentAnalysis.evaluated(_))
 
     if (currentCallSet(calledSig)) {
       calledSignatures.add(calledSig)
-      callerGraph.add(Analyzer.CallEdge(calledSig, Some(invoke), isig))
+      callerGraph.add(ProgramAnalyzer.CallEdge(calledSig, Some(invoke), isig))
       addToCallSet(calledSig, currentCallSet)
       analyses(isig).evaluated(invoke) = IType.Bottom
-      methodProps(calledSig) = Analyzer.dummyProps(calledSig.method, true)
+      methodProps(calledSig) = ProgramAnalyzer.dummyProps(calledSig.method, true)
 
       Seq(isig)
     } else if (classManager.loadClass(calledSig.method.cls).isEmpty) {
@@ -271,13 +271,13 @@ class Analyzer(entrypoints: Seq[MethodSig],
       Seq(isig)
     } else if (invoke.isInstanceOf[SSA.InvokeSpecial]) {
       calledSignatures.add(calledSig)
-      callerGraph.add(Analyzer.CallEdge(isig, Some(invoke), calledSig))
+      callerGraph.add(ProgramAnalyzer.CallEdge(isig, Some(invoke), calledSig))
       addToCallSet(calledSig, currentCallSet)
       Seq(calledSig)
     } else classManager.resolvePossibleSigs(calledSig.method) match {
       case None =>
         calledSignatures.add(calledSig)
-        callerGraph.add(Analyzer.CallEdge(isig, Some(invoke), calledSig))
+        callerGraph.add(ProgramAnalyzer.CallEdge(isig, Some(invoke), calledSig))
         addToCallSet(calledSig, currentCallSet)
         Seq(isig).filter(!methodProps.contains(_))
       case Some(subSigs0) =>
@@ -305,7 +305,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
         )
         if (rets.isEmpty) Seq(isig)
         else {
-          rets.foreach(ret => callerGraph.add(Analyzer.CallEdge(isig, Some(invoke), ret)))
+          rets.foreach(ret => callerGraph.add(ProgramAnalyzer.CallEdge(isig, Some(invoke), ret)))
 
           rets.foreach(addToCallSet(_, currentCallSet))
           rets
@@ -319,7 +319,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
       val copied = resolved.map(m => isig.copy(method = m))
 
       val resolvedProps = copied.flatMap(methodProps.get)
-      Analyzer.Properties(
+      ProgramAnalyzer.Properties(
         classManager.mergeTypes(resolvedProps.map(_.inferredReturn)),
         resolvedProps.forall(_.pure),
         resolvedProps.flatMap(_.liveArgs).toSet
@@ -341,7 +341,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
                         log: Logger.InferredMethod,
                         methodBody: MethodBody,
                         innerStack: List[InferredSig]) = {
-    new OptimisticAnalyze[IType](
+    new MethodAnalyzer[IType](
       methodBody,
       Map.empty,
       methodBody.getAllVertices().collect { case b: SSA.Block if b.upstream.isEmpty => b }.head,
@@ -351,7 +351,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
     )
   }
 
-  def computePurity(optResult: OptimisticAnalyze.Result[IType],
+  def computePurity(optResult: MethodAnalyzer.Result[IType],
                     callSet: Set[InferredSig]) = {
     optResult.inferred.keysIterator.forall {
       case n: SSA.New => false
@@ -409,10 +409,10 @@ class Analyzer(entrypoints: Seq[MethodSig],
   def checkSubclass(cls1: JType.Cls, cls2: JType.Cls) = classManager.mergeTypes(Seq(cls1, cls2)) == cls2
 }
 
-object Analyzer {
+object ProgramAnalyzer {
   case class CallEdge(caller: InferredSig, node: Option[SSA.Invoke], called: InferredSig)
-  case class GlobalResult(visitedMethods: collection.Map[InferredSig, Analyzer.Result],
-                          visitedResolved: collection.Map[InferredSig, Analyzer.Properties],
+  case class GlobalResult(visitedMethods: collection.Map[InferredSig, ProgramAnalyzer.Result],
+                          visitedResolved: collection.Map[InferredSig, ProgramAnalyzer.Properties],
                           staticFieldReferencedClasses: collection.Set[JType.Cls])
   case class Result(methodBody: MethodBody,
                     inferred: mutable.LinkedHashMap[SSA.Val, IType],
@@ -423,14 +423,14 @@ object Analyzer {
                         pure: Boolean,
                         liveArgs: Set[Int])
 
-  def dummyResult(originalSig: MethodSig, optimistic: Boolean) = Analyzer.Result(
+  def dummyResult(originalSig: MethodSig, optimistic: Boolean) = ProgramAnalyzer.Result(
     new MethodBody(Nil, Nil),
     mutable.LinkedHashMap.empty,
     Set.empty,
     dummyProps(originalSig, optimistic)
   )
 
-  def dummyProps(originalSig: MethodSig, optimistic: Boolean) = Analyzer.Properties(
+  def dummyProps(originalSig: MethodSig, optimistic: Boolean) = ProgramAnalyzer.Properties(
     if (optimistic) IType.Bottom else originalSig.desc.ret,
     optimistic,
     if (optimistic) Set.empty

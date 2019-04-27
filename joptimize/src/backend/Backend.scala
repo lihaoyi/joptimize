@@ -2,7 +2,7 @@ package joptimize.backend
 
 import joptimize.{FileLogger, Logger, Util}
 import joptimize.algorithms.{Dominator, MultiBiMap, Scheduler}
-import joptimize.analyzer.{Analyzer, Namer, Renderer}
+import joptimize.analyzer.{ProgramAnalyzer, Namer, Renderer}
 import joptimize.frontend.ClassManager
 import joptimize.graph.HavlakLoopTree
 import joptimize.model._
@@ -14,7 +14,7 @@ import collection.JavaConverters._
 import scala.collection.mutable
 
 object Backend {
-  def apply(analyzerRes: Analyzer.GlobalResult,
+  def apply(analyzerRes: ProgramAnalyzer.GlobalResult,
             entrypoints: scala.Seq[MethodSig],
             classManager: ClassManager.ReadOnly,
             eliminateOldMethods: Boolean,
@@ -108,7 +108,7 @@ object Backend {
               if (invokeSpecial){
                 analyzerRes.visitedMethods.getOrElse(
                   invokedSig,
-                  Analyzer.dummyResult(invokedSig.method, optimistic = false)
+                  ProgramAnalyzer.dummyResult(invokedSig.method, optimistic = false)
                 ).props
               }else{
 
@@ -119,7 +119,7 @@ object Backend {
 
                 val res = analyzerRes.visitedResolved.getOrElse(
                   invokedSig.copy(method = highestSig),
-                  Analyzer.dummyResult(highestSig, optimistic = false).props
+                  ProgramAnalyzer.dummyResult(highestSig, optimistic = false).props
                 )
 
                 res
@@ -180,10 +180,10 @@ object Backend {
   }
 
   def processMethodBody(originalSig: MethodSig,
-                        result: Analyzer.Result,
+                        result: ProgramAnalyzer.Result,
                         log: Logger.InferredMethod,
                         classExists: JType.Cls => Boolean,
-                        resolvedProperties: (InferredSig, Boolean) => Analyzer.Properties,
+                        resolvedProperties: (InferredSig, Boolean) => ProgramAnalyzer.Properties,
                         argMapping: Map[Int, Int]) = {
 
 
@@ -211,7 +211,7 @@ object Backend {
 //    pprint.log(originalSig)
 //    pprint.log(result.program)
     val (controlFlowEdges, startBlock, allBlocks, blockEdges) =
-      Analyzer.analyzeBlockStructure(result.methodBody)
+      ProgramAnalyzer.analyzeBlockStructure(result.methodBody)
     val loopTree2 = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)
 
     val dominators2 = Dominator.findDominators(blockEdges, allBlocks)
@@ -253,7 +253,7 @@ object Backend {
       result.methodBody,
       allVertices2,
       nodesToBlocks,
-      Analyzer.analyzeBlockStructure(result.methodBody)._1,
+      ProgramAnalyzer.analyzeBlockStructure(result.methodBody)._1,
       postRegisterAllocNaming,
       log
     )

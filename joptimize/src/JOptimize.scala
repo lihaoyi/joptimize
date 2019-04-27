@@ -1,7 +1,7 @@
 package joptimize
 
 import backend.Backend
-import joptimize.analyzer.Analyzer
+import joptimize.analyzer.ProgramAnalyzer
 import joptimize.frontend.{ClassManager, Frontend}
 import joptimize.model._
 import org.objectweb.asm.{ClassVisitor, ClassWriter, Opcodes}
@@ -14,7 +14,7 @@ object JOptimize{
     val classManager = new ClassManager(classFiles.get)
     val frontend = new Frontend(classManager)
 
-    val analyzer = new Analyzer(entrypoints, classManager, log, frontend)
+    val analyzer = new ProgramAnalyzer(entrypoints, classManager, log, frontend)
     val analyzerRes = analyzer.apply()
 
 //    pprint.log(analyzerRes.visitedMethods)

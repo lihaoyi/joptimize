@@ -532,10 +532,10 @@ object SSA{
   }
 
   class InvokeVirtual(var state: State,
-                           var srcs: Seq[Val],
-                           var cls: JType.Cls,
-                           var name: String,
-                           var desc: Desc) extends Val(desc.ret) with Invoke{
+                      var srcs: Seq[Val],
+                      var cls: JType.Cls,
+                      var name: String,
+                      var desc: Desc) extends Val(desc.ret) with Invoke{
     def upstream = state +: srcs
     def replaceUpstream(swap: Swapper): Unit = {
       state = swap(state)
@@ -546,10 +546,10 @@ object SSA{
 
 
   class InvokeInterface(var state: State,
-                             var srcs: Seq[Val],
-                             var cls: JType.Cls,
-                             var name: String,
-                             var desc: Desc) extends Val(desc.ret) with Invoke{
+                        var srcs: Seq[Val],
+                        var cls: JType.Cls,
+                        var name: String,
+                        var desc: Desc) extends Val(desc.ret) with Invoke{
     def upstream = state +: srcs
     def replaceUpstream(swap: Swapper): Unit = {
       state = swap(state)
@@ -559,10 +559,10 @@ object SSA{
   }
 
   class InvokeDynamic(var name: String,
-                           var desc: Desc,
-                           var bootstrap: InvokeDynamic.Bootstrap,
-                           var bootstrapArgs: Seq[InvokeDynamic.Arg],
-                           var srcs: Seq[Val]) extends Val(desc.ret) {
+                      var desc: Desc,
+                      var bootstrap: InvokeDynamic.Bootstrap,
+                      var bootstrapArgs: Seq[InvokeDynamic.Arg],
+                      var srcs: Seq[Val]) extends Val(desc.ret) {
     def upstream = srcs
     def replaceUpstream(swap: Swapper): Unit = {
       srcs = srcs.map(swap(_))

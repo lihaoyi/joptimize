@@ -1,6 +1,6 @@
 package joptimize.optimize
 
-import joptimize.analyzer.{Analyzer, Renderer}
+import joptimize.analyzer.{ProgramAnalyzer, Renderer}
 import joptimize.model._
 import joptimize.{FileLogger, Logger, Util}
 
@@ -14,7 +14,7 @@ object OptimisticSimplify {
             liveBlocks: Set[SSA.Block],
             log: Logger.InferredMethod,
             classExists: JType.Cls => Boolean,
-            resolvedProperties: (InferredSig, Boolean) => Analyzer.Properties) = {
+            resolvedProperties: (InferredSig, Boolean) => ProgramAnalyzer.Properties) = {
 
     log.pprint(methodBody.args -> argMapping)
     methodBody.args = methodBody.args.filter(a => argMapping.contains(a.index) || (a.index == 0 && !isStatic))
@@ -47,7 +47,7 @@ object OptimisticSimplify {
                    classExists: JType.Cls => Boolean,
                    log: Logger.InferredMethod,
                    liveBlocks: Set[SSA.Block],
-                   resolvedProperties: (InferredSig, Boolean) => Analyzer.Properties,
+                   resolvedProperties: (InferredSig, Boolean) => ProgramAnalyzer.Properties,
                    argMapping: Map[Int, Int]) = node match {
     case p: SSA.ChangedState =>
 //      log.pprint(inferred.contains(p))
