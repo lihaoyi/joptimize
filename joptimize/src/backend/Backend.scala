@@ -145,7 +145,7 @@ object Backend {
     val visitedInterfaces = Util.findSeenInterfaces(loadClassCache, newMethods.map(_._1))
 
     val grouped =
-      (visitedInterfaces ++ analyzerRes.visitedClasses.map(_.name)).filter(s => loadClassCache.contains(JType.Cls(s))).map(loadClassCache(_) -> Nil).toMap ++
+      (visitedInterfaces ++ analyzerRes.staticFieldReferencedClasses.map(_.name)).filter(s => loadClassCache.contains(JType.Cls(s))).map(loadClassCache(_) -> Nil).toMap ++
         newMethods.groupBy(_._1).mapValues(_.map(_._2))
 
     for((cn, mns) <- grouped) yield {

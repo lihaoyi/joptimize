@@ -16,7 +16,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
                frontend: Frontend){
   val methodProps = mutable.LinkedHashMap.empty[InferredSig, Analyzer.Properties]
   val calledSignatures = mutable.LinkedHashSet.empty[InferredSig]
-  val visitedClasses = mutable.LinkedHashSet.empty[JType.Cls]
+  val staticFieldReferencedClasses = mutable.LinkedHashSet.empty[JType.Cls]
 
   /**
     * Edges from the caller to the called
@@ -72,7 +72,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
     Analyzer.GlobalResult(
       visitedMethods,
       visitedResolved.toMap,
-      visitedClasses
+      staticFieldReferencedClasses
     )
   }
 
@@ -100,10 +100,10 @@ class Analyzer(entrypoints: Seq[MethodSig],
     val newCurrent: Seq[InferredSig] = step match {
       case OptimisticAnalyze.Step.Continue(nodes) =>
         val flat = nodes.flatMap{
-          case n: SSA.GetField => handleFieldReference(isig, currentCallSet, n.owner)
-          case n: SSA.PutField => handleFieldReference(isig, currentCallSet, n.owner)
-          case n: SSA.GetStatic => handleFieldReference(isig, currentCallSet, n.cls)
-          case n: SSA.PutStatic => handleFieldReference(isig, currentCallSet, n.cls)
+          case n: SSA.GetField => handleFieldReference(isig, currentCallSet, n.owner, static = false)
+          case n: SSA.PutField => handleFieldReference(isig, currentCallSet, n.owner, static = false)
+          case n: SSA.GetStatic => handleFieldReference(isig, currentCallSet, n.cls, static = true)
+          case n: SSA.PutStatic => handleFieldReference(isig, currentCallSet, n.cls, static = true)
 
           case n: SSA.New => handleNew(n) ++ Seq(isig)
           case invoke: SSA.Invoke => handleInvoke(isig, currentCallSet, currentAnalysis, invoke)
@@ -200,7 +200,9 @@ class Analyzer(entrypoints: Seq[MethodSig],
 
   def handleFieldReference(isig: InferredSig,
                            currentCallSet: Set[InferredSig],
-                           cls: JType.Cls) = {
+                           cls: JType.Cls,
+                           static: Boolean) = {
+    if (static) staticFieldReferencedClasses.add(cls)
     val clinits = analyzeClinits(Seq(cls))
 
     if (clinits.isEmpty) Seq(isig)
@@ -287,7 +289,6 @@ class Analyzer(entrypoints: Seq[MethodSig],
   }
 
   def analyzeClinits(classes: Seq[JType.Cls]) = {
-    classes.foreach(visitedClasses.add)
 
     for {
       cls <- classes
@@ -396,7 +397,7 @@ object Analyzer {
   case class CallEdge(caller: InferredSig, node: Option[SSA.Invoke], called: InferredSig)
   case class GlobalResult(visitedMethods: collection.Map[InferredSig, Analyzer.Result],
                           visitedResolved: collection.Map[InferredSig, Analyzer.Properties],
-                          visitedClasses: collection.Set[JType.Cls])
+                          staticFieldReferencedClasses: collection.Set[JType.Cls])
   case class Result(methodBody: MethodBody,
                     inferred: mutable.LinkedHashMap[SSA.Val, IType],
                     liveBlocks: Set[SSA.Block],
