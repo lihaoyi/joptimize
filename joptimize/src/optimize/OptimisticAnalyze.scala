@@ -227,11 +227,13 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
   }
 
   def evaluateVal(v: SSA.Val): Step[T] = {
-    val upstream = v.upstream.collect{case v: SSA.Val => evaluated(v)}
-    if (upstream.contains(IType.Bottom)) evaluated(v) = IType.Bottom.asInstanceOf[T]
-    else v match{
-      case n: SSA.Invoke =>
-      case _ => evaluated(v) = lattice.transferValue(v, evaluated)
+    if (!evaluated.contains(v)){
+      val upstream = v.upstream.collect{case v: SSA.Val => evaluated(v)}
+      if (upstream.contains(IType.Bottom)) evaluated(v) = IType.Bottom.asInstanceOf[T]
+      else v match{
+        case n: SSA.Invoke =>
+        case _ => evaluated(v) = lattice.transferValue(v, evaluated)
+      }
     }
     Step.Continue(Some(v))
   }
