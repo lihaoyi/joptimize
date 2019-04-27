@@ -1,4 +1,4 @@
-package joptimize.examples.opt;
+package joptimize.examples.simplify;
 
 class Optimistic {
 
@@ -30,7 +30,7 @@ class Optimistic {
 
     @joptimize.Test(
             inputs = {1, 2, 3, 4},
-            checkRemoved = "joptimize.examples.opt.Optimistic.recursivePureConstant0"
+            checkRemoved = "joptimize.examples.simplify.Optimistic.recursivePureConstant0"
     )
     public static int recursivePureConstant(int x, int y) {
         return recursivePureConstant0(x, y);
@@ -45,8 +45,8 @@ class Optimistic {
     @joptimize.Test(
             inputs = {1, 2, 3, 4},
             checkRemoved = {
-                    "joptimize.examples.opt.Optimistic.mutualRecursivePureConstant1",
-                    "joptimize.examples.opt.Optimistic.mutualRecursivePureConstant2"
+                    "joptimize.examples.simplify.Optimistic.mutualRecursivePureConstant1",
+                    "joptimize.examples.simplify.Optimistic.mutualRecursivePureConstant2"
             }
     )
     public static int mutualRecursivePureConstant(int x, int y) {
@@ -67,7 +67,7 @@ class Optimistic {
     @joptimize.Test(
             inputs = {1, 2, 3, 4},
             checkPresent = {
-                    "joptimize.examples.opt.Optimistic.generalRecursiveHelper"
+                    "joptimize.examples.simplify.Optimistic.generalRecursiveHelper"
             }
     )
     public static int generalRecursive(int x, int y) {

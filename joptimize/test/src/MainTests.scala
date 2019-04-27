@@ -135,7 +135,7 @@ object MainTests extends TestSuite{
 //        'run - annotatedTest
       }
     }
-    'opt - {
+    'simplify - {
       'Folding - {
         'iadd - annotatedTest
         'isub - annotatedTest
@@ -199,24 +199,6 @@ object MainTests extends TestSuite{
         'main - annotatedTest
         'deadLoopVariable - annotatedTest
         'deadLocal - annotatedTest
-      }
-      'Optimistic - {
-        'trivial - annotatedTest
-        'loopConstant - annotatedTest
-        'branchConstant - annotatedTest
-        'recursivePureConstant - annotatedTest
-        'mutualRecursivePureConstant - annotatedTest
-        'generalRecursive - annotatedTest
-
-        'implementLate1 - annotatedTest
-        'implementLate2 - annotatedTest
-        'implementLate3 - annotatedTest
-        'implementLate4 - annotatedTest
-        // These tests cannot pass until we have optimistic inter-procedural
-        // liveness analysis, rather than the simple intra-procedural liveness
-        // analysis that we have now
-        //        'recursivePureDeadArg - annotatedTest
-        //        'mutualRecursivePureDeadArg - annotatedTest
       }
       'ConstantMethod - {
         'intMain0 - annotatedTest
@@ -316,6 +298,30 @@ object MainTests extends TestSuite{
       'ForceWide - {
         'main - annotatedTest
       }
+    }
+    'optimistic - {
+      'Simple - {
+        'trivial - annotatedTest
+        'loopConstant - annotatedTest
+        'branchConstant - annotatedTest
+      }
+      'Recursive - {
+        'recursivePureConstant - annotatedTest
+        'mutualRecursivePureConstant - annotatedTest
+        'generalRecursive - annotatedTest
+      }
+      'ClassLoading - {
+        'monomorphicOptimize - annotatedTest
+        'preBimorphicUnoptimize - annotatedTest
+        'postBimorphicDeoptimize - annotatedTest
+        'prePostBimorphicDeoptimize - annotatedTest
+        // These tests cannot pass until we have optimistic inter-procedural
+        // liveness analysis, rather than the simple intra-procedural liveness
+        // analysis that we have now
+        //        'recursivePureDeadArg - annotatedTest
+        //        'mutualRecursivePureDeadArg - annotatedTest
+      }
+
     }
   }
 }

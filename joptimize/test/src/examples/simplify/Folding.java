@@ -1,4 +1,4 @@
-package joptimize.examples.opt;
+package joptimize.examples.simplify;
 
 class Folding {
     @joptimize.Test(inputs = {1, 2}, addedNumConst = {102})

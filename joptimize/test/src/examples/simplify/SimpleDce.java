@@ -1,4 +1,4 @@
-package joptimize.examples.opt;
+package joptimize.examples.simplify;
 
 class SimpleDce {
     @joptimize.Test(inputs = {1, 2, 3}, removedNumConst = {13})

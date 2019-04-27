@@ -1,4 +1,4 @@
-package joptimize.examples.opt;
+package joptimize.examples.simplify;
 
 class InstanceofJumpFlatten {
     @joptimize.Test(

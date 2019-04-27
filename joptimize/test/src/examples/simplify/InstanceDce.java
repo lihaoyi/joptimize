@@ -1,4 +1,4 @@
-package joptimize.examples.opt;
+package joptimize.examples.simplify;
 
 class InstanceDce {
     static FooTwo unknown1 = new BarTwo();
