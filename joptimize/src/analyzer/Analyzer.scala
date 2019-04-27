@@ -46,149 +46,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
     }
 
     while(current.nonEmpty){
-
-      println()
-      println(pprint.apply(current.map(_.method.toString.stripPrefix("joptimize.examples.simple."))))
-      val isig = current.maxBy(callSets(_).size)
-      val currentCallSet = callSets(isig) ++ Set(isig)
-
-      val methodLog = globalLog.method(isig.method)
-      val inferredLog = globalLog.inferredMethod(isig)
-      val methodBody = frontend.loadMethodBody(isig, methodLog).get
-      val currentAnalysis = analyses.getOrElseUpdate(
-        isig,
-        optimisticAnalyze(
-          (if (isig.method.static) Nil else Seq(isig.method.cls)) ++ isig.inferred,
-          inferredLog,
-          methodBody,
-          Nil
-        )
-      )
-
-      val step = currentAnalysis.step()
-
-      val newCurrent: Seq[InferredSig] = step match{
-        case OptimisticAnalyze.Step.Continue(nodeOpt) =>
-          val addedCls = nodeOpt match{
-            case Some(n: SSA.GetField) => Some(n.owner)
-            case Some(n: SSA.PutField) => Some(n.owner)
-            case Some(n: SSA.GetStatic) => Some(n.cls)
-            case Some(n: SSA.PutStatic) => Some(n.cls)
-            case _ => None
-          }
-          val clinits = analyzeClinits(addedCls.toSeq)
-
-          if (clinits.isEmpty) Seq(isig)
-          else{
-            clinits.foreach(clinit => callerGraph ::= Analyzer.CallEdge(isig, None, clinit))
-            clinits.foreach(addToCallSet(_, currentCallSet))
-            clinits
-          }
-
-        case OptimisticAnalyze.Step.Done() =>
-
-          val optimisticResult = currentAnalysis.apply()
-          val retTypes = currentAnalysis.apply().inferredReturns.filter(_ != JType.Prim.V)
-          val inferredReturn =
-            if (retTypes.isEmpty) JType.Prim.V
-            else classManager.mergeTypes(retTypes)
-
-          val props = Analyzer.Properties(
-            inferredReturn,
-            computePurity(optimisticResult, currentCallSet) &&
-            !(isig.method.static && classManager.loadMethod(MethodSig(isig.method.cls, "<clinit>", Desc(Nil, JType.Prim.V), true)).nonEmpty),
-            optimisticResult.inferred.collect { case (a: SSA.Arg, _) => a.index }.toSet
-          )
-
-          val unchanged = methodProps.get(isig).contains(props)
-
-          methodProps(isig) = props
-
-          inferredLog.pprint(optimisticResult.inferred)
-          inferredLog.pprint(optimisticResult.liveBlocks)
-
-          val returnEdges = callerGraph.filter(_.called == isig)
-
-          for (edge <- returnEdges) {
-            for(node <- edge.node){
-              if (analyses(edge.caller).evaluated.contains(node)){
-                analyses(edge.caller).workList.add(
-                  OptimisticAnalyze.WorkItem.ForceInvalidate(node)
-                )
-              }
-              analyses(edge.caller).evaluated(node) = classManager.mergeTypes(
-                analyses(edge.caller).evaluated.get(node).toSeq ++ Seq(props.inferredReturn)
-              )
-
-            }
-          }
-          val filtered =
-            if (!unchanged) returnEdges.map(_.caller)
-            else returnEdges.map(_.caller).filter(!methodProps.contains(_))
-
-          filtered
-
-
-        case OptimisticAnalyze.Step.ComputeSig(calledSig, invoke) =>
-
-          if (currentCallSet(calledSig)) {
-            calledSignatures.add(calledSig)
-            callerGraph ::= Analyzer.CallEdge(calledSig, Some(invoke), isig)
-            addToCallSet(calledSig, currentCallSet)
-            analyses(isig).evaluated(invoke) = IType.Bottom
-            methodProps(calledSig) = Analyzer.dummyProps(calledSig.method, true)
-
-            Seq(isig)
-          } else if(classManager.loadClass(calledSig.method.cls).isEmpty){
-            analyses(isig).evaluated(invoke) = calledSig.method.desc.ret
-            Seq(isig)
-          } else if (invoke.isInstanceOf[SSA.InvokeSpecial]){
-            calledSignatures.add(calledSig)
-            callerGraph ::= Analyzer.CallEdge(isig, Some(invoke), calledSig)
-            addToCallSet(calledSig, currentCallSet)
-            Seq(calledSig)
-          }else classManager.resolvePossibleSigs(calledSig.method) match {
-            case None =>
-              calledSignatures.add(calledSig)
-              callerGraph ::= Analyzer.CallEdge(isig, Some(invoke), calledSig)
-              addToCallSet(calledSig, currentCallSet)
-              Seq(isig).filter(!methodProps.contains(_))
-            case Some(subSigs0) =>
-              calledSignatures.add(calledSig)
-              val subSigs = subSigs0.filter{ subSig =>
-                classManager.loadMethod(subSig).exists(_.instructions.size() != 0)
-              }
-
-              assert(subSigs.nonEmpty)
-
-              val (clinitss, subss) = subSigs
-                .map{subSig =>
-                  val clinits = analyzeClinits(Seq(subSig.cls))
-                  (clinits, Seq(InferredSig(subSig, calledSig.inferred)))
-                }
-                .unzip
-              val clinits = clinitss.flatten
-              val subs = subss.flatten
-
-              val rets = (clinits ++ subs).filter(!methodProps.contains(_))
-
-              analyses(isig).evaluated(invoke) = classManager.mergeTypes(
-                analyses(isig).evaluated.get(invoke).toSeq ++
-                subs.flatMap(methodProps.get).map(_.inferredReturn)
-              )
-              if (rets.isEmpty) Seq(isig)
-              else {
-                rets.foreach(ret => callerGraph ::= Analyzer.CallEdge(isig, Some(invoke), ret))
-
-                rets.foreach(addToCallSet(_, currentCallSet))
-                rets
-              }
-
-          }
-      }
-
-      current.remove(isig)
-      newCurrent.foreach(current.add)
+      step()
     }
 
     pprint.log(
@@ -219,6 +77,164 @@ class Analyzer(entrypoints: Seq[MethodSig],
     )
   }
 
+  def step() = {
+    println()
+    println(pprint.apply(current.map(_.method.toString.stripPrefix("joptimize.examples.simple."))))
+    val isig = current.maxBy(callSets(_).size)
+    val currentCallSet = callSets(isig) ++ Set(isig)
+
+    val methodLog = globalLog.method(isig.method)
+    val inferredLog = globalLog.inferredMethod(isig)
+    val methodBody = frontend.loadMethodBody(isig, methodLog).get
+    val currentAnalysis = analyses.getOrElseUpdate(
+      isig,
+      optimisticAnalyze(
+        (if (isig.method.static) Nil else Seq(isig.method.cls)) ++ isig.inferred,
+        inferredLog,
+        methodBody,
+        Nil
+      )
+    )
+
+    val step = currentAnalysis.step()
+
+    val newCurrent: Seq[InferredSig] = step match {
+      case OptimisticAnalyze.Step.Continue(nodeOpt) =>
+        nodeOpt match {
+          case Some(n: SSA.GetField) => handleFieldReference(isig, currentCallSet, n.owner)
+          case Some(n: SSA.PutField) => handleFieldReference(isig, currentCallSet, n.owner)
+          case Some(n: SSA.GetStatic) => handleFieldReference(isig, currentCallSet, n.cls)
+          case Some(n: SSA.PutStatic) => handleFieldReference(isig, currentCallSet, n.cls)
+          case Some(invoke: SSA.Invoke) => handleInvoke(isig, currentCallSet, currentAnalysis, invoke)
+          case _ => Seq(isig)
+        }
+
+
+      case OptimisticAnalyze.Step.Done() => handleReturn(isig, currentCallSet, inferredLog, currentAnalysis)
+    }
+
+    current.remove(isig)
+    newCurrent.foreach(current.add)
+  }
+
+  def handleReturn(isig: InferredSig, currentCallSet: Set[InferredSig], inferredLog: Logger.InferredMethod, currentAnalysis: OptimisticAnalyze[IType]) = {
+    val optimisticResult = currentAnalysis.apply()
+    val retTypes = currentAnalysis.apply().inferredReturns.filter(_ != JType.Prim.V)
+    val inferredReturn =
+      if (retTypes.isEmpty) JType.Prim.V
+      else classManager.mergeTypes(retTypes)
+
+    val props = Analyzer.Properties(
+      inferredReturn,
+      computePurity(optimisticResult, currentCallSet) &&
+        !(isig.method.static && classManager.loadMethod(MethodSig(isig.method.cls, "<clinit>", Desc(Nil, JType.Prim.V), true)).nonEmpty),
+      optimisticResult.inferred.collect { case (a: SSA.Arg, _) => a.index }.toSet
+    )
+
+    val unchanged = methodProps.get(isig).contains(props)
+
+    methodProps(isig) = props
+
+    inferredLog.pprint(optimisticResult.inferred)
+    inferredLog.pprint(optimisticResult.liveBlocks)
+
+    val returnEdges = callerGraph.filter(_.called == isig)
+
+    for (edge <- returnEdges) {
+      for (node <- edge.node) {
+        if (analyses(edge.caller).evaluated.contains(node)) {
+          analyses(edge.caller).workList.add(
+            OptimisticAnalyze.WorkItem.ForceInvalidate(node)
+          )
+        }
+        analyses(edge.caller).evaluated(node) = classManager.mergeTypes(
+          analyses(edge.caller).evaluated.get(node).toSeq ++ Seq(props.inferredReturn)
+        )
+
+      }
+    }
+    val filtered =
+      if (!unchanged) returnEdges.map(_.caller)
+      else returnEdges.map(_.caller).filter(!methodProps.contains(_))
+
+    filtered
+  }
+
+  def handleFieldReference(isig: InferredSig,
+                           currentCallSet: Set[InferredSig],
+                           cls: JType.Cls) = {
+    val clinits = analyzeClinits(Seq(cls))
+
+    if (clinits.isEmpty) Seq(isig)
+    else {
+      clinits.foreach(clinit => callerGraph ::= Analyzer.CallEdge(isig, None, clinit))
+      clinits.foreach(addToCallSet(_, currentCallSet))
+      clinits
+    }
+  }
+
+  def handleInvoke(isig: InferredSig,
+                   currentCallSet: Set[InferredSig],
+                   currentAnalysis: OptimisticAnalyze[IType],
+                   invoke: SSA.Invoke) = {
+    val calledSig = invoke.inferredSig(currentAnalysis.evaluated(_))
+
+    if (currentCallSet(calledSig)) {
+      calledSignatures.add(calledSig)
+      callerGraph ::= Analyzer.CallEdge(calledSig, Some(invoke), isig)
+      addToCallSet(calledSig, currentCallSet)
+      analyses(isig).evaluated(invoke) = IType.Bottom
+      methodProps(calledSig) = Analyzer.dummyProps(calledSig.method, true)
+
+      Seq(isig)
+    } else if (classManager.loadClass(calledSig.method.cls).isEmpty) {
+      analyses(isig).evaluated(invoke) = calledSig.method.desc.ret
+      Seq(isig)
+    } else if (invoke.isInstanceOf[SSA.InvokeSpecial]) {
+      calledSignatures.add(calledSig)
+      callerGraph ::= Analyzer.CallEdge(isig, Some(invoke), calledSig)
+      addToCallSet(calledSig, currentCallSet)
+      Seq(calledSig)
+    } else classManager.resolvePossibleSigs(calledSig.method) match {
+      case None =>
+        calledSignatures.add(calledSig)
+        callerGraph ::= Analyzer.CallEdge(isig, Some(invoke), calledSig)
+        addToCallSet(calledSig, currentCallSet)
+        Seq(isig).filter(!methodProps.contains(_))
+      case Some(subSigs0) =>
+        calledSignatures.add(calledSig)
+        val subSigs = subSigs0.filter { subSig =>
+          classManager.loadMethod(subSig).exists(_.instructions.size() != 0)
+        }
+
+        assert(subSigs.nonEmpty)
+
+        val (clinitss, subss) = subSigs
+          .map { subSig =>
+            val clinits = analyzeClinits(Seq(subSig.cls))
+            (clinits, Seq(InferredSig(subSig, calledSig.inferred)))
+          }
+          .unzip
+        val clinits = clinitss.flatten
+        val subs = subss.flatten
+
+        val rets = (clinits ++ subs).filter(!methodProps.contains(_))
+
+        analyses(isig).evaluated(invoke) = classManager.mergeTypes(
+          analyses(isig).evaluated.get(invoke).toSeq ++
+            subs.flatMap(methodProps.get).map(_.inferredReturn)
+        )
+        if (rets.isEmpty) Seq(isig)
+        else {
+          rets.foreach(ret => callerGraph ::= Analyzer.CallEdge(isig, Some(invoke), ret))
+
+          rets.foreach(addToCallSet(_, currentCallSet))
+          rets
+        }
+
+    }
+  }
+
   def resolveProps(isig: InferredSig) = {
     classManager.resolvePossibleSigs(isig.method).map{ resolved =>
       val copied = resolved.map(m => isig.copy(method = m))
@@ -241,18 +257,6 @@ class Analyzer(entrypoints: Seq[MethodSig],
       if classManager.loadMethod(clinit).isDefined
       if !analyses.contains(InferredSig(clinit, Nil))
     } yield InferredSig(clinit, Nil)
-  }
-
-  def onNew(cls: JType.Cls) = {
-    for(upperClassNode <- classManager.loadClass(cls)){
-      invalidated.put(
-        cls,
-        upperClassNode.methods.asScala.map(mn =>
-          MethodSig(cls, mn.name, Desc.read(mn.desc), (mn.access & Opcodes.ACC_STATIC) != 0)
-        )
-      )
-    }
-
   }
 
   def optimisticAnalyze(inferredArgs: Seq[IType],
@@ -393,6 +397,4 @@ object Analyzer {
 
     (controlFlowEdges, startBlock, allBlocks, blockEdges)
   }
-
-
 }

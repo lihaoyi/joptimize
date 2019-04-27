@@ -119,6 +119,7 @@ object MainTests extends TestSuite{
 //        'staticInheritanceMethod - annotatedTest
         'moreStrings - annotatedTest
         'implementLate - annotatedTest
+        'implementLate0 - annotatedTest
       }
 //      'Exceptions - {
 //        'throwCatch0 - annotatedTest

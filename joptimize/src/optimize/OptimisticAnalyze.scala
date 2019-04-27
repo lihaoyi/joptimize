@@ -76,9 +76,9 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
   def invalidateValue(v: SSA.Val): OptimisticAnalyze.Step[T] = {
     val upstream = v.upstream.collect{case v: SSA.Val => evaluated.getOrElse(v, IType.Bottom)}
 
-    if (upstream.contains(IType.Bottom)) Step.Continue(None)
+    if (upstream.contains(IType.Bottom)) () // do nothing
     else v match{
-      case n: SSA.Invoke => Step.ComputeSig[T](n.inferredSig(evaluated(_).asInstanceOf[IType]), n)
+      case n: SSA.Invoke =>
       case _ =>
         v match{
           case p: SSA.Phi =>
@@ -92,8 +92,8 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
               invalidateDownstream(v)
             }
         }
-        Step.Continue(None)
     }
+    Step.Continue(Some(v))
   }
 
   def computeNextBlocks(currentBlock: SSA.Block) = {
@@ -242,17 +242,12 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
 
   def evaluateVal(v: SSA.Val): Step[T] = {
     val upstream = v.upstream.collect{case v: SSA.Val => evaluated(v)}
-    if (upstream.contains(IType.Bottom)) {
-      evaluated(v) = IType.Bottom.asInstanceOf[T]
-      Step.Continue(Some(v))
-    } else v match{
+    if (upstream.contains(IType.Bottom)) evaluated(v) = IType.Bottom.asInstanceOf[T]
+    else v match{
       case n: SSA.Invoke =>
-        val isig = n.inferredSig(evaluated(_).asInstanceOf[IType])
-        Step.ComputeSig[T](isig, n)
-      case _ =>
-        evaluated(v) = lattice.transferValue(v, evaluated)
-        Step.Continue(Some(v))
+      case _ => evaluated(v) = lattice.transferValue(v, evaluated)
     }
+    Step.Continue(Some(v))
   }
 
   /**
@@ -300,7 +295,6 @@ object OptimisticAnalyze {
   object Step{
     case class Continue[T](node: Option[SSA.Val]) extends Step[T]
     case class Done[T]() extends Step[T]
-    case class ComputeSig[T](isig: InferredSig, invoke: SSA.Invoke) extends Step[T]
   }
   case class Result[T](inferredReturns: Seq[T],
                        inferred: mutable.LinkedHashMap[SSA.Val, T],
