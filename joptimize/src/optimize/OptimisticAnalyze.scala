@@ -17,7 +17,7 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
                            evaluateBinBranch: (T, T, SSA.BinBranch.Code) => Option[Boolean],
                            evaluateSwitch: T => Option[Int]){
 
-  val inferredBlocks = mutable.Set(initialBlock)
+  val inferredBlocks = mutable.LinkedHashSet(initialBlock)
 
   val workList = mutable.LinkedHashSet[WorkItem](WorkItem.Block(initialBlock))
 
@@ -31,13 +31,14 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
     if (workList.nonEmpty){
       val item = workList.head
 
-//      println(pprint.apply(item))
+      println(pprint.apply(item))
       workList.remove(item)
       item match{
         case WorkItem.Val(v) =>
           evaluateVal(v)
         case WorkItem.Block(currentBlock) =>
-          inferredBlocks.add(currentBlock)
+          pprint.log(currentBlock)
+
           log.pprint(currentBlock)
           queueSortedUpstreams(currentBlock.next.upstreamVals.toSet)
           workList.add(WorkItem.BlockJump(currentBlock))
@@ -175,6 +176,7 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
       for ((k, v) <- newPhiValues) {
         evaluated(k) = v
       }
+      inferredBlocks.add(nextBlock)
       workList.add(WorkItem.Block(nextBlock))
     }else{
       for ((k, v) <- newPhiValues) {
@@ -183,8 +185,7 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
 
           val merged = lattice.join(old, v)
           if (merged != old) {
-            //              continueNextBlock = true
-            //                  log.pprint((k, old, v, merged))
+
             workList.add(WorkItem.ForceInvalidate(k))
             evaluated(k) = merged
           }

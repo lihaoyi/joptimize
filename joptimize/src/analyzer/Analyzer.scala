@@ -73,8 +73,8 @@ class Analyzer(entrypoints: Seq[MethodSig],
   }
 
   def step() = {
-//    println()
-//    println(pprint.apply(current.map(_.method.toString.stripPrefix("joptimize.examples.simple."))))
+    println()
+    println(pprint.apply(current.map(_.method.toString.stripPrefix("joptimize.examples.simple."))))
     val isig = current.maxBy(callSets(_).size)
     val currentCallSet = callSets(isig) ++ Set(isig)
 
@@ -134,7 +134,9 @@ class Analyzer(entrypoints: Seq[MethodSig],
         }
 
 
-      case OptimisticAnalyze.Step.Done() => handleReturn(isig, currentCallSet, inferredLog, currentAnalysis)
+      case OptimisticAnalyze.Step.Done() =>
+        println("DONE")
+        handleReturn(isig, currentCallSet, inferredLog, currentAnalysis)
     }
 
     current.remove(isig)
