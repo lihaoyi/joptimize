@@ -94,14 +94,14 @@ class Analyzer(entrypoints: Seq[MethodSig],
     val step = currentAnalysis.step()
 
     val newCurrent: Seq[InferredSig] = step match {
-      case OptimisticAnalyze.Step.Continue(nodeOpt) =>
-        nodeOpt match {
-          case Some(n: SSA.GetField) => handleFieldReference(isig, currentCallSet, n.owner)
-          case Some(n: SSA.PutField) => handleFieldReference(isig, currentCallSet, n.owner)
-          case Some(n: SSA.GetStatic) => handleFieldReference(isig, currentCallSet, n.cls)
-          case Some(n: SSA.PutStatic) => handleFieldReference(isig, currentCallSet, n.cls)
+      case OptimisticAnalyze.Step.Continue(nodes) =>
+        val flat = nodes.flatMap{
+          case n: SSA.GetField => handleFieldReference(isig, currentCallSet, n.owner)
+          case n: SSA.PutField => handleFieldReference(isig, currentCallSet, n.owner)
+          case n: SSA.GetStatic => handleFieldReference(isig, currentCallSet, n.cls)
+          case n: SSA.PutStatic => handleFieldReference(isig, currentCallSet, n.cls)
 
-          case Some(n: SSA.New) =>
+          case n: SSA.New =>
 
             classManager.loadClass(n.cls)
             val superClasses = classManager.resolveSuperTypes(n.cls)
@@ -122,17 +122,18 @@ class Analyzer(entrypoints: Seq[MethodSig],
               if edge.called.method.desc == msig.desc
               if classManager.mergeTypes(Seq(node.cls, msig.cls)) == node.cls
             } yield {
-              analyses(edge.caller).invalidations.add(OptimisticAnalyze.Invalidate.Force(node))
+              analyses(edge.caller).invalidations.add(OptimisticAnalyze.Invalidate.Invoke(node))
               callerGraph ::= Analyzer.CallEdge(edge.caller, Some(node), edge.called.copy(method = msig))
               addToCallSet(edge.called.copy(method = msig), callSets(edge.caller))
               edge.called.copy(method = msig)
             }
 
             newMethodOverrides ++ Seq(isig)
-          case Some(invoke: SSA.Invoke) => handleInvoke(isig, currentCallSet, currentAnalysis, invoke)
-          case _ => Seq(isig)
-        }
+          case invoke: SSA.Invoke => handleInvoke(isig, currentCallSet, currentAnalysis, invoke)
+          case _ => Nil
+        }.distinct
 
+        if (flat.nonEmpty) flat else Seq(isig)
 
       case OptimisticAnalyze.Step.Done() =>
         handleReturn(isig, currentCallSet, inferredLog, currentAnalysis)
@@ -175,7 +176,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
       for (node <- edge.node) {
         if (analyses(edge.caller).evaluated.contains(node)) {
           analyses(edge.caller).invalidations.add(
-            OptimisticAnalyze.Invalidate.Force(node)
+            OptimisticAnalyze.Invalidate.Invoke(node)
           )
         }
         analyses(edge.caller).evaluated(node) = classManager.mergeTypes(

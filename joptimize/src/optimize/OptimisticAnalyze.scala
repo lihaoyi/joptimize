@@ -33,11 +33,9 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
       val item = invalidations.head
       invalidations.remove(item)
       item match {
-        case Invalidate.Force(v) =>
-          invalidateDownstream(v)
-          Step.Continue(None)
-        case Invalidate.Incremental(v) =>
-          invalidateValue(v)
+        case Invalidate.Phi(v) => invalidateDownstream(v)
+        case Invalidate.Invoke(v) => invalidateDownstream(v)
+        case Invalidate.Incremental(v) => invalidateValue(v)
       }
     } else if (workList.nonEmpty){
       val item = workList.head
@@ -45,59 +43,60 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
       item match{
         case WorkItem.Val(v) =>
           if (!evaluated.contains(v)) evaluateVal(v)
-          else Step.Continue(None)
+          else Step.Continue(Nil)
         case WorkItem.Block(currentBlock) =>
 
           log.pprint(currentBlock)
           queueSortedUpstreams(currentBlock.next.upstreamVals.toSet)
           workList.add(WorkItem.BlockJump(currentBlock))
-          Step.Continue(None)
+          Step.Continue(Nil)
 
         case WorkItem.BlockJump(currentBlock) =>
           val nextBlocks = computeNextBlocks(currentBlock)
           for(nextBlock <- nextBlocks){
             workList.add(WorkItem.Transition(currentBlock, nextBlock))
           }
-          Step.Continue(None)
+          Step.Continue(Nil)
         case WorkItem.Transition(currentBlock, nextBlock) =>
           queueNextBlockTwo(currentBlock, nextBlock)
-          Step.Continue(None)
+          Step.Continue(Nil)
       }
 
     }else {
       Step.Done()
     }
   }
-  def invalidateDownstream(v: SSA.Val) = {
-    v.downstreamList
-      .filter{
-        case v: SSA.Val => evaluated.contains(v)
-        case j: SSA.Jump => seenJumps.contains(j)
-      }
-      .foreach {
-        case phi: SSA.Phi =>
-          if (evaluated(v) != evaluated(phi)){
-            evaluated(phi) = lattice.join(evaluated(v), evaluated(phi))
-            invalidations.add(Invalidate.Force(phi))
-          }
-        case nextV: SSA.Val => invalidations.add(Invalidate.Incremental(nextV))
-        case j: SSA.Jump => workList.add(WorkItem.BlockJump(j.block))
-      }
+
+  def invalidateDownstream(v: SSA.Val): Step.Continue[T] = {
+    val downstreams = v.downstreamList.filter{
+      case v: SSA.Val => evaluated.contains(v)
+      case j: SSA.Jump => seenJumps.contains(j)
+    }
+    downstreams.foreach {
+      case phi: SSA.Phi =>
+        if (evaluated(v) != evaluated(phi)){
+          evaluated(phi) = lattice.join(evaluated(v), evaluated(phi))
+          invalidations.add(Invalidate.Phi(phi))
+        }
+      case i: SSA.Invoke => invalidations.add(Invalidate.Invoke(i))
+      case nextV: SSA.Val => invalidations.add(Invalidate.Incremental(nextV))
+      case j: SSA.Jump => workList.add(WorkItem.BlockJump(j.block))
+    }
+    Step.Continue(downstreams.collect{case v: SSA.Val => v})
   }
+
   def invalidateValue(v: SSA.Val): OptimisticAnalyze.Step[T] = {
     val upstream = v.upstream.collect{case v: SSA.Val => evaluated.getOrElse(v, IType.Bottom)}
 
-    if (upstream.contains(IType.Bottom)) () // do nothing
-    else v match{
-      case n: SSA.Invoke =>
-      case _ =>
-        val newValue = lattice.transferValue(v, evaluated)
-        if (evaluated(v) != newValue){
-          evaluated(v) = newValue
-          invalidateDownstream(v)
-        }
+    if (upstream.contains(IType.Bottom)) Step.Continue(Seq(v)) // do nothing
+    else {
+      val newValue = lattice.transferValue(v, evaluated)
+      if (evaluated(v) == newValue) Step.Continue(Seq(v))
+      else{
+        evaluated(v) = newValue
+        invalidateDownstream(v)
+      }
     }
-    Step.Continue(Some(v))
   }
 
   def computeNextBlocks(currentBlock: SSA.Block) = {
@@ -187,7 +186,7 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
 
           val merged = lattice.join(old, v)
           if (merged != old) {
-            invalidations.add(Invalidate.Force(k))
+            invalidations.add(Invalidate.Phi(k))
             evaluated(k) = merged
           }
         }
@@ -236,7 +235,7 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
         case _ => evaluated(v) = lattice.transferValue(v, evaluated)
       }
     }
-    Step.Continue(Some(v))
+    Step.Continue(Seq(v))
   }
 
   /**
@@ -271,8 +270,11 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
 object OptimisticAnalyze {
   sealed trait Invalidate
   object Invalidate{
-    case class Force(src: SSA.Val) extends Invalidate
-    case class Incremental(src: SSA.Val) extends Invalidate
+    case class Phi(src: SSA.Phi) extends Invalidate
+    case class Invoke(src: SSA.Invoke) extends Invalidate
+    case class Incremental(src: SSA.Val) extends Invalidate{
+      assert(!src.isInstanceOf[SSA.Invoke] && !src.isInstanceOf[SSA.Phi])
+    }
   }
   sealed trait WorkItem
   object WorkItem{
@@ -285,7 +287,7 @@ object OptimisticAnalyze {
 
   sealed trait Step[T]
   object Step{
-    case class Continue[T](node: Option[SSA.Val]) extends Step[T]
+    case class Continue[T](node: Seq[SSA.Val]) extends Step[T]
     case class Done[T]() extends Step[T]
   }
   case class Result[T](inferredReturns: Seq[T],
