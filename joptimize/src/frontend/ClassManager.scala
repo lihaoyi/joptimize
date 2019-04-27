@@ -24,12 +24,14 @@ class ClassManager(getClassFile: String => Option[Array[Byte]]) extends ClassMan
   val loadClassCache = mutable.LinkedHashMap.empty[JType.Cls, Option[ClassNode]]
   val loadMethodCache = mutable.LinkedHashMap.empty[MethodSig, Option[MethodNode]]
 
-//  def resolveSuperTypes(current0: JType.Cls) = {
-//
-//    val all = mutable.Buffer.empty[JType.Cls]
-//
-//    Seq(current0) ++ resolveSuperTypes(c)
-//  }
+  def resolveSuperTypes(current0: JType.Cls): Seq[JType.Cls] = {
+    val supers = supertypeMap.get(current0) match{
+      case None => Nil
+      case Some(sup) => sup.flatMap(resolveSuperTypes)
+    }
+    Seq(current0) ++ supers
+  }
+
   def resolvePossibleSigs(sig: MethodSig): Option[Seq[MethodSig]] = {
     if (sig.static) {
       def rec(currentCls: JType.Cls): Option[MethodSig] = {

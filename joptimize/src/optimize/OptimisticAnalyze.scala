@@ -27,10 +27,11 @@ class OptimisticAnalyze[T](methodBody: MethodBody,
   val inferredReturns = mutable.Buffer.empty[T]
 
   def step(): OptimisticAnalyze.Step[T] = {
-    pprint.log(workList)
+//    pprint.log(workList)
     if (workList.nonEmpty){
       val item = workList.head
 
+//      println(pprint.apply(item))
       workList.remove(item)
       item match{
         case WorkItem.Val(v) =>

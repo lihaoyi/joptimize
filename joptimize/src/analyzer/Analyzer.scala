@@ -48,10 +48,6 @@ class Analyzer(entrypoints: Seq[MethodSig],
       step()
     }
 
-    pprint.log(
-      analyses.filterKeys(_.method.name == "implementLate").mapValues(_.evaluated)
-    )
-
     for(m <- methodProps.keysIterator){
       calledSignatures.add(m)
     }
@@ -77,8 +73,8 @@ class Analyzer(entrypoints: Seq[MethodSig],
   }
 
   def step() = {
-    println()
-    println(pprint.apply(current.map(_.method.toString.stripPrefix("joptimize.examples.simple."))))
+//    println()
+//    println(pprint.apply(current.map(_.method.toString.stripPrefix("joptimize.examples.simple."))))
     val isig = current.maxBy(callSets(_).size)
     val currentCallSet = callSets(isig) ++ Set(isig)
 
@@ -104,17 +100,35 @@ class Analyzer(entrypoints: Seq[MethodSig],
           case Some(n: SSA.PutField) => handleFieldReference(isig, currentCallSet, n.owner)
           case Some(n: SSA.GetStatic) => handleFieldReference(isig, currentCallSet, n.cls)
           case Some(n: SSA.PutStatic) => handleFieldReference(isig, currentCallSet, n.cls)
-//          case Some(n: SSA.New) =>
-//            val superClasses = classManager.
-//            val newMethodOverrides = for{
-//              loadedClsNode <- classManager.loadClass(n.cls).toSeq
-//              mn <- loadedClsNode.methods.asScala
-//              msig = MethodSig(n.cls, mn.name, Desc.read(mn.desc), (mn.access & Opcodes.ACC_STATIC) != 0)
-//              if
-//            } yield {
-//
-//            }
-//            newMethodOverrides ++ Seq(isig)
+
+          case Some(n: SSA.New) =>
+
+            classManager.loadClass(n.cls)
+            val superClasses = classManager.resolveSuperTypes(n.cls)
+            val potentialSigs = for {
+              cls <- superClasses
+              loadedClsNode <- classManager.loadClass(cls).toSeq
+              mn <- loadedClsNode.methods.asScala
+              if (mn.access & (Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC)) == 0
+              msig = MethodSig(n.cls, mn.name, Desc.read(mn.desc), false)
+            }yield msig
+
+            val newMethodOverrides = for{
+              msig <- potentialSigs
+              edge <- callerGraph
+              node <- edge.node
+              if !node.isInstanceOf[SSA.InvokeSpecial]
+              if edge.called.method.name == msig.name
+              if edge.called.method.desc == msig.desc
+              if classManager.mergeTypes(Seq(node.cls, msig.cls)) == node.cls
+            } yield {
+              analyses(edge.caller).workList.add(OptimisticAnalyze.WorkItem.ForceInvalidate(node))
+              callerGraph ::= Analyzer.CallEdge(edge.caller, Some(node), edge.called.copy(method = msig))
+              addToCallSet(edge.called.copy(method = msig), callSets(edge.caller))
+              edge.called.copy(method = msig)
+            }
+
+            newMethodOverrides ++ Seq(isig)
           case Some(invoke: SSA.Invoke) => handleInvoke(isig, currentCallSet, currentAnalysis, invoke)
           case _ => Seq(isig)
         }
@@ -124,10 +138,13 @@ class Analyzer(entrypoints: Seq[MethodSig],
     }
 
     current.remove(isig)
-    newCurrent.foreach(current.add)
+    for(c <- newCurrent){
+      current.add(c)
+    }
   }
 
   def handleReturn(isig: InferredSig, currentCallSet: Set[InferredSig], inferredLog: Logger.InferredMethod, currentAnalysis: OptimisticAnalyze[IType]) = {
+//    println("DONE")
     val optimisticResult = currentAnalysis.apply()
     val retTypes = currentAnalysis.apply().inferredReturns.filter(_ != JType.Prim.V)
     val inferredReturn =
