@@ -101,34 +101,7 @@ class Analyzer(entrypoints: Seq[MethodSig],
           case n: SSA.GetStatic => handleFieldReference(isig, currentCallSet, n.cls)
           case n: SSA.PutStatic => handleFieldReference(isig, currentCallSet, n.cls)
 
-          case n: SSA.New =>
-
-            classManager.loadClass(n.cls)
-            val superClasses = classManager.resolveSuperTypes(n.cls)
-            val potentialSigs = for {
-              cls <- superClasses
-              loadedClsNode <- classManager.loadClass(cls).toSeq
-              mn <- loadedClsNode.methods.asScala
-              if (mn.access & (Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC)) == 0
-              msig = MethodSig(n.cls, mn.name, Desc.read(mn.desc), false)
-            }yield msig
-
-            val newMethodOverrides = for{
-              msig <- potentialSigs
-              edge <- callerGraph
-              node <- edge.node
-              if !node.isInstanceOf[SSA.InvokeSpecial]
-              if edge.called.method.name == msig.name
-              if edge.called.method.desc == msig.desc
-              if classManager.mergeTypes(Seq(node.cls, msig.cls)) == node.cls
-            } yield {
-              analyses(edge.caller).invalidations.add(OptimisticAnalyze.Invalidate.Invoke(node))
-              callerGraph ::= Analyzer.CallEdge(edge.caller, Some(node), edge.called.copy(method = msig))
-              addToCallSet(edge.called.copy(method = msig), callSets(edge.caller))
-              edge.called.copy(method = msig)
-            }
-
-            newMethodOverrides ++ Seq(isig)
+          case n: SSA.New => handleNew(n) ++ Seq(isig)
           case invoke: SSA.Invoke => handleInvoke(isig, currentCallSet, currentAnalysis, invoke)
           case _ => Nil
         }.distinct
@@ -143,6 +116,34 @@ class Analyzer(entrypoints: Seq[MethodSig],
     for(c <- newCurrent){
       current.add(c)
     }
+  }
+
+  def handleNew(n: SSA.New) = {
+    classManager.loadClass(n.cls)
+    val superClasses = classManager.resolveSuperTypes(n.cls)
+    val potentialSigs = for {
+      cls <- superClasses
+      loadedClsNode <- classManager.loadClass(cls).toSeq
+      mn <- loadedClsNode.methods.asScala
+      if (mn.access & (Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC)) == 0
+      msig = MethodSig(n.cls, mn.name, Desc.read(mn.desc), false)
+    } yield msig
+
+    val newMethodOverrides = for {
+      msig <- potentialSigs
+      edge <- callerGraph
+      node <- edge.node
+      if !node.isInstanceOf[SSA.InvokeSpecial]
+      if edge.called.method.name == msig.name
+      if edge.called.method.desc == msig.desc
+      if classManager.mergeTypes(Seq(node.cls, msig.cls)) == node.cls
+    } yield {
+      analyses(edge.caller).invalidations.add(OptimisticAnalyze.Invalidate.Invoke(node))
+      callerGraph ::= Analyzer.CallEdge(edge.caller, Some(node), edge.called.copy(method = msig))
+      addToCallSet(edge.called.copy(method = msig), callSets(edge.caller))
+      edge.called.copy(method = msig)
+    }
+    newMethodOverrides
   }
 
   def handleReturn(isig: InferredSig,
