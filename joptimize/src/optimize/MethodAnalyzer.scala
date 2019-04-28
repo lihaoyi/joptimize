@@ -21,6 +21,17 @@ import scala.collection.mutable
   * `evaluateWorkList` and `invalidateWorkList` containing nodes to evaluate or
   * invalidate.
   *
+  * Inference of previously-unseen nodes takes place block-by-block exclusively through
+  * the `evaluateWorkList`, while inference of already-seen nodes takes place node-by-node
+  * through `invalidateWorkList`. The coarse block-by-block traversal is necessary for
+  * reachability and control-flow analysis to occur, while the node-by-node traversal
+  * allows for more finer-grained invalidation of already-seen nodes and simply delegates
+  * to the block-by-block analysis for nodes it hasn't already seen.
+  *
+  * In the presence of invalidation, both `evaluateWorkList` and `invalidateWorkList` may
+  * end up with nodes which are in the wrong seen state for that work list to process; in
+  * such a case those nodes are simply ignored.
+  *
   * Inference of [[SSA.Invoke]] method call nodes is delegated to the caller, who has
   * to take the [[Step.Continue]] returned by [[step]], schedule that node to have its
   * return type inferred, and insert the value into the current `evaluated` dictionary

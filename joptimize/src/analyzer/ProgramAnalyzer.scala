@@ -33,8 +33,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
   val methodProps = mutable.LinkedHashMap.empty[InferredSig, ProgramAnalyzer.Properties]
 
   /**
-    * The set of all called method signatures. Used to compute which methods need to be
-    * invalidated whenever a new `SSA.New` node is seen.
+    * The set of all called method signatures.
     */
   val calledSignatures = mutable.LinkedHashSet.empty[InferredSig]
 
@@ -47,7 +46,9 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
 
   /**
     * Edges from the caller to the called. Used to guide the traversal from an analyzed
-    * method to others that depend on it.
+    * method to others that depend on it. A call site may have multiple edges leaving it
+    * if it is a virtual call resolving to multiple implementations, and more edges may
+    * be added to a callsite as more subclassing implementations are discovered.
     *
     * This is constructed dynamically as the program is traversed, and the set of edges
     * grows monotonically.
@@ -120,6 +121,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
 //    println()
 //    println(pprint.apply(current.map(_.method.toString.stripPrefix("joptimize.examples.simple."))))
     val isig = current.maxBy(callStackSets(_).size)
+    current.remove(isig)
     val currentCallSet = callStackSets(isig) ++ Set(isig)
 
     val methodLog = globalLog.method(isig.method)
@@ -145,36 +147,31 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
           case n: SSA.GetStatic => handleFieldReference(isig, currentCallSet, n.cls, static = true)
           case n: SSA.PutStatic => handleFieldReference(isig, currentCallSet, n.cls, static = true)
 
-          case n: SSA.New => handleNew(n) ++ Seq(isig)
+          case n: SSA.New => handleNew(isig, n)
           case invoke: SSA.Invoke => handleInvoke(isig, currentCallSet, currentAnalysis, invoke)
           case _ => Nil
         }.distinct
 
-        if (flat.nonEmpty) flat else Seq(isig)
+        flat ++ Seq(isig)
 
       case MethodAnalyzer.Step.Done() =>
         handleReturn(isig, currentCallSet, inferredLog, currentAnalysis)
     }
 
-    current.remove(isig)
-    for(c <- newCurrent){
-      current.add(c)
-    }
+
+    newCurrent.foreach(current.add)
   }
 
-  def handleNew(n: SSA.New) = {
+  def handleNew(isig: InferredSig, n: SSA.New) = {
     classManager.loadClass(n.cls)
     val superClasses = classManager.resolveSuperTypes(n.cls)
-    val potentialSigs = for {
+
+    val newMethodOverrides = for {
       cls <- superClasses
       loadedClsNode <- classManager.loadClass(cls).toSeq
       mn <- loadedClsNode.methods.asScala
       if (mn.access & (Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC)) == 0
       msig = MethodSig(n.cls, mn.name, Desc.read(mn.desc), false)
-    } yield msig
-
-    val newMethodOverrides = for {
-      msig <- potentialSigs
       edge <- callGraph
       node <- edge.node
       if !node.isInstanceOf[SSA.InvokeSpecial]
@@ -187,7 +184,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
       addToCallSet(edge.called.copy(method = msig), callStackSets(edge.caller))
       edge.called.copy(method = msig)
     }
-    newMethodOverrides
+    newMethodOverrides ++ Seq(isig)
   }
 
   def handleReturn(isig: InferredSig,
@@ -417,8 +414,8 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
 
 object ProgramAnalyzer {
   case class CallEdge(caller: InferredSig, node: Option[SSA.Invoke], called: InferredSig)
-  case class GlobalResult(visitedMethods: collection.Map[InferredSig, ProgramAnalyzer.Result],
-                          visitedResolved: collection.Map[InferredSig, ProgramAnalyzer.Properties],
+  case class GlobalResult(visitedMethods: collection.Map[InferredSig, Result],
+                          visitedResolved: collection.Map[InferredSig, Properties],
                           staticFieldReferencedClasses: collection.Set[JType.Cls])
   case class Result(methodBody: MethodBody,
                     inferred: mutable.LinkedHashMap[SSA.Val, IType],
