@@ -39,12 +39,6 @@ class MethodAnalyzer[T](methodBody: MethodBody,
   val liveBlocks = mutable.LinkedHashSet(initialBlock)
 
   /**
-    * The set of jump instructions that have been seen in the course of this method body's
-    * traversal. Grows monotonically
-    */
-  val seenJumps = mutable.LinkedHashSet.empty[SSA.Jump]
-
-  /**
     * The set of return instructions that have been seen in the course of this method body's
     * traversal, and their returned values. Grows monotonically
     */
@@ -95,7 +89,7 @@ class MethodAnalyzer[T](methodBody: MethodBody,
   def queueDownstreamInvalidations(v: SSA.Val): Step.Continue[T] = {
     val downstreams = v.downstreamList.filter{
       case v: SSA.Val => evaluated.contains(v)
-      case j: SSA.Jump => seenJumps.contains(j)
+      case j: SSA.Jump => liveBlocks.contains(j.block)
     }
     downstreams.foreach {
       case phi: SSA.Phi =>
@@ -131,7 +125,6 @@ class MethodAnalyzer[T](methodBody: MethodBody,
         Seq(nextBlock)
 
       case n: SSA.Jump =>
-        seenJumps.add(n)
         n match {
           case r: SSA.Return =>
             inferredReturns(r) = Seq(evaluated(r.state))
