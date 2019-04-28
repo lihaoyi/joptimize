@@ -8,6 +8,12 @@ import org.objectweb.asm.Opcodes
 
 import scala.collection.mutable
 
+/**
+  * Optimistically walks an entire program, comprised of many methods linked together
+  * via a call graph. Constructs the method call graph in memory as `callGraph`, and only
+  * maintains the current set of analysis-in-progress methods, relying on the `callGraph`
+  * to decide where to return to after each method analysis is complete.
+  */
 class ProgramAnalyzer(entrypoints: Seq[MethodSig],
                       classManager: ClassManager,
                       globalLog: Logger.Global,
@@ -46,7 +52,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
     * This is constructed dynamically as the program is traversed, and the set of edges
     * grows monotonically.
     */
-  val callerGraph = mutable.LinkedHashSet.empty[ProgramAnalyzer.CallEdge]
+  val callGraph = mutable.LinkedHashSet.empty[ProgramAnalyzer.CallEdge]
 
   /**
     * Work in progress optimistic analyses of the various methods in play. These analyses
@@ -169,7 +175,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
 
     val newMethodOverrides = for {
       msig <- potentialSigs
-      edge <- callerGraph
+      edge <- callGraph
       node <- edge.node
       if !node.isInstanceOf[SSA.InvokeSpecial]
       if edge.called.method.name == msig.name
@@ -177,7 +183,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
       if classManager.mergeTypes(Seq(node.cls, msig.cls)) == node.cls
     } yield {
       analyses(edge.caller).invalidateWorkList.add(MethodAnalyzer.Invalidate.Invoke(node))
-      callerGraph.add(ProgramAnalyzer.CallEdge(edge.caller, Some(node), edge.called.copy(method = msig)))
+      callGraph.add(ProgramAnalyzer.CallEdge(edge.caller, Some(node), edge.called.copy(method = msig)))
       addToCallSet(edge.called.copy(method = msig), callStackSets(edge.caller))
       edge.called.copy(method = msig)
     }
@@ -214,7 +220,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
     inferredLog.pprint(optimisticResult.inferred)
     inferredLog.pprint(optimisticResult.liveBlocks)
 
-    val returnEdges = callerGraph.iterator.filter(_.called == isig).toArray
+    val returnEdges = callGraph.iterator.filter(_.called == isig).toArray
 
     for (edge <- returnEdges) {
       for (node <- edge.node) {
@@ -246,7 +252,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
 
     if (clinits.isEmpty) Seq(isig)
     else {
-      clinits.foreach(clinit => callerGraph.add(ProgramAnalyzer.CallEdge(isig, None, clinit)))
+      clinits.foreach(clinit => callGraph.add(ProgramAnalyzer.CallEdge(isig, None, clinit)))
       clinits.foreach(addToCallSet(_, currentCallSet))
       clinits
     }
@@ -260,7 +266,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
 
     if (currentCallSet(calledSig)) {
       calledSignatures.add(calledSig)
-      callerGraph.add(ProgramAnalyzer.CallEdge(calledSig, Some(invoke), isig))
+      callGraph.add(ProgramAnalyzer.CallEdge(calledSig, Some(invoke), isig))
       addToCallSet(calledSig, currentCallSet)
       analyses(isig).evaluated(invoke) = IType.Bottom
       methodProps(calledSig) = ProgramAnalyzer.dummyProps(calledSig.method, true)
@@ -271,13 +277,13 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
       Seq(isig)
     } else if (invoke.isInstanceOf[SSA.InvokeSpecial]) {
       calledSignatures.add(calledSig)
-      callerGraph.add(ProgramAnalyzer.CallEdge(isig, Some(invoke), calledSig))
+      callGraph.add(ProgramAnalyzer.CallEdge(isig, Some(invoke), calledSig))
       addToCallSet(calledSig, currentCallSet)
       Seq(calledSig)
     } else classManager.resolvePossibleSigs(calledSig.method) match {
       case None =>
         calledSignatures.add(calledSig)
-        callerGraph.add(ProgramAnalyzer.CallEdge(isig, Some(invoke), calledSig))
+        callGraph.add(ProgramAnalyzer.CallEdge(isig, Some(invoke), calledSig))
         addToCallSet(calledSig, currentCallSet)
         Seq(isig).filter(!methodProps.contains(_))
       case Some(subSigs0) =>
@@ -305,7 +311,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
         )
         if (rets.isEmpty) Seq(isig)
         else {
-          rets.foreach(ret => callerGraph.add(ProgramAnalyzer.CallEdge(isig, Some(invoke), ret)))
+          rets.foreach(ret => callGraph.add(ProgramAnalyzer.CallEdge(isig, Some(invoke), ret)))
 
           rets.foreach(addToCallSet(_, currentCallSet))
           rets

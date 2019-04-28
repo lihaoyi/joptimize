@@ -8,6 +8,24 @@ import joptimize.{FileLogger, Logger, Util}
 
 import scala.collection.mutable
 
+/**
+  * Optimistically incrementally walks a method to infer a property [[T]] over the
+  * [[SSA.Val]]s inside the method body.
+  *
+  * Execution is controlled by two inputs: the [[lattice]] that infers values for each
+  * [[SSA.Val]] based on its upstream inputs, and a [[brancher]] that determines which
+  * blocks to branch to depending on the input of each [[SSA.Jump]].
+  *
+  * The traversal state is entirely encapsulated in the current set of inferences
+  * (`evaluated`, `liveBlocks`, `inferredReturns`) as well as the two work lists of
+  * `evaluateWorkList` and `invalidateWorkList` containing nodes to evaluate or
+  * invalidate.
+  *
+  * Inference of [[SSA.Invoke]] method call nodes is delegated to the caller, who has
+  * to take the [[Step.Continue]] returned by [[step]], schedule that node to have its
+  * return type inferred, and insert the value into the current `evaluated` dictionary
+  * before continuing to step through this [[MethodAnalyzer]]
+  */
 class MethodAnalyzer[T](methodBody: MethodBody,
                         initialValues: Map[SSA.Val, T],
                         initialBlock: SSA.Block,
