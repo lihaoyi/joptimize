@@ -233,9 +233,9 @@ object MainTests extends TestSuite{
         'single3 - annotatedTest
         'single4 - annotatedTest
 
-//        'unknown1 - annotatedTest
-//        'unknown2 - annotatedTest
-//        'unknown3 - annotatedTest
+        'unknown1 - annotatedTest
+        'unknown2 - annotatedTest
+        'unknown3 - annotatedTest
       }
       'InterfacePreservation - {
         'shallow - annotatedTest
