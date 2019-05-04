@@ -6,7 +6,6 @@ import joptimize.analyzer.{ProgramAnalyzer, Namer, Renderer}
 import joptimize.frontend.ClassManager
 import joptimize.graph.HavlakLoopTree
 import joptimize.model._
-import joptimize.optimize.OptimisticSimplify
 import org.objectweb.asm.Opcodes
 import org.objectweb.asm.tree.{ClassNode, InsnList, MethodNode}
 

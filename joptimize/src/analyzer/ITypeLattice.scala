@@ -1,4 +1,4 @@
-package joptimize.optimize
+package joptimize.analyzer
 
 import joptimize.model._
 

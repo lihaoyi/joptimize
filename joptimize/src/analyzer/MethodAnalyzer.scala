@@ -1,9 +1,8 @@
-package joptimize.optimize
+package joptimize.analyzer
 
-import joptimize.analyzer.Namer
 import joptimize.graph.TarjansStronglyConnectedComponents
 import joptimize.model._
-import joptimize.optimize.MethodAnalyzer.{Evaluate, Invalidate, Result, Step, topoSort}
+import MethodAnalyzer.{Evaluate, Invalidate, Result, Step, topoSort}
 import joptimize.{FileLogger, Logger, Util}
 
 import scala.collection.mutable
@@ -74,7 +73,7 @@ class MethodAnalyzer[T](methodBody: MethodBody,
   val inferredReturns = mutable.LinkedHashMap.empty[SSA.Jump, Seq[T]]
 
   def step(): MethodAnalyzer.Step[T] = {
-//    pprint.log(workList)
+    //    pprint.log(workList)
     if (invalidateWorkList.nonEmpty){
       val item = invalidateWorkList.head
       invalidateWorkList.remove(item)

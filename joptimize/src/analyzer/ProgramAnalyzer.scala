@@ -3,7 +3,6 @@ import collection.JavaConverters._
 import joptimize.frontend.{ClassManager, Frontend}
 import joptimize.Logger
 import joptimize.model._
-import joptimize.optimize._
 import org.objectweb.asm.Opcodes
 
 import scala.collection.mutable

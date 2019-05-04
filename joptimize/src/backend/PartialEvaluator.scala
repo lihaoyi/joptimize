@@ -1,6 +1,6 @@
-package joptimize.optimize
+package joptimize.backend
 
-import joptimize.{Logger, Util}
+import joptimize.Logger
 import joptimize.model.SSA
 
 object PartialEvaluator {
