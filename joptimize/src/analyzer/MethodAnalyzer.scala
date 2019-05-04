@@ -126,6 +126,7 @@ class MethodAnalyzer[T](methodBody: MethodBody,
           invalidateWorkList.add(Invalidate.Phi(phi))
         }
       case i: SSA.Invoke => invalidateWorkList.add(Invalidate.Invoke(i))
+      case i: SSA.InvokeDynamic => invalidateWorkList.add(Invalidate.InvokeDynamic(i))
       case nextV: SSA.Val => invalidateWorkList.add(Invalidate.Incremental(nextV))
       case j: SSA.Jump => evaluateWorkList.add(Evaluate.BlockJump(j.block))
     }
@@ -277,6 +278,7 @@ class MethodAnalyzer[T](methodBody: MethodBody,
       if (upstream.contains(IType.Bottom)) evaluated(v) = IType.Bottom.asInstanceOf[T]
       else v match{
         case n: SSA.Invoke =>
+        case n: SSA.InvokeDynamic =>
         case _ => evaluated(v) = lattice.transferValue(v, evaluated)
       }
     }
@@ -317,6 +319,7 @@ object MethodAnalyzer {
   object Invalidate{
     case class Phi(src: SSA.Phi) extends Invalidate
     case class Invoke(src: SSA.Invoke) extends Invalidate
+    case class InvokeDynamic(src: SSA.InvokeDynamic) extends Invalidate
     case class Incremental(src: SSA.Val) extends Invalidate{
       assert(!src.isInstanceOf[SSA.Invoke] && !src.isInstanceOf[SSA.Phi])
     }

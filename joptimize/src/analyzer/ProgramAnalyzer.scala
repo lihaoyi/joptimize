@@ -1,9 +1,9 @@
 package joptimize.analyzer
 import collection.JavaConverters._
 import joptimize.frontend.{ClassManager, Frontend}
-import joptimize.Logger
+import joptimize.{Logger, Util}
 import joptimize.model._
-import org.objectweb.asm.Opcodes
+import org.objectweb.asm.{Handle, Opcodes}
 
 import scala.collection.mutable
 
@@ -148,6 +148,38 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
 
           case n: SSA.New => handleNew(isig, n)
           case invoke: SSA.Invoke => handleInvoke(isig, currentCallSet, currentAnalysis, invoke)
+          case indy: SSA.InvokeDynamic =>
+            if (indy.bootstrap == Util.metafactory || indy.bootstrap == Util.altMetafactory){
+
+//              val target = indy.bootstrapArgs(1).asInstanceOf[SSA.InvokeDynamic.HandleArg]
+//              val targetSig = MethodSig(
+//                target.cls,
+//                target.name,
+//                target.desc,
+//                target.tag == Opcodes.H_INVOKESTATIC
+//              )
+//
+//              ctx.walkMethod(targetSig, targetSig.desc.args)
+//
+//              val n = Util.clone(currentInsn, ctx.blockInsnMapping)
+//              val nextFrame = currentFrame.execute(n, SSAInterpreter)
+//              walkNextLabel(nextFrame) match {
+//                case Some(t) => t
+//                case None => walkInsn(current.getNext, nextFrame, ctx)
+//              }
+              ???
+            }else if(indy.bootstrap == Util.makeConcatWithConstants){
+              currentAnalysis.evaluated(indy) = JType.Cls("java/lang/String")
+              Seq(isig)
+            } else{
+              pprint.log(indy.bootstrap)
+              pprint.log(indy.bootstrapArgs)
+              pprint.log(indy.bootstrapArgs.map(_.getClass))
+              pprint.log(indy.desc)
+              pprint.log(indy.name)
+              ???
+            }
+//            handleInvoke(isig, currentCallSet, currentAnalysis, invoke)
           case _ => Nil
         }.distinct
 
@@ -392,6 +424,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
         }
       case n: SSA.UnaOp => true
 
+      case n: SSA.InvokeDynamic => n.bootstrap == Util.makeConcatWithConstants
       case n: SSA.Invoke =>
         if (n.srcs.exists(!optResult.inferred.contains(_))) true
         else {
