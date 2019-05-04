@@ -33,6 +33,7 @@ class Frontend(val classManager: ClassManager) {
       log.graph(Renderer.dumpSvg(methodBody))
       log.check(methodBody.checkLinks(checkDead = false))
       methodBody.removeDeadNodes()
+      log.graph(Renderer.dumpSvg(methodBody))
       log.check(methodBody.checkLinks())
       log.graph(Renderer.dumpSvg(methodBody))
 

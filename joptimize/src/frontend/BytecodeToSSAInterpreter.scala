@@ -245,6 +245,7 @@ class BytecodeToSSAInterpreter(merges: mutable.LinkedHashSet[SSA.Phi],
         val insn2 = insn.asInstanceOf[InvokeDynamicInsnNode]
         val bsm = insn2.bsm
         val op = new SSA.InvokeDynamic(
+          state,
           insn2.name, Desc.read(insn2.desc),
           SSA.InvokeDynamic.bootstrapFromHandle(bsm),
           insn2.bsmArgs.map(SSA.InvokeDynamic.anyToArg),

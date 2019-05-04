@@ -50,21 +50,26 @@ abstract class FileLogger(logRoot: os.Path, ignorePrefix: os.RelPath, segments: 
   os.write.over(destFile, "", createFolders = true)
 
   def renderAnsiLine(labelOpt: Option[String],
-                     printed: fansi.Str)(implicit file: sourcecode.File, line: sourcecode.Line) = {
+                     printed: fansi.Str)
+                    (implicit file: sourcecode.File, line: sourcecode.Line) = {
     val prefix =
-      fansi.Color.Green(file.value.split('/').last) ++
-        fansi.Str(":") ++
-        fansi.Color.Green(line.value.toString) ++
-        labelOpt.fold(fansi.Str(""))(label =>
-          fansi.Str(" ") ++
-            fansi.Color.Cyan(label)
-        ) ++
-        fansi.Str(": ")
+      computePrefix(labelOpt, file, line)
 
     os.write.append(
       destFile,
       Seq(upickle.default.write(LogMessage.Message(prefix ++ printed)), "\n")
     )
+  }
+
+  def computePrefix(labelOpt: Option[String], file: File, line: Line) = {
+    fansi.Color.Green(file.value.split('/').last) ++
+      fansi.Str(":") ++
+      fansi.Color.Green(line.value.toString) ++
+      labelOpt.fold(fansi.Str(""))(label =>
+        fansi.Str(" ") ++
+          fansi.Color.Cyan(label)
+      ) ++
+      fansi.Str(": ")
   }
 
   def pprint(value0: => sourcecode.Text[Any])
@@ -76,7 +81,10 @@ abstract class FileLogger(logRoot: os.Path, ignorePrefix: os.RelPath, segments: 
            (implicit f: sourcecode.File, line: sourcecode.Line) = {
     os.write.append(
       destFile,
-      Seq(upickle.default.write(g), "\n")
+      Seq(
+        upickle.default.write(LogMessage.Message(computePrefix(None, f, line))), "\n",
+        upickle.default.write(g), "\n"
+      )
     )
   }
 

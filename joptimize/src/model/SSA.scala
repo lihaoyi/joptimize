@@ -558,13 +558,15 @@ object SSA{
     override def toString = s"${super.toString()}(${cls.name}, $name, $desc)"
   }
 
-  class InvokeDynamic(var name: String,
+  class InvokeDynamic(var state: State,
+                      var name: String,
                       var desc: Desc,
                       var bootstrap: InvokeDynamic.Bootstrap,
                       var bootstrapArgs: Seq[InvokeDynamic.Arg],
                       var srcs: Seq[Val]) extends Val(desc.ret) {
-    def upstream = srcs
+    def upstream = state +: srcs
     def replaceUpstream(swap: Swapper): Unit = {
+      state = swap(state)
       srcs = srcs.map(swap(_))
     }
   }

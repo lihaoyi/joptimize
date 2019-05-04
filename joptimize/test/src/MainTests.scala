@@ -93,13 +93,13 @@ object MainTests extends TestSuite{
         'getAndSetLoop2 - annotatedTest
         'getAndSetLoop3 - annotatedTest
       }
-//      'InvokeDynamic - {
-//        'lambda - annotatedTest
+      'InvokeDynamic - {
+        'lambda - annotatedTest
 //        'lambdaArg - annotatedTest
 //        'lambdaBoxed - annotatedTest
 //        'lambdaBoxedArgs - annotatedTest
 //        'concat - annotatedTest
-//      }
+      }
 //      'ScalaInvokeDynamic - {
 //        'hello - annotatedTest
 //        'hello2 - annotatedTest
