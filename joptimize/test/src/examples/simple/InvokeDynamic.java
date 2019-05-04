@@ -1,10 +1,13 @@
 package joptimize.examples.simple;
 
 public class InvokeDynamic {
+    interface IntSupplier{
+        int getAsInt();
+    }
     @joptimize.Test(inputs = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12})
     public static int lambda(int a) {
         int x = 1;
-        java.util.function.IntSupplier r1 = () -> a + x;
+        IntSupplier r1 = () -> a + x;
         return r1.getAsInt();
     }
 

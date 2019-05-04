@@ -151,23 +151,29 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
           case indy: SSA.InvokeDynamic =>
             if (indy.bootstrap == Util.metafactory || indy.bootstrap == Util.altMetafactory){
 
-//              val target = indy.bootstrapArgs(1).asInstanceOf[SSA.InvokeDynamic.HandleArg]
-//              val targetSig = MethodSig(
-//                target.cls,
-//                target.name,
-//                target.desc,
-//                target.tag == Opcodes.H_INVOKESTATIC
-//              )
-//
-//              ctx.walkMethod(targetSig, targetSig.desc.args)
-//
-//              val n = Util.clone(currentInsn, ctx.blockInsnMapping)
-//              val nextFrame = currentFrame.execute(n, SSAInterpreter)
-//              walkNextLabel(nextFrame) match {
-//                case Some(t) => t
-//                case None => walkInsn(current.getNext, nextFrame, ctx)
-//              }
-              ???
+              val target = indy.bootstrapArgs(1).asInstanceOf[SSA.InvokeDynamic.HandleArg]
+              val calledDesc = indy.bootstrapArgs(0).asInstanceOf[SSA.InvokeDynamic.MethodArg].i
+              val targetSig = MethodSig(
+                target.cls,
+                target.name,
+                target.desc,
+                target.tag == Opcodes.H_INVOKESTATIC
+              )
+
+              val retCls = indy.desc.ret.asInstanceOf[JType.Cls]
+              val msig = MethodSig(
+                indy.desc.ret.asInstanceOf[JType.Cls],
+                indy.name,
+                calledDesc,
+                target.tag == Opcodes.H_INVOKESTATIC
+              )
+              classManager.seenLambdas(msig) =
+                classManager.seenLambdas.getOrElse(msig, Set()) + (indy -> targetSig)
+              currentAnalysis.evaluated(indy) = retCls
+              pprint.log(targetSig)
+              val res = handleLambda(isig, retCls, targetSig)
+              pprint.log(res)
+              res
             }else if(indy.bootstrap == Util.makeConcatWithConstants){
               currentAnalysis.evaluated(indy) = JType.Cls("java/lang/String")
               Seq(isig)
@@ -203,6 +209,30 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
       mn <- loadedClsNode.methods.asScala
       if (mn.access & (Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC)) == 0
       msig = MethodSig(n.cls, mn.name, Desc.read(mn.desc), false)
+      edge <- callGraph
+      node <- edge.node
+      if !node.isInstanceOf[SSA.InvokeSpecial]
+      if edge.called.method.name == msig.name
+      if edge.called.method.desc == msig.desc
+      if classManager.mergeTypes(Seq(node.cls, msig.cls)) == node.cls
+    } yield {
+      analyses(edge.caller).invalidateWorkList.add(MethodAnalyzer.Invalidate.Invoke(node))
+      callGraph.add(ProgramAnalyzer.CallEdge(edge.caller, Some(node), edge.called.copy(method = msig)))
+      addToCallSet(edge.called.copy(method = msig), callStackSets(edge.caller))
+      edge.called.copy(method = msig)
+    }
+    newMethodOverrides ++ Seq(isig)
+  }
+
+  def handleLambda(isig: InferredSig, retCls: JType.Cls, msig: MethodSig) = {
+    pprint.log(retCls)
+    val loaded = classManager.loadClass(retCls)
+    pprint.log(loaded)
+    val superClasses = classManager.resolveSuperTypes(retCls)
+
+    val newMethodOverrides = for {
+      cls <- superClasses
+      loadedClsNode <- classManager.loadClass(cls).toSeq
       edge <- callGraph
       node <- edge.node
       if !node.isInstanceOf[SSA.InvokeSpecial]
@@ -292,6 +322,8 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
                    invoke: SSA.Invoke) = {
     val calledSig = invoke.inferredSig(currentAnalysis.evaluated(_))
 
+    pprint.log(isig)
+    pprint.log(invoke.sig)
     if (currentCallSet(calledSig)) {
       calledSignatures.add(calledSig)
       callGraph.add(ProgramAnalyzer.CallEdge(calledSig, Some(invoke), isig))
@@ -325,7 +357,10 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
         val (clinitss, subss) = subSigs
           .map { subSig =>
             val clinits = analyzeClinits(Seq(subSig.cls))
-            (clinits, Seq(InferredSig(subSig, calledSig.inferred)))
+            pprint.log(subSig)
+            pprint.log(calledSig.inferred)
+            val prefix = subSig.desc.args.take(subSig.desc.args.length - calledSig.inferred.length)
+            (clinits, Seq(InferredSig(subSig, prefix ++ calledSig.inferred)))
           }
           .unzip
         val clinits = clinitss.flatten
@@ -350,7 +385,10 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
 
   def resolveProps(isig: InferredSig) = {
     classManager.resolvePossibleSigs(isig.method).map{ resolved =>
-      val copied = resolved.map(m => isig.copy(method = m))
+      val copied = resolved.map{ m =>
+        val prefix = m.desc.args.take(m.desc.args.length - isig.inferred.length)
+        isig.copy(method = m, inferred = prefix ++ isig.inferred)
+      }
 
       val resolvedProps = copied.flatMap(methodProps.get)
       ProgramAnalyzer.Properties(
