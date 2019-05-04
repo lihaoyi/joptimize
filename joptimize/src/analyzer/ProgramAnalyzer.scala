@@ -170,9 +170,9 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
               classManager.seenLambdas(msig) =
                 classManager.seenLambdas.getOrElse(msig, Set()) + (indy -> targetSig)
               currentAnalysis.evaluated(indy) = retCls
-              pprint.log(targetSig)
+//              pprint.log(targetSig)
               val res = handleLambda(isig, retCls, targetSig)
-              pprint.log(res)
+//              pprint.log(res)
               res
             }else if(indy.bootstrap == Util.makeConcatWithConstants){
               currentAnalysis.evaluated(indy) = JType.Cls("java/lang/String")
@@ -225,9 +225,9 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
   }
 
   def handleLambda(isig: InferredSig, retCls: JType.Cls, msig: MethodSig) = {
-    pprint.log(retCls)
+//    pprint.log(retCls)
     val loaded = classManager.loadClass(retCls)
-    pprint.log(loaded)
+//    pprint.log(loaded)
     val superClasses = classManager.resolveSuperTypes(retCls)
 
     val newMethodOverrides = for {
@@ -322,8 +322,8 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
                    invoke: SSA.Invoke) = {
     val calledSig = invoke.inferredSig(currentAnalysis.evaluated(_))
 
-    pprint.log(isig)
-    pprint.log(invoke.sig)
+//    pprint.log(isig)
+//    pprint.log(invoke.sig)
     if (currentCallSet(calledSig)) {
       calledSignatures.add(calledSig)
       callGraph.add(ProgramAnalyzer.CallEdge(calledSig, Some(invoke), isig))
@@ -357,8 +357,8 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
         val (clinitss, subss) = subSigs
           .map { subSig =>
             val clinits = analyzeClinits(Seq(subSig.cls))
-            pprint.log(subSig)
-            pprint.log(calledSig.inferred)
+//            pprint.log(subSig)
+//            pprint.log(calledSig.inferred)
             val prefix = subSig.desc.args.take(subSig.desc.args.length - calledSig.inferred.length)
             (clinits, Seq(InferredSig(subSig, prefix ++ calledSig.inferred)))
           }
