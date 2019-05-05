@@ -36,8 +36,8 @@ class ClassManager(getClassFile: String => Option[Array[Byte]]) extends ClassMan
   }
 
   def resolvePossibleSigs(sig: MethodSig): Option[Seq[MethodSig]] = {
-//    pprint.log(sig)
-//    pprint.log(seenLambdas)
+    pprint.log(sig)
+    pprint.log(seenLambdas)
     if (sig.static) {
       def rec(currentCls: JType.Cls): Option[MethodSig] = {
         val currentSig = sig.copy(cls = currentCls)
@@ -62,7 +62,7 @@ class ClassManager(getClassFile: String => Option[Array[Byte]]) extends ClassMan
         if resolveSuperTypes(sig.cls).contains(msig.cls)
         (node, sig)<- set
       } yield sig
-//      pprint.log(lambdas)
+      pprint.log(lambdas)
       Some(sig :: lambdas.toList ::: subTypes)
     }
   }
@@ -81,8 +81,8 @@ class ClassManager(getClassFile: String => Option[Array[Byte]]) extends ClassMan
         supertypeMap(cls) = up :: supertypeMap.getOrElse(cls, Nil)
         loadClass(up)
       }
-//      pprint.log(cn.name)
-//      pprint.log(cn.methods.asScala.map(m => m.name -> m.desc))
+      pprint.log(cn.name)
+      pprint.log(cn.methods.asScala.map(m => m.name -> m.desc))
 
       cn
     }
