@@ -2,10 +2,9 @@ package joptimize.frontend
 
 import joptimize.Util
 import joptimize.algorithms.MultiBiMap
-import joptimize.model.{CType, IType, JType, MethodSig, SSA}
+import joptimize.model.{CType, IType, JType, MethodSig}
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.tree.{ClassNode, MethodNode}
-
 import collection.JavaConverters._
 import scala.collection.mutable
 object ClassManager{
@@ -25,8 +24,6 @@ class ClassManager(getClassFile: String => Option[Array[Byte]]) extends ClassMan
   val loadClassCache = mutable.LinkedHashMap.empty[JType.Cls, Option[ClassNode]]
   val loadMethodCache = mutable.LinkedHashMap.empty[MethodSig, Option[MethodNode]]
 
-  val seenLambdas = mutable.Map.empty[MethodSig, Set[(SSA.InvokeDynamic, MethodSig)]]
-
   def resolveSuperTypes(current0: JType.Cls): Seq[JType.Cls] = {
     val supers = supertypeMap.get(current0) match{
       case None => Nil
@@ -36,8 +33,6 @@ class ClassManager(getClassFile: String => Option[Array[Byte]]) extends ClassMan
   }
 
   def resolvePossibleSigs(sig: MethodSig): Option[Seq[MethodSig]] = {
-    pprint.log(sig)
-    pprint.log(seenLambdas)
     if (sig.static) {
       def rec(currentCls: JType.Cls): Option[MethodSig] = {
         val currentSig = sig.copy(cls = currentCls)
@@ -56,14 +51,7 @@ class ClassManager(getClassFile: String => Option[Array[Byte]]) extends ClassMan
         .getOrElse(sig.cls, Nil)
         .map(c => sig.copy(cls = c))
 
-      val lambdas = for{
-        (msig, set) <- seenLambdas
-        if msig.name == sig.name && msig.desc == sig.desc
-        if resolveSuperTypes(sig.cls).contains(msig.cls)
-        (node, sig)<- set
-      } yield sig
-      pprint.log(lambdas)
-      Some(sig :: lambdas.toList ::: subTypes)
+      Some(sig :: subTypes)
     }
   }
 
@@ -81,8 +69,6 @@ class ClassManager(getClassFile: String => Option[Array[Byte]]) extends ClassMan
         supertypeMap(cls) = up :: supertypeMap.getOrElse(cls, Nil)
         loadClass(up)
       }
-      pprint.log(cn.name)
-      pprint.log(cn.methods.asScala.map(m => m.name -> m.desc))
 
       cn
     }

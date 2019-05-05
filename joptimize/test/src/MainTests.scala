@@ -94,8 +94,8 @@ object MainTests extends TestSuite{
         'getAndSetLoop3 - annotatedTest
       }
       'InvokeDynamic - {
-        'lambda - annotatedTest
-        'lambdaArg - annotatedTest
+//        'lambda - annotatedTest
+//        'lambdaArg - annotatedTest
 //        'lambdaBoxed - annotatedTest
 //        'lambdaBoxedArgs - annotatedTest
         'concat - annotatedTest
