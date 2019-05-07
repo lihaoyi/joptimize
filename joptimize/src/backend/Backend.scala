@@ -158,19 +158,11 @@ object Backend {
     }
     def ignore(s: String) = s.startsWith("java/")
 
-    def findSupertypes(cls: JType.Cls) = {
-      val output = mutable.Buffer(cls)
-      while(loadClassCache.contains(output.last) && loadClassCache(output.last).superName != null && !ignore(loadClassCache(output.last).superName)){
-        output.append(JType.Cls(loadClassCache(output.last).superName))
-      }
-      output
-    }
-
     val outClasses = BytecodeDCE.apply(
       entrypoints,
       grouped.keys.toSeq,
-      findSubtypes = classManager.getAllSubclasses,
-      findSupertypes = findSupertypes,
+      findSubtypes = classManager.getAllSubtypes,
+      getLinearSuperclasses = classManager.getLinearSuperclasses,
       ignore = ignore
     )
 

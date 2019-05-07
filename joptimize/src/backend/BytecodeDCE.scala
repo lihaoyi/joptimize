@@ -17,7 +17,7 @@ object BytecodeDCE {
   def apply(entrypoints: scala.Seq[MethodSig],
             classNodes: Seq[ClassNode],
             findSubtypes: JType.Cls => Seq[JType.Cls],
-            findSupertypes: JType.Cls => Seq[JType.Cls],
+            getLinearSuperclasses: JType.Cls => Seq[JType.Cls],
             ignore: String => Boolean): Seq[ClassNode] = {
 
     val classNodeMap = classNodes.map{cn => (JType.Cls(cn.name), cn)}.toMap
@@ -39,7 +39,7 @@ object BytecodeDCE {
         val mn = methodSigMap(
           if (!current.static) current
           else {
-            val x = findSupertypes(current.cls)
+            val x = getLinearSuperclasses(current.cls)
             val y = x.map(MethodSig(_, current.name, current.desc, current.static))
             val z = y.filter(methodSigMap.contains)
             z.take(1).toSeq.head
@@ -66,7 +66,7 @@ object BytecodeDCE {
               Desc.read(current.desc), current.getOpcode == Opcodes.INVOKESTATIC
             )
 
-            val subtypes = if (sig.static) findSupertypes(sig.cls) else findSubtypes(sig.cls)
+            val subtypes = if (sig.static) getLinearSuperclasses(sig.cls) else findSubtypes(sig.cls)
             if (sig.static) subtypes.foreach(seenClasses.add)
 
             val possibleSigs = subtypes.map(st => sig.copy(cls = st)) ++ Seq(sig)

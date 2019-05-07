@@ -197,7 +197,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
 
   def handleNew(isig: InferredSig, n: SSA.New) = {
     classManager.loadClass(n.cls)
-    val superClasses = classManager.resolveSuperTypes(n.cls)
+    val superClasses = classManager.getAllSupertypes(n.cls)
 
     val newMethodOverrides = for {
       cls <- superClasses

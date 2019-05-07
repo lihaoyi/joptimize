@@ -9,7 +9,8 @@ import collection.JavaConverters._
 import scala.collection.mutable
 object ClassManager{
   trait ReadOnly{
-    def getAllSubclasses(cls: JType.Cls): Seq[JType.Cls]
+    def getAllSubtypes(cls: JType.Cls): Seq[JType.Cls]
+    def getLinearSuperclasses(cls: JType.Cls): Seq[JType.Cls]
     def supertypeMap: mutable.LinkedHashMap[JType.Cls, List[JType.Cls]]
     def loadClassCache: collection.Map[JType.Cls, Option[ClassNode]]
     def loadMethodCache: collection.Map[MethodSig, Option[MethodNode]]
@@ -23,33 +24,38 @@ class ClassManager(getClassFile: String => Option[Array[Byte]]) extends ClassMan
 
   val loadClassCache = mutable.LinkedHashMap.empty[JType.Cls, Option[ClassNode]]
   val loadMethodCache = mutable.LinkedHashMap.empty[MethodSig, Option[MethodNode]]
+  def getLinearSuperclasses(cls: JType.Cls): Seq[JType.Cls] = {
+    def rec(currentCls: JType.Cls): List[JType.Cls] = {
+      loadClass(currentCls) match {
+        case None => Nil
+        case Some(cls) => JType.Cls(cls.name) :: rec(JType.Cls(cls.superName))
+      }
+    }
+    rec(cls)
+  }
 
-  def resolveSuperTypes(current0: JType.Cls): Seq[JType.Cls] = {
+  def getAllSupertypes(current0: JType.Cls): Seq[JType.Cls] = {
     val supers = supertypeMap.get(current0) match{
       case None => Nil
-      case Some(sup) => sup.flatMap(resolveSuperTypes)
+      case Some(sup) => sup.flatMap(getAllSupertypes)
     }
     Seq(current0) ++ supers
   }
 
   def resolvePossibleSigs(sig: MethodSig): Option[Seq[MethodSig]] = {
     if (sig.static) {
-      def rec(currentCls: JType.Cls): Option[MethodSig] = {
-        val currentSig = sig.copy(cls = currentCls)
-        if (loadMethod(currentSig).nonEmpty) Some(currentSig)
-        else loadClass(currentCls) match {
-          case None => None
-          case Some(cls) => rec(JType.Cls(cls.superName))
-        }
-      }
-
       if (sig.name == "<clinit>") Some(Seq(sig))
-      else rec(sig.cls).map(s => Seq(s))
-    }else Some(getAllSubclasses(sig.cls).map(c => sig.copy(cls = c)))
+      else {
+        getLinearSuperclasses(sig.cls).iterator
+          .map(c => sig.copy(cls = c))
+          .find(loadMethod(_).nonEmpty)
+          .map(Seq(_))
+      }
+    }else Some(getAllSubtypes(sig.cls).map(c => sig.copy(cls = c)))
   }
 
-  def getAllSubclasses(cls: JType.Cls): Seq[JType.Cls] = {
-    Seq(cls) ++ subtypeMap.getOrElse(cls, Nil).flatMap(getAllSubclasses)
+  def getAllSubtypes(cls: JType.Cls): Seq[JType.Cls] = {
+    Seq(cls) ++ subtypeMap.getOrElse(cls, Nil).flatMap(getAllSubtypes)
   }
 
 
