@@ -16,12 +16,73 @@ public class Inheritance {
         return s;
     }
 
+
+    static class Toyota extends Car {
+        public Toyota() {
+            this.cc = 10;
+        }
+
+        public String vStart() {
+            return "vr";
+        }
+
+        public String superVStart() {
+            return super.vStart();
+        }
+    }
+
+    static class Honda extends Car {
+        public int cc = 5;
+
+        public String vStart() {
+            return "v".concat(String.valueOf(cc))
+                    .concat("r")
+                    .concat(String.valueOf(((Car) this).cc))
+                    .concat("r")
+                    .concat(String.valueOf(super.cc));
+        }
+    }
+
+    static class Car {
+        public int cc;
+
+        public String vStart() {
+            return "";
+        }
+
+        public void rev() {
+            this.cc = this.cc + 1;
+        }
+
+        public String vroom() {
+            String s = vStart();
+            for (int i = 0; i < cc; i++) {
+                s = s.concat("o");
+            }
+            return s;
+        }
+    }
+
     @joptimize.Test()
     public static String getSetField() {
         Car honda = new Honda();
         ((Honda) honda).cc++;
         return "";
     }
+
+
+    static class Sheep implements Baas {
+        public String baa(int n) {
+            String s = "b";
+            for (int i = 0; i < n; i++) s = s.concat("a");
+            return s;
+        }
+    }
+
+    static interface Baas {
+        public String baa(int n);
+    }
+
 
     @joptimize.Test(inputs = {1, 2, 4, 8})
     public static String implement(int n) {
@@ -54,6 +115,44 @@ public class Inheritance {
     public static String superMethod() {
         return new Toyota().superVStart();
     }
+
+
+
+    static interface ParentInterface {
+        public static int x = 30;
+    }
+
+    static class Parent {
+        public static int x = 10;
+
+        public static int inherited() {
+            return 0xcafebabe;
+        }
+
+        public static int overriden() {
+            return 1337;
+        }
+    }
+
+    static class Child1 extends Parent {
+        public static int get() {
+            return x;
+        }
+
+        public static int overriden() {
+            return 31337;
+        }
+    }
+
+    static class Cowc {
+    }
+
+    static class Child2 extends Cowc implements ParentInterface {
+        public static int get() {
+            return x;
+        }
+    }
+
 
     @joptimize.Test()
     public static int staticInheritance() {
@@ -95,97 +194,16 @@ public class Inheritance {
         return s.toString();
     }
 
-}
-
-interface ParentInterface {
-    public static int x = 30;
-}
-
-class Parent {
-    public static int x = 10;
-
-    public static int inherited() {
-        return 0xcafebabe;
+    interface Func1<T1, R> {
+        R apply(T1 v);
     }
 
-    public static int overriden() {
-        return 1337;
-    }
-}
-
-class Child1 extends Parent {
-    public static int get() {
-        return x;
+    @joptimize.Test(inputs = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12})
+    public static int lambdaSpecialized(int a){
+        Func1<Object, Integer> r1 = new Func1<Object, Integer>(){
+            public Integer apply(Object v){ return v.getClass().getName().length() + a;}
+        };
+        return r1.apply(Integer.valueOf(123)) + r1.apply("abc");
     }
 
-    public static int overriden() {
-        return 31337;
-    }
-}
-
-class Cowc {
-}
-
-class Child2 extends Cowc implements ParentInterface {
-    public static int get() {
-        return x;
-    }
-}
-
-class Sheep implements Baas {
-    public String baa(int n) {
-        String s = "b";
-        for (int i = 0; i < n; i++) s = s.concat("a");
-        return s;
-    }
-}
-
-interface Baas {
-    public String baa(int n);
-}
-
-class Toyota extends Car {
-    public Toyota() {
-        this.cc = 10;
-    }
-
-    public String vStart() {
-        return "vr";
-    }
-
-    public String superVStart() {
-        return super.vStart();
-    }
-}
-
-class Honda extends Car {
-    public int cc = 5;
-
-    public String vStart() {
-        return "v".concat(String.valueOf(cc))
-                .concat("r")
-                .concat(String.valueOf(((Car) this).cc))
-                .concat("r")
-                .concat(String.valueOf(super.cc));
-    }
-}
-
-class Car {
-    public int cc;
-
-    public String vStart() {
-        return "";
-    }
-
-    public void rev() {
-        this.cc = this.cc + 1;
-    }
-
-    public String vroom() {
-        String s = vStart();
-        for (int i = 0; i < cc; i++) {
-            s = s.concat("o");
-        }
-        return s;
-    }
 }

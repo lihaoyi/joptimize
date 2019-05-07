@@ -104,6 +104,7 @@ object MainTests extends TestSuite{
         'hello - annotatedTest
         'hello2 - annotatedTest
         'lambda - annotatedTest
+
         'lambdaBoxed - annotatedTest
         'concat - annotatedTest
       }
@@ -118,6 +119,7 @@ object MainTests extends TestSuite{
         'staticInheritance - annotatedTest
         'staticInheritanceMethod - annotatedTest
         'moreStrings - annotatedTest
+        'lambdaSpecialized - annotatedTest
       }
 //      'Exceptions - {
 //        'throwCatch0 - annotatedTest

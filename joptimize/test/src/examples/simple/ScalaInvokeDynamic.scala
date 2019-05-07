@@ -25,6 +25,18 @@ object ScalaInvokeDynamic {
         r1(10.0 / a)
     }
 
+    trait Func1[-T1, +R] {
+        def apply(v1: T1): R
+    }
+
+    @joptimize.Test(inputs = Array(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12))
+    def lambdaSpecialized(a: Int) = {
+        val r1: Func1[Object, Int] = new Func1[Object, Int]{
+            def apply(v1: Object) = v1.getClass.getName.length + a
+        }
+        r1(Integer.valueOf(123)) + r1("abc")
+    }
+
     @joptimize.Test(inputs = Array(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12))
     def lambdaBoxed(a: Int)  = {
         val x = 1
