@@ -32,9 +32,14 @@ object Util{
         jTypeRet
       )
 
-      val mangledName =
-        if (jTypeRet == isig.method.desc.ret) isig.method.name
-        else mangleName0(isig.method, isig.inferred)
+      val mangledName = (jTypeRet, isig.method.desc.ret) match {
+        case (JType.Prim.I, JType.Prim.Z) => isig.method.name
+        case (JType.Prim.I, JType.Prim.S) => isig.method.name
+        case (JType.Prim.I, JType.Prim.B) => isig.method.name
+        case (lhs, rhs) =>
+          if (lhs == rhs) isig.method.name
+          else mangleName0(isig.method, isig.inferred)
+      }
       (mangledName, narrowedDesc)
     }
     else{
