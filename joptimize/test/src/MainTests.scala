@@ -325,5 +325,10 @@ object MainTests extends TestSuite{
       }
 
     }
+    'inlining - {
+      'Chaining - {
+        'hello - annotatedTest
+      }
+    }
   }
 }

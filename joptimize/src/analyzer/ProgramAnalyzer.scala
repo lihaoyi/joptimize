@@ -157,6 +157,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
 
     val step = currentAnalysis.step()
 
+//    pprint.log(step)
     val newCurrent: Seq[InferredSig] = step match {
       case MethodAnalyzer.Step.Continue(nodes) =>
 //        pprint.log(nodes)
@@ -215,21 +216,27 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
 
   def handleNew(isig: InferredSig, n: SSA.New) = {
     classManager.loadClass(n.cls)
-    val superClasses = classManager.getAllSupertypes(n.cls)
+    val superClasses = classManager.getAllSupertypes(n.cls).toSet
 
-    val newMethodOverrides = for {
-      cls <- superClasses
-      loadedClsNode <- classManager.loadClass(cls).toSeq
-      mn <- loadedClsNode.methods.asScala
-      if (mn.access & (Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC)) == 0
-      msig = MethodSig(n.cls, mn.name, Desc.read(mn.desc), false)
+    val superClassCallList = for {
       edge <- callGraph
       node <- edge.node
       if !node.isInstanceOf[SSA.InvokeSpecial]
-      if edge.called.method.name == msig.name
-      if edge.called.method.desc == msig.desc
-      if classManager.mergeTypes(Seq(node.cls, msig.cls)) == node.cls
+      if superClasses.contains(node.cls)
+    } yield (node, edge)
+
+    val superClassMethodMap = superClassCallList
+      .groupBy(t => (t._1.name, t._1.desc))
+      .map{case (k, v) => (k, v.map(_._2))}
+
+    val newMethodOverrides = for {
+      loadedClsNode <- classManager.loadClass(n.cls).toSeq
+      mn <- loadedClsNode.methods.asScala
+      if (mn.access & (Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC)) == 0
+      edge <- superClassMethodMap.getOrElse((mn.name, Desc.read(mn.desc)), Nil)
+      node <- edge.node
     } yield {
+      val msig = edge.called.method.copy(cls = n.cls)
       analyses(edge.caller).invalidateWorkList.add(MethodAnalyzer.Invalidate.Invoke(node))
       callGraph.add(ProgramAnalyzer.CallEdge(edge.caller, Some(node), edge.called.copy(method = msig)))
       addToCallSet(edge.called.copy(method = msig), callStackSets(edge.caller))
@@ -237,6 +244,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
     }
     newMethodOverrides ++ Seq(isig)
   }
+
 
   def handleReturn(isig: InferredSig,
                    currentCallSet: Set[InferredSig],
