@@ -80,7 +80,7 @@ object Backend {
         case Right(props) => props
       }
       val (mangledName, mangledDesc) =
-        if (isig.method.name == "<init>") (isig.method.name, isig.method.desc)
+        if (entrypoints.contains(isig.method) || isig.method.name == "<init>") (isig.method.name, isig.method.desc)
         else Util.mangle(isig, props.inferredReturn, liveArgs)
 
       val newNode = new MethodNode(
@@ -126,8 +126,6 @@ object Backend {
             },
             argMapping
           )
-
-
       }
       newNode.desc = mangledDesc.unparse
       newNode.tryCatchBlocks = Nil.asJava

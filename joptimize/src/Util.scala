@@ -23,18 +23,20 @@ object Util{
              narrowReturnType: IType,
              liveArgs: Int => Boolean) = {
 
+    val jTypeRet = CType.toJType(narrowReturnType, isig.method.desc.ret)
+
     if (isManglingCompatible(isig.inferred, isig.method.desc.args)) {
 
       val narrowedDesc = Desc(
         mangleLiveArgList(isig.method.desc.args, isig.method.static, liveArgs),
-        isig.method.desc.ret
+        jTypeRet
       )
 
       (isig.method.name, narrowedDesc)
     }
     else{
       val mangledName = mangleName0(isig.method, isig.inferred)
-      val jTypeRet = CType.toJType(narrowReturnType, isig.method.desc.ret)
+
       val jTypeArgs = isig.inferred
         .zip(isig.method.desc.args)
         .map(t => CType.toJType(t._1, t._2))

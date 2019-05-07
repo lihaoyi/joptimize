@@ -247,9 +247,6 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
 
     methodProps(isig) = props
 
-    inferredLog.pprint(optimisticResult.inferred)
-    inferredLog.pprint(optimisticResult.liveBlocks)
-
     val returnEdges = callGraph.iterator.filter(_.called == isig).toArray
 
     for (edge <- returnEdges) {
