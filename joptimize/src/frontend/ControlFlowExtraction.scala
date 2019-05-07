@@ -137,7 +137,7 @@ object ControlFlowExtraction {
           n.default = default
           Nil
 
-        case (IFEQ | IFNE | IFLT | IFGE | IFGT | IFLE, insn: JumpInsnNode) =>
+        case (IFEQ | IFNE | IFLT | IFGE | IFGT | IFLE | IFNULL | IFNONNULL, insn: JumpInsnNode) =>
           val startRegion = findStartRegion(i)
           val n = new SSA.UnaBranch(
             frames(i).state,

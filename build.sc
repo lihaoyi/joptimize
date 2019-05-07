@@ -24,6 +24,11 @@ object joptimize extends ScalaModule{
       ivy"com.lihaoyi::ujson:0.7.1"
     )
     def testFrameworks = Seq("joptimize.UTestFramework")
+
+    def forkEnv = Map(
+      "SCALA_JAR" -> compileClasspath().find(_.path.toString.contains("scala-library")).get.path.toString
+    )
+    def scalacOptions = super.scalacOptions() ++ Seq("-Ydelambdafy:inline")
   }
 }
 

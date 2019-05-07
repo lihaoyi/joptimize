@@ -9,7 +9,7 @@ import collection.JavaConverters._
 import scala.collection.mutable
 object ClassManager{
   trait ReadOnly{
-    def subtypeMap: mutable.LinkedHashMap[JType.Cls, List[JType.Cls]]
+    def getAllSubclasses(cls: JType.Cls): Seq[JType.Cls]
     def supertypeMap: mutable.LinkedHashMap[JType.Cls, List[JType.Cls]]
     def loadClassCache: collection.Map[JType.Cls, Option[ClassNode]]
     def loadMethodCache: collection.Map[MethodSig, Option[MethodNode]]
@@ -45,14 +45,11 @@ class ClassManager(getClassFile: String => Option[Array[Byte]]) extends ClassMan
 
       if (sig.name == "<clinit>") Some(Seq(sig))
       else rec(sig.cls).map(s => Seq(s))
-    }else{
-      //      pprint.log(subtypeMap.items().toMap)
-      val subTypes = subtypeMap
-        .getOrElse(sig.cls, Nil)
-        .map(c => sig.copy(cls = c))
+    }else Some(getAllSubclasses(sig.cls).map(c => sig.copy(cls = c)))
+  }
 
-      Some(sig :: subTypes)
-    }
+  def getAllSubclasses(cls: JType.Cls): Seq[JType.Cls] = {
+    Seq(cls) ++ subtypeMap.getOrElse(cls, Nil).flatMap(getAllSubclasses)
   }
 
 

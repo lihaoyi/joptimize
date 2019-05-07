@@ -89,4 +89,17 @@ object CType{
     def name = s"TD$value"
     def widen = JType.Prim.D
   }
+
+  /**
+    * Weird "meaningless type" sentinel value. Unlike Void, it has a size of 1
+    * and can take up spots in the stack or locals, but doesn't really have any
+    * meaning beyond a placeholder and all operations on it should fail
+    */
+  object Null extends IType {
+    override def name = "Null"
+
+    def widen = Null
+
+    def isConstant = true
+  }
 }

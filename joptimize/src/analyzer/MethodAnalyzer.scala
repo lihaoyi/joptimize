@@ -155,6 +155,8 @@ class MethodAnalyzer[T](methodBody: MethodBody,
 
       case n: SSA.Jump =>
         n match {
+          case r: SSA.AThrow =>
+            Nil
           case r: SSA.Return =>
             inferredReturns(r) = Seq(evaluated(r.state))
             Nil

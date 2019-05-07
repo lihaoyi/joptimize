@@ -156,7 +156,7 @@ object Backend {
 
       cn.methods.addAll(mns.asJava)
     }
-    def ignore(s: String) = s.startsWith("java/") || s.startsWith("scala/")
+    def ignore(s: String) = s.startsWith("java/")
 
     def findSupertypes(cls: JType.Cls) = {
       val output = mutable.Buffer(cls)
@@ -169,7 +169,7 @@ object Backend {
     val outClasses = BytecodeDCE.apply(
       entrypoints,
       grouped.keys.toSeq,
-      findSubtypes = classManager.subtypeMap.getOrElse(_, Nil),
+      findSubtypes = classManager.getAllSubclasses,
       findSupertypes = findSupertypes,
       ignore = ignore
     )

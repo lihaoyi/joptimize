@@ -192,7 +192,9 @@ object Util{
       val current = queue.dequeue()
       if (!visitedInterfaces.contains(current)) {
         visitedInterfaces.add(current)
-        queue.enqueue(classNodeMap(current).interfaces.asScala: _*)
+        classNodeMap.get(current).foreach{cn =>
+          queue.enqueue(cn.interfaces.asScala: _*)
+        }
       }
     }
     visitedInterfaces

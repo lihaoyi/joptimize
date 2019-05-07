@@ -1,5 +1,7 @@
 package joptimize
+import java.io.ByteArrayOutputStream
 import java.net.URLClassLoader
+import java.util.zip.ZipFile
 
 import joptimize.model.{Desc, JType, MethodSig}
 import org.objectweb.asm.tree.{ClassNode, IntInsnNode, LdcInsnNode}
@@ -16,6 +18,20 @@ object MainTestUtils {
   val testRoot = classesRoot / "joptimize" / "examples"
 
   def annotatedTest(implicit tp: TestPath) = {
+    val zipFile = new ZipFile(sys.env("SCALA_JAR"))
+    import collection.JavaConverters._
+    val scalaClasses = zipFile
+      .entries
+      .asScala
+      .filter(!_.isDirectory)
+      .map{ x =>
+        val stream = zipFile.getInputStream(x)
+        val out = new ByteArrayOutputStream()
+        os.Internals.transfer(stream, out)
+        (x.getName, out.toByteArray)
+      }
+      .toMap
+
     val rawCls = Class.forName(s"joptimize.examples.${tp.value.dropRight(1).mkString(".")}")
     val rawMethod = rawCls.getDeclaredMethods.find(_.getName == tp.value.last).get
     val methodDesc = Desc(
@@ -23,11 +39,12 @@ object MainTestUtils {
       JType.fromJavaCls(rawMethod.getReturnType)
     )
 
-    val inputFileMap = os.walk(testRoot / tp.value.dropRight(2))
+    val inputFileMap0 = os.walk(testRoot / tp.value.dropRight(2))
       .filter(os.isFile)
       .map(p => (p.relativeTo(classesRoot).toString, os.read.bytes(p)))
       .toMap
 
+    val inputFileMap = scalaClasses ++ inputFileMap0
     os.remove.all(outRoot / tp.value)
     val outputFileMap = JOptimize.run(
       inputFileMap,

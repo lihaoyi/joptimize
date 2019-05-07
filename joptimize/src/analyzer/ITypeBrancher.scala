@@ -16,8 +16,8 @@ object ITypeBrancher extends Brancher[IType]{
     case (CType.I(v), SSA.UnaBranch.IFLT) => Some(v < 0)
     case (CType.I(v), SSA.UnaBranch.IFGE) => Some(v >= 0)
     case (CType.I(v), SSA.UnaBranch.IFGT) => Some(v > 0)
-    case (JType.Null, SSA.UnaBranch.IFNULL) => Some(true)
-    case (JType.Null, SSA.UnaBranch.IFNONNULL) => Some(false)
+//    case (JType.Null, SSA.UnaBranch.IFNULL) => Some(true)
+//    case (JType.Null, SSA.UnaBranch.IFNONNULL) => Some(false)
     case _ => None
   }
   def evaluateBinBranch(t1: IType, t2: IType, op: SSA.BinBranch.Code) = (t1, t2, op) match {

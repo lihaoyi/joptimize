@@ -222,6 +222,7 @@ object CodeGenMethod{
         case n: SSA.ConstStr => Seq(new LdcInsnNode(n.value))
         case n: SSA.ConstNull => Seq(new InsnNode(ACONST_NULL))
         case n: SSA.ConstCls =>
+//          pprint.log(n.value.name)
           Seq(new LdcInsnNode(org.objectweb.asm.Type.getType(n.value.name)))
         case n: SSA.InvokeStatic =>
           Seq(new MethodInsnNode(INVOKESTATIC, n.cls.name, n.name, n.desc.unparse))

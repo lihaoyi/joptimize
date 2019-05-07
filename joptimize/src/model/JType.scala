@@ -75,18 +75,7 @@ object JType{
     def javaName = name.replace('/', '.')
   }
 
-  /**
-    * Weird "meaningless type" sentinel value. Unlike Void, it has a size of 1
-    * and can take up spots in the stack or locals, but doesn't really have any
-    * meaning beyond a placeholder and all operations on it should fail
-    */
-  object Null extends Ref {
-    override def internalName = ???
-    override def name = ???
-    override def javaName = ???
-    override def realCls = ???
-    override def size = 1
-  }
+
 
   abstract class Prim[T: ClassTag](val size: Int,
                                    val index: Int,

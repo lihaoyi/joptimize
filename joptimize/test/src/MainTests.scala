@@ -100,13 +100,13 @@ object MainTests extends TestSuite{
 //        'lambdaBoxedArgs - annotatedTest
         'concat - annotatedTest
       }
-//      'ScalaInvokeDynamic - {
-//        'hello - annotatedTest
-//        'hello2 - annotatedTest
-//        'lambda - annotatedTest
-//        'lambdaBoxed - annotatedTest
-//        'concat - annotatedTest
-//      }
+      'ScalaInvokeDynamic - {
+        'hello - annotatedTest
+        'hello2 - annotatedTest
+        'lambda - annotatedTest
+        'lambdaBoxed - annotatedTest
+        'concat - annotatedTest
+      }
       'Inheritance - {
         'hello - annotatedTest
         'strings - annotatedTest

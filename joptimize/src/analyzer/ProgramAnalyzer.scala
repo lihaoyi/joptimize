@@ -121,6 +121,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
 //    println(pprint.apply(current.map(_.method.toString.stripPrefix("joptimize.examples.simple."))))
     val isig = current.maxBy(callStackSets(_).size)
     current.remove(isig)
+//    println(isig.toString)
     val currentCallSet = callStackSets(isig) ++ Set(isig)
 
     val methodLog = globalLog.method(isig.method)
@@ -140,6 +141,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
 
     val newCurrent: Seq[InferredSig] = step match {
       case MethodAnalyzer.Step.Continue(nodes) =>
+//        pprint.log(nodes)
         val flat = nodes.flatMap{
           case n: SSA.GetField => handleFieldReference(isig, currentCallSet, n.owner, static = false)
           case n: SSA.PutField => handleFieldReference(isig, currentCallSet, n.owner, static = false)
@@ -316,35 +318,40 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
         Seq(isig).filter(!methodProps.contains(_))
       case Some(subSigs0) =>
         calledSignatures.add(calledSig)
-        val subSigs = subSigs0.filter { subSig =>
-          classManager.loadMethod(subSig).exists(_.instructions.size() != 0)
-        }
-
-        assert(subSigs.nonEmpty)
-
-        val (clinitss, subss) = subSigs
-          .map { subSig =>
-            val clinits = analyzeClinits(Seq(subSig.cls))
-            (clinits, Seq(InferredSig(subSig, calledSig.inferred)))
+        val loaded = subSigs0.map(classManager.loadMethod)
+        if (loaded.forall(_.isEmpty)){
+          analyses(isig).evaluated(invoke) = calledSig.method.desc.ret
+          Seq(isig)
+        }else {
+          val subSigs = subSigs0.filter { subSig =>
+            classManager.loadMethod(subSig).exists(_.instructions.size() != 0)
           }
-          .unzip
-        val clinits = clinitss.flatten
-        val subs = subss.flatten
 
-        val rets = (clinits ++ subs).filter(!methodProps.contains(_))
+          assert(subSigs.nonEmpty)
 
-        analyses(isig).evaluated(invoke) = classManager.mergeTypes(
-          analyses(isig).evaluated.get(invoke).toSeq ++
-            subs.flatMap(methodProps.get).map(_.inferredReturn)
-        )
-        if (rets.isEmpty) Seq(isig)
-        else {
-          rets.foreach(ret => callGraph.add(ProgramAnalyzer.CallEdge(isig, Some(invoke), ret)))
+          val (clinitss, subss) = subSigs
+            .map { subSig =>
+              val clinits = analyzeClinits(Seq(subSig.cls))
+              (clinits, Seq(InferredSig(subSig, calledSig.inferred)))
+            }
+            .unzip
+          val clinits = clinitss.flatten
+          val subs = subss.flatten
 
-          rets.foreach(addToCallSet(_, currentCallSet))
-          rets
+          val rets = (clinits ++ subs).filter(!methodProps.contains(_))
+
+          analyses(isig).evaluated(invoke) = classManager.mergeTypes(
+            analyses(isig).evaluated.get(invoke).toSeq ++
+              subs.flatMap(methodProps.get).map(_.inferredReturn)
+          )
+          if (rets.isEmpty) Seq(isig)
+          else {
+            rets.foreach(ret => callGraph.add(ProgramAnalyzer.CallEdge(isig, Some(invoke), ret)))
+
+            rets.foreach(addToCallSet(_, currentCallSet))
+            rets
+          }
         }
-
     }
   }
 
@@ -436,7 +443,23 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
           else resolveProps(key).fold(default)(_.pure)
         }
 
-      //    case n: SSA.InvokeDynamic => computeMethodSig(n, n.srcs.map(inferences))
+      //    case methodBody: MethodBody,
+      //    inferred: mutable.LinkedHashMap[SSA.Val, IType],
+      //    liveBlocks: Set[SSA.Block],
+      //    props: Properties)
+      //
+      //  case class Properties(inferredReturn: IType,
+      //                        pure: Boolean,
+      //                        liveArgs: Set[Int])
+      //
+      //  def dummyResult(originalSig: MethodSig, optimistic: Boolean) = ProgramAnalyzer.Result(
+      //    new MethodBody(Nil, Nil),
+      //    mutable.LinkedHashMap.empty,
+      //    Set.empty,
+      //    dummyProps(originalSig, optimistic)
+      //  )
+      //
+      //  def dummyPropsn: SSA.InvokeDynamic => computeMethodSig(n, n.srcs.map(inferences))
       case p: SSA.Phi => true
     }
   }
