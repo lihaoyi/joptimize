@@ -16,9 +16,7 @@ object OptimisticSimplify {
             classExists: JType.Cls => Boolean,
             resolvedProperties: (InferredSig, Boolean) => ProgramAnalyzer.Properties) = log.block{
 
-    log.pprint(methodBody.args -> argMapping)
     methodBody.args = methodBody.args.filter(a => argMapping.contains(a.index) || (a.index == 0 && !isStatic))
-    log.pprint(methodBody.args -> argMapping)
 
 //    log.pprint(argMapping)
     for(n <- methodBody.getAllVertices()){

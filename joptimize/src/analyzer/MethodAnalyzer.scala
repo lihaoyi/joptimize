@@ -43,7 +43,7 @@ class MethodAnalyzer[T](methodBody: MethodBody,
                         log: Logger.InferredMethod,
                         brancher: Brancher[T]){
 
-  log.graph(Renderer.dumpSvg(methodBody))
+  log.graph("PRE OPTIMISTIC ANALYSIS")(Renderer.dumpSvg(methodBody))
 
   /**
     * A queue of tasks to perform when traversing new previously-unseen code.

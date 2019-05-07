@@ -9,7 +9,8 @@ trait Logger{
   def pprint(value0: => sourcecode.Text[Any])
             (implicit f: sourcecode.File, line: sourcecode.Line): Unit
 
-  def graph(g: => LogMessage.Graph)
+  def graph(label: String)
+           (g: => LogMessage.Graph)
            (implicit f: sourcecode.File, line: sourcecode.Line): Unit
   def apply(value0: => sourcecode.Text[fansi.Str])(implicit f: sourcecode.File, line: sourcecode.Line): Unit
   def println(value: => String)(implicit f: sourcecode.File, line: sourcecode.Line): Unit
@@ -31,7 +32,7 @@ object Logger{
 object DummyLogger extends Logger with Logger.Global with Logger.Method with Logger.InferredMethod {
   def pprint(value0: => Text[Any])(implicit f: File, line: Line): Unit = ()
 
-  def graph(g: => LogMessage.Graph)(implicit f: File, line: Line): Unit = ()
+  def graph(label: String)(g: => LogMessage.Graph)(implicit f: File, line: Line): Unit = ()
 
   def apply(value0: => Text[Str])(implicit f: File, line: Line): Unit = ()
 
@@ -82,12 +83,13 @@ abstract class FileLogger(logRoot: os.Path, segments: Seq[String], name: String)
     renderAnsiLine(Some(value0.source), _root_.pprint.apply(value0.value, height=99999))
   }
 
-  def graph(g: => LogMessage.Graph)
+  def graph(label: String)
+           (g: => LogMessage.Graph)
            (implicit f: sourcecode.File, line: sourcecode.Line) = {
     os.write.append(
       destFile,
       Seq(
-        upickle.default.write((indent, LogMessage.Message(computePrefix(None, f, line)))), "\n",
+        upickle.default.write((indent, LogMessage.Message(computePrefix(None, f, line) ++ label))), "\n",
         upickle.default.write((indent, g)), "\n"
       )
     )

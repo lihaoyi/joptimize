@@ -28,18 +28,14 @@ class Frontend(val classManager: ClassManager) {
       log(Renderer.renderInsns(mn.instructions, printer, methodPrinter))
 
       val methodBody = ConstructSSA.apply(originalSig, mn, log)
-      log.println("raw")
-      log.graph(Renderer.dumpSvg(methodBody))
+      log.graph("RAW")(Renderer.dumpSvg(methodBody))
       log.check(methodBody.checkLinks(checkDead = false))
-      log.println("removeDeadNodes")
       methodBody.removeDeadNodes()
-      log.graph(Renderer.dumpSvg(methodBody))
+      log.graph("removeDeadNodes")(Renderer.dumpSvg(methodBody))
       log.check(methodBody.checkLinks())
-      log.graph(Renderer.dumpSvg(methodBody))
 
-      log.println("simplifyPhiMerges")
       simplifyPhiMerges(methodBody)
-      log.graph(Renderer.dumpSvg(methodBody))
+      log.graph("simplifyPhiMerges")(Renderer.dumpSvg(methodBody))
       log.check(methodBody.checkLinks())
       Some(methodBody)
     }

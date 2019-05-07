@@ -196,8 +196,7 @@ object Backend {
 
     log.check(result.methodBody.checkLinks(checkDead = false))
     result.methodBody.removeDeadNodes()
-    log.println("POST OPTIMISTIC SIMPLIFY")
-    log.graph(Renderer.dumpSvg(result.methodBody))
+    log.graph("POST OPTIMISTIC SIMPLIFY")(Renderer.dumpSvg(result.methodBody))
     log.check(result.methodBody.checkLinks())
 
     val allVertices2 = result.methodBody.getAllVertices()

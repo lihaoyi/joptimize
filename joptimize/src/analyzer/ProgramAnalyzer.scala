@@ -110,8 +110,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
       )
     }
 
-    globalLog.println("PROGRAM CALL GRAPH")
-    globalLog.graph {
+    globalLog.graph("PROGRAM CALL GRAPH") {
       val allNodes = callGraph.flatMap(edge => Seq(edge.called, edge.caller)).toArray
       val allNodeIndices = allNodes.zipWithIndex.toMap
       LogMessage.Graph(
