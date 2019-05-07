@@ -23,9 +23,8 @@ object CodeGenMethod{
             nodesToBlocks: Map[SSA.Val, SSA.Block],
             cfg: Seq[(SSA.Control, SSA.Control)],
             naming: Namer.Result,
-            log: Logger.InferredMethod) = {
+            log: Logger.InferredMethod) = log.block{
 
-    log.pprint(naming)
     val blocksToNodes = nodesToBlocks.groupBy(_._2).map{case (k, v) => (k, v.keys)}
     val sortedControls = sortControlFlowGraph(cfg)
 

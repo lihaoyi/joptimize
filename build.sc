@@ -25,8 +25,26 @@ object joptimize extends ScalaModule{
     )
     def testFrameworks = Seq("joptimize.UTestFramework")
 
+    def unzippedScalaFolder = T{
+      val zipFile = new java.util.zip.ZipFile(
+        compileClasspath().find(_.path.toString.contains("scala-library")).get.path.toString
+      )
+      import collection.JavaConverters._
+      for(x <- zipFile.entries.asScala){
+        if (!x.isDirectory){
+          os.write(
+            T.ctx().dest / os.RelPath(x.getName),
+            zipFile.getInputStream(x),
+            createFolders = true
+          )
+        }
+      }
+
+      PathRef(T.ctx().dest)
+    }
     def forkEnv = Map(
-      "SCALA_JAR" -> compileClasspath().find(_.path.toString.contains("scala-library")).get.path.toString
+      "SCALA_FOLDER" -> unzippedScalaFolder().path.toString,
+      "CLASSES_FOLDER" -> compile().classes.path.toString()
     )
     def scalacOptions = super.scalacOptions() ++ Seq("-Ydelambdafy:inline")
   }

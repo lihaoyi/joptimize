@@ -76,8 +76,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
     else callStackSets(k) = v
   }
 
-  def apply() = {
-
+  def apply() = globalLog.block {
     for (ep <- entrypoints) {
       val isig = InferredSig(ep, ep.desc.args)
       current.add(isig)
@@ -111,11 +110,12 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
       )
     }
 
+    globalLog.println("PROGRAM CALL GRAPH")
     globalLog.graph {
       val allNodes = callGraph.flatMap(edge => Seq(edge.called, edge.caller)).toArray
       val allNodeIndices = allNodes.zipWithIndex.toMap
       LogMessage.Graph(
-        allNodes.map(n => LogMessage.Graph.Node(n.method.cls.javaName + "." + n.method.name, "cyan", live = true)),
+        allNodes.map(n => LogMessage.Graph.Node(n.method.cls.javaName + "." + n.method.name + "\n" + n.inferred, "cyan", live = true)),
         callGraph.toSeq.map(edge =>
           LogMessage.Graph.Edge(
             allNodeIndices(edge.caller),
@@ -209,7 +209,16 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
       case MethodAnalyzer.Step.Done() =>
         handleReturn(isig, currentCallSet, inferredLog, currentAnalysis)
     }
-
+    if (newCurrent != Seq(isig)){
+      val edge =
+        fansi.Color.Green(isig.toString) ++ " -> " ++
+        fansi.Str.join(
+          Seq(fansi.Str("[")) ++
+          newCurrent.flatMap(n => Seq(fansi.Str(", "), fansi.Color.Green(n.toString))).drop(1) ++
+          Seq(fansi.Str("]")):_*
+        )
+      globalLog.apply(edge)
+    }
 
     newCurrent.foreach(current.add)
   }

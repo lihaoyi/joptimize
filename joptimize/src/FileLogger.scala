@@ -18,6 +18,8 @@ trait Logger{
   def check(action: => Unit): Unit
   def global(): Logger.Global
   def inferredMethod(isig: InferredSig): Logger.InferredMethod
+
+  def block[T](t: => T)(implicit e: sourcecode.Enclosing, pkg: sourcecode.Pkg): T
 }
 
 object Logger{
@@ -42,13 +44,16 @@ object DummyLogger extends Logger with Logger.Global with Logger.Method with Log
   def global() = this
 
   def inferredMethod(isig: InferredSig) = this
+
+  def block[T](t: => T)(implicit e: sourcecode.Enclosing, pkg: sourcecode.Pkg): T = t
 }
 
-abstract class FileLogger(logRoot: os.Path, ignorePrefix: os.RelPath, segments: Seq[String], name: String) extends Logger {
-  val destFile = logRoot / (os.rel / segments relativeTo ignorePrefix) / (name + ".js")
+abstract class FileLogger(logRoot: os.Path, segments: Seq[String], name: String) extends Logger {
+  val destFile = logRoot / segments / (name + ".js")
   if (!os.exists(destFile))
   os.write.over(destFile, "", createFolders = true)
 
+  var indent = 0
   def renderAnsiLine(labelOpt: Option[String],
                      printed: fansi.Str)
                     (implicit file: sourcecode.File, line: sourcecode.Line) = {
@@ -57,7 +62,7 @@ abstract class FileLogger(logRoot: os.Path, ignorePrefix: os.RelPath, segments: 
 
     os.write.append(
       destFile,
-      Seq(upickle.default.write(LogMessage.Message(prefix ++ printed)), "\n")
+      Seq(upickle.default.write((indent, LogMessage.Message(prefix ++ printed))), "\n")
     )
   }
 
@@ -82,8 +87,8 @@ abstract class FileLogger(logRoot: os.Path, ignorePrefix: os.RelPath, segments: 
     os.write.append(
       destFile,
       Seq(
-        upickle.default.write(LogMessage.Message(computePrefix(None, f, line))), "\n",
-        upickle.default.write(g), "\n"
+        upickle.default.write((indent, LogMessage.Message(computePrefix(None, f, line)))), "\n",
+        upickle.default.write((indent, g)), "\n"
       )
     )
   }
@@ -97,32 +102,35 @@ abstract class FileLogger(logRoot: os.Path, ignorePrefix: os.RelPath, segments: 
     renderAnsiLine(None, value)
   }
 
-  def method(originalSig: MethodSig) = new FileLogger.Method(logRoot, ignorePrefix, originalSig)
-  def global() = new FileLogger.Global(logRoot, ignorePrefix)
-  def inferredMethod(isig: InferredSig) = new FileLogger.InferredMethod(logRoot, ignorePrefix, isig.method, isig.inferred)
+  def method(originalSig: MethodSig) = new FileLogger.Method(logRoot, originalSig)
+  def global() = new FileLogger.Global(logRoot)
+  def inferredMethod(isig: InferredSig) = new FileLogger.InferredMethod(logRoot, isig.method, isig.inferred)
+  def block[T](t: => T)(implicit e: sourcecode.Enclosing, pkg: sourcecode.Pkg): T = {
+    println(e.value.drop(pkg.value.length + 1))
+    indent += 1
+    try t
+    finally indent -= 1
+  }
 }
 
 object FileLogger{
-  class Global(logRoot: os.Path, ignorePrefix: os.RelPath)
+  class Global(logRoot: os.Path)
     extends FileLogger(
       logRoot,
-      ignorePrefix,
-      ignorePrefix.segments,
-      "global"
+      Nil,
+      "index"
     ) with Logger.Global
 
-  class Method(logRoot: os.Path, ignorePrefix: os.RelPath, originalSig: MethodSig)
+  class Method(logRoot: os.Path, originalSig: MethodSig)
     extends FileLogger(
       logRoot,
-      ignorePrefix,
       originalSig.cls.name.split('/') :+ Util.mangleName0(originalSig, originalSig.desc.args),
-      "original"
+      "index"
     ) with Logger.Method
 
-  class InferredMethod(logRoot: os.Path, ignorePrefix: os.RelPath, originalSig: MethodSig, inferredArgs: Seq[IType])
+  class InferredMethod(logRoot: os.Path, originalSig: MethodSig, inferredArgs: Seq[IType])
     extends FileLogger(
       logRoot,
-      ignorePrefix,
       originalSig.cls.name.split('/') :+ Util.mangleName0(originalSig, originalSig.desc.args),
       Util.mangleArgs(inferredArgs)
     ) with Logger.InferredMethod

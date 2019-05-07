@@ -49,16 +49,14 @@ object ViewServerMain extends cask.MainRoutes{
           )
         ),
         div(cls := "container-fluid")(
-          if (logPath.last.endsWith(".js")){
-            val logEntries = os.read.lines(logPath).map(upickle.default.read[LogMessage](_))
-            logEntries.map{
-              case LogMessage.Message(str) => pre(ansiToHtml(str))
-              case LogMessage.Graph(nodes, edges) => renderGraph(nodes, edges)
-            }
-          } else if (os.isDir(logPath)){
-            ul(
-              for(p <- os.list(logPath))
-              yield li(a(href := s"/${p.relativeTo(logRoot)}", s"${p.relativeTo(logPath)}"))
+          if (logPath.last.endsWith(".js")) renderEntries(logPath)
+          else if (os.isDir(logPath)){
+            frag(
+              ul(
+                for(p <- os.list(logPath))
+                yield li(a(href := s"/${p.relativeTo(logRoot)}", s"${p.relativeTo(logPath)}"))
+              ),
+              if (os.exists(logPath / "index.js")) renderEntries(logPath / "index.js") else ()
             )
           } else ???
         )
@@ -66,6 +64,15 @@ object ViewServerMain extends cask.MainRoutes{
     ).render
   }
 
+  def renderEntries(logPath: os.Path) = {
+    val logEntries = os.read.lines(logPath).map(upickle.default.read[(Int, LogMessage)](_))
+    pre(
+      logEntries.map{
+        case (indent, LogMessage.Message(str)) => div(paddingLeft := 20 * indent, ansiToHtml(str))
+        case (indent, LogMessage.Graph(nodes, edges)) => div(paddingLeft := 20 * indent, renderGraph(nodes, edges))
+      }
+    )
+  }
   def renderGraph(nodes: IndexedSeq[LogMessage.Graph.Node],
                   edges: Seq[LogMessage.Graph.Edge]): Frag = {
 

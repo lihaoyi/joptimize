@@ -1,5 +1,6 @@
 package joptimize.algorithms
 
+import joptimize.Logger
 import joptimize.algorithms.ClickScheduler
 import joptimize.graph.HavlakLoopTree
 import joptimize.model.SSA
@@ -10,7 +11,8 @@ object Scheduler {
   def apply(loopTree: HavlakLoopTree.Loop[SSA.Block],
             dominators: Dominator.Result[SSA.Block],
             startBlock: SSA.Block,
-            allVertices: Set[SSA.Node]): Map[SSA.Val, SSA.Block] = {
+            allVertices: Set[SSA.Node],
+            log: Logger.InferredMethod): Map[SSA.Val, SSA.Block] = {
 
     val loopNestMap = mutable.LinkedHashMap.empty[SSA.Node, Int]
     def recLoop(loop: HavlakLoopTree.Loop[SSA.Block], depth: Int): Unit = {

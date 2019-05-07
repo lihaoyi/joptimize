@@ -19,24 +19,25 @@ class Frontend(val classManager: ClassManager) {
     cachedMethodBodies.getOrElseUpdate(isig, loadMethodBody0(isig.method, log))
   }
 
-  def loadMethodBody0(originalSig: MethodSig, log: Logger.Method) = {
+  def loadMethodBody0(originalSig: MethodSig, log: Logger.Method) = log.block{
     val printer = new Textifier
     val methodPrinter = new TraceMethodVisitor(printer)
     val mn = classManager.loadMethod(originalSig).getOrElse(throw new Exception("Unknown Sig: " + originalSig))
     if(mn.instructions.size() == 0) None
     else {
-      log.println("================ BYTECODE ================")
       log(Renderer.renderInsns(mn.instructions, printer, methodPrinter))
 
       val methodBody = ConstructSSA.apply(originalSig, mn, log)
-
+      log.println("raw")
       log.graph(Renderer.dumpSvg(methodBody))
       log.check(methodBody.checkLinks(checkDead = false))
+      log.println("removeDeadNodes")
       methodBody.removeDeadNodes()
       log.graph(Renderer.dumpSvg(methodBody))
       log.check(methodBody.checkLinks())
       log.graph(Renderer.dumpSvg(methodBody))
 
+      log.println("simplifyPhiMerges")
       simplifyPhiMerges(methodBody)
       log.graph(Renderer.dumpSvg(methodBody))
       log.check(methodBody.checkLinks())

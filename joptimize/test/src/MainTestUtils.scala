@@ -13,24 +13,12 @@ import scala.collection.mutable
 
 object MainTestUtils {
 
-  val classesRoot = os.Path("out/joptimize/test/compile/dest/classes", os.pwd)
+  val classesRoot = os.Path(sys.env("CLASSES_FOLDER"), os.pwd)
   val outRoot = os.Path("out/scratch", os.pwd)
   val testRoot = classesRoot / "joptimize" / "examples"
 
   def annotatedTest(implicit tp: TestPath) = {
-    val zipFile = new ZipFile(sys.env("SCALA_JAR"))
-    import collection.JavaConverters._
-    val scalaClasses = zipFile
-      .entries
-      .asScala
-      .filter(!_.isDirectory)
-      .map{ x =>
-        val stream = zipFile.getInputStream(x)
-        val out = new ByteArrayOutputStream()
-        os.Internals.transfer(stream, out)
-        (x.getName, out.toByteArray)
-      }
-      .toMap
+    os.remove.all(os.pwd / 'out / 'scratch)
 
     val rawCls = Class.forName(s"joptimize.examples.${tp.value.dropRight(1).mkString(".")}")
     val rawMethod = rawCls.getDeclaredMethods.find(_.getName == tp.value.last).get
@@ -39,27 +27,23 @@ object MainTestUtils {
       JType.fromJavaCls(rawMethod.getReturnType)
     )
 
-    val inputFileMap0 = os.walk(testRoot / tp.value.dropRight(2))
-      .filter(os.isFile)
-      .map(p => (p.relativeTo(classesRoot).toString, os.read.bytes(p)))
-      .toMap
-
-    val inputFileMap = scalaClasses ++ inputFileMap0
     os.remove.all(outRoot / tp.value)
+    def loadIfExists(folderEnv: String, name: String): Option[Array[Byte]] = {
+      val p = os.Path(sys.env(folderEnv)) / os.RelPath(name)
+      if (os.exists(p)) Some(os.read.bytes(p))
+      else None
+    }
     val outputFileMap = JOptimize.run(
-      inputFileMap,
+      name => loadIfExists("CLASSES_FOLDER", name).orElse(loadIfExists("SCALA_FOLDER", name)),
       Seq(MethodSig(s"joptimize/examples/${tp.value.dropRight(1).mkString("/")}", tp.value.last, methodDesc, static = true)),
       eliminateOldMethods = true,
 //      log = DummyLogger
-      log = new FileLogger.Global(
-        logRoot = outRoot / tp.value,
-        ignorePrefix = os.rel / 'joptimize / 'examples / tp.value.dropRight(2)
-      )
+      log = new FileLogger.Global(logRoot = outRoot)
     )
 
 
     for((k, bytes) <- outputFileMap){
-      os.write(outRoot / tp.value / os.RelPath(k), bytes, createFolders = true)
+      os.write(outRoot / os.RelPath(k), bytes, createFolders = true)
 //      val subPath = os.RelPath(k).relativeTo(ignorePrefix)
 //      assert(subPath.ups == 0)
 //      os.write(outRoot / tp.value / subPath, bytes, createFolders = true)
@@ -151,7 +135,7 @@ object MainTestUtils {
 
   def checkWithClassloader(f: URLClassLoader => Any)(implicit tp: TestPath) = {
     val cl = new URLClassLoader(
-      Array((outRoot / tp.value).toNIO.toUri.toURL),
+      Array(outRoot.toNIO.toUri.toURL),
       ClassLoader.getSystemClassLoader().getParent()
     )
     try f(cl)

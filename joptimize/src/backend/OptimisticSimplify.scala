@@ -14,7 +14,7 @@ object OptimisticSimplify {
             liveBlocks: Set[SSA.Block],
             log: Logger.InferredMethod,
             classExists: JType.Cls => Boolean,
-            resolvedProperties: (InferredSig, Boolean) => ProgramAnalyzer.Properties) = {
+            resolvedProperties: (InferredSig, Boolean) => ProgramAnalyzer.Properties) = log.block{
 
     log.pprint(methodBody.args -> argMapping)
     methodBody.args = methodBody.args.filter(a => argMapping.contains(a.index) || (a.index == 0 && !isStatic))
@@ -33,13 +33,6 @@ object OptimisticSimplify {
     methodBody.allTerminals = methodBody.allTerminals.filter{
       case j: SSA.Jump => liveBlocks.contains(j.block)
     }
-
-
-//    log.pprint(program.allTerminals)
-
-    log.println("POST OPTIMISTIC SIMPLIFY")
-    log.graph(Renderer.dumpSvg(methodBody))
-
   }
 
   def simplifyNode(node: SSA.Node,
@@ -65,12 +58,11 @@ object OptimisticSimplify {
       val (mangledName, mangledDesc, liveArgsOpt) =
         if (n.name == "<init>" || !classExists(n.cls)) (n.name, n.desc, None)
         else {
-          log.pprint(properties.liveArgs)
           //          log.pprint(n.sig)
 //          log.pprint(inferredArgs)
 //          log.pprint(liveArgs)
           val (name, desc) = Util.mangle(
-  inferredSig,
+            inferredSig,
             inferred.getOrElseUpdate(n, n.desc.ret),
             properties.liveArgs
           )
@@ -78,7 +70,6 @@ object OptimisticSimplify {
           (name, desc, Some(properties.liveArgs))
         }
 
-      log.pprint(liveArgsOpt)
       if (properties.pure){
         val replacement = prepareNodeReplacement(inferred, n)
         replacement match{

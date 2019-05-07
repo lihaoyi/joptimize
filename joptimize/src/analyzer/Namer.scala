@@ -20,7 +20,7 @@ object Namer {
   def apply(methodBody: MethodBody,
             scheduledVals: Map[SSA.Val, SSA.Control],
             allVertices: Set[SSA.Node],
-            log: Logger.InferredMethod): Result = {
+            log: Logger.InferredMethod): Result = log.block{
 
     val downstreamEdges = allVertices.flatMap(x => x.downstreamList.map(x -> _)).toSeq ++ scheduledVals.map(_.swap)
 

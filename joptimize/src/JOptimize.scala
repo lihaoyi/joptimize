@@ -4,14 +4,15 @@ import backend.Backend
 import joptimize.analyzer.ProgramAnalyzer
 import joptimize.frontend.{ClassManager, Frontend}
 import joptimize.model._
+import org.objectweb.asm.tree.ClassNode
 import org.objectweb.asm.{ClassVisitor, ClassWriter, Opcodes}
 object JOptimize{
-  def run(classFiles: Map[String, Array[Byte]],
+  def run(getClassFile: String => Option[Array[Byte]],
           entrypoints: Seq[MethodSig],
           eliminateOldMethods: Boolean,
           log: Logger.Global): Map[String, Array[Byte]] = {
 
-    val classManager = new ClassManager(classFiles.get)
+    val classManager = new ClassManager(getClassFile)
     val frontend = new Frontend(classManager)
 
     val analyzer = new ProgramAnalyzer(entrypoints, classManager, log, frontend)
@@ -28,8 +29,13 @@ object JOptimize{
       log,
     )
 
+    serialize(log, outClasses)
+  }
+
+
+  def serialize(log: Logger.Global, outClasses: Seq[ClassNode]) = log.block {
     outClasses
-      .map{cn =>
+      .map { cn =>
         log.pprint(cn.name)
         val cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES)
         cn.accept(new ClassVisitor(Opcodes.ASM7, cw) {
@@ -38,7 +44,8 @@ object JOptimize{
                                    descriptor: String,
                                    signature: String,
                                    exceptions: Array[String]) = {
-            log.pprint(access, name, descriptor, signature)
+            val ref = name + descriptor
+            log.pprint(ref)
             super.visitMethod(access, name, descriptor, signature, exceptions)
           }
         })
@@ -46,6 +53,4 @@ object JOptimize{
       }
       .toMap
   }
-
-
 }

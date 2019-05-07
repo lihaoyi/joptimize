@@ -30,12 +30,13 @@ object Renderer {
                   printer: Textifier,
                   methodPrinter: TraceMethodVisitor,
                   target: AbstractInsnNode = null,
-                  decorate: AbstractInsnNode => fansi.Str = _ => ""): fansi.Str = {
+                  decorate: AbstractInsnNode => fansi.Str = _ => "",
+                  prefix: Seq[fansi.Str] = Seq("\n")): fansi.Str = {
     import collection.JavaConverters._
     val listing = if (target == null) insns.iterator.asScala else Iterator(target)
     val indices = insns.iterator().asScala.zipWithIndex.toMap
     fansi.Str.join(
-      listing
+      prefix ++ listing
         .flatMap{ k =>
           val rhs = prettyprint(k, printer, methodPrinter)
           val splitIndex0 = rhs.indexWhere(_ != ' ')
@@ -63,7 +64,11 @@ object Renderer {
     val printer = new Textifier
     val methodPrinter = new TraceMethodVisitor(printer)
     for((insns, footer) <- blockCode){
-      for(insn <- insns ++ footer) output.append(Renderer.renderInsns(finalInsns, printer, methodPrinter, insn))
+      for(insn <- insns ++ footer) {
+        output.append(
+          Renderer.renderInsns(finalInsns, printer, methodPrinter, insn, prefix = Nil)
+        )
+      }
       output.append("")
     }
     fansi.Str(output.mkString("\n"))
