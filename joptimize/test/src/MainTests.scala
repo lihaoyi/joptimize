@@ -104,7 +104,7 @@ object MainTests extends TestSuite{
         'hello - annotatedTest
         'hello2 - annotatedTest
         'lambda - annotatedTest
-
+        'lambdaSpecialized - annotatedTest
         'lambdaBoxed - annotatedTest
         'concat - annotatedTest
       }

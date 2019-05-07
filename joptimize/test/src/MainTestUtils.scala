@@ -150,7 +150,10 @@ object MainTestUtils {
   }
 
   def checkWithClassloader(f: URLClassLoader => Any)(implicit tp: TestPath) = {
-    val cl = new URLClassLoader(Array((outRoot / tp.value).toNIO.toUri.toURL))
+    val cl = new URLClassLoader(
+      Array((outRoot / tp.value).toNIO.toUri.toURL),
+      ClassLoader.getSystemClassLoader().getParent()
+    )
     try f(cl)
     finally cl.close()
   }
