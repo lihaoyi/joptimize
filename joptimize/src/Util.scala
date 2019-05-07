@@ -62,7 +62,7 @@ object Util{
   }
 
   def mangleName0(originalSig: MethodSig, inferredTypes: Seq[IType]) = {
-    originalSig.name + "__" + mangleArgs(inferredTypes)
+    originalSig.name + "__" + mangleArgs(inferredTypes) + "__" + mangleArgs(Seq(originalSig.desc.ret))
   }
 
   def mangleArgs(inferredTypes: Seq[IType]) = inferredTypes.map(_.name).mkString("__").replace('/', '_').replace('[', 'A')
