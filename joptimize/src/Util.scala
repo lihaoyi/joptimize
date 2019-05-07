@@ -32,7 +32,10 @@ object Util{
         jTypeRet
       )
 
-      (isig.method.name, narrowedDesc)
+      val mangledName =
+        if (jTypeRet == isig.method.desc.ret) isig.method.name
+        else mangleName0(isig.method, isig.inferred)
+      (mangledName, narrowedDesc)
     }
     else{
       val mangledName = mangleName0(isig.method, isig.inferred)

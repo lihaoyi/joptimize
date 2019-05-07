@@ -3,6 +3,7 @@ import collection.JavaConverters._
 import joptimize.frontend.{ClassManager, Frontend}
 import joptimize.{Logger, Util}
 import joptimize.model._
+import joptimize.viewer.model.LogMessage
 import org.objectweb.asm.{Handle, Opcodes}
 
 import scala.collection.mutable
@@ -107,6 +108,23 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
         analyses(k).evaluated,
         analyses(k).liveBlocks.toSet,
         props
+      )
+    }
+
+    globalLog.graph {
+      val allNodes = callGraph.flatMap(edge => Seq(edge.called, edge.caller)).toArray
+      val allNodeIndices = allNodes.zipWithIndex.toMap
+      LogMessage.Graph(
+        allNodes.map(n => LogMessage.Graph.Node(n.method.cls.javaName + "." + n.method.name, "cyan", live = true)),
+        callGraph.toSeq.map(edge =>
+          LogMessage.Graph.Edge(
+            allNodeIndices(edge.caller),
+            allNodeIndices(edge.called),
+            forwardArrow = true,
+            dashed = false,
+            thick = false
+          )
+        )
       )
     }
     ProgramAnalyzer.GlobalResult(
