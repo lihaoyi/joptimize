@@ -40,7 +40,7 @@ object ScalaInvokeDynamic {
     @joptimize.Test(inputs = Array(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12))
     def lambdaBoxed(a: Int)  = {
         val x = 1
-        val r1: Function0[Integer] = () => a + x
+        val r1: Function0[Integer] = () => Integer.valueOf(a + x)
         r1()
     }
 
