@@ -17,7 +17,7 @@ object Backend {
             entrypoints: scala.Seq[MethodSig],
             classManager: ClassManager.ReadOnly,
             eliminateOldMethods: Boolean,
-            log: Logger.Global) = log.block{
+            log: Logger.Global): Seq[ClassNode] = log.block{
 
 
     val loadMethodCache = classManager.loadMethodCache.collect{case (k, Some(v)) => (k, v)}.toMap
@@ -149,7 +149,10 @@ object Backend {
 
     log.pprint(visitedInterfaces)
     val grouped =
-      (visitedInterfaces ++ analyzerRes.staticFieldReferencedClasses.map(_.name)).filter(s => loadClassCache.contains(JType.Cls(s))).map(loadClassCache(_) -> Nil).toMap ++
+      (visitedInterfaces ++ analyzerRes.staticFieldReferencedClasses.map(_.name))
+        .filter(s => loadClassCache.contains(JType.Cls(s)))
+        .map(loadClassCache(_) -> Nil)
+        .toMap ++
       newMethods.groupBy(_._1).mapValues(_.map(_._2))
 
     for((cn, mns) <- grouped) yield {

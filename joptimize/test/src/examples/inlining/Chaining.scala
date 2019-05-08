@@ -37,14 +37,29 @@ object Chaining {
   @joptimize.Test(inputs = Array(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12))
   def hello5(a: Int, b: Int): Int = {
     val xOpt = if (a % 2 == 0) Some(1) else None
-    val yOpt = if (b % 2 == 0) Some(1) else None
+    val yOpt = if (b % 3 == 0) Some(1) else None
 
     val res = xOpt.flatMap(x => yOpt.map(y => x + y))
 
     if (res.isEmpty) -1 else res.get
   }
   @joptimize.Test(inputs = Array(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12))
-  def hello6(a: Int, b: Int, c: Int): Int = {
+  def hello6(a: Int, b: Int): Int = {
+    val xOpt = if (a % 2 == 0) Some(1) else None
+    val yOpt = if (b % 3 == 0) Some(1) else None
+
+    val res1 = xOpt.map(x => x + 1)
+    val res2 = yOpt.map(y => y + 2)
+
+    (res1.isEmpty, res2.isEmpty) match{
+      case (true, true) => -1
+      case (false, true) => res1.get
+      case (true, false) => res2.get
+      case (false, false) => res1.get + res2.get
+    }
+  }
+  @joptimize.Test(inputs = Array(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12))
+  def hello7(a: Int, b: Int, c: Int): Int = {
     val xOpt = if (a % 2 == 0) Some(1) else None
     val yOpt = if (b % 2 == 0) Some(2) else None
     val zOpt = if (c % 2 == 0) Some(3) else None

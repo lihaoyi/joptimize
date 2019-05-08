@@ -72,6 +72,10 @@ object BytecodeDCE {
             val possibleSigs = subtypes.map(st => sig.copy(cls = st)) ++ Seq(sig)
 
             queue.enqueue(possibleSigs.filter(methodSigMap.contains):_*)
+            sig.desc.ret match{
+              case cls: JType.Cls => seenClasses.add(cls)
+              case _ => // do nothing
+            }
 
           case current: FieldInsnNode =>
             val clinitMethod = MethodSig(current.owner, "<clinit>", Desc.read("()V"), true)
