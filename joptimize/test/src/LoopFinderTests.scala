@@ -1,4 +1,4 @@
-package joptimize
+package test
 import joptimize.algorithms.Dominator
 import joptimize.graph.HavlakLoopTree.Loop
 import joptimize.graph.HavlakLoopTree

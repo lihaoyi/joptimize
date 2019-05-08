@@ -1,4 +1,4 @@
-package joptimize
+package test
 import java.io.ByteArrayOutputStream
 import java.net.URLClassLoader
 import java.util.zip.ZipFile
@@ -15,12 +15,12 @@ object MainTestUtils {
 
   val classesRoot = os.Path(sys.env("CLASSES_FOLDER"), os.pwd)
   val outRoot = os.Path("out/scratch", os.pwd)
-  val testRoot = classesRoot / "joptimize" / "examples"
+  val testRoot = classesRoot / "test"
 
   def annotatedTest(implicit tp: TestPath) = {
     os.remove.all(os.pwd / 'out / 'scratch)
 
-    val rawCls = Class.forName(s"joptimize.examples.${tp.value.dropRight(1).mkString(".")}")
+    val rawCls = Class.forName(s"test.${tp.value.dropRight(1).mkString(".")}")
     val rawMethod = rawCls.getDeclaredMethods.find(_.getName == tp.value.last).get
     val methodDesc = Desc(
       rawMethod.getParameterTypes.map(c => JType.fromJavaCls(c)),
@@ -33,12 +33,12 @@ object MainTestUtils {
       if (os.exists(p)) Some(os.read.bytes(p))
       else None
     }
-    val outputFileMap = JOptimize.run(
+    val outputFileMap = joptimize.JOptimize.run(
       name => loadIfExists("CLASSES_FOLDER", name).orElse(loadIfExists("SCALA_FOLDER", name)),
-      Seq(MethodSig(s"joptimize/examples/${tp.value.dropRight(1).mkString("/")}", tp.value.last, methodDesc, static = true)),
+      Seq(MethodSig(s"test/${tp.value.dropRight(1).mkString("/")}", tp.value.last, methodDesc, static = true)),
       eliminateOldMethods = true,
 //      log = DummyLogger
-      log = new FileLogger.Global(logRoot = outRoot)
+      log = new joptimize.FileLogger.Global(logRoot = outRoot)
     )
 
 
@@ -49,7 +49,7 @@ object MainTestUtils {
 //      os.write(outRoot / tp.value / subPath, bytes, createFolders = true)
     }
 
-    val testAnnot = rawMethod.getAnnotation(classOf[joptimize.Test])
+    val testAnnot = rawMethod.getAnnotation(classOf[Test])
     val cases = testAnnot.inputs() match{
       case Array() => Iterator(Array())
       case multiple => multiple.grouped(rawMethod.getParameterCount)
@@ -57,7 +57,7 @@ object MainTestUtils {
 
     val output = mutable.Buffer.empty[ujson.Value]
     for (args <- cases) checkWithClassloader{ cl =>
-      val cls = cl.loadClass(s"joptimize.examples.${tp.value.dropRight(1).mkString(".")}")
+      val cls = cl.loadClass(s"test.${tp.value.dropRight(1).mkString(".")}")
       val joptimizedMethod = cls.getDeclaredMethod(tp.value.last, rawMethod.getParameterTypes: _*)
       joptimizedMethod.setAccessible(true)
       rawMethod.setAccessible(true)
@@ -157,7 +157,7 @@ object MainTestUtils {
       }
 
     val cls2 = cl.loadClass(
-      s"joptimize.examples.${tp.value.dropRight(2).mkString(".")}.$clsName"
+      s"test.${tp.value.dropRight(2).mkString(".")}.$clsName"
     )
     (cls2, methodName)
   }
@@ -176,7 +176,7 @@ object MainTestUtils {
 
     val clsName = tp.value(tp.value.length - 2)
     val bytestream = os.read.inputStream(
-      os.resource(cl) / "joptimize" / "examples" / tp.value.dropRight(2) / (clsName + ".class")
+      os.resource(cl) / "test" / tp.value.dropRight(2) / (clsName + ".class")
     )
     val cr = new ClassReader(bytestream)
     val cn = new ClassNode()
@@ -247,7 +247,7 @@ object MainTestUtils {
   def checkClassRemoved(cl: ClassLoader, sigString: String)(implicit tp: TestPath) = {
     intercept[ClassNotFoundException]{
       cl.loadClass(
-        s"joptimize.examples.${tp.value.dropRight(2).mkString(".")}.$sigString"
+        s"test.${tp.value.dropRight(2).mkString(".")}.$sigString"
       )
     }
   }

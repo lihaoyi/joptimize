@@ -1,4 +1,4 @@
-package joptimize
+package test
 
 
 class UTestFramework extends utest.runner.Framework {

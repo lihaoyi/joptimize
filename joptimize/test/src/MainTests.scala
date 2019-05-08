@@ -1,4 +1,4 @@
-package joptimize
+package test
 import utest._
 import MainTestUtils.annotatedTest
 object MainTests extends TestSuite{

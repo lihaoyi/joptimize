@@ -327,7 +327,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
                            cls: JType.Cls,
                            static: Boolean) = {
     if (static) staticFieldReferencedClasses.add(cls)
-    val clinits = analyzeClinits(Seq(cls))
+    val clinits = analyzeClinits(cls)
 
     if (clinits.isEmpty) Seq(isig)
     else {
@@ -381,19 +381,14 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
 
           assert(subSigs.nonEmpty)
 
-          val (clinitss, subss) = subSigs
-            .map { subSig =>
-              val clinits = analyzeClinits(Seq(subSig.cls))
-              (clinits, Seq(InferredSig(subSig, calledSig.inferred)))
-            }
-            .unzip
-          val clinits = clinitss.flatten.filter(!methodProps.contains(_))
-          val subs = subss.flatten.filter(!methodProps.contains(_))
-          val rets = clinits ++ subs
+          val clinits = subSigs.flatMap(subSig => analyzeClinits(subSig.cls))
+          val subs = subSigs.map(subSig => InferredSig(subSig, calledSig.inferred))
+
+          val rets = (clinits ++ subs).filter(!methodProps.contains(_))
 
           val merged = classManager.mergeTypes(
             analyses(isig).evaluated.get(invoke).toSeq ++
-            subss.flatten.flatMap(methodProps.get).map(_.inferredReturn)
+            subs.flatMap(methodProps.get).map(_.inferredReturn)
           )
 
           analyses(isig).evaluated(invoke) = merged
@@ -423,14 +418,13 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
     }
   }
 
-  def analyzeClinits(classes: Seq[JType.Cls]) = {
-
-    for {
-      cls <- classes
-      val clinit = MethodSig(cls, "<clinit>", Desc(Nil, JType.Prim.V), true)
-      if classManager.loadMethod(clinit).isDefined
-      if !analyses.contains(InferredSig(clinit, Nil))
-    } yield InferredSig(clinit, Nil)
+  def analyzeClinits(cls: JType.Cls) = {
+    val clinit = MethodSig(cls, "<clinit>", Desc(Nil, JType.Prim.V), true)
+    if (classManager.loadMethod(clinit).isDefined && !analyses.contains(InferredSig(clinit, Nil))){
+      Seq(InferredSig(clinit, Nil))
+    } else{
+      Nil
+    }
   }
 
   def optimisticAnalyze(inferredArgs: Seq[IType],

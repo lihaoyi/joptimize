@@ -23,7 +23,7 @@ object joptimize extends ScalaModule{
       ivy"com.lihaoyi::utest::0.6.6",
       ivy"com.lihaoyi::ujson:0.7.1"
     )
-    def testFrameworks = Seq("joptimize.UTestFramework")
+    def testFrameworks = Seq("test.UTestFramework")
 
     def unzippedScalaFolder = T{
       val zipFile = new java.util.zip.ZipFile(
