@@ -25,6 +25,7 @@ object Backend {
     //    pprint.log(loadMethodCache.keys)
     val combined = analyzerRes.visitedResolved.mapValues(Right(_)) ++ analyzerRes.visitedMethods.mapValues(Left(_))
 
+    log.pprint(combined.map{case (k, v) => (k.toString, loadClassCache.contains(k.method.cls), loadMethodCache.contains(k.method))})
     val highestMethodDefiners = log.block {
       for {
         (isig, _) <- combined
@@ -142,11 +143,14 @@ object Backend {
       }
     }
 
-    val visitedInterfaces = Util.findSeenInterfaces(loadClassCache, newMethods.map(_._1))
+    val visitedInterfaces =
+      Util.findSeenInterfaces(loadClassCache, newMethods.map(_._1)) ++
+      Seq("scala/runtime/Nothing$")
 
+    log.pprint(visitedInterfaces)
     val grouped =
       (visitedInterfaces ++ analyzerRes.staticFieldReferencedClasses.map(_.name)).filter(s => loadClassCache.contains(JType.Cls(s))).map(loadClassCache(_) -> Nil).toMap ++
-        newMethods.groupBy(_._1).mapValues(_.map(_._2))
+      newMethods.groupBy(_._1).mapValues(_.map(_._2))
 
     for((cn, mns) <- grouped) yield {
       if (cn.attrs != null) Util.removeFromJavaList(cn.attrs)(_.`type` == "ScalaSig")
@@ -169,7 +173,7 @@ object Backend {
       )
     }
     outClasses
-//    grouped.keys
+//    grouped.keys.toSeq
   }
 
   def processMethodBody(originalSig: MethodSig,

@@ -110,11 +110,19 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
       )
     }
 
+    classManager.loadClass("scala/runtime/Nothing$")
     globalLog.graph("PROGRAM CALL GRAPH") {
       val allNodes = callGraph.flatMap(edge => Seq(edge.called, edge.caller)).toArray
       val allNodeIndices = allNodes.zipWithIndex.toMap
       LogMessage.Graph(
-        allNodes.map(n => LogMessage.Graph.Node(n.method.cls.javaName + "." + n.method.name + "\n" + n.inferred, "cyan", live = true)),
+        allNodes.map(n =>
+          LogMessage.Graph.Node(
+            n.method.toString + "\n" +
+            n.inferred.map(_.name).mkString("(", ", ", ")"),
+            "cyan",
+            live = true
+          )
+        ),
         callGraph.toSeq.map(edge =>
           LogMessage.Graph.Edge(
             allNodeIndices(edge.caller),
@@ -125,6 +133,12 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
           )
         )
       )
+    }
+    globalLog.pprint(visitedMethods.keys.map(_.toString))
+    for((m, props) <- visitedMethods){
+      globalLog.inferredMethod(m).pprint(props.props.inferredReturn)
+      globalLog.inferredMethod(m).pprint(props.props.liveArgs)
+      globalLog.inferredMethod(m).pprint(props.props.pure)
     }
     ProgramAnalyzer.GlobalResult(
       visitedMethods,
@@ -337,10 +351,13 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
       analyses(isig).evaluated(invoke) = calledSig.method.desc.ret
       Seq(isig)
     } else if (invoke.isInstanceOf[SSA.InvokeSpecial]) {
-      calledSignatures.add(calledSig)
-      callGraph.add(ProgramAnalyzer.CallEdge(isig, Some(invoke), calledSig))
-      addToCallSet(calledSig, currentCallSet)
-      Seq(calledSig)
+      val calledSig2 =
+        if (invoke.name != "<init>") calledSig
+        else calledSig.copy(inferred = calledSig.method.desc.args)
+      calledSignatures.add(calledSig2)
+      callGraph.add(ProgramAnalyzer.CallEdge(isig, Some(invoke), calledSig2))
+      addToCallSet(calledSig2, currentCallSet)
+      Seq(calledSig2)
     } else classManager.resolvePossibleSigs(calledSig.method) match {
       case None =>
         calledSignatures.add(calledSig)
@@ -419,7 +436,8 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
       methodBody.getAllVertices().collect { case b: SSA.Block if b.upstream.isEmpty => b }.head,
       new ITypeLattice((x, y) => classManager.mergeTypes(Seq(x, y)), inferredArgs),
       log,
-      ITypeBrancher
+      ITypeBrancher,
+      IType.Bottom
     )
   }
 

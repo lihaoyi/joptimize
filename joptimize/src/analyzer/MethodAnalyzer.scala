@@ -41,7 +41,8 @@ class MethodAnalyzer[T](methodBody: MethodBody,
                         initialBlock: SSA.Block,
                         lattice: Lattice[T],
                         log: Logger.InferredMethod,
-                        brancher: Brancher[T]){
+                        brancher: Brancher[T],
+                        bottom: T){
 
   log.graph("PRE OPTIMISTIC ANALYSIS")(Renderer.dumpSvg(methodBody))
 
@@ -158,6 +159,7 @@ class MethodAnalyzer[T](methodBody: MethodBody,
       case n: SSA.Jump =>
         n match {
           case r: SSA.AThrow =>
+            inferredReturns(r) = Seq(bottom)
             Nil
           case r: SSA.Return =>
             inferredReturns(r) = Seq(evaluated(r.state))

@@ -63,7 +63,8 @@ abstract class FileLogger(logRoot: os.Path, segments: Seq[String], name: String)
 
     os.write.append(
       destFile,
-      Seq(upickle.default.write((indent, LogMessage.Message(prefix ++ printed))), "\n")
+      Seq(upickle.default.write((indent, LogMessage.Message(prefix ++ printed))), "\n"),
+      createFolders = true
     )
   }
 
@@ -91,7 +92,8 @@ abstract class FileLogger(logRoot: os.Path, segments: Seq[String], name: String)
       Seq(
         upickle.default.write((indent, LogMessage.Message(computePrefix(None, f, line) ++ label))), "\n",
         upickle.default.write((indent, g)), "\n"
-      )
+      ),
+      createFolders = true
     )
   }
 
