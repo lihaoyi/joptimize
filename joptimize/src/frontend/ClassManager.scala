@@ -133,6 +133,6 @@ class ClassManager(getClassFile: String => Option[Array[Byte]]) extends ClassMan
         }
       )
     }
-    else None
+    else throw new Exception("DUNNO WHAT IS THIS " + itypes)
   }
 }

@@ -118,7 +118,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
         allNodes.map(n =>
           LogMessage.Graph.Node(
             n.method.toString + "\n" +
-            n.inferred.map(_.name).mkString("(", ", ", ")"),
+            n.inferred.map(_.name).mkString("(", ", ", ")") + methodProps(n).inferredReturn,
             "cyan",
             live = true
           )
@@ -134,8 +134,9 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
         )
       )
     }
-    globalLog.pprint(visitedMethods.keys.map(_.toString))
+    globalLog.pprint(visitedMethods.map{case (k, v) => (k.toString, v.props)})
     for((m, props) <- visitedMethods){
+      globalLog.inferredMethod(m).pprint(analyses(m).evaluated)
       globalLog.inferredMethod(m).pprint(props.props.inferredReturn)
       globalLog.inferredMethod(m).pprint(props.props.liveArgs)
       globalLog.inferredMethod(m).pprint(props.props.pure)
@@ -170,7 +171,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
 
     val step = currentAnalysis.step()
 
-//    pprint.log(step)
+    globalLog.pprint(step)
     val newCurrent: Seq[InferredSig] = step match {
       case MethodAnalyzer.Step.Continue(nodes) =>
 //        pprint.log(nodes)
@@ -291,6 +292,9 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
       optimisticResult.inferred.collect { case (a: SSA.Arg, _) => a.index }.toSet
     )
 
+    val returnProps = fansi.Color.Green(isig.toString) ++ " -> " ++ props.toString
+    globalLog.apply(returnProps)
+
     val unchanged = methodProps.get(isig).contains(props)
 
     methodProps(isig) = props
@@ -383,18 +387,21 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
               (clinits, Seq(InferredSig(subSig, calledSig.inferred)))
             }
             .unzip
-          val clinits = clinitss.flatten
-          val subs = subss.flatten
+          val clinits = clinitss.flatten.filter(!methodProps.contains(_))
+          val subs = subss.flatten.filter(!methodProps.contains(_))
+          val rets = clinits ++ subs
 
-          val rets = (clinits ++ subs).filter(!methodProps.contains(_))
-
-          analyses(isig).evaluated(invoke) = classManager.mergeTypes(
+          val merged = classManager.mergeTypes(
             analyses(isig).evaluated.get(invoke).toSeq ++
-              subs.flatMap(methodProps.get).map(_.inferredReturn)
+            subss.flatten.flatMap(methodProps.get).map(_.inferredReturn)
           )
+
+          analyses(isig).evaluated(invoke) = merged
+
           if (rets.isEmpty) Seq(isig)
           else {
-            rets.foreach(ret => callGraph.add(ProgramAnalyzer.CallEdge(isig, Some(invoke), ret)))
+            subs.foreach(ret => callGraph.add(ProgramAnalyzer.CallEdge(isig, Some(invoke), ret)))
+            clinits.foreach(ret => callGraph.add(ProgramAnalyzer.CallEdge(isig, None, ret)))
 
             rets.foreach(addToCallSet(_, currentCallSet))
             rets
@@ -517,7 +524,9 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
 }
 
 object ProgramAnalyzer {
-  case class CallEdge(caller: InferredSig, node: Option[SSA.Invoke], called: InferredSig)
+  case class CallEdge(caller: InferredSig, node: Option[SSA.Invoke], called: InferredSig){
+    if (called.method.name == "<clinit>") assert(node.isEmpty)
+  }
   case class GlobalResult(visitedMethods: collection.Map[InferredSig, Result],
                           visitedResolved: collection.Map[InferredSig, Properties],
                           staticFieldReferencedClasses: collection.Set[JType.Cls])

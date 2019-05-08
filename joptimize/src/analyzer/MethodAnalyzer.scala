@@ -76,9 +76,11 @@ class MethodAnalyzer[T](methodBody: MethodBody,
   val inferredReturns = mutable.LinkedHashMap.empty[SSA.Jump, Seq[T]]
 
   def step(): MethodAnalyzer.Step[T] = {
+//    log.pprint(evaluated)
     //    pprint.log(workList)
     if (invalidateWorkList.nonEmpty){
       val item = invalidateWorkList.head
+//      log.pprint(item)
       invalidateWorkList.remove(item)
       item match {
         case Invalidate.Phi(v) => queueDownstreamInvalidations(v)
@@ -87,6 +89,7 @@ class MethodAnalyzer[T](methodBody: MethodBody,
       }
     } else if (evaluateWorkList.nonEmpty){
       val item = evaluateWorkList.head
+//      log.pprint(item)
       evaluateWorkList.remove(item)
       item match{
         case Evaluate.Val(v) =>
@@ -281,7 +284,7 @@ class MethodAnalyzer[T](methodBody: MethodBody,
   def evaluateVal(v: SSA.Val): Step[T] = {
     if (!evaluated.contains(v)){
       val upstream = v.upstream.collect{case v: SSA.Val => evaluated(v)}
-      if (upstream.contains(IType.Bottom)) evaluated(v) = IType.Bottom.asInstanceOf[T]
+      if (upstream.contains(bottom)) evaluated(v) = bottom
       else v match{
         case n: SSA.Invoke =>
         case n: SSA.InvokeDynamic =>
