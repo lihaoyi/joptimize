@@ -76,6 +76,11 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
     else callStackSets(k) = v
   }
 
+  def addCallEdge(edge: ProgramAnalyzer.CallEdge) = {
+    callGraph.add(edge)
+    addToCallSet(edge.called, callStackSets(edge.caller) + edge.caller)
+  }
+
   def apply() = globalLog.block {
     for (ep <- entrypoints) {
       val isig = InferredSig(ep, ep.desc.args)
@@ -154,7 +159,6 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
     val isig = current.maxBy(callStackSets(_).size)
     current.remove(isig)
 //    println(isig.toString)
-    val currentCallSet = callStackSets(isig) ++ Set(isig)
 
     val methodLog = globalLog.method(isig.method)
     val inferredLog = globalLog.inferredMethod(isig)
@@ -176,13 +180,13 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
       case MethodAnalyzer.Step.Continue(nodes) =>
 //        pprint.log(nodes)
         val flat = nodes.flatMap{
-          case n: SSA.GetField => handleFieldReference(isig, currentCallSet, n.owner, static = false)
-          case n: SSA.PutField => handleFieldReference(isig, currentCallSet, n.owner, static = false)
-          case n: SSA.GetStatic => handleFieldReference(isig, currentCallSet, n.cls, static = true)
-          case n: SSA.PutStatic => handleFieldReference(isig, currentCallSet, n.cls, static = true)
+          case n: SSA.GetField => handleFieldReference(isig, n.owner, static = false)
+          case n: SSA.PutField => handleFieldReference(isig, n.owner, static = false)
+          case n: SSA.GetStatic => handleFieldReference(isig, n.cls, static = true)
+          case n: SSA.PutStatic => handleFieldReference(isig, n.cls, static = true)
 
           case n: SSA.New => handleNew(isig, n)
-          case invoke: SSA.Invoke => handleInvoke(isig, currentCallSet, currentAnalysis, invoke)
+          case invoke: SSA.Invoke => handleInvoke(isig, currentAnalysis, invoke)
           case indy: SSA.InvokeDynamic =>
             if (indy.bootstrap == Util.metafactory || indy.bootstrap == Util.altMetafactory){
               ???
@@ -204,7 +208,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
         flat ++ Seq(isig)
 
       case MethodAnalyzer.Step.Done() =>
-        handleReturn(isig, currentCallSet, inferredLog, currentAnalysis)
+        handleReturn(isig, inferredLog, currentAnalysis)
     }
     if (newCurrent != Seq(isig)){
       val edge =
@@ -243,8 +247,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
       node <- edge.node
     } yield {
       val msig = edge.called.method.copy(cls = n.cls)
-      callGraph.add(ProgramAnalyzer.CallEdge(edge.caller, Some(node), edge.called.copy(method = msig)))
-      addToCallSet(edge.called.copy(method = msig), callStackSets(edge.caller))
+      addCallEdge(ProgramAnalyzer.CallEdge(edge.caller, Some(node), edge.called.copy(method = msig)))
       edge.called.copy(method = msig)
     }
     newMethodOverrides ++ Seq(isig)
@@ -252,7 +255,6 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
 
 
   def handleReturn(isig: InferredSig,
-                   currentCallSet: Set[InferredSig],
                    inferredLog: Logger.InferredMethod,
                    currentAnalysis: MethodAnalyzer[IType]) = {
 //    println("DONE")
@@ -266,7 +268,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
 
     val props = ProgramAnalyzer.Properties(
       inferredReturn,
-      computePurity(optimisticResult, currentCallSet) &&
+      computePurity(optimisticResult, callStackSets(isig)) &&
       !(isig.method.static && classManager.loadMethod(MethodSig(isig.method.cls, "<clinit>", Desc(Nil, JType.Prim.V), true)).nonEmpty),
       optimisticResult.inferred.collect { case (a: SSA.Arg, _) => a.index }.toSet
     )
@@ -294,31 +296,25 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
     methodsToEnqueue.toSeq
   }
 
-  def handleFieldReference(isig: InferredSig,
-                           currentCallSet: Set[InferredSig],
-                           cls: JType.Cls,
-                           static: Boolean) = {
+  def handleFieldReference(isig: InferredSig, cls: JType.Cls, static: Boolean) = {
     if (static) staticFieldReferencedClasses.add(cls)
     val clinits = analyzeClinits(cls)
 
     if (clinits.isEmpty) Seq(isig)
     else {
-      clinits.foreach(clinit => callGraph.add(ProgramAnalyzer.CallEdge(isig, None, clinit)))
-      clinits.foreach(addToCallSet(_, currentCallSet))
+      clinits.foreach(clinit => addCallEdge(ProgramAnalyzer.CallEdge(isig, None, clinit)))
       clinits
     }
   }
 
   def handleInvoke(isig: InferredSig,
-                   currentCallSet: Set[InferredSig],
                    currentAnalysis: MethodAnalyzer[IType],
                    invoke: SSA.Invoke) = {
     val calledSig = invoke.inferredSig(currentAnalysis.evaluated(_))
 
-    if (currentCallSet(calledSig)) {
+    if (callStackSets(isig)(calledSig)) {
       calledSignatures.add(calledSig)
-      callGraph.add(ProgramAnalyzer.CallEdge(calledSig, Some(invoke), isig))
-      addToCallSet(calledSig, currentCallSet)
+      addCallEdge(ProgramAnalyzer.CallEdge(calledSig, Some(invoke), isig))
       analyses(isig).evaluated(invoke) = IType.Bottom
 
       Seq(isig)
@@ -330,14 +326,12 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
         if (invoke.name != "<init>") calledSig
         else calledSig.copy(inferred = calledSig.method.desc.args)
       calledSignatures.add(calledSig2)
-      callGraph.add(ProgramAnalyzer.CallEdge(isig, Some(invoke), calledSig2))
-      addToCallSet(calledSig2, currentCallSet)
+      addCallEdge(ProgramAnalyzer.CallEdge(isig, Some(invoke), calledSig2))
       Seq(calledSig2)
     } else classManager.resolvePossibleSigs(calledSig.method) match {
       case None =>
         calledSignatures.add(calledSig)
-        callGraph.add(ProgramAnalyzer.CallEdge(isig, Some(invoke), calledSig))
-        addToCallSet(calledSig, currentCallSet)
+        addCallEdge(ProgramAnalyzer.CallEdge(isig, Some(invoke), calledSig))
         Seq(isig).filter(!methodProps.contains(_))
       case Some(subSigs0) =>
         calledSignatures.add(calledSig)
@@ -366,10 +360,9 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
 
           if (rets.isEmpty) Seq(isig)
           else {
-            subs.foreach(ret => callGraph.add(ProgramAnalyzer.CallEdge(isig, Some(invoke), ret)))
-            clinits.foreach(ret => callGraph.add(ProgramAnalyzer.CallEdge(isig, None, ret)))
+            subs.foreach(ret => addCallEdge(ProgramAnalyzer.CallEdge(isig, Some(invoke), ret)))
+            clinits.foreach(ret => addCallEdge(ProgramAnalyzer.CallEdge(isig, None, ret)))
 
-            rets.foreach(addToCallSet(_, currentCallSet))
             rets
           }
         }
