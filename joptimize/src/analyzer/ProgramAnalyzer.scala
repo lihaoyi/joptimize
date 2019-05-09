@@ -237,10 +237,17 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
 
     val inferredReturn = classManager.mergeTypes(retTypes)
 
+    val computedPurity = ProgramAnalyzer.computePurity(
+      optimisticResult,
+      callStackSets(isig),
+      classManager,
+      methodProps.get,
+      resolveProps
+    )
+    val clinitSig = MethodSig(isig.method.cls, "<clinit>", Desc(Nil, JType.Prim.V), true)
     val props = ProgramAnalyzer.Properties(
       inferredReturn,
-      computePurity(optimisticResult, callStackSets(isig)) &&
-      !(isig.method.static && classManager.loadMethod(MethodSig(isig.method.cls, "<clinit>", Desc(Nil, JType.Prim.V), true)).nonEmpty),
+      computedPurity && !(isig.method.static && classManager.loadMethod(clinitSig).nonEmpty),
       optimisticResult.inferred.collect { case (a: SSA.Arg, _) => a.index }.toSet
     )
 
@@ -306,62 +313,6 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
     )
   }
 
-  def computePurity(optResult: MethodAnalyzer.Result[IType],
-                    callSet: Set[InferredSig]) = {
-    optResult.inferred.keysIterator.forall {
-      case n: SSA.New => false
-      case n: SSA.CheckCast => false
-      case n: SSA.InstanceOf => true
-
-      case n: SSA.ChangedState => true
-      case n: SSA.Arg => true
-
-      case n: SSA.ConstI => true
-      case n: SSA.ConstJ => true
-      case n: SSA.ConstF => true
-      case n: SSA.ConstD => true
-      case n: SSA.ConstStr => true
-      case n: SSA.ConstNull => true
-      case n: SSA.ConstCls => true
-
-      case n: SSA.ArrayLength => false
-
-      case n: SSA.GetField => false
-      case n: SSA.PutField => false
-
-      case n: SSA.GetStatic => false
-      case n: SSA.PutStatic => false
-
-      case n: SSA.GetArray => false
-      case n: SSA.PutArray => false
-
-      case n: SSA.NewArray => false
-      case n: SSA.MultiANewArray => false
-
-      case n: SSA.BinOp =>
-        n.opcode match {
-          case SSA.BinOp.IDIV | SSA.BinOp.IREM | SSA.BinOp.LDIV | SSA.BinOp.LREM => false
-          case _ => true
-        }
-      case n: SSA.UnaOp => true
-
-      case n: SSA.InvokeDynamic => n.bootstrap == Util.makeConcatWithConstants
-      case n: SSA.Invoke =>
-        if (n.srcs.exists(!optResult.inferred.contains(_))) true
-        else {
-
-          val key = n.inferredSig(optResult.inferred)
-          val default = callSet(key)
-          if (classManager.loadClass(key.method.cls).isEmpty) false
-          else if (n.isInstanceOf[SSA.InvokeSpecial]) methodProps.get(key).fold(default)(_.pure)
-          else resolveProps(key).fold(default)(_.pure)
-        }
-
-      case p: SSA.Phi => true
-    }
-  }
-
-  def checkSubclass(cls1: JType.Cls, cls2: JType.Cls) = classManager.mergeTypes(Seq(cls1, cls2)) == cls2
 }
 
 object ProgramAnalyzer {
@@ -500,6 +451,64 @@ object ProgramAnalyzer {
     }
   }
 
+  def computePurity(optResult: MethodAnalyzer.Result[IType],
+                    callSet: Set[InferredSig],
+                    classManager: ClassManager,
+                    getMethodProps: InferredSig => Option[Properties],
+                    getResolvedProps: InferredSig => Option[Properties]) = {
+    optResult.inferred.keysIterator.forall {
+      case n: SSA.New => false
+      case n: SSA.CheckCast => false
+      case n: SSA.InstanceOf => true
+
+      case n: SSA.ChangedState => true
+      case n: SSA.Arg => true
+
+      case n: SSA.ConstI => true
+      case n: SSA.ConstJ => true
+      case n: SSA.ConstF => true
+      case n: SSA.ConstD => true
+      case n: SSA.ConstStr => true
+      case n: SSA.ConstNull => true
+      case n: SSA.ConstCls => true
+
+      case n: SSA.ArrayLength => false
+
+      case n: SSA.GetField => false
+      case n: SSA.PutField => false
+
+      case n: SSA.GetStatic => false
+      case n: SSA.PutStatic => false
+
+      case n: SSA.GetArray => false
+      case n: SSA.PutArray => false
+
+      case n: SSA.NewArray => false
+      case n: SSA.MultiANewArray => false
+
+      case n: SSA.BinOp =>
+        n.opcode match {
+          case SSA.BinOp.IDIV | SSA.BinOp.IREM | SSA.BinOp.LDIV | SSA.BinOp.LREM => false
+          case _ => true
+        }
+      case n: SSA.UnaOp => true
+
+      case n: SSA.InvokeDynamic => n.bootstrap == Util.makeConcatWithConstants
+      case n: SSA.Invoke =>
+        if (n.srcs.exists(!optResult.inferred.contains(_))) true
+        else {
+
+          val key = n.inferredSig(optResult.inferred)
+          val default = callSet(key)
+          if (classManager.loadClass(key.method.cls).isEmpty) false
+          else if (n.isInstanceOf[SSA.InvokeSpecial]) getMethodProps(key).fold(default)(_.pure)
+          else getResolvedProps(key).fold(default)(_.pure)
+        }
+
+      case p: SSA.Phi => true
+    }
+  }
+
   def dummyProps(originalSig: MethodSig, optimistic: Boolean) = ProgramAnalyzer.Properties(
     if (optimistic) IType.Bottom else originalSig.desc.ret,
     optimistic,
@@ -507,19 +516,5 @@ object ProgramAnalyzer {
     else Range.inclusive(0, originalSig.desc.args.length + (if (originalSig.static) 0 else 1)).toSet
   )
 
-  def analyzeBlockStructure(methodBody: MethodBody) = {
-    val controlFlowEdges = Renderer.findControlFlowGraph(methodBody)
-    val startBlock = (controlFlowEdges.map(_._1).toSet -- controlFlowEdges.map(_._2)).head.asInstanceOf[SSA.Block]
-    val allBlocks = controlFlowEdges
-      .flatMap { case (k, v) => Seq(k, v) }
-      .collect { case b: SSA.Block => b }
 
-    val blockEdges = controlFlowEdges.flatMap {
-      case (k: SSA.Block, v: SSA.Jump) => Nil
-      case (k: SSA.Jump, v: SSA.Block) => Seq(k.block -> v)
-      case (k: SSA.Block, v: SSA.Block) => Seq(k -> v)
-    }
-
-    (controlFlowEdges, startBlock, allBlocks, blockEdges)
-  }
 }

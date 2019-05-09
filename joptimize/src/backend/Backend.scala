@@ -211,7 +211,7 @@ object Backend {
 //    pprint.log(originalSig)
 //    pprint.log(result.program)
     val (controlFlowEdges, startBlock, allBlocks, blockEdges) =
-      ProgramAnalyzer.analyzeBlockStructure(result.methodBody)
+      analyzeBlockStructure(result.methodBody)
     val loopTree2 = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)
 
     val dominators2 = Dominator.findDominators(blockEdges, allBlocks)
@@ -234,7 +234,7 @@ object Backend {
       result.methodBody,
       allVertices2,
       nodesToBlocks,
-      ProgramAnalyzer.analyzeBlockStructure(result.methodBody)._1,
+      analyzeBlockStructure(result.methodBody)._1,
       postRegisterAllocNaming,
       log
     )
@@ -242,5 +242,21 @@ object Backend {
     log.println("================ OUTPUT BYTECODE ================")
     log(Renderer.renderBlockCode(blockCode, finalInsns))
     finalInsns
+  }
+
+  def analyzeBlockStructure(methodBody: MethodBody) = {
+    val controlFlowEdges = Renderer.findControlFlowGraph(methodBody)
+    val startBlock = (controlFlowEdges.map(_._1).toSet -- controlFlowEdges.map(_._2)).head.asInstanceOf[SSA.Block]
+    val allBlocks = controlFlowEdges
+      .flatMap { case (k, v) => Seq(k, v) }
+      .collect { case b: SSA.Block => b }
+
+    val blockEdges = controlFlowEdges.flatMap {
+      case (k: SSA.Block, v: SSA.Jump) => Nil
+      case (k: SSA.Jump, v: SSA.Block) => Seq(k.block -> v)
+      case (k: SSA.Block, v: SSA.Block) => Seq(k -> v)
+    }
+
+    (controlFlowEdges, startBlock, allBlocks, blockEdges)
   }
 }
