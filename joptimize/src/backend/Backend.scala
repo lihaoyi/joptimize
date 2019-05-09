@@ -13,7 +13,7 @@ import collection.JavaConverters._
 import scala.collection.mutable
 
 object Backend {
-  def apply(analyzerRes: ProgramAnalyzer.GlobalResult,
+  def apply(analyzerRes: ProgramAnalyzer.ProgramResult,
             entrypoints: scala.Seq[MethodSig],
             classManager: ClassManager.ReadOnly,
             eliminateOldMethods: Boolean,
@@ -180,7 +180,7 @@ object Backend {
   }
 
   def processMethodBody(originalSig: MethodSig,
-                        result: ProgramAnalyzer.Result,
+                        result: ProgramAnalyzer.MethodResult,
                         log: Logger.InferredMethod,
                         classExists: JType.Cls => Boolean,
                         resolvedProperties: (InferredSig, Boolean) => ProgramAnalyzer.Properties,
