@@ -71,14 +71,12 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
     */
   val callStackSets = mutable.Map.empty[InferredSig, Set[InferredSig]]
 
-  def addToCallSet(k: InferredSig, v: Set[InferredSig]) = {
-    if (callStackSets.contains(k)) callStackSets(k) ++= v
-    else callStackSets(k) = v
-  }
-
   def addCallEdge(edge: ProgramAnalyzer.CallEdge) = {
     callGraph.add(edge)
-    addToCallSet(edge.called, callStackSets(edge.caller) + edge.caller)
+    current.add(edge.called)
+    val newCallSet = callStackSets(edge.caller) + edge.caller
+    if (callStackSets.contains(edge.called)) callStackSets(edge.called) ++= newCallSet
+    else callStackSets(edge.called) = newCallSet
   }
 
   def apply() = globalLog.block {
@@ -224,22 +222,19 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
     }
 
     for(result <- results){
-      for(e <- result.edges){
-        addCallEdge(e)
-        current.add(e.called)
-      }
-      for(s <- result.staticFieldReferencedClasses) staticFieldReferencedClasses.add(s)
-      for(s <- result.calledSignatures) calledSignatures.add(s)
-      for(s <- result.evaluated) {
-        val merged = classManager.mergeTypes(Seq(s._3) ++ analyses(s._1).evaluated.get(s._2))
-        if (!analyses(s._1).evaluated.get(s._2).contains(merged)){
-          analyses(s._1).evaluated(s._2) = merged
-          analyses(s._1).invalidateWorkList.add(MethodAnalyzer.Invalidate.Invoke(s._2))
-          current.add(s._1)
+      result.edges.foreach(addCallEdge)
+      result.staticFieldReferencedClasses.foreach(staticFieldReferencedClasses.add)
+      result.calledSignatures.foreach(calledSignatures.add)
+      for((sig, invoke, tpe) <- result.evaluated) {
+        val merged = classManager.mergeTypes(Seq(tpe) ++ analyses(sig).evaluated.get(invoke))
+        if (!analyses(sig).evaluated.get(invoke).contains(merged)){
+          analyses(sig).evaluated(invoke) = merged
+          analyses(sig).invalidateWorkList.add(MethodAnalyzer.Invalidate.Invoke(invoke))
+          current.add(sig)
         }
       }
-      for(s <- result.setProps) {
-        methodProps(s._1) = s._2
+      for((sig, props) <- result.setProps) {
+        methodProps(sig) = props
       }
     }
 
