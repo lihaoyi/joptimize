@@ -44,7 +44,17 @@ object Chaining {
     if (res.isEmpty) -1 else res.get
   }
   @test.Test(inputs = Array(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12))
-  def hello6(a: Int, b: Int): Int = {
+  def hello6(a: Int): Int = {
+    val xOpt = if (a % 2 == 0) Some(1) else None
+
+    val res1 = xOpt.map(_ + 1)
+    val res2 = xOpt.map(_ + 2)
+
+    if (res1.isEmpty && res2.isEmpty) 1 else 0
+  }
+
+  @test.Test(inputs = Array(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12))
+  def hello7(a: Int, b: Int): Int = {
     val xOpt = if (a % 2 == 0) Some(1) else None
     val yOpt = if (b % 3 == 0) Some(1) else None
 
@@ -58,8 +68,9 @@ object Chaining {
       case (false, false) => res1.get + res2.get
     }
   }
+
   @test.Test(inputs = Array(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12))
-  def hello7(a: Int, b: Int, c: Int): Int = {
+  def hello8(a: Int, b: Int, c: Int): Int = {
     val xOpt = if (a % 2 == 0) Some(1) else None
     val yOpt = if (b % 2 == 0) Some(2) else None
     val zOpt = if (c % 2 == 0) Some(3) else None

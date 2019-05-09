@@ -185,23 +185,6 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
           case invoke: SSA.Invoke => handleInvoke(isig, currentCallSet, currentAnalysis, invoke)
           case indy: SSA.InvokeDynamic =>
             if (indy.bootstrap == Util.metafactory || indy.bootstrap == Util.altMetafactory){
-
-//              val target = indy.bootstrapArgs(1).asInstanceOf[SSA.InvokeDynamic.HandleArg]
-//              val targetSig = MethodSig(
-//                target.cls,
-//                target.name,
-//                target.desc,
-//                target.tag == Opcodes.H_INVOKESTATIC
-//              )
-//
-//              ctx.walkMethod(targetSig, targetSig.desc.args)
-//
-//              val n = Util.clone(currentInsn, ctx.blockInsnMapping)
-//              val nextFrame = currentFrame.execute(n, SSAInterpreter)
-//              walkNextLabel(nextFrame) match {
-//                case Some(t) => t
-//                case None => walkInsn(current.getNext, nextFrame, ctx)
-//              }
               ???
             }else if(indy.bootstrap == Util.makeConcatWithConstants){
               currentAnalysis.evaluated(indy) = JType.Cls("java/lang/String")
@@ -260,7 +243,6 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
       node <- edge.node
     } yield {
       val msig = edge.called.method.copy(cls = n.cls)
-      analyses(edge.caller).invalidateWorkList.add(MethodAnalyzer.Invalidate.Invoke(node))
       callGraph.add(ProgramAnalyzer.CallEdge(edge.caller, Some(node), edge.called.copy(method = msig)))
       addToCallSet(edge.called.copy(method = msig), callStackSets(edge.caller))
       edge.called.copy(method = msig)
@@ -295,31 +277,24 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
     val returnProps = fansi.Color.Green(isig.toString) ++ " -> " ++ props.toString
     globalLog.apply(returnProps)
 
-    val unchanged = methodProps.get(isig).contains(props)
-
     methodProps(isig) = props
 
-    val returnEdges = callGraph.iterator.filter(_.called == isig).toArray
+    val methodsToEnqueue = mutable.LinkedHashSet.empty[InferredSig]
 
-    for (edge <- returnEdges) {
+    for (edge <- callGraph if edge.called == isig) {
       for (node <- edge.node) {
         val mergedType = classManager.mergeTypes(
           analyses(edge.caller).evaluated.get(node).toSeq ++ Seq(props.inferredReturn)
         )
-
-        if (!analyses(edge.caller).evaluated.get(node).contains(props.inferredReturn)) {
+        if (!analyses(edge.caller).evaluated.get(node).contains(mergedType)) {
           analyses(edge.caller).invalidateWorkList.add(MethodAnalyzer.Invalidate.Invoke(node))
+          analyses(edge.caller).evaluated(node) = mergedType
+          methodsToEnqueue.add(edge.caller)
         }
-
-        analyses(edge.caller).evaluated(node) = mergedType
       }
     }
-    val filtered =
-      if (!unchanged) returnEdges.map(_.caller)
-      else returnEdges.map(_.caller).filter(!methodProps.contains(_))
 
-//    pprint.log(filtered)
-    filtered
+    methodsToEnqueue.toSeq
   }
 
   def handleFieldReference(isig: InferredSig,

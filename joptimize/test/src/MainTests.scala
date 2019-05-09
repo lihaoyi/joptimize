@@ -335,6 +335,7 @@ object MainTests extends TestSuite{
         'hello5 - annotatedTest
         'hello6 - annotatedTest
         'hello7 - annotatedTest
+        'hello8 - annotatedTest
       }
     }
   }
