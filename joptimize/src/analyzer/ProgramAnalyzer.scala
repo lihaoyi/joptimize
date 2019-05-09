@@ -176,10 +176,9 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
     val step = currentAnalysis.step()
 
     globalLog.pprint(step)
-    val newCurrent: Seq[InferredSig] = step match {
+    step match {
       case MethodAnalyzer.Step.Continue(nodes) =>
-//        pprint.log(nodes)
-        val flat = nodes.flatMap{
+        val edges: Seq[ProgramAnalyzer.CallEdge] = nodes.flatMap{
           case n: SSA.GetField => handleFieldReference(isig, n.owner, static = false)
           case n: SSA.PutField => handleFieldReference(isig, n.owner, static = false)
           case n: SSA.GetStatic => handleFieldReference(isig, n.cls, static = true)
@@ -188,43 +187,29 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
           case n: SSA.New => handleNew(isig, n)
           case invoke: SSA.Invoke => handleInvoke(isig, currentAnalysis, invoke)
           case indy: SSA.InvokeDynamic =>
-            if (indy.bootstrap == Util.metafactory || indy.bootstrap == Util.altMetafactory){
-              ???
-            }else if(indy.bootstrap == Util.makeConcatWithConstants){
+            if (indy.bootstrap == Util.metafactory || indy.bootstrap == Util.altMetafactory) ???
+            else if(indy.bootstrap == Util.makeConcatWithConstants){
               currentAnalysis.evaluated(indy) = JType.Cls("java/lang/String")
-              Seq(isig)
-            } else{
-              pprint.log(indy.bootstrap)
-              pprint.log(indy.bootstrapArgs)
-              pprint.log(indy.bootstrapArgs.map(_.getClass))
-              pprint.log(indy.desc)
-              pprint.log(indy.name)
-              ???
-            }
-//            handleInvoke(isig, currentCallSet, currentAnalysis, invoke)
+              Nil
+            } else ???
+
           case _ => Nil
         }.distinct
 
-        flat ++ Seq(isig)
+        for(e <- edges){
+          addCallEdge(e)
+          current.add(e.called)
+        }
+
+        current.add(isig)
 
       case MethodAnalyzer.Step.Done() =>
-        handleReturn(isig, inferredLog, currentAnalysis)
+        val next = handleReturn(isig, inferredLog, currentAnalysis)
+        next.foreach(current.add)
     }
-    if (newCurrent != Seq(isig)){
-      val edge =
-        fansi.Color.Green(isig.toString) ++ " -> " ++
-        fansi.Str.join(
-          Seq(fansi.Str("[")) ++
-          newCurrent.flatMap(n => Seq(fansi.Str(", "), fansi.Color.Green(n.toString))).drop(1) ++
-          Seq(fansi.Str("]")):_*
-        )
-      globalLog.apply(edge)
-    }
-
-    newCurrent.foreach(current.add)
   }
 
-  def handleNew(isig: InferredSig, n: SSA.New) = {
+  def handleNew(isig: InferredSig, n: SSA.New): Seq[ProgramAnalyzer.CallEdge] = {
     classManager.loadClass(n.cls)
     val superClasses = classManager.getAllSupertypes(n.cls).toSet
 
@@ -239,7 +224,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
       .groupBy(t => (t._1.name, t._1.desc))
       .map{case (k, v) => (k, v.map(_._2))}
 
-    val newMethodOverrides = for {
+    for {
       loadedClsNode <- classManager.loadClass(n.cls).toSeq
       mn <- loadedClsNode.methods.asScala
       if (mn.access & (Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC)) == 0
@@ -247,10 +232,8 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
       node <- edge.node
     } yield {
       val msig = edge.called.method.copy(cls = n.cls)
-      addCallEdge(ProgramAnalyzer.CallEdge(edge.caller, Some(node), edge.called.copy(method = msig)))
-      edge.called.copy(method = msig)
+      ProgramAnalyzer.CallEdge(edge.caller, Some(node), edge.called.copy(method = msig))
     }
-    newMethodOverrides ++ Seq(isig)
   }
 
 
@@ -296,49 +279,46 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
     methodsToEnqueue.toSeq
   }
 
-  def handleFieldReference(isig: InferredSig, cls: JType.Cls, static: Boolean) = {
+  def handleFieldReference(isig: InferredSig,
+                           cls: JType.Cls,
+                           static: Boolean): Seq[ProgramAnalyzer.CallEdge] = {
     if (static) staticFieldReferencedClasses.add(cls)
     val clinits = analyzeClinits(cls)
 
-    if (clinits.isEmpty) Seq(isig)
-    else {
-      clinits.foreach(clinit => addCallEdge(ProgramAnalyzer.CallEdge(isig, None, clinit)))
-      clinits
-    }
+    if (clinits.isEmpty) Nil
+    else clinits.map(ProgramAnalyzer.CallEdge(isig, None, _))
   }
 
   def handleInvoke(isig: InferredSig,
                    currentAnalysis: MethodAnalyzer[IType],
-                   invoke: SSA.Invoke) = {
+                   invoke: SSA.Invoke): Seq[ProgramAnalyzer.CallEdge] = {
     val calledSig = invoke.inferredSig(currentAnalysis.evaluated(_))
 
     if (callStackSets(isig)(calledSig)) {
       calledSignatures.add(calledSig)
-      addCallEdge(ProgramAnalyzer.CallEdge(calledSig, Some(invoke), isig))
+
       analyses(isig).evaluated(invoke) = IType.Bottom
 
-      Seq(isig)
+      Seq(ProgramAnalyzer.CallEdge(calledSig, Some(invoke), isig))
     } else if (classManager.loadClass(calledSig.method.cls).isEmpty) {
       analyses(isig).evaluated(invoke) = calledSig.method.desc.ret
-      Seq(isig)
+      Nil
     } else if (invoke.isInstanceOf[SSA.InvokeSpecial]) {
       val calledSig2 =
         if (invoke.name != "<init>") calledSig
         else calledSig.copy(inferred = calledSig.method.desc.args)
       calledSignatures.add(calledSig2)
-      addCallEdge(ProgramAnalyzer.CallEdge(isig, Some(invoke), calledSig2))
-      Seq(calledSig2)
+      Seq(ProgramAnalyzer.CallEdge(isig, Some(invoke), calledSig2))
     } else classManager.resolvePossibleSigs(calledSig.method) match {
       case None =>
         calledSignatures.add(calledSig)
-        addCallEdge(ProgramAnalyzer.CallEdge(isig, Some(invoke), calledSig))
-        Seq(isig).filter(!methodProps.contains(_))
+        Seq(ProgramAnalyzer.CallEdge(isig, Some(invoke), calledSig))
       case Some(subSigs0) =>
         calledSignatures.add(calledSig)
         val loaded = subSigs0.map(classManager.loadMethod)
         if (loaded.forall(_.isEmpty)){
           analyses(isig).evaluated(invoke) = calledSig.method.desc.ret
-          Seq(isig)
+          Nil
         }else {
           val subSigs = subSigs0.filter { subSig =>
             classManager.loadMethod(subSig).exists(_.instructions.size() != 0)
@@ -349,8 +329,6 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
           val clinits = subSigs.flatMap(subSig => analyzeClinits(subSig.cls))
           val subs = subSigs.map(subSig => InferredSig(subSig, calledSig.inferred))
 
-          val rets = (clinits ++ subs).filter(!methodProps.contains(_))
-
           val merged = classManager.mergeTypes(
             analyses(isig).evaluated.get(invoke).toSeq ++
             subs.flatMap(methodProps.get).map(_.inferredReturn)
@@ -358,13 +336,8 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
 
           analyses(isig).evaluated(invoke) = merged
 
-          if (rets.isEmpty) Seq(isig)
-          else {
-            subs.foreach(ret => addCallEdge(ProgramAnalyzer.CallEdge(isig, Some(invoke), ret)))
-            clinits.foreach(ret => addCallEdge(ProgramAnalyzer.CallEdge(isig, None, ret)))
-
-            rets
-          }
+          subs.map(ret => ProgramAnalyzer.CallEdge(isig, Some(invoke), ret)) ++
+          clinits.map(ret => ProgramAnalyzer.CallEdge(isig, None, ret))
         }
     }
   }
@@ -458,23 +431,6 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
           else resolveProps(key).fold(default)(_.pure)
         }
 
-      //    case methodBody: MethodBody,
-      //    inferred: mutable.LinkedHashMap[SSA.Val, IType],
-      //    liveBlocks: Set[SSA.Block],
-      //    props: Properties)
-      //
-      //  case class Properties(inferredReturn: IType,
-      //                        pure: Boolean,
-      //                        liveArgs: Set[Int])
-      //
-      //  def dummyResult(originalSig: MethodSig, optimistic: Boolean) = ProgramAnalyzer.Result(
-      //    new MethodBody(Nil, Nil),
-      //    mutable.LinkedHashMap.empty,
-      //    Set.empty,
-      //    dummyProps(originalSig, optimistic)
-      //  )
-      //
-      //  def dummyPropsn: SSA.InvokeDynamic => computeMethodSig(n, n.srcs.map(inferences))
       case p: SSA.Phi => true
     }
   }
