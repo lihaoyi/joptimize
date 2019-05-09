@@ -152,6 +152,15 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
     )
   }
 
+  /**
+    * Performs a single step of the whole-program analysis.
+    *
+    * Delegates most of the business logic to static `ProgramAnalyzer.handle*` functions,
+    * which are provided a limited [[ProgramAnalyzer.HandlerApi]] of utilities they can use
+    * and return a [[ProgramAnalyzer.StepResult]] struct dictating what actions should be
+    * performed at each step. This helps keep the messy `handle*` logic separate from the
+    * also-messy mutable state and related code in the [[ProgramAnalyzer]] instance.
+    */
   def step() = {
 //    println()
 //    println(pprint.apply(current.map(_.method.toString.stripPrefix("joptimize.examples.simple."))))
