@@ -177,9 +177,9 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
     val step = currentAnalysis.step()
 
     globalLog.pprint(step)
-    step match {
+    val results: Seq[ProgramAnalyzer.StepResult] = step match {
       case MethodAnalyzer.Step.Continue(nodes) =>
-        val results: Seq[ProgramAnalyzer.StepResult] = nodes.map{
+        nodes.map{
           case n: SSA.GetField => ProgramAnalyzer.handleFieldReference(isig, n.owner, false, analyzeClinits)
           case n: SSA.PutField => ProgramAnalyzer.handleFieldReference(isig, n.owner, false, analyzeClinits)
           case n: SSA.GetStatic => ProgramAnalyzer.handleFieldReference(isig, n.cls, true, analyzeClinits)
@@ -207,73 +207,44 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
           case _ => ProgramAnalyzer.StepResult()
         }
 
-        for(result <- results){
-          for(e <- result.edges){
-            addCallEdge(e)
-            current.add(e.called)
-          }
-          for(s <- result.staticFieldReferencedClasses) staticFieldReferencedClasses.add(s)
-          for(s <- result.calledSignatures) calledSignatures.add(s)
-          for(s <- result.evaluated) analyses(s._1).evaluated(s._2) = s._3
-        }
-
-        current.add(isig)
 
       case MethodAnalyzer.Step.Done() =>
-        val next = handleReturn(isig, inferredLog, currentAnalysis)
-        next.foreach(current.add)
-    }
-  }
-
-  def handleReturn(isig: InferredSig,
-                   inferredLog: Logger.InferredMethod,
-                   currentAnalysis: MethodAnalyzer[IType]) = {
-//    println("DONE")
-    val optimisticResult = currentAnalysis.apply()
-    val retTypes = currentAnalysis.apply()
-      .inferredReturns
-      .flatMap(_._2)
-      .toSeq
-
-    val inferredReturn = classManager.mergeTypes(retTypes)
-
-    val computedPurity = ProgramAnalyzer.computePurity(
-      optimisticResult,
-      callStackSets(isig),
-      classManager,
-      methodProps.get,
-      resolveProps
-    )
-    val clinitSig = MethodSig(isig.method.cls, "<clinit>", Desc(Nil, JType.Prim.V), true)
-    val props = ProgramAnalyzer.Properties(
-      inferredReturn,
-      computedPurity && !(isig.method.static && classManager.loadMethod(clinitSig).nonEmpty),
-      optimisticResult.inferred.collect { case (a: SSA.Arg, _) => a.index }.toSet
-    )
-
-    val returnProps = fansi.Color.Green(isig.toString) ++ " -> " ++ props.toString
-    globalLog.apply(returnProps)
-
-    methodProps(isig) = props
-
-    val methodsToEnqueue = mutable.LinkedHashSet.empty[InferredSig]
-
-    for (edge <- callGraph if edge.called == isig) {
-      for (node <- edge.node) {
-        val mergedType = classManager.mergeTypes(
-          analyses(edge.caller).evaluated.get(node).toSeq ++ Seq(props.inferredReturn)
+        Seq(
+          ProgramAnalyzer.handleReturn(
+            isig,
+            inferredLog,
+            currentAnalysis,
+            classManager,
+            methodProps.get,
+            resolveProps,
+            callGraph,
+            callStackSets(isig)
+          )
         )
-        if (!analyses(edge.caller).evaluated.get(node).contains(mergedType)) {
-          analyses(edge.caller).invalidateWorkList.add(MethodAnalyzer.Invalidate.Invoke(node))
-          analyses(edge.caller).evaluated(node) = mergedType
-          methodsToEnqueue.add(edge.caller)
+    }
+
+    for(result <- results){
+      for(e <- result.edges){
+        addCallEdge(e)
+        current.add(e.called)
+      }
+      for(s <- result.staticFieldReferencedClasses) staticFieldReferencedClasses.add(s)
+      for(s <- result.calledSignatures) calledSignatures.add(s)
+      for(s <- result.evaluated) {
+        val merged = classManager.mergeTypes(Seq(s._3) ++ analyses(s._1).evaluated.get(s._2))
+        if (!analyses(s._1).evaluated.get(s._2).contains(merged)){
+          analyses(s._1).evaluated(s._2) = merged
+          analyses(s._1).invalidateWorkList.add(MethodAnalyzer.Invalidate.Invoke(s._2))
+          current.add(s._1)
         }
+      }
+      for(s <- result.setProps) {
+        methodProps(s._1) = s._2
       }
     }
 
-    methodsToEnqueue.toSeq
+    if (!step.isInstanceOf[MethodAnalyzer.Step.Done[_]]) current.add(isig)
   }
-
 
   def resolveProps(isig: InferredSig) = {
     classManager.resolvePossibleSigs(isig.method).map{ resolved =>
@@ -319,7 +290,8 @@ object ProgramAnalyzer {
   case class StepResult(edges: Seq[CallEdge] = Nil,
                         staticFieldReferencedClasses: Seq[JType.Cls] = Nil,
                         calledSignatures: Seq[InferredSig] = Nil,
-                        evaluated: Seq[(InferredSig, SSA.Invoke, IType)] = Nil)
+                        evaluated: Seq[(InferredSig, SSA.Invoke, IType)] = Nil,
+                        setProps: Seq[(InferredSig, Properties)] = Nil)
   case class CallEdge(caller: InferredSig, node: Option[SSA.Invoke], called: InferredSig){
     if (called.method.name == "<clinit>") assert(node.isEmpty)
   }
@@ -451,6 +423,50 @@ object ProgramAnalyzer {
     }
   }
 
+  def handleReturn(isig: InferredSig,
+                   inferredLog: Logger.InferredMethod,
+                   currentAnalysis: MethodAnalyzer[IType],
+                   classManager: ClassManager,
+                   getMethodProps: InferredSig => Option[Properties],
+                   getResolvedProps: InferredSig => Option[Properties],
+                   callGraph: Iterable[CallEdge],
+                   callSet: Set[InferredSig]) = {
+    //    println("DONE")
+    val optimisticResult = currentAnalysis.apply()
+    val retTypes = currentAnalysis.apply()
+      .inferredReturns
+      .flatMap(_._2)
+      .toSeq
+
+    val inferredReturn = classManager.mergeTypes(retTypes)
+
+    val computedPurity = ProgramAnalyzer.computePurity(
+      optimisticResult,
+      callSet,
+      classManager,
+      getMethodProps,
+      getResolvedProps
+    )
+
+    val clinitSig = MethodSig(isig.method.cls, "<clinit>", Desc(Nil, JType.Prim.V), true)
+    val props = ProgramAnalyzer.Properties(
+      inferredReturn,
+      computedPurity && !(isig.method.static && classManager.loadMethod(clinitSig).nonEmpty),
+      optimisticResult.inferred.collect { case (a: SSA.Arg, _) => a.index }.toSet
+    )
+
+    val evaluated = for {
+      edge <- callGraph
+      if edge.called == isig
+      node <- edge.node
+    } yield (edge.caller, node, props.inferredReturn)
+
+    StepResult(
+      evaluated = evaluated.toSeq,
+      setProps = Seq(isig -> props)
+    )
+  }
+
   def computePurity(optResult: MethodAnalyzer.Result[IType],
                     callSet: Set[InferredSig],
                     classManager: ClassManager,
@@ -515,6 +531,4 @@ object ProgramAnalyzer {
     if (optimistic) Set.empty
     else Range.inclusive(0, originalSig.desc.args.length + (if (originalSig.static) 0 else 1)).toSet
   )
-
-
 }
