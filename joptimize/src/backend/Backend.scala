@@ -107,10 +107,10 @@ object Backend {
               (invokedSig, invokeSpecial) => {
 
                 if (invokeSpecial) {
-                  analyzerRes.visitedMethods.getOrElse(
-                    invokedSig,
-                    ProgramAnalyzer.dummyResult(invokedSig.method, optimistic = false)
-                  ).props
+                  analyzerRes.visitedMethods.get(invokedSig) match{
+                    case Some(res) => res.props
+                    case None => ProgramAnalyzer.dummyProps(invokedSig.method, optimistic = false)
+                  }
                 } else {
 
                   val highestSig =
@@ -120,7 +120,7 @@ object Backend {
 
                   val res = analyzerRes.visitedResolved.getOrElse(
                     invokedSig.copy(method = highestSig),
-                    ProgramAnalyzer.dummyResult(highestSig, optimistic = false).props
+                    ProgramAnalyzer.dummyProps(highestSig, optimistic = false)
                   )
 
                   res

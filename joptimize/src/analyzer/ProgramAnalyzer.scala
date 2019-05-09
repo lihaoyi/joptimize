@@ -320,7 +320,6 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
       callGraph.add(ProgramAnalyzer.CallEdge(calledSig, Some(invoke), isig))
       addToCallSet(calledSig, currentCallSet)
       analyses(isig).evaluated(invoke) = IType.Bottom
-      methodProps(calledSig) = ProgramAnalyzer.dummyProps(calledSig.method, true)
 
       Seq(isig)
     } else if (classManager.loadClass(calledSig.method.cls).isEmpty) {
@@ -505,13 +504,6 @@ object ProgramAnalyzer {
   case class Properties(inferredReturn: IType,
                         pure: Boolean,
                         liveArgs: Set[Int])
-
-  def dummyResult(originalSig: MethodSig, optimistic: Boolean) = ProgramAnalyzer.Result(
-    new MethodBody(Nil, Nil),
-    mutable.LinkedHashMap.empty,
-    Set.empty,
-    dummyProps(originalSig, optimistic)
-  )
 
   def dummyProps(originalSig: MethodSig, optimistic: Boolean) = ProgramAnalyzer.Properties(
     if (optimistic) IType.Bottom else originalSig.desc.ret,
