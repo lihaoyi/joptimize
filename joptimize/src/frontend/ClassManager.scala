@@ -106,6 +106,7 @@ class ClassManager(getClassFile: String => Option[Array[Byte]]) extends ClassMan
     }.distinct
     if (flattened.length == 1) Some(flattened.head)
     else if(flattened.length == 0) None
+    else if(flattened.forall(_.widen == JType.Prim.V)) Some(JType.Prim.V)
     else if(flattened.forall(_.widen == JType.Prim.I)) Some(JType.Prim.I)
     else if(flattened.forall(_.widen == JType.Prim.F)) Some(JType.Prim.F)
     else if(flattened.forall(_.widen == JType.Prim.J)) Some(JType.Prim.J)

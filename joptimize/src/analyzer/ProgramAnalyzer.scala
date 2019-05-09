@@ -260,17 +260,14 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
     val retTypes = currentAnalysis.apply()
       .inferredReturns
       .flatMap(_._2)
-      .filter(_ != JType.Prim.V)
       .toSeq
 
-    val inferredReturn =
-      if (retTypes.isEmpty) JType.Prim.V
-      else classManager.mergeTypes(retTypes)
+    val inferredReturn = classManager.mergeTypes(retTypes)
 
     val props = ProgramAnalyzer.Properties(
       inferredReturn,
       computePurity(optimisticResult, currentCallSet) &&
-        !(isig.method.static && classManager.loadMethod(MethodSig(isig.method.cls, "<clinit>", Desc(Nil, JType.Prim.V), true)).nonEmpty),
+      !(isig.method.static && classManager.loadMethod(MethodSig(isig.method.cls, "<clinit>", Desc(Nil, JType.Prim.V), true)).nonEmpty),
       optimisticResult.inferred.collect { case (a: SSA.Arg, _) => a.index }.toSet
     )
 
@@ -413,7 +410,8 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
       new ITypeLattice((x, y) => classManager.mergeTypes(Seq(x, y)), inferredArgs),
       log,
       ITypeBrancher,
-      IType.Bottom
+      IType.Bottom,
+      JType.Prim.V
     )
   }
 
