@@ -215,35 +215,6 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
     }
   }
 
-  def handleNew(isig: InferredSig, n: SSA.New): ProgramAnalyzer.StepResult = {
-    classManager.loadClass(n.cls)
-    val superClasses = classManager.getAllSupertypes(n.cls).toSet
-
-    val superClassCallList = for {
-      edge <- callGraph
-      node <- edge.node
-      if !node.isInstanceOf[SSA.InvokeSpecial]
-      if superClasses.contains(node.cls)
-    } yield (node, edge)
-
-    val superClassMethodMap = superClassCallList
-      .groupBy(t => (t._1.name, t._1.desc))
-      .map{case (k, v) => (k, v.map(_._2))}
-    ProgramAnalyzer.StepResult(
-      for {
-        loadedClsNode <- classManager.loadClass(n.cls).toSeq
-        mn <- loadedClsNode.methods.asScala
-        if (mn.access & (Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC)) == 0
-        edge <- superClassMethodMap.getOrElse((mn.name, Desc.read(mn.desc)), Nil)
-        node <- edge.node
-      } yield {
-        val msig = edge.called.method.copy(cls = n.cls)
-        ProgramAnalyzer.CallEdge(edge.caller, Some(node), edge.called.copy(method = msig))
-      }
-    )
-  }
-
-
   def handleReturn(isig: InferredSig,
                    inferredLog: Logger.InferredMethod,
                    currentAnalysis: MethodAnalyzer[IType]) = {
@@ -286,14 +257,43 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
     methodsToEnqueue.toSeq
   }
 
+  def handleNew(isig: InferredSig, n: SSA.New): ProgramAnalyzer.StepResult = {
+    classManager.loadClass(n.cls)
+    val superClasses = classManager.getAllSupertypes(n.cls).toSet
+
+    val superClassCallList = for {
+      edge <- callGraph
+      node <- edge.node
+      if !node.isInstanceOf[SSA.InvokeSpecial]
+      if superClasses.contains(node.cls)
+    } yield (node, edge)
+
+    val superClassMethodMap = superClassCallList
+      .groupBy(t => (t._1.name, t._1.desc))
+      .map{case (k, v) => (k, v.map(_._2))}
+    ProgramAnalyzer.StepResult(
+      for {
+        loadedClsNode <- classManager.loadClass(n.cls).toSeq
+        mn <- loadedClsNode.methods.asScala
+        if (mn.access & (Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC)) == 0
+        edge <- superClassMethodMap.getOrElse((mn.name, Desc.read(mn.desc)), Nil)
+        node <- edge.node
+      } yield {
+        val msig = edge.called.method.copy(cls = n.cls)
+        ProgramAnalyzer.CallEdge(edge.caller, Some(node), edge.called.copy(method = msig))
+      }
+    )
+  }
+
   def handleFieldReference(isig: InferredSig,
                            cls: JType.Cls,
                            static: Boolean): ProgramAnalyzer.StepResult = {
-    if (static) staticFieldReferencedClasses.add(cls)
-    val clinits = analyzeClinits(cls)
 
-    if (clinits.isEmpty) ProgramAnalyzer.StepResult()
-    else ProgramAnalyzer.StepResult(clinits.map(ProgramAnalyzer.CallEdge(isig, None, _)))
+    val clinits = analyzeClinits(cls)
+    ProgramAnalyzer.StepResult(
+      edges = clinits.map(ProgramAnalyzer.CallEdge(isig, None, _)),
+      staticFieldReferencedClasses = if (static) Seq(cls) else Nil
+    )
   }
 
   def handleInvoke(isig: InferredSig,
