@@ -198,8 +198,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
           case indy: SSA.InvokeDynamic =>
             if (indy.bootstrap == Util.metafactory || indy.bootstrap == Util.altMetafactory) ???
             else if(indy.bootstrap == Util.makeConcatWithConstants){
-              currentAnalysis.evaluated(indy) = JType.Cls("java/lang/String")
-              ProgramAnalyzer.StepResult()
+              ProgramAnalyzer.StepResult(evaluated = Seq((isig, indy, JType.Cls("java/lang/String"))))
             } else ???
 
           case _ => ProgramAnalyzer.StepResult()
@@ -229,7 +228,11 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
         val merged = classManager.mergeTypes(Seq(tpe) ++ analyses(sig).evaluated.get(invoke))
         if (!analyses(sig).evaluated.get(invoke).contains(merged)){
           analyses(sig).evaluated(invoke) = merged
-          analyses(sig).invalidateWorkList.add(MethodAnalyzer.Invalidate.Invoke(invoke))
+          invoke match{
+            case n: SSA.Invoke =>
+              analyses(sig).invalidateWorkList.add(MethodAnalyzer.Invalidate.Invoke(n))
+            case _ => // do nothing
+          }
           current.add(sig)
         }
       }
@@ -285,7 +288,7 @@ object ProgramAnalyzer {
   case class StepResult(edges: Seq[CallEdge] = Nil,
                         staticFieldReferencedClasses: Seq[JType.Cls] = Nil,
                         calledSignatures: Seq[InferredSig] = Nil,
-                        evaluated: Seq[(InferredSig, SSA.Invoke, IType)] = Nil,
+                        evaluated: Seq[(InferredSig, SSA.Val, IType)] = Nil,
                         setProps: Seq[(InferredSig, Properties)] = Nil)
   case class CallEdge(caller: InferredSig, node: Option[SSA.Invoke], called: InferredSig){
     if (called.method.name == "<clinit>") assert(node.isEmpty)
@@ -364,8 +367,6 @@ object ProgramAnalyzer {
       )
     } else if (classManager.loadClass(calledSig.method.cls).isEmpty) {
       ProgramAnalyzer.StepResult(
-        edges = Nil,
-        calledSignatures = Nil,
         evaluated = Seq((isig, invoke, calledSig.method.desc.ret))
       )
     } else if (invoke.isInstanceOf[SSA.InvokeSpecial]) {
