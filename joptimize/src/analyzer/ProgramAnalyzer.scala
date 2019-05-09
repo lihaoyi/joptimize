@@ -4,6 +4,7 @@ import joptimize.frontend.{ClassManager, Frontend}
 import joptimize.{Logger, Util}
 import joptimize.model._
 import joptimize.viewer.model.LogMessage
+import org.objectweb.asm.tree.ClassNode
 import org.objectweb.asm.{Handle, Opcodes}
 
 import scala.collection.mutable
@@ -15,9 +16,9 @@ import scala.collection.mutable
   * to decide where to return to after each method analysis is complete.
   */
 class ProgramAnalyzer(entrypoints: Seq[MethodSig],
-                      classManager: ClassManager,
+                      val classManager: ClassManager,
                       globalLog: Logger.Global,
-                      frontend: Frontend){
+                      frontend: Frontend) extends ProgramAnalyzer.HandlerApi {
 
   /**
     * The current queue of methods to analyze. Can have multiple methods in it at the same
@@ -178,23 +179,13 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
     val results: Seq[ProgramAnalyzer.StepResult] = step match {
       case MethodAnalyzer.Step.Continue(nodes) =>
         nodes.map{
-          case n: SSA.GetField => ProgramAnalyzer.handleFieldReference(isig, n.owner, false, analyzeClinits)
-          case n: SSA.PutField => ProgramAnalyzer.handleFieldReference(isig, n.owner, false, analyzeClinits)
-          case n: SSA.GetStatic => ProgramAnalyzer.handleFieldReference(isig, n.cls, true, analyzeClinits)
-          case n: SSA.PutStatic => ProgramAnalyzer.handleFieldReference(isig, n.cls, true, analyzeClinits)
+          case n: SSA.GetField => ProgramAnalyzer.handleFieldReference(isig, n.owner, false, this)
+          case n: SSA.PutField => ProgramAnalyzer.handleFieldReference(isig, n.owner, false, this)
+          case n: SSA.GetStatic => ProgramAnalyzer.handleFieldReference(isig, n.cls, true, this)
+          case n: SSA.PutStatic => ProgramAnalyzer.handleFieldReference(isig, n.cls, true, this)
 
-          case n: SSA.New => ProgramAnalyzer.handleNew(isig, n, classManager, callGraph)
-          case invoke: SSA.Invoke =>
-            ProgramAnalyzer.handleInvoke(
-              isig,
-              currentAnalysis,
-              invoke,
-              classManager,
-              analyzeClinits,
-              callStackSets(_)(_),
-              analyses(isig).evaluated.get(invoke),
-              methodProps.get
-            )
+          case n: SSA.New => ProgramAnalyzer.handleNew(isig, n, this)
+          case invoke: SSA.Invoke => ProgramAnalyzer.handleInvoke(isig, currentAnalysis, invoke, this)
           case indy: SSA.InvokeDynamic =>
             if (indy.bootstrap == Util.metafactory || indy.bootstrap == Util.altMetafactory) ???
             else if(indy.bootstrap == Util.makeConcatWithConstants){
@@ -206,18 +197,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
 
 
       case MethodAnalyzer.Step.Done() =>
-        Seq(
-          ProgramAnalyzer.handleReturn(
-            isig,
-            inferredLog,
-            currentAnalysis,
-            classManager,
-            methodProps.get,
-            resolveProps,
-            callGraph,
-            callStackSets(isig)
-          )
-        )
+        Seq(ProgramAnalyzer.handleReturn(isig, inferredLog, currentAnalysis, this))
     }
 
     for(result <- results){
@@ -243,6 +223,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
 
     if (!step.isInstanceOf[MethodAnalyzer.Step.Done[_]]) current.add(isig)
   }
+  def getMethodProps(isig: InferredSig): Option[ProgramAnalyzer.Properties] = methodProps.get(isig)
 
   def resolveProps(isig: InferredSig) = {
     classManager.resolvePossibleSigs(isig.method).map{ resolved =>
@@ -282,6 +263,9 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
     )
   }
 
+  def isCalledFrom(isig: InferredSig, calledSig: InferredSig) = callStackSets(isig)(calledSig)
+
+  def getAnalysesEvaluated(isig: InferredSig, invoke: SSA.Invoke) = analyses(isig).evaluated.get(invoke)
 }
 
 object ProgramAnalyzer {
@@ -305,16 +289,22 @@ object ProgramAnalyzer {
                         pure: Boolean,
                         liveArgs: Set[Int])
 
+  trait HandlerApi{
+    def classManager: ClassManager
+    def callGraph: Iterable[CallEdge]
+    def analyzeClinits(cls: JType.Cls): Seq[InferredSig]
+    def getMethodProps(isig: InferredSig): Option[ProgramAnalyzer.Properties]
+    def resolveProps(isig: InferredSig): Option[Properties]
+    def isCalledFrom(isig: InferredSig, calledSig: InferredSig): Boolean
+    def getAnalysesEvaluated(isig: InferredSig, invoke: SSA.Invoke): Option[IType]
+  }
 
-  def handleNew(isig: InferredSig,
-                n: SSA.New,
-                classManager: ClassManager,
-                callGraph: Iterable[CallEdge]): ProgramAnalyzer.StepResult = {
-    classManager.loadClass(n.cls)
-    val superClasses = classManager.getAllSupertypes(n.cls).toSet
+  def handleNew(isig: InferredSig, n: SSA.New, api: HandlerApi): ProgramAnalyzer.StepResult = {
+    api.classManager.loadClass(n.cls)
+    val superClasses = api.classManager.getAllSupertypes(n.cls).toSet
 
     val superClassCallList = for {
-      edge <- callGraph
+      edge <- api.callGraph
       node <- edge.node
       if !node.isInstanceOf[SSA.InvokeSpecial]
       if superClasses.contains(node.cls)
@@ -325,7 +315,7 @@ object ProgramAnalyzer {
       .map{case (k, v) => (k, v.map(_._2))}
     ProgramAnalyzer.StepResult(
       for {
-        loadedClsNode <- classManager.loadClass(n.cls).toSeq
+        loadedClsNode <- api.classManager.loadClass(n.cls).toSeq
         mn <- loadedClsNode.methods.asScala
         if (mn.access & (Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC)) == 0
         edge <- superClassMethodMap.getOrElse((mn.name, Desc.read(mn.desc)), Nil)
@@ -340,9 +330,9 @@ object ProgramAnalyzer {
   def handleFieldReference(isig: InferredSig,
                            cls: JType.Cls,
                            static: Boolean,
-                           analyzeClinits: JType.Cls => Seq[InferredSig]): ProgramAnalyzer.StepResult = {
+                           api: HandlerApi): ProgramAnalyzer.StepResult = {
 
-    val clinits = analyzeClinits(cls)
+    val clinits = api.analyzeClinits(cls)
     ProgramAnalyzer.StepResult(
       edges = clinits.map(ProgramAnalyzer.CallEdge(isig, None, _)),
       staticFieldReferencedClasses = if (static) Seq(cls) else Nil
@@ -352,20 +342,16 @@ object ProgramAnalyzer {
   def handleInvoke(isig: InferredSig,
                    currentAnalysis: MethodAnalyzer[IType],
                    invoke: SSA.Invoke,
-                   classManager: ClassManager,
-                   analyzeClinits: JType.Cls => Seq[InferredSig],
-                   isCalledFrom: (InferredSig, InferredSig) => Boolean,
-                   invokeEvaluated: Option[IType],
-                   getProp: InferredSig => Option[Properties]): ProgramAnalyzer.StepResult = {
+                   api: HandlerApi): ProgramAnalyzer.StepResult = {
     val calledSig = invoke.inferredSig(currentAnalysis.evaluated(_))
 
-    if (isCalledFrom(isig, calledSig)) {
+    if (api.isCalledFrom(isig, calledSig)) {
       ProgramAnalyzer.StepResult(
         edges = Seq(ProgramAnalyzer.CallEdge(calledSig, Some(invoke), isig)),
         calledSignatures = Seq(calledSig),
         evaluated = Seq((isig, invoke, IType.Bottom))
       )
-    } else if (classManager.loadClass(calledSig.method.cls).isEmpty) {
+    } else if (api.classManager.loadClass(calledSig.method.cls).isEmpty) {
       ProgramAnalyzer.StepResult(
         evaluated = Seq((isig, invoke, calledSig.method.desc.ret))
       )
@@ -378,7 +364,7 @@ object ProgramAnalyzer {
         edges = Seq(ProgramAnalyzer.CallEdge(isig, Some(invoke), calledSig2)),
         calledSignatures = Seq(calledSig2)
       )
-    } else classManager.resolvePossibleSigs(calledSig.method) match {
+    } else api.classManager.resolvePossibleSigs(calledSig.method) match {
       case None =>
         ProgramAnalyzer.StepResult(
           edges = Seq(ProgramAnalyzer.CallEdge(isig, Some(invoke), calledSig)),
@@ -386,7 +372,7 @@ object ProgramAnalyzer {
         )
 
       case Some(subSigs0) =>
-        val loaded = subSigs0.map(classManager.loadMethod)
+        val loaded = subSigs0.map(api.classManager.loadMethod)
         if (loaded.forall(_.isEmpty)){
           ProgramAnalyzer.StepResult(
             evaluated = Seq((isig, invoke, calledSig.method.desc.ret)),
@@ -394,17 +380,17 @@ object ProgramAnalyzer {
           )
         }else {
           val subSigs = subSigs0.filter { subSig =>
-            classManager.loadMethod(subSig).exists(_.instructions.size() != 0)
+            api.classManager.loadMethod(subSig).exists(_.instructions.size() != 0)
           }
 
           assert(subSigs.nonEmpty)
 
-          val clinits = subSigs.flatMap(subSig => analyzeClinits(subSig.cls))
+          val clinits = subSigs.flatMap(subSig => api.analyzeClinits(subSig.cls))
           val subs = subSigs.map(subSig => InferredSig(subSig, calledSig.inferred))
 
-          val merged = classManager.mergeTypes(
-            invokeEvaluated.toSeq ++
-            subs.flatMap(getProp(_).toSeq).map(_.inferredReturn)
+          val merged = api.classManager.mergeTypes(
+            api.getAnalysesEvaluated(isig, invoke).toSeq ++
+            subs.flatMap(api.getMethodProps(_).toSeq).map(_.inferredReturn)
           )
 
           ProgramAnalyzer.StepResult(
@@ -422,11 +408,7 @@ object ProgramAnalyzer {
   def handleReturn(isig: InferredSig,
                    inferredLog: Logger.InferredMethod,
                    currentAnalysis: MethodAnalyzer[IType],
-                   classManager: ClassManager,
-                   getMethodProps: InferredSig => Option[Properties],
-                   getResolvedProps: InferredSig => Option[Properties],
-                   callGraph: Iterable[CallEdge],
-                   callSet: Set[InferredSig]) = {
+                   api: HandlerApi) = {
     //    println("DONE")
     val optimisticResult = currentAnalysis.apply()
     val retTypes = currentAnalysis.apply()
@@ -434,25 +416,19 @@ object ProgramAnalyzer {
       .flatMap(_._2)
       .toSeq
 
-    val inferredReturn = classManager.mergeTypes(retTypes)
+    val inferredReturn = api.classManager.mergeTypes(retTypes)
 
-    val computedPurity = ProgramAnalyzer.computePurity(
-      optimisticResult,
-      callSet,
-      classManager,
-      getMethodProps,
-      getResolvedProps
-    )
+    val computedPurity = ProgramAnalyzer.computePurity(isig, optimisticResult, api)
 
     val clinitSig = MethodSig(isig.method.cls, "<clinit>", Desc(Nil, JType.Prim.V), true)
     val props = ProgramAnalyzer.Properties(
       inferredReturn,
-      computedPurity && !(isig.method.static && classManager.loadMethod(clinitSig).nonEmpty),
+      computedPurity && !(isig.method.static && api.classManager.loadMethod(clinitSig).nonEmpty),
       optimisticResult.inferred.collect { case (a: SSA.Arg, _) => a.index }.toSet
     )
 
     val evaluated = for {
-      edge <- callGraph
+      edge <- api.callGraph
       if edge.called == isig
       node <- edge.node
     } yield (edge.caller, node, props.inferredReturn)
@@ -463,11 +439,7 @@ object ProgramAnalyzer {
     )
   }
 
-  def computePurity(optResult: MethodAnalyzer.Result[IType],
-                    callSet: Set[InferredSig],
-                    classManager: ClassManager,
-                    getMethodProps: InferredSig => Option[Properties],
-                    getResolvedProps: InferredSig => Option[Properties]) = {
+  def computePurity(isig: InferredSig, optResult: MethodAnalyzer.Result[IType], api: HandlerApi) = {
     optResult.inferred.keysIterator.forall {
       case n: SSA.New => false
       case n: SSA.CheckCast => false
@@ -511,10 +483,10 @@ object ProgramAnalyzer {
         else {
 
           val key = n.inferredSig(optResult.inferred)
-          val default = callSet(key)
-          if (classManager.loadClass(key.method.cls).isEmpty) false
-          else if (n.isInstanceOf[SSA.InvokeSpecial]) getMethodProps(key).fold(default)(_.pure)
-          else getResolvedProps(key).fold(default)(_.pure)
+          val default = api.isCalledFrom(isig, key)
+          if (api.classManager.loadClass(key.method.cls).isEmpty) false
+          else if (n.isInstanceOf[SSA.InvokeSpecial]) api.getMethodProps(key).fold(default)(_.pure)
+          else api.resolveProps(key).fold(default)(_.pure)
         }
 
       case p: SSA.Phi => true
