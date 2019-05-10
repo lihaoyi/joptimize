@@ -14,6 +14,7 @@ object ClassManager{
     def supertypeMap: mutable.LinkedHashMap[JType.Cls, List[JType.Cls]]
     def loadClassCache: collection.Map[JType.Cls, Option[ClassNode]]
     def loadMethodCache: collection.Map[MethodSig, Option[MethodNode]]
+    def resolvePossibleSigs(sig: MethodSig): Option[Seq[MethodSig]]
   }
 }
 class ClassManager(getClassFile: String => Option[Array[Byte]]) extends ClassManager.ReadOnly {
@@ -43,15 +44,21 @@ class ClassManager(getClassFile: String => Option[Array[Byte]]) extends ClassMan
   }
 
   def resolvePossibleSigs(sig: MethodSig): Option[Seq[MethodSig]] = {
+    def superDefiner =
+      getLinearSuperclasses(sig.cls)
+        .iterator
+        .map(c => sig.copy(cls = c))
+        .find(loadMethod(_).nonEmpty)
+
     if (sig.static) {
       if (sig.name == "<clinit>") Some(Seq(sig))
-      else {
-        getLinearSuperclasses(sig.cls).iterator
-          .map(c => sig.copy(cls = c))
-          .find(loadMethod(_).nonEmpty)
-          .map(Seq(_))
-      }
-    }else Some(getAllSubtypes(sig.cls).map(c => sig.copy(cls = c)))
+      else superDefiner.map(Seq(_))
+    }else {
+      Some(
+        superDefiner.toSeq ++
+        getAllSubtypes(sig.cls).map(c => sig.copy(cls = c))
+      )
+    }
   }
 
   def getAllSubtypes(cls: JType.Cls): Seq[JType.Cls] = {

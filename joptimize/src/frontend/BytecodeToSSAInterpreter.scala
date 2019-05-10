@@ -259,11 +259,11 @@ class BytecodeToSSAInterpreter(merges: mutable.LinkedHashSet[SSA.Phi],
         (op, new SSA.ChangedState(op))
       case INVOKEVIRTUAL =>
         val insn2 = insn.asInstanceOf[MethodInsnNode]
-        val op = new SSA.InvokeVirtual(state, vs, insn2.owner, insn2.name, Desc.read(insn2.desc))
+        val op = new SSA.InvokeVirtual(state, vs, insn2.owner, insn2.name, Desc.read(insn2.desc), false)
         (op, new SSA.ChangedState(op))
       case INVOKEINTERFACE =>
         val insn2 = insn.asInstanceOf[MethodInsnNode]
-        val op = new SSA.InvokeInterface(state, vs, insn2.owner, insn2.name, Desc.read(insn2.desc))
+        val op = new SSA.InvokeVirtual(state, vs, insn2.owner, insn2.name, Desc.read(insn2.desc), true)
         (op, new SSA.ChangedState(op))
       case INVOKESPECIAL =>
         val insn2 = insn.asInstanceOf[MethodInsnNode]

@@ -1,9 +1,10 @@
 package joptimize.backend
 
-import joptimize.Util
+import joptimize.{Logger, Util}
 import joptimize.model.{Desc, JType, MethodSig, SSA}
 import org.objectweb.asm.tree._
 import org.objectweb.asm.{Handle, Opcodes}
+
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 
@@ -16,9 +17,10 @@ import scala.collection.mutable
 object BytecodeDCE {
   def apply(entrypoints: scala.Seq[MethodSig],
             classNodes: Seq[ClassNode],
-            findSubtypes: JType.Cls => Seq[JType.Cls],
+            resolvePossibleSigs: MethodSig => Seq[MethodSig],
             getLinearSuperclasses: JType.Cls => Seq[JType.Cls],
-            ignore: String => Boolean): Seq[ClassNode] = {
+            ignore: String => Boolean,
+            log: Logger.Global): Seq[ClassNode] = {
 
     val classNodeMap = classNodes.map{cn => (JType.Cls(cn.name), cn)}.toMap
     val allMethodSigs = for{
@@ -66,10 +68,10 @@ object BytecodeDCE {
               Desc.read(current.desc), current.getOpcode == Opcodes.INVOKESTATIC
             )
 
-            val subtypes = if (sig.static) getLinearSuperclasses(sig.cls) else findSubtypes(sig.cls)
-            if (sig.static) subtypes.foreach(seenClasses.add)
+            val possibleSigs = resolvePossibleSigs(sig)
 
-            val possibleSigs = subtypes.map(st => sig.copy(cls = st)) ++ Seq(sig)
+            seenClasses.add(sig.cls)
+            possibleSigs.foreach(sig => seenClasses.add(sig.cls))
 
             queue.enqueue(possibleSigs.filter(methodSigMap.contains):_*)
             sig.desc.ret match{

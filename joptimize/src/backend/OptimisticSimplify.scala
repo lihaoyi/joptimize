@@ -68,16 +68,20 @@ object OptimisticSimplify {
           (name, desc, Some(properties.liveArgs))
         }
 
+      val mangledCls =
+        if (n.isInstanceOf[SSA.InvokeStatic] || n.isInstanceOf[SSA.InvokeSpecial]) n.cls
+        else inferred(n.srcs(0)).asInstanceOf[JType.Cls]
+
       if (properties.pure){
         val replacement = prepareNodeReplacement(inferred, n)
         replacement match{
           case Some(r) => constantFoldNode(inferred, r, n)
           case None =>
             purifyNode(n)
-            mangleInvocation(n, liveArgsOpt, mangledName, mangledDesc)
+            mangleInvocation(n, liveArgsOpt, mangledName, mangledDesc, mangledCls)
         }
       }else{
-        mangleInvocation(n, liveArgsOpt, mangledName, mangledDesc)
+        mangleInvocation(n, liveArgsOpt, mangledName, mangledDesc, mangledCls)
       }
 
     case p: SSA.Phi =>
@@ -181,7 +185,8 @@ object OptimisticSimplify {
   def mangleInvocation(n: SSA.Invoke,
                        liveArgsOpt: Option[Set[Int]],
                        mangledName: String,
-                       mangledDesc: Desc) = {
+                       mangledDesc: Desc,
+                       mangledCls: JType.Cls) = {
     for (liveArgs <- liveArgsOpt) {
       val (live, die) = n.srcs.zipWithIndex.partition {
         case (a, i) => (!n.sig.static && i == 0) || liveArgs(i)
@@ -191,5 +196,6 @@ object OptimisticSimplify {
     }
     n.name = mangledName
     n.desc = mangledDesc
+    n.cls = mangledCls
   }
 }

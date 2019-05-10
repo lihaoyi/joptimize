@@ -126,7 +126,8 @@ object Backend {
                   res
                 }
               },
-              argMapping
+              argMapping,
+              cls => classManager.loadClassCache(cls).map(c => (c.access & Opcodes.ACC_INTERFACE) != 0)
             )
         }
         newNode.desc = mangledDesc.unparse
@@ -156,6 +157,8 @@ object Backend {
       newMethods.groupBy(_._1).mapValues(_.map(_._2))
 
     for((cn, mns) <- grouped) yield {
+      log.pprint(cn.name)
+      log.pprint(mns.map(_.name))
       if (cn.attrs != null) Util.removeFromJavaList(cn.attrs)(_.`type` == "ScalaSig")
       if (cn.attrs != null) Util.removeFromJavaList(cn.attrs)(_.`type` == "ScalaInlineInfo")
       if (cn.visibleAnnotations != null) {
@@ -170,9 +173,10 @@ object Backend {
       BytecodeDCE.apply(
         entrypoints,
         grouped.keys.toSeq,
-        findSubtypes = classManager.getAllSubtypes,
+        resolvePossibleSigs = classManager.resolvePossibleSigs(_).toSeq.flatten,
         getLinearSuperclasses = classManager.getLinearSuperclasses,
-        ignore = ignore
+        ignore = ignore,
+        log = log
       )
     }
     outClasses
@@ -184,7 +188,8 @@ object Backend {
                         log: Logger.InferredMethod,
                         classExists: JType.Cls => Boolean,
                         resolvedProperties: (InferredSig, Boolean) => ProgramAnalyzer.Properties,
-                        argMapping: Map[Int, Int]) = log.block{
+                        argMapping: Map[Int, Int],
+                        isInterface: JType.Cls => Option[Boolean]) = log.block{
 
 
 
@@ -236,7 +241,8 @@ object Backend {
       nodesToBlocks,
       analyzeBlockStructure(result.methodBody)._1,
       postRegisterAllocNaming,
-      log
+      log,
+      isInterface
     )
 
     log.println("================ OUTPUT BYTECODE ================")

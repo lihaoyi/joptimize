@@ -23,7 +23,8 @@ object CodeGenMethod{
             nodesToBlocks: Map[SSA.Val, SSA.Block],
             cfg: Seq[(SSA.Control, SSA.Control)],
             naming: Namer.Result,
-            log: Logger.InferredMethod) = log.block{
+            log: Logger.InferredMethod,
+            isInterface: JType.Cls => Option[Boolean]) = log.block{
 
     val blocksToNodes = nodesToBlocks.groupBy(_._2).map{case (k, v) => (k, v.keys)}
     val sortedControls = sortControlFlowGraph(cfg)
@@ -55,7 +56,8 @@ object CodeGenMethod{
               val destination = srcBlock.downstreamList.collect{case t: SSA.False => t}.head
               if (blockIndices(destination) == blockIndices(control) + 1) None
               else Some(labels(destination))
-            }
+            },
+            isInterface
           )
 
           insns.appendAll(code)
@@ -64,8 +66,10 @@ object CodeGenMethod{
           for(node <- blockNodes){
             if (naming.savedLocals.contains(node) && !node.isInstanceOf[SSA.Arg]){
               val nodeInsns =
-                if (node.isInstanceOf[SSA.ChangedState]) generateStateChangeBytecode(node, savedLocalNumbers)
-                else generateValBytecode(node, savedLocalNumbers)
+                if (node.isInstanceOf[SSA.ChangedState]) {
+                  generateStateChangeBytecode(node, savedLocalNumbers, isInterface)
+                }
+                else generateValBytecode(node, savedLocalNumbers, isInterface)
 
 //              val printer = new Textifier
 //              val methodPrinter = new TraceMethodVisitor(printer)
@@ -90,7 +94,7 @@ object CodeGenMethod{
       case phi: SSA.Phi if phi.getSize != 0 =>
         for((k, v) <- phi.incoming){
           val (insns, footer) = blockCode(blockIndices(k))
-          val added = rec(v, savedLocalNumbers) ++ Seq(new VarInsnNode(saveOp(phi), savedLocalNumbers(phi)))
+          val added = rec(v, savedLocalNumbers, isInterface) ++ Seq(new VarInsnNode(saveOp(phi), savedLocalNumbers(phi)))
           blockCode(blockIndices(k)) = (insns ++ added, footer)
         }
       case _ => //do nothing
@@ -106,10 +110,12 @@ object CodeGenMethod{
     (blockCode, finalInsns)
   }
 
-  def generateStateChangeBytecode(node: SSA.Val, savedLocalNumbers: Map[SSA.Val, Int]) = {
+  def generateStateChangeBytecode(node: SSA.Val,
+                                  savedLocalNumbers: Map[SSA.Val, Int],
+                                  isInterface: JType.Cls => Option[Boolean]) = {
     node.upstream
       .collect { case v: SSA.Val if !savedLocalNumbers.contains(v) =>
-        generateValBytecodeSideEffects(v, savedLocalNumbers)
+        generateValBytecodeSideEffects(v, savedLocalNumbers, isInterface)
       }
       .flatten
   }
@@ -135,19 +141,22 @@ object CodeGenMethod{
   }
 
 
-  def rec(ssa: SSA.Val, savedLocals: Map[SSA.Val, Int]): Seq[AbstractInsnNode] = {
-    if (ssa.isInstanceOf[SSA.ChangedState]) generateStateChangeBytecode(ssa, savedLocals)
+  def rec(ssa: SSA.Val,
+          savedLocals: Map[SSA.Val, Int],
+          isInterface: JType.Cls => Option[Boolean]): Seq[AbstractInsnNode] = {
+    if (ssa.isInstanceOf[SSA.ChangedState]) generateStateChangeBytecode(ssa, savedLocals, isInterface)
     else if (ssa.isInstanceOf[SSA.Phi] && ssa.getSize == 0) Nil
     else if (savedLocals.contains(ssa)) Seq(new VarInsnNode(loadOp(ssa), savedLocals(ssa)))
-    else generateValBytecode(ssa, savedLocals)
+    else generateValBytecode(ssa, savedLocals, isInterface)
   }
 
   def generateJumpBytecode(ssa: SSA.Jump,
                            savedLocals: Map[SSA.Val, Int],
                            jumpLabel: SSA.Control => LabelNode,
                            switchLabels: SSA.Control => (LabelNode, Seq[LabelNode]),
-                           fallthroughLabel: SSA.Control => Option[LabelNode]): Seq[AbstractInsnNode] = {
-    val upstreams = ssa.upstreamVals.flatMap(rec(_, savedLocals))
+                           fallthroughLabel: SSA.Control => Option[LabelNode],
+                           isInterface: JType.Cls => Option[Boolean]): Seq[AbstractInsnNode] = {
+    val upstreams = ssa.upstreamVals.flatMap(rec(_, savedLocals, isInterface))
     val current: Seq[AbstractInsnNode] = ssa match{
       case n: SSA.UnaBranch =>
         val goto = fallthroughLabel(n).map(new JumpInsnNode(GOTO, _))
@@ -174,10 +183,12 @@ object CodeGenMethod{
 
   }
 
-  def generateValBytecode(ssa: SSA.Val, savedLocals: Map[SSA.Val, Int]): Seq[AbstractInsnNode] = {
+  def generateValBytecode(ssa: SSA.Val,
+                          savedLocals: Map[SSA.Val, Int],
+                          isInterface: JType.Cls => Option[Boolean]): Seq[AbstractInsnNode] = {
     if (ssa.isInstanceOf[SSA.Phi]) Nil
     else {
-      val upstreams = ssa.upstreamVals.flatMap(rec(_, savedLocals))
+      val upstreams = ssa.upstreamVals.flatMap(rec(_, savedLocals, isInterface))
       val current: Seq[AbstractInsnNode] = ssa match{
         case _: SSA.ChangedState => Nil
         case _: SSA.Copy => Nil
@@ -227,9 +238,8 @@ object CodeGenMethod{
         case n: SSA.InvokeSpecial =>
           Seq(new MethodInsnNode(INVOKESPECIAL, n.cls.name, n.name, n.desc.unparse))
         case n: SSA.InvokeVirtual =>
-          Seq(new MethodInsnNode(INVOKEVIRTUAL, n.cls.name, n.name, n.desc.unparse))
-        case n: SSA.InvokeInterface =>
-          Seq(new MethodInsnNode(INVOKEINTERFACE, n.cls.name, n.name, n.desc.unparse))
+          val opcode = if (isInterface(n.cls).getOrElse(n.interface)) INVOKEINTERFACE else INVOKEVIRTUAL
+          Seq(new MethodInsnNode(opcode, n.cls.name, n.name, n.desc.unparse))
         case n: SSA.InvokeDynamic=>
           Seq(new InvokeDynamicInsnNode(
             n.name, n.desc.unparse,
@@ -261,10 +271,12 @@ object CodeGenMethod{
   }
 
 
-  def generateValBytecodeSideEffects(ssa: SSA.Val, savedLocals: Map[SSA.Val, Int]): Seq[AbstractInsnNode] = {
+  def generateValBytecodeSideEffects(ssa: SSA.Val,
+                                     savedLocals: Map[SSA.Val, Int],
+                                     isInterface: JType.Cls => Option[Boolean]): Seq[AbstractInsnNode] = {
     if (ssa.isInstanceOf[SSA.Phi]) Nil
     else {
-      val upstreams = ssa.upstreamVals.flatMap(rec(_, savedLocals))
+      val upstreams = ssa.upstreamVals.flatMap(rec(_, savedLocals, isInterface))
       val current: Seq[AbstractInsnNode] = ssa match{
         case _: SSA.State | _: SSA.Copy | _: SSA.Phi | _: SSA.Arg => Nil
         case n: SSA.BinOp => Seq(new InsnNode(n.opcode.i), new InsnNode(POP))
@@ -282,10 +294,8 @@ object CodeGenMethod{
           Seq(new MethodInsnNode(INVOKESPECIAL, n.cls.name, n.name, n.desc.unparse)) ++
           (if (n.desc.ret.size == 0) Nil else Seq(new InsnNode(POP)))
         case n: SSA.InvokeVirtual =>
-          Seq(new MethodInsnNode(INVOKEVIRTUAL, n.cls.name, n.name, n.desc.unparse)) ++
-          (if (n.desc.ret.size == 0) Nil else Seq(new InsnNode(POP)))
-        case n: SSA.InvokeInterface =>
-          Seq(new MethodInsnNode(INVOKEINTERFACE, n.cls.name, n.name, n.desc.unparse)) ++
+          val opcode = if (isInterface(n.cls).getOrElse(n.interface)) INVOKEINTERFACE else INVOKEVIRTUAL
+          Seq(new MethodInsnNode(opcode, n.cls.name, n.name, n.desc.unparse)) ++
           (if (n.desc.ret.size == 0) Nil else Seq(new InsnNode(POP)))
         case n: SSA.InvokeDynamic =>
           Seq(new InvokeDynamicInsnNode(
