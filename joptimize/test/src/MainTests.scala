@@ -327,15 +327,17 @@ object MainTests extends TestSuite{
     }
     'inlining - {
       'Chaining - {
-        'hello0 - annotatedTest
-        'hello1 - annotatedTest
-        'hello2 - annotatedTest
-        'hello3 - annotatedTest
-        'hello4 - annotatedTest
-        'hello5 - annotatedTest
-        'hello6 - annotatedTest
-        'hello7 - annotatedTest
-        'hello8 - annotatedTest
+        'noneGet - annotatedTest
+        'someGet - annotatedTest
+        'castSomeGet - annotatedTest
+        'get - annotatedTest
+        'map - annotatedTest
+        'mapInnerClass - annotatedTest
+        'flatMap - annotatedTest
+        'flatMapMap - annotatedTest
+        'mapTwice - annotatedTest
+        'mapTwice2 - annotatedTest
+        'flatMapMapChain - annotatedTest
       }
     }
   }
