@@ -16,4 +16,5 @@ public @interface Test {
     String[] checkNotMangled() default {};
     int[] addedNumConst() default {};
     int[] removedNumConst() default {};
+    boolean inline() default false;
 }

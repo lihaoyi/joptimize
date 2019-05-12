@@ -37,7 +37,8 @@ object Chaining {
 
   @test.Test(
     inputs = Array(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12),
-    checkClassRemoved = Array("Chaining$NamedFunction")
+    checkClassRemoved = Array("Chaining$NamedFunction"),
+    inline = true
   )
   def mapInnerClass(a: Int): Int = {
     val xOpt = if (a % 2 == 0) Some(1) else None

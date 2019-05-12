@@ -148,7 +148,8 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
     ProgramAnalyzer.ProgramResult(
       visitedMethods,
       visitedResolved.toMap,
-      staticFieldReferencedClasses
+      staticFieldReferencedClasses,
+      callGraph.toSeq
     )
   }
 
@@ -288,7 +289,8 @@ object ProgramAnalyzer {
   }
   case class ProgramResult(visitedMethods: collection.Map[InferredSig, MethodResult],
                            visitedResolved: collection.Map[InferredSig, Properties],
-                           staticFieldReferencedClasses: collection.Set[JType.Cls])
+                           staticFieldReferencedClasses: collection.Set[JType.Cls],
+                           callGraph: Seq[CallEdge])
   case class MethodResult(methodBody: MethodBody,
                           inferred: mutable.LinkedHashMap[SSA.Val, IType],
                           liveBlocks: Set[SSA.Block],

@@ -26,40 +26,80 @@ object Backend {
     val combined = analyzerRes.visitedResolved.mapValues(Right(_)) ++ analyzerRes.visitedMethods.mapValues(Left(_))
 
     log.pprint(combined.map{case (k, v) => (k.toString, loadClassCache.contains(k.method.cls), loadMethodCache.contains(k.method))})
-    val highestMethodDefiners = log.block {
-      for {
-        (isig, _) <- combined
-        if loadMethodCache.contains(isig.method)
-      } yield {
-        var parentClasses = List.empty[JType.Cls]
-        var current = isig.method.cls
-        while ( {
-          if (!loadClassCache.contains(current)) false
-          else {
-            parentClasses = current :: parentClasses
-            loadClassCache(current).superName match {
-              case null => false
-              case name =>
-                current = JType.Cls(name)
-                true
-            }
-          }
-        }) ()
+    val highestMethodDefiners = computeHighestMethodDefiners(
+      analyzerRes,
+      log,
+      loadMethodCache,
+      loadClassCache,
+      combined
+    )
 
-        val highestCls = parentClasses
-          .find { cls =>
+    val newMethods = generateNewMethods(
+      analyzerRes,
+      entrypoints,
+      log,
+      loadMethodCache,
+      loadClassCache,
+      combined,
+      highestMethodDefiners,
+      classManager
+    )
 
-            val key = isig.copy(method = isig.method.copy(cls = cls))
-            val res = analyzerRes.visitedResolved.contains(key)
-            res
-          }
-          .get
 
-        (isig, highestCls)
+    if (eliminateOldMethods) {
+      for ((k, cn) <- loadClassCache) {
+        cn.methods.clear()
       }
     }
 
-    val newMethods = log.block {
+    val visitedInterfaces =
+      Util.findSeenInterfaces(loadClassCache, newMethods.map(_._1)) ++
+      Seq("scala/runtime/Nothing$")
+
+    log.pprint(visitedInterfaces)
+    val grouped =
+      (visitedInterfaces ++ analyzerRes.staticFieldReferencedClasses.map(_.name))
+        .filter(s => loadClassCache.contains(JType.Cls(s)))
+        .map(loadClassCache(_) -> Nil)
+        .toMap ++
+      newMethods.groupBy(_._1).mapValues(_.map(_._2))
+
+    for((cn, mns) <- grouped) yield {
+      log.pprint(cn.name)
+      log.pprint(mns.map(_.name))
+      if (cn.attrs != null) Util.removeFromJavaList(cn.attrs)(_.`type` == "ScalaSig")
+      if (cn.attrs != null) Util.removeFromJavaList(cn.attrs)(_.`type` == "ScalaInlineInfo")
+      if (cn.visibleAnnotations != null) {
+        Util.removeFromJavaList(cn.visibleAnnotations )(_.desc == "Lscala/reflect/ScalaSignature;")
+      }
+
+      cn.methods.addAll(mns.asJava)
+    }
+    def ignore(s: String) = s.startsWith("java/")
+
+    val outClasses = log.block{
+      BytecodeDCE.apply(
+        entrypoints,
+        grouped.keys.toSeq,
+        resolvePossibleSigs = classManager.resolvePossibleSigs(_).toSeq.flatten,
+        getLinearSuperclasses = classManager.getLinearSuperclasses,
+        ignore = ignore,
+        log = log
+      )
+    }
+    outClasses
+//    grouped.keys.toSeq
+  }
+
+  def generateNewMethods(analyzerRes: ProgramAnalyzer.ProgramResult,
+                         entrypoints: Seq[MethodSig],
+                         log: Logger.Global,
+                         loadMethodCache: Map[MethodSig, MethodNode],
+                         loadClassCache: Map[JType.Cls, ClassNode],
+                         combined: collection.Map[InferredSig, Either[ProgramAnalyzer.MethodResult, ProgramAnalyzer.Properties]],
+                         highestMethodDefiners: collection.Map[InferredSig, JType.Cls],
+                         classManager: ClassManager.ReadOnly) = {
+    log.block {
       for {
         (isig, result) <- combined.toList
         if loadClassCache.contains(isig.method.cls)
@@ -107,7 +147,7 @@ object Backend {
               (invokedSig, invokeSpecial) => {
 
                 if (invokeSpecial) {
-                  analyzerRes.visitedMethods.get(invokedSig) match{
+                  analyzerRes.visitedMethods.get(invokedSig) match {
                     case Some(res) => res.props
                     case None => ProgramAnalyzer.dummyProps(invokedSig.method, optimistic = false)
                   }
@@ -136,51 +176,45 @@ object Backend {
         loadClassCache(isig.method.cls) -> newNode
       }
     }
+  }
 
+  def computeHighestMethodDefiners(analyzerRes: ProgramAnalyzer.ProgramResult,
+                                   log: Logger.Global,
+                                   loadMethodCache: Map[MethodSig, MethodNode],
+                                   loadClassCache: Map[JType.Cls, ClassNode],
+                                   combined: collection.Map[InferredSig, Either[ProgramAnalyzer.MethodResult, ProgramAnalyzer.Properties]]) = {
+    log.block {
+      for {
+        (isig, _) <- combined
+        if loadMethodCache.contains(isig.method)
+      } yield {
+        var parentClasses = List.empty[JType.Cls]
+        var current = isig.method.cls
+        while ( {
+          if (!loadClassCache.contains(current)) false
+          else {
+            parentClasses = current :: parentClasses
+            loadClassCache(current).superName match {
+              case null => false
+              case name =>
+                current = JType.Cls(name)
+                true
+            }
+          }
+        }) ()
 
-    if (eliminateOldMethods) {
-      for ((k, cn) <- loadClassCache) {
-        cn.methods.clear()
+        val highestCls = parentClasses
+          .find { cls =>
+
+            val key = isig.copy(method = isig.method.copy(cls = cls))
+            val res = analyzerRes.visitedResolved.contains(key)
+            res
+          }
+          .get
+
+        (isig, highestCls)
       }
     }
-
-    val visitedInterfaces =
-      Util.findSeenInterfaces(loadClassCache, newMethods.map(_._1)) ++
-      Seq("scala/runtime/Nothing$")
-
-    log.pprint(visitedInterfaces)
-    val grouped =
-      (visitedInterfaces ++ analyzerRes.staticFieldReferencedClasses.map(_.name))
-        .filter(s => loadClassCache.contains(JType.Cls(s)))
-        .map(loadClassCache(_) -> Nil)
-        .toMap ++
-      newMethods.groupBy(_._1).mapValues(_.map(_._2))
-
-    for((cn, mns) <- grouped) yield {
-      log.pprint(cn.name)
-      log.pprint(mns.map(_.name))
-      if (cn.attrs != null) Util.removeFromJavaList(cn.attrs)(_.`type` == "ScalaSig")
-      if (cn.attrs != null) Util.removeFromJavaList(cn.attrs)(_.`type` == "ScalaInlineInfo")
-      if (cn.visibleAnnotations != null) {
-        Util.removeFromJavaList(cn.visibleAnnotations )(_.desc == "Lscala/reflect/ScalaSignature;")
-      }
-
-      cn.methods.addAll(mns.asJava)
-    }
-    def ignore(s: String) = s.startsWith("java/")
-
-    val outClasses = log.block{
-      BytecodeDCE.apply(
-        entrypoints,
-        grouped.keys.toSeq,
-        resolvePossibleSigs = classManager.resolvePossibleSigs(_).toSeq.flatten,
-        getLinearSuperclasses = classManager.getLinearSuperclasses,
-        ignore = ignore,
-        log = log
-      )
-    }
-    outClasses
-//    grouped.keys.toSeq
   }
 
   def processMethodBody(originalSig: MethodSig,
