@@ -30,13 +30,19 @@ object Chaining {
 
     if (res.isEmpty) -1 else res.get
   }
-  @test.Test(inputs = Array(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12))
+
+  class NamedFunction(a: Int) extends Function1[Int, Int]{
+    def apply(x: Int) = x + a
+  }
+
+  @test.Test(
+    inputs = Array(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12),
+    checkClassRemoved = Array("Chaining$NamedFunction")
+  )
   def mapInnerClass(a: Int): Int = {
     val xOpt = if (a % 2 == 0) Some(1) else None
 
-    val res = xOpt.map(new Function1[Int, Int]{
-      def apply(x: Int) = x + a
-    })
+    val res = xOpt.map(new NamedFunction(a))
 
     if (res.isEmpty) -1 else res.get
   }
