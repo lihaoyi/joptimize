@@ -2,7 +2,8 @@ package joptimize.backend
 
 import joptimize.{FileLogger, Logger, Util}
 import joptimize.algorithms.{Dominator, MultiBiMap, Scheduler}
-import joptimize.analyzer.{ProgramAnalyzer, Namer, Renderer}
+import joptimize.analyzer.ProgramAnalyzer.{CallEdge, MethodResult}
+import joptimize.analyzer.{Namer, ProgramAnalyzer, Renderer}
 import joptimize.frontend.ClassManager
 import joptimize.graph.HavlakLoopTree
 import joptimize.model._
@@ -23,11 +24,16 @@ object Backend {
     val loadMethodCache = classManager.loadMethodCache.collect{case (k, Some(v)) => (k, v)}.toMap
     val loadClassCache = classManager.loadClassCache.collect{case (k, Some(v)) => (k, v)}.toMap
     //    pprint.log(loadMethodCache.keys)
-    val combined = analyzerRes.visitedResolved.mapValues(Right(_)) ++ analyzerRes.visitedMethods.mapValues(Left(_))
 
-    log.pprint(combined.map{case (k, v) => (k.toString, loadClassCache.contains(k.method.cls), loadMethodCache.contains(k.method))})
+
+    val inlinedAnalyzerRes = inline(analyzerRes, log)
+
+    val combined =
+      inlinedAnalyzerRes.visitedResolved.mapValues(Right(_)) ++
+      inlinedAnalyzerRes.visitedMethods.mapValues(Left(_))
+
     val highestMethodDefiners = computeHighestMethodDefiners(
-      analyzerRes,
+      inlinedAnalyzerRes,
       log,
       loadMethodCache,
       loadClassCache,
@@ -35,7 +41,7 @@ object Backend {
     )
 
     val newMethods = generateNewMethods(
-      analyzerRes,
+      inlinedAnalyzerRes,
       entrypoints,
       log,
       loadMethodCache,
@@ -58,7 +64,7 @@ object Backend {
 
     log.pprint(visitedInterfaces)
     val grouped =
-      (visitedInterfaces ++ analyzerRes.staticFieldReferencedClasses.map(_.name))
+      (visitedInterfaces ++ inlinedAnalyzerRes.staticFieldReferencedClasses.map(_.name))
         .filter(s => loadClassCache.contains(JType.Cls(s)))
         .map(loadClassCache(_) -> Nil)
         .toMap ++
@@ -89,6 +95,84 @@ object Backend {
     }
     outClasses
 //    grouped.keys.toSeq
+  }
+
+  def inline(analyzerRes: ProgramAnalyzer.ProgramResult, log: Logger.Global) = log.block{
+    val inlineableEdges = analyzerRes
+      .callGraph
+      .filter(e => e.called.method.name != "<init>" && e.called.method.name != "<clinit>")
+      .groupBy(_.called)
+      .values
+      .collect { case Seq(singleEdge) => singleEdge }
+
+    val inlineableEdgeSet = inlineableEdges.toSet
+    log.pprint(inlineableEdges.map(_.toString))
+    val inlinedMethodsSet = inlineableEdges.map(_.called).toSet
+    val visitedMethods = mutable.LinkedHashMap.empty[InferredSig, MethodResult]
+    for((k, v) <- analyzerRes.visitedMethods){
+      visitedMethods.put(k, v)
+    }
+
+
+    for {
+      edge <- inlineableEdges
+      node <- edge.node
+    } {
+      val calledMethod = analyzerRes.visitedMethods(edge.called)
+      log.graph("edge.caller") {
+        Renderer.dumpSvg(analyzerRes.visitedMethods(edge.caller).methodBody)
+      }
+      log.graph("edge.called") {
+        Renderer.dumpSvg(analyzerRes.visitedMethods(edge.called).methodBody)
+      }
+      val calledBody = calledMethod.methodBody
+
+      for ((arg, src) <- calledBody.args.zip(node.srcs)) Util.replace(arg, src)
+
+      val returnedVals = mutable.Buffer.empty[(SSA.Val, SSA.Jump)]
+      val returnedStates = mutable.Buffer.empty[(SSA.State, SSA.Jump)]
+      calledBody.allTerminals.foreach {
+        case r: SSA.ReturnVal =>
+          returnedVals.append(r.src -> r)
+          returnedStates.append(r.state -> r)
+        case r: SSA.Return =>
+          returnedStates.append(r.state -> r)
+      }
+
+      val Seq(nextState) = node.downstreamList.collect { case s: SSA.State => s }
+
+      (returnedVals, returnedStates) match {
+        case (Seq(), Seq((rState, ret))) =>
+          Util.replace(nextState, rState)
+          rState.downstreamRemoveAll(ret)
+        case (Seq((rVal, ret0)), Seq((rState, ret1))) =>
+          Util.replace(nextState, rState)
+          rState.downstreamRemoveAll(ret1)
+          Util.replace(node, rVal)
+          rVal.downstreamRemoveAll(ret0)
+        case _ =>
+      }
+      val calledStartBlock = calledMethod.liveBlocks.find(_.upstream.isEmpty).get
+      calledStartBlock.downstreamList.foreach {
+        case s: SSA.ChangedState =>
+          Util.replace(s, node.state)
+//          s.replaceUpstream(calledStartBlock, node.state)
+        case _ => //do nothing
+      }
+
+      visitedMethods(edge.caller) = visitedMethods(edge.caller).copy(inferred = visitedMethods(edge.caller).inferred ++ visitedMethods(edge.called).inferred)
+      visitedMethods.remove(edge.called)
+      log.graph("INLINED " + edge) {
+        Renderer.dumpSvg(analyzerRes.visitedMethods(edge.caller).methodBody)
+      }
+    }
+
+    ProgramAnalyzer.ProgramResult(
+      visitedMethods,
+      analyzerRes.visitedResolved.filterKeys(!inlinedMethodsSet.contains(_)),
+      analyzerRes.staticFieldReferencedClasses,
+      analyzerRes.callGraph.filter(!inlineableEdgeSet(_))
+    )
   }
 
   def generateNewMethods(analyzerRes: ProgramAnalyzer.ProgramResult,
