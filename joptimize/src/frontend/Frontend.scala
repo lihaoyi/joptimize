@@ -54,15 +54,16 @@ class Frontend(val classManager: ClassManager) {
 
     case merge: SSA.Merge =>
       if (merge.incoming.size == 1 && merge.next != null) {
-        for(next <- Option(merge.next) ++ merge.nextPhis){
+        for(next <- Option(merge.next) ++ merge.nextPhis ++ merge.blockInvokes){
 
           next.replaceUpstream(merge, merge.incoming.head)
         }
 
         merge.incoming.head.next = merge.next
         merge.incoming.head.nextPhis = merge.nextPhis
+        merge.incoming.head.blockInvokes = merge.blockInvokes
         merge.next = null
-        (merge.incoming.head +: merge.phis) ++ merge.nextPhis
+        (merge.incoming.head +: merge.phis) ++ merge.nextPhis ++ merge.blockInvokes
       }
       else Nil
   }

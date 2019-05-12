@@ -17,6 +17,8 @@ case class MethodBody(var args: Seq[SSA.Arg], var allTerminals: Seq[SSA.Control]
     val allVertices = getAllVertices()
     allVertices.foreach(_.checkLinks())
 
+    val starts = allVertices.collect{case s: SSA.Start => s}
+    assert(starts.size == 1, "Incorrect number of SSA.Start nodes: " + starts.mkString(", "))
     if (checkDead) {
       val missing = for {
         v <- allVertices

@@ -26,7 +26,8 @@ object Backend {
     //    pprint.log(loadMethodCache.keys)
 
 
-    val inlinedAnalyzerRes = inline(analyzerRes, log)
+    val inlinedAnalyzerRes = inlineAll(analyzerRes, classManager, log)
+//    val inlinedAnalyzerRes = analyzerRes
 
     val combined =
       inlinedAnalyzerRes.visitedResolved.mapValues(Right(_)) ++
@@ -97,7 +98,9 @@ object Backend {
 //    grouped.keys.toSeq
   }
 
-  def inline(analyzerRes: ProgramAnalyzer.ProgramResult, log: Logger.Global) = log.block{
+  def inlineAll(analyzerRes: ProgramAnalyzer.ProgramResult,
+                classManager: ClassManager.ReadOnly,
+                log: Logger.Global) = log.block{
     val inlineableEdges = analyzerRes
       .callGraph
       .filter(e => e.called.method.name != "<init>" && e.called.method.name != "<clinit>")
@@ -118,53 +121,7 @@ object Backend {
       edge <- inlineableEdges
       node <- edge.node
     } {
-      val calledMethod = analyzerRes.visitedMethods(edge.called)
-      log.graph("edge.caller") {
-        Renderer.dumpSvg(analyzerRes.visitedMethods(edge.caller).methodBody)
-      }
-      log.graph("edge.called") {
-        Renderer.dumpSvg(analyzerRes.visitedMethods(edge.called).methodBody)
-      }
-      val calledBody = calledMethod.methodBody
-
-      for ((arg, src) <- calledBody.args.zip(node.srcs)) Util.replace(arg, src)
-
-      val returnedVals = mutable.Buffer.empty[(SSA.Val, SSA.Jump)]
-      val returnedStates = mutable.Buffer.empty[(SSA.State, SSA.Jump)]
-      calledBody.allTerminals.foreach {
-        case r: SSA.ReturnVal =>
-          returnedVals.append(r.src -> r)
-          returnedStates.append(r.state -> r)
-        case r: SSA.Return =>
-          returnedStates.append(r.state -> r)
-      }
-
-      val Seq(nextState) = node.downstreamList.collect { case s: SSA.State => s }
-
-      (returnedVals, returnedStates) match {
-        case (Seq(), Seq((rState, ret))) =>
-          Util.replace(nextState, rState)
-          rState.downstreamRemoveAll(ret)
-        case (Seq((rVal, ret0)), Seq((rState, ret1))) =>
-          Util.replace(nextState, rState)
-          rState.downstreamRemoveAll(ret1)
-          Util.replace(node, rVal)
-          rVal.downstreamRemoveAll(ret0)
-        case _ =>
-      }
-      val calledStartBlock = calledMethod.liveBlocks.find(_.upstream.isEmpty).get
-      calledStartBlock.downstreamList.foreach {
-        case s: SSA.ChangedState =>
-          Util.replace(s, node.state)
-//          s.replaceUpstream(calledStartBlock, node.state)
-        case _ => //do nothing
-      }
-
-      visitedMethods(edge.caller) = visitedMethods(edge.caller).copy(inferred = visitedMethods(edge.caller).inferred ++ visitedMethods(edge.called).inferred)
-      visitedMethods.remove(edge.called)
-      log.graph("INLINED " + edge) {
-        Renderer.dumpSvg(analyzerRes.visitedMethods(edge.caller).methodBody)
-      }
+      inlineSingleMethod(analyzerRes, classManager, log, visitedMethods, edge, node)
     }
 
     ProgramAnalyzer.ProgramResult(
@@ -173,6 +130,152 @@ object Backend {
       analyzerRes.staticFieldReferencedClasses,
       analyzerRes.callGraph.filter(!inlineableEdgeSet(_))
     )
+  }
+
+  def inlineSingleMethod(analyzerRes: ProgramAnalyzer.ProgramResult,
+                         classManager: ClassManager.ReadOnly,
+                         log: Logger.Global,
+                         visitedMethods: mutable.LinkedHashMap[InferredSig, MethodResult],
+                         edge: CallEdge,
+                         node: SSA.Invoke) = {
+    val nodeBlock = node.block.get
+    val calledMethod = analyzerRes.visitedMethods(edge.called)
+    log.graph("edge.caller") {
+      Renderer.dumpSvg(analyzerRes.visitedMethods(edge.caller).methodBody)
+    }
+    log.graph("edge.called") {
+      Renderer.dumpSvg(analyzerRes.visitedMethods(edge.called).methodBody)
+    }
+    val calledBody = calledMethod.methodBody
+
+    for ((arg, src) <- calledBody.args.zip(node.srcs)) Util.replace(arg, src)
+
+    val returnedVals = mutable.Buffer.empty[(SSA.Val, SSA.Jump)]
+    val returnedStates = mutable.Buffer.empty[(SSA.State, SSA.Jump)]
+    calledBody.allTerminals.foreach {
+      case r: SSA.ReturnVal =>
+        returnedVals.append(r.src -> r)
+        returnedStates.append(r.state -> r)
+      case r: SSA.Return =>
+        returnedStates.append(r.state -> r)
+    }
+
+    val Seq(nextState) = node.downstreamList.collect { case s: SSA.ChangedState => s }
+
+    val addedBlocks = (returnedVals, returnedStates) match {
+      case (Seq(), Seq((rState, ret))) =>
+        Util.replace(nextState, rState)
+        rState.downstreamRemoveAll(ret)
+        ret.block.next = nodeBlock.next
+        nodeBlock.next.replaceUpstream(nodeBlock, ret.block)
+        nodeBlock.next match {
+          case m: SSA.Merge =>
+            m.phis.foreach { phi =>
+              nodeBlock.nextPhis = nodeBlock.nextPhis.filter(_ != phi)
+              ret.block.nextPhis = Seq(phi) ++ ret.block.nextPhis
+              phi.replaceUpstream(nodeBlock, ret.block)
+            }
+          case _ => // do nothing
+        }
+        Nil
+      case (Seq((rVal, ret0)), Seq((rState, ret1))) =>
+        Util.replace(nextState, rState)
+        rState.downstreamRemoveAll(ret1)
+        Util.replace(node, rVal)
+        rVal.downstreamRemoveAll(ret0)
+        ret0.block.next = nodeBlock.next
+        nodeBlock.next.replaceUpstream(nodeBlock, ret0.block)
+        nodeBlock.next match {
+          case m: SSA.Merge =>
+            m.phis.foreach { phi =>
+              nodeBlock.nextPhis = nodeBlock.nextPhis.filter(_ != phi)
+              ret0.block.nextPhis = Seq(phi) ++ ret0.block.nextPhis
+              phi.replaceUpstream(nodeBlock, ret0.block)
+            }
+          case _ => // do nothing
+        }
+        Nil
+
+      case (values, states) => // multiple returns
+        val triplets = values.zip(states).map { case ((v, j), (s, _)) => (v, j, s) }
+
+        triplets.foreach { case (v, j, s) =>
+          v.downstreamList.foreach(v.downstreamRemoveAll)
+          s.downstreamList.foreach(s.downstreamRemoveAll)
+        }
+        val valPhi = new SSA.Phi(
+          null,
+          triplets.map { case (v, j, s) => (j.block, v) }.toSet,
+          classManager.mergeTypes(triplets.map { case (v, j, s) => v.jtype }).asInstanceOf[JType]
+        )
+
+        val statePhi = new SSA.Phi(
+          null,
+          triplets.map { case (v, j, s) => (j.block, v) }.toSet,
+          JType.Prim.V
+        )
+
+        triplets.foreach { case (v, j, s) => j.block.nextPhis ++= Seq(statePhi, valPhi) }
+        val merge = new SSA.Merge(
+          triplets.map(_._2.block).toSet,
+          next = nodeBlock.next,
+          phis = Seq(valPhi, statePhi)
+        )
+
+        triplets.foreach { case (v, j, s) =>
+          j.block.next = merge
+        }
+        valPhi.block = merge
+        statePhi.block = merge
+
+        nodeBlock.next.replaceUpstream(nodeBlock, merge)
+        nodeBlock.next match {
+          case m: SSA.Merge =>
+            m.phis.foreach { phi =>
+              nodeBlock.nextPhis = nodeBlock.nextPhis.filter(_ != phi)
+              merge.nextPhis = Seq(phi) ++ merge.nextPhis
+              phi.replaceUpstream(nodeBlock, merge)
+            }
+          case _ => // do nothing
+        }
+
+        Util.replace(nextState, statePhi)
+        Util.replace(node, valPhi)
+        Seq(merge)
+    }
+    val calledStartBlock = calledMethod.liveBlocks.collect { case s: SSA.Start => s }.head
+
+    calledStartBlock.downstreamList.foreach {
+      case s: SSA.ChangedState =>
+        Util.replace(s, node.state)
+      //          s.replaceUpstream(calledStartBlock, node.state)
+      case _ => //do nothing
+    }
+
+    calledStartBlock.next.replaceUpstream(calledStartBlock, nodeBlock)
+    calledStartBlock.next.replaceUpstream(calledStartBlock.startingState, node.state)
+    node.state.downstreamAdd(calledStartBlock.next)
+    calledStartBlock match {
+      case m: SSA.Merge =>
+
+        m.phis.foreach(_.replaceUpstream(calledStartBlock, nodeBlock))
+      case _ => // do nothing
+    }
+    nodeBlock.next = calledStartBlock.next
+    nodeBlock.blockInvokes = nodeBlock.blockInvokes.filter(_ != node)
+
+    visitedMethods(edge.caller) = visitedMethods(edge.caller).copy(
+      inferred = visitedMethods(edge.caller).inferred ++ visitedMethods(edge.called).inferred,
+      liveBlocks =
+        visitedMethods(edge.caller).liveBlocks ++
+        visitedMethods(edge.called).liveBlocks ++
+        addedBlocks
+    )
+    visitedMethods.remove(edge.called)
+    log.graph("INLINED " + edge) {
+      Renderer.dumpSvg(analyzerRes.visitedMethods(edge.caller).methodBody)
+    }
+    analyzerRes.visitedMethods(edge.caller).methodBody.checkLinks()
   }
 
   def generateNewMethods(analyzerRes: ProgramAnalyzer.ProgramResult,
@@ -309,7 +412,19 @@ object Backend {
                         argMapping: Map[Int, Int],
                         isInterface: JType.Cls => Option[Boolean]) = log.block{
 
-
+    // Strip out the SSA.Invoke#block edges from the method body before proceeding with
+    // simplification and code generation.
+    //
+    // These edges are necessary for simplifying the inlining step done earlier, but once
+    // inlining is done, they are unnecessary. They also seem to cause problems with downstream
+    // code generations for unknown reasons
+    result.methodBody.getAllVertices().foreach{
+      case i: SSA.Block => i.blockInvokes = Nil
+      case i: SSA.InvokeStatic => i.block = None
+      case i: SSA.InvokeVirtual=> i.block = None
+      case i: SSA.InvokeSpecial => i.block = None
+      case _ =>
+    }
 
     log.pprint(argMapping)
 

@@ -221,7 +221,7 @@ object Renderer {
 
       case reg: SSA.Merge =>
         val name = if (reg.upstream.isEmpty) "start" else "merge"
-        val rhs = apply(name + reg.insnIndex, reg.upstream.iterator.map(x => atom(fansi.Color.Magenta(naming.savedLocals(x)._2).toString)).toSeq:_*)
+        val rhs = apply(name, reg.upstream.iterator.map(x => atom(fansi.Color.Magenta(naming.savedLocals(x)._2).toString)).toSeq:_*)
         (fansi.Color.Magenta(naming.savedLocals(reg)._2), rhs)
 
       case n: SSA.AThrow => (renderBlock(n), apply("throw", rec(n.src)))

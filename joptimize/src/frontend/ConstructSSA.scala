@@ -32,7 +32,7 @@ object ConstructSSA {
       insns,
       i => regionStarts(insnIndices(i)),
       joptimize.frontend.DataflowExecutor.analyze(
-        sig.cls.name, mn,
+        sig.cls.name, mn, regionStarts,
         new BytecodeToSSAInterpreter(phiMerges0, startRegionLookup, regionStarts, argMapping),
         new SSA.ChangedState(regionStarts(0).get)
       ),

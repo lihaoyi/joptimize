@@ -15,14 +15,8 @@ import scala.collection.mutable
   * @param < V> type of the Value used for the analysis.
   * @author Eric Bruneton
   */
-class Frame[V <: Value, S <: V] (var numLocals: Int, val numStack0: Int){
+class Frame[V <: Value, S <: V, B] (var numLocals: Int, val numStack0: Int){
 
-/**
-  * Constructs a new frame with the given size.
-  *
-  * @param numLocals the maximum number of local variables of the frame.
-  * @param numStack  the maximum stack size of the frame.
-  */
   /**
     * The local variables and the operand stack of this frame. The first {@link #numLocals} elements
     * correspond to the local variables. The following {@link #numStack} elements correspond to the
@@ -38,7 +32,7 @@ class Frame[V <: Value, S <: V] (var numLocals: Int, val numStack0: Int){
     *
     * @param frame a frame.
     */
-  def this(frame: Frame[V, S]) {
+  def this(frame: Frame[V, S, B]) {
     this(frame.numLocals, frame.values.length - frame.numLocals)
     init(frame) // NOPMD(ConstructorCallsOverridableMethod): can't fix for backward compatibility.
 
@@ -50,7 +44,7 @@ class Frame[V <: Value, S <: V] (var numLocals: Int, val numStack0: Int){
     * @param frame a frame.
     * @return this frame.
     */
-  def init(frame: Frame[V, S]) = {
+  def init(frame: Frame[V, S, B]) = {
     System.arraycopy(frame.values, 0, values, 0, values.length)
     numStack = frame.numStack
     state = frame.state
@@ -162,7 +156,9 @@ class Frame[V <: Value, S <: V] (var numLocals: Int, val numStack0: Int){
     *                           POP on an empty operand stack).
     */
   @throws[AnalyzerException]
-  def execute(insn: AbstractInsnNode, interpreter: Interpreter[V, S]): Unit = {
+  def execute(insn: AbstractInsnNode,
+              interpreter: Interpreter[V, S, B],
+              block: B): Unit = {
     var value1: V = null.asInstanceOf[V]
     var value2: V = null.asInstanceOf[V]
     var value3: V = null.asInstanceOf[V]
@@ -381,7 +377,7 @@ class Frame[V <: Value, S <: V] (var numLocals: Int, val numStack0: Int){
           i -= 1
         }
         if (insn.getOpcode != Opcodes.INVOKESTATIC) valueList.insert(0, pop())
-        val (res, newState) = interpreter.naryOperation(insn, valueList, state)
+        val (res, newState) = interpreter.naryOperation(insn, valueList, state, block)
         state = newState
         if (Type.getReturnType(methodDescriptor) ne Type.VOID_TYPE) push(res)
 
@@ -394,7 +390,7 @@ class Frame[V <: Value, S <: V] (var numLocals: Int, val numStack0: Int){
           valueList.insert(0, pop())
           i -= 1
         }
-        val (res, newState) = interpreter.naryOperation(insn, valueList, state)
+        val (res, newState) = interpreter.naryOperation(insn, valueList, state, block)
         if (Type.getReturnType(methodDescriptor) ne Type.VOID_TYPE) push(res)
         state = newState
 
@@ -421,7 +417,7 @@ class Frame[V <: Value, S <: V] (var numLocals: Int, val numStack0: Int){
           valueList.insert(0, pop())
           i -= 1
         }
-        val (res, newState) = interpreter.naryOperation(insn, valueList, state)
+        val (res, newState) = interpreter.naryOperation(insn, valueList, state, block)
         push(res)
         state = newState
       case IFNULL | IFNONNULL => interpreter.unaryCommand(insn, pop())
@@ -438,7 +434,10 @@ class Frame[V <: Value, S <: V] (var numLocals: Int, val numStack0: Int){
     *                    { @literal false} otherwise.
     * @throws AnalyzerException if the frames have incompatible sizes.
     */
-  def merge(insnIndex: Int, targetInsnIndex: Int, frame: Frame[V, S], interpreter: Interpreter[V, S]) = {
+  def merge(insnIndex: Int,
+            targetInsnIndex: Int,
+            frame: Frame[V, S, B],
+            interpreter: Interpreter[V, S, B]) = {
     if (numStack != frame.numStack) throw new AnalyzerException(null, "Incompatible stack heights")
     state = interpreter.merge(state, frame.state, insnIndex, targetInsnIndex)
     for(i <- 0 until (numLocals + numStack)){
@@ -457,7 +456,7 @@ class Frame[V <: Value, S <: V] (var numLocals: Int, val numStack0: Int){
     *                    { @literal false} otherwise.
     * @throws AnalyzerException if the frames have incompatible sizes.
     */
-  def merge0(insnIndex: Int, targetInsnIndex: Int, interpreter: Interpreter[V, S]) = {
+  def merge0(insnIndex: Int, targetInsnIndex: Int, interpreter: Interpreter[V, S, B]) = {
     state = interpreter.merge0(state, insnIndex, targetInsnIndex)
     for(i <- 0 until (numLocals + numStack)){
       val v = interpreter.merge0(values(i), insnIndex, targetInsnIndex)

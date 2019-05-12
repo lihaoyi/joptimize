@@ -42,14 +42,14 @@ object ControlFlowExtraction {
             first = false
             Some(new SSA.Start(null, null))
           }
-          else Some(new SSA.Merge(i, Set(), null, Nil))
+          else Some(new SSA.Merge(Set(), null, Nil))
         }
     regionStarts
   }
 
   def extractControlFlow(insns: Vector[AbstractInsnNode],
                          regionStarts: AbstractInsnNode => Option[SSA.Merge],
-                         frames: Array[Frame[SSA.Val, SSA.State]],
+                         frames: Array[Frame[SSA.Val, SSA.State, SSA.Block]],
                          findStartRegion: Int => SSA.Merge) = {
     def frameTop(i: Int, n: Int) = frames(i).getStack(frames(i).getStackSize - 1 - n)
 

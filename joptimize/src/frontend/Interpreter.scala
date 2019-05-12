@@ -15,7 +15,7 @@ import org.objectweb.asm.tree.analysis.Value
   * @param < V> type of the Value used for the analysis.
   * @author Eric Bruneton
   */
-abstract class Interpreter[V <: Value, S <: V] {
+abstract class Interpreter[V <: Value, S <: V, B] {
   /**
     * Creates a new value that represents the given parameter type. This method is called to
     * initialize the value of a local corresponding to a method parameter in a frame.
@@ -113,7 +113,7 @@ abstract class Interpreter[V <: Value, S <: V] {
     * INVOKEVIRTUAL, INVOKESPECIAL, INVOKESTATIC, INVOKEINTERFACE, MULTIANEWARRAY and
     * INVOKEDYNAMIC
     */
-  def naryOperation(insn: AbstractInsnNode, values: Seq[V], state: S): (V, S)
+  def naryOperation(insn: AbstractInsnNode, values: Seq[V], state: S, block: B): (V, S)
 
   /**
     * Merges two values. The merge operation must return a value that represents both values (for

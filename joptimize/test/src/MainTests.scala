@@ -341,7 +341,8 @@ object MainTests extends TestSuite{
       }
       'Inlining - {
         'simple - annotatedTest
-        'mapInnerClass - annotatedTest
+        'conditional - annotatedTest
+        'conditionalIf - annotatedTest
       }
     }
   }

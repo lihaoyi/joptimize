@@ -15,6 +15,7 @@ object ClassManager{
     def loadClassCache: collection.Map[JType.Cls, Option[ClassNode]]
     def loadMethodCache: collection.Map[MethodSig, Option[MethodNode]]
     def resolvePossibleSigs(sig: MethodSig): Option[Seq[MethodSig]]
+    def mergeTypes(itypes: Seq[IType]): IType
   }
 }
 class ClassManager(getClassFile: String => Option[Array[Byte]]) extends ClassManager.ReadOnly {

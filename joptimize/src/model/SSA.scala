@@ -87,6 +87,8 @@ object SSA{
   }
   sealed abstract class Block() extends Control(){
     var nextPhis: Seq[Phi] = Nil
+    var blockInvokes: Seq[Invoke] = Nil
+    def downstreamList = nextPhis ++ blockInvokes
     def next: SSA.Control
     def next_=(v: SSA.Control)
   }
@@ -104,7 +106,7 @@ object SSA{
     def next: SSA.Control
     def next_=(v: SSA.Control)
     def block: SSA.Block
-    def downstreamList = Option(next).toSeq ++ nextPhis
+    override def downstreamList = Option(next).toSeq ++ nextPhis ++ blockInvokes
     def downstreamSize = 1 + nextPhis.length
   }
 
@@ -151,13 +153,12 @@ object SSA{
   }
 
   class Start(next: SSA.Control,
-              var startingState: SSA.ChangedState) extends Merge(0, Set(), next, Nil){
+              var startingState: SSA.ChangedState) extends Merge(Set(), next, Nil){
     override def toString = s"Start@${Integer.toHexString(System.identityHashCode(this))}"
     override def downstreamList = super.downstreamList ++ Seq(startingState)
     override def downstreamSize = super.downstreamSize + 1
   }
-  class Merge(var insnIndex: Int,
-              var incoming: Set[Block],
+  class Merge(var incoming: Set[Block],
               var next: SSA.Control,
               var phis: Seq[SSA.Phi]) extends Block() {
     def controls = upstream
@@ -167,7 +168,7 @@ object SSA{
     def replaceUpstream(swap: Swapper): Unit = {
       incoming = incoming.map(swap(_))
     }
-    def downstreamList = Option(next).toSeq ++ phis ++ nextPhis
+    override def downstreamList = Option(next).toSeq ++ phis ++ super.downstreamList
     def downstreamSize = 1 + phis.length + nextPhis.length
   }
   class True(var branch: Jump, var next: SSA.Control) extends SimpleBlock(){
@@ -499,46 +500,61 @@ object SSA{
     def name_=(v: String): Unit
     def desc: Desc
     def desc_=(v: Desc): Unit
+    def block: Option[Block]
+    def block_=(v: Option[Block]): Unit
 
     def sig = MethodSig(cls, name, desc, this.isInstanceOf[InvokeStatic])
     def inferredSig(inferred: SSA.Val => IType) = {
       InferredSig(sig, srcs.drop(if (sig.static) 0 else 1).map(inferred))
     }
+    override def update() = {
+      upstream.filter(_ != null).collect{
+        case c: SSA.Val => c.downstreamAdd(this)
+        case c: SSA.Block => c.blockInvokes ++= Seq(this)
+      }
+      this
+    }
   }
-  class InvokeStatic(var state: State,
-                          var srcs: Seq[Val],
-                          var cls: JType.Cls,
-                          var name: String,
-                          var desc: Desc) extends Val(desc.ret) with Invoke {
-    def upstream = state +: srcs
+  class InvokeStatic(var block: Option[Block],
+                     var state: State,
+                     var srcs: Seq[Val],
+                     var cls: JType.Cls,
+                     var name: String,
+                     var desc: Desc) extends Val(desc.ret) with Invoke {
+    def upstream = block.toSeq ++ Seq(state) ++ srcs
     def replaceUpstream(swap: Swapper): Unit = {
+      block = block.map(swap(_))
       state = swap(state)
       srcs = srcs.map(swap(_))
     }
     override def toString = s"${super.toString()}(${cls.name}, $name, $desc)"
   }
 
-  class InvokeSpecial(var state: State,
-                           var srcs: Seq[Val],
-                           var cls: JType.Cls,
-                           var name: String,
-                           var desc: Desc) extends Val(desc.ret) with Invoke{
-    def upstream = state +: srcs
+  class InvokeSpecial(var block: Option[Block],
+                      var state: State,
+                      var srcs: Seq[Val],
+                      var cls: JType.Cls,
+                      var name: String,
+                      var desc: Desc) extends Val(desc.ret) with Invoke{
+    def upstream = block.toSeq ++ Seq(state) ++ srcs
     def replaceUpstream(swap: Swapper): Unit = {
+      block = block.map(swap(_))
       state = swap(state)
       srcs = srcs.map(swap(_))
     }
     override def toString = s"${super.toString()}(${cls.name}, $name, $desc)"
   }
 
-  class InvokeVirtual(var state: State,
+  class InvokeVirtual(var block: Option[Block],
+                      var state: State,
                       var srcs: Seq[Val],
                       var cls: JType.Cls,
                       var name: String,
                       var desc: Desc,
                       var interface: Boolean) extends Val(desc.ret) with Invoke{
-    def upstream = state +: srcs
+    def upstream = block.toSeq ++ Seq(state) ++ srcs
     def replaceUpstream(swap: Swapper): Unit = {
+      block = block.map(swap(_))
       state = swap(state)
       srcs = srcs.map(swap(_))
     }

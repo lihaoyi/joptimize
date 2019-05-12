@@ -14,10 +14,11 @@ import scala.collection.mutable
   * graph's incoming edges during the {@link Interpreter#merge}
   */
 object DataflowExecutor{
-  def analyze[V <: Value, S <: V](owner: String,
-                                  method: MethodNode,
-                                  interpreter: Interpreter[V, S],
-                                  initialState: S): Array[Frame[V, S]] = {
+  def analyze[V <: Value, S <: V, B](owner: String,
+                                     method: MethodNode,
+                                     regionStarts: IndexedSeq[Option[B]],
+                                     interpreter: Interpreter[V, S, B],
+                                     initialState: S): Array[Frame[V, S, B]] = {
     /** The instructions of the currently analyzed method. */
     val insnList = method.instructions
     /** The size of {@link #insnList}. */
@@ -25,7 +26,7 @@ object DataflowExecutor{
     /** The exception handlers of the currently analyzed method (one list per instruction index). */
     val handlers = new Array[mutable.Buffer[TryCatchBlockNode]](insnListSize)
     /** The execution stack frames of the currently analyzed method (one per instruction index). */
-    val frames = new Array[Frame[V, S]](insnListSize)
+    val frames = new Array[Frame[V, S, B]](insnListSize)
     /** The instructions that remain to process (one boolean per instruction index). */
     val inInstructionsToProcess = new Array[Boolean](insnListSize)
     /** The indices of the instructions that remain to process in the currently analyzed method. */
@@ -33,11 +34,21 @@ object DataflowExecutor{
     /** The number of instructions that remain to process in the currently analyzed method. */
     var numInstructionsToProcess = 0
 
-    def merge(insnIndex: Int, targetInsnIndex: Int, frame: Frame[V, S]) = {
+    val regionLookup: IndexedSeq[B] = {
+      val arr = mutable.ArrayBuffer.empty[B]
+      for(r <- regionStarts){
+        r match{
+          case Some(x) => arr.append(x)
+          case None => arr.append(arr.last)
+        }
+      }
+      arr
+    }
+    def merge(insnIndex: Int, targetInsnIndex: Int, frame: Frame[V, S, B]) = {
       val oldFrame = frames(targetInsnIndex)
       if (oldFrame != null) oldFrame.merge(insnIndex, targetInsnIndex, frame, interpreter)
       else {
-        frames(targetInsnIndex) = new Frame[V, S](frame)
+        frames(targetInsnIndex) = new Frame[V, S, B](frame)
         frames(targetInsnIndex).merge0(insnIndex, targetInsnIndex, interpreter)
         inInstructionsToProcess(targetInsnIndex) = true
 
@@ -47,7 +58,7 @@ object DataflowExecutor{
     }
 
     if ((method.access & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE)) != 0) {
-      return new Array[Frame[V, S]](0)
+      return new Array[Frame[V, S, B]](0)
     }
 
     // For each exception handler, and each instruction within its range, record in 'handlers' the
@@ -87,7 +98,7 @@ object DataflowExecutor{
           case AbstractInsnNode.LABEL | AbstractInsnNode.LINE | AbstractInsnNode.FRAME =>
             merge(insnIndex, insnIndex + 1, oldFrame)
           case _ =>
-            currentFrame.init(oldFrame).execute(insnNode, interpreter)
+            currentFrame.init(oldFrame).execute(insnNode, interpreter, regionLookup(insnIndex))
             insnNode match {
               case jumpInsn: JumpInsnNode =>
                 if (insnOpcode != Opcodes.GOTO) merge(insnIndex, insnIndex + 1, currentFrame)
@@ -120,7 +131,7 @@ object DataflowExecutor{
               if (tryCatchBlock.`type` == null) Type.getObjectType("java/lang/Throwable")
               else Type.getObjectType(tryCatchBlock.`type`)
 
-            val handler = new Frame[V, S](oldFrame)
+            val handler = new Frame[V, S, B](oldFrame)
             handler.clearStack()
             handler.push(interpreter.newExceptionValue(tryCatchBlock, catchType))
             merge(insnIndex, insnList.indexOf(tryCatchBlock.handler), handler)
@@ -142,11 +153,11 @@ object DataflowExecutor{
     * @param method the method to be analyzed.
     * @return the initial execution stack frame of the 'method'.
     */
-  private def computeInitialFrame[V <: Value, S <: V](owner: String,
-                                                      method: MethodNode,
-                                                      interpreter: Interpreter[V, S],
-                                                      initialState: S) = {
-    val frame = new Frame[V, S](method.maxLocals, method.maxStack)
+  private def computeInitialFrame[V <: Value, S <: V, B](owner: String,
+                                                         method: MethodNode,
+                                                         interpreter: Interpreter[V, S, B],
+                                                         initialState: S) = {
+    val frame = new Frame[V, S, B](method.maxLocals, method.maxStack)
     frame.state = initialState
     var currentLocal = 0
     val isInstanceMethod = (method.access & Opcodes.ACC_STATIC) == 0
