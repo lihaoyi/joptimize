@@ -287,7 +287,7 @@ object ProgramAnalyzer {
   case class CallEdge(caller: InferredSig, node: Option[SSA.Invoke], called: InferredSig){
     if (called.method.name == "<clinit>") assert(node.isEmpty)
   }
-  case class ProgramResult(visitedMethods: collection.Map[InferredSig, MethodResult],
+  case class ProgramResult(visitedMethods: mutable.LinkedHashMap[InferredSig, MethodResult],
                            visitedResolved: collection.Map[InferredSig, Properties],
                            staticFieldReferencedClasses: collection.Set[JType.Cls],
                            callGraph: Seq[CallEdge])
