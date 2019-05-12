@@ -223,9 +223,48 @@ object Backend {
 
         Nil
 
+      case (Seq(), states) => // multiple returns
+
+        log.pprint(states)
+        states.foreach { case (s, j) =>
+          s.downstreamRemoveAll(j)
+        }
+
+        val statePhi = new SSA.Phi(
+          null,
+          states.map { case (s, j) => (j.block, s) }.toSet,
+          JType.Prim.V
+        )
+
+        states.foreach { case (s, j) => j.block.nextPhis ++= Seq(statePhi) }
+        val merge = new SSA.Merge(
+          states.map(_._2.block).toSet,
+          next = nodeBlock.next,
+          phis = Seq(statePhi)
+        )
+
+        states.foreach { case (s, j) =>
+          j.block.next = merge
+        }
+        statePhi.block = merge
+
+        nodeBlock.next.replaceUpstream(nodeBlock, merge)
+        nodeBlock.next match {
+          case m: SSA.Merge =>
+            m.phis.foreach { phi =>
+              nodeBlock.nextPhis = nodeBlock.nextPhis.filter(_ != phi)
+              merge.nextPhis = Seq(phi) ++ merge.nextPhis
+              phi.replaceUpstream(nodeBlock, merge)
+            }
+          case _ => // do nothing
+        }
+
+        Util.replace(nextState, statePhi)
+        Seq(merge)
       case (values, states) => // multiple returns
         val triplets = values.zip(states).map { case ((v, j), (s, _)) => (v, j, s) }
 
+        log.pprint(triplets)
         triplets.foreach { case (v, j, s) =>
           v.downstreamRemoveAll(j)
           s.downstreamRemoveAll(j)

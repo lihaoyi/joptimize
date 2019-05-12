@@ -343,6 +343,7 @@ object MainTests extends TestSuite{
         'simple - annotatedTest
         'conditional - annotatedTest
         'conditionalIf - annotatedTest
+        'conditionalIfVoid - annotatedTest
       }
     }
   }

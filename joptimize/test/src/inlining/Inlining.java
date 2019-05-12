@@ -45,4 +45,27 @@ public class Inlining {
             return -1;
         }
     }
+    @test.Test(
+            inputs = {0, 0, 0, 1, 1, 0, 1, 1},
+            inline = true
+    )
+    static int conditionalIfVoid(int a, int b) {
+        int[] box = {0};
+        if (a == 0){
+            conditionalIfVoid0(box, b);
+            return box[0];
+        }else{
+            return box[0];
+        }
+    }
+
+    static void conditionalIfVoid0(int[] box, int bc) {
+        if (bc == 0){
+            box[0] = bc;
+            return;
+        }else{
+            box[0] = -bc;
+            return;
+        }
+    }
 }
