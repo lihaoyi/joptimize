@@ -234,7 +234,7 @@ object Backend {
                         argMapping: Map[Int, Int],
                         isInterface: JType.Cls => Option[Boolean]) = log.block{
 
-    result.methodBody.checkLinks()
+    log.check(result.methodBody.checkLinks())
     // Strip out the SSA.Invoke#block edges from the method body before proceeding with
     // simplification and code generation.
     //

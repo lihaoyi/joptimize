@@ -91,160 +91,69 @@ object Inliner {
     val calledBody = calledMethod.methodBody
     val calledStartBlock = calledMethod.liveBlocks.collect { case s: SSA.Start => s }.head
 
-    inlineWireParams(log, node, calledBody)
+    // Wire up input params, state and block
+    calledStartBlock.downstreamList.foreach(_.replaceUpstream(calledStartBlock, nodeBlock))
 
+    for ((arg, src) <- calledBody.args.zip(node.srcs)) {
+      src.downstreamRemove(node)
+      Util.replace(arg, src, log)
+    }
+    Util.replace(calledStartBlock.startingState, node.state)
 
-    val returnedVals = mutable.Buffer.empty[(SSA.Val, SSA.Jump)]
-    val returnedStates = mutable.Buffer.empty[(SSA.State, SSA.Jump)]
+    // Collect returns
+    val returns = mutable.Buffer.empty[(SSA.State, SSA.Jump, Option[SSA.Val])]
     val throws = mutable.Buffer.empty[SSA.AThrow]
     calledBody.allTerminals.foreach {
-      case r: SSA.ReturnVal =>
-        returnedVals.append(r.src -> r)
-        returnedStates.append(r.state -> r)
-      case r: SSA.Return =>
-        returnedStates.append(r.state -> r)
+      case r: SSA.ReturnVal => returns.append((r.state, r, Some(r.src)))
+      case r: SSA.Return => returns.append((r.state, r, None))
       case a: SSA.AThrow => throws.append(a)
     }
 
     val Seq(nextState) = node.downstreamList.collect { case s: SSA.ChangedState => s }
 
-    val addedBlocks = (returnedVals, returnedStates) match {
-      case (Seq(), Seq((rState, ret1))) =>
-        Util.replace(nextState, rState)
-        rState.downstreamRemoveAll(ret1)
-        Nil
-      case (Seq((rVal, ret0)), Seq((rState, ret1))) =>
-        Util.replace(nextState, rState)
-        rState.downstreamRemoveAll(ret1)
-        Util.replace(node, rVal)
-        rVal.downstreamRemoveAll(ret0)
-        ret0.block.next = nodeBlock.next
-        nodeBlock.next.replaceUpstream(nodeBlock, ret0.block)
-        nodeBlock.next match {
-          case m: SSA.Merge =>
-            m.phis.foreach { phi =>
-              nodeBlock.nextPhis = nodeBlock.nextPhis.filter(_ != phi)
-              ret0.block.nextPhis = Seq(phi) ++ ret0.block.nextPhis
-              phi.replaceUpstream(nodeBlock, ret0.block)
-            }
-          case _ => // do nothing
+    val (inlinedLastBlock, inlinedFinalValOpt, inlinedFinalState) = prepareOutputNodes(
+      classManager,
+      log,
+      nodeBlock,
+      returns,
+      nextState
+    )
+
+    // Wire up return value, state and block
+    inlinedFinalValOpt.foreach(Util.replace(node, _))
+    Util.replace(nextState, inlinedFinalState)
+    inlinedLastBlock.next = nodeBlock.next
+
+    // Wire up return block
+    nodeBlock.next.replaceUpstream(nodeBlock, inlinedLastBlock)
+    nodeBlock.next match {
+      case m: SSA.Merge =>
+        m.phis.foreach { phi =>
+          nodeBlock.nextPhis = nodeBlock.nextPhis.filter(_ != phi)
+          inlinedLastBlock.nextPhis = Seq(phi) ++ inlinedLastBlock.nextPhis
+          phi.replaceUpstream(nodeBlock, inlinedLastBlock)
         }
-
-        Nil
-
-      case (Seq(), states) => // multiple returns
-
-        log.pprint(states)
-        states.foreach { case (s, j) =>
-          s.downstreamRemoveAll(j)
-        }
-
-        val statePhi = new SSA.Phi(
-          null,
-          states.map { case (s, j) => (j.block, s) }.toSet,
-          JType.Prim.V
-        )
-
-        states.foreach { case (s, j) => j.block.nextPhis ++= Seq(statePhi) }
-        val merge = new SSA.Merge(
-          states.map(_._2.block).toSet,
-          next = nodeBlock.next,
-          phis = Seq(statePhi)
-        )
-
-        states.foreach { case (s, j) =>
-          j.block.next = merge
-        }
-        statePhi.block = merge
-
-        nodeBlock.next.replaceUpstream(nodeBlock, merge)
-        nodeBlock.next match {
-          case m: SSA.Merge =>
-            m.phis.foreach { phi =>
-              nodeBlock.nextPhis = nodeBlock.nextPhis.filter(_ != phi)
-              merge.nextPhis = Seq(phi) ++ merge.nextPhis
-              phi.replaceUpstream(nodeBlock, merge)
-            }
-          case _ => // do nothing
-        }
-
-        Util.replace(nextState, statePhi)
-        Seq(merge)
-      case (values, states) => // multiple returns
-        val triplets = values.zip(states).map { case ((v, j), (s, _)) => (v, j, s) }
-
-        log.pprint(triplets)
-        triplets.foreach { case (v, j, s) =>
-          v.downstreamRemoveAll(j)
-          s.downstreamRemoveAll(j)
-        }
-        val valPhi = new SSA.Phi(
-          null,
-          triplets.map { case (v, j, s) => (j.block, v) }.toSet,
-          classManager.mergeTypes(triplets.map { case (v, j, s) => v.jtype }).asInstanceOf[JType]
-        )
-
-        val statePhi = new SSA.Phi(
-          null,
-          triplets.map { case (v, j, s) => (j.block, s) }.toSet,
-          JType.Prim.V
-        )
-
-        triplets.foreach { case (v, j, s) => j.block.nextPhis ++= Seq(statePhi, valPhi) }
-        val merge = new SSA.Merge(
-          triplets.map(_._2.block).toSet,
-          next = nodeBlock.next,
-          phis = Seq(valPhi, statePhi)
-        )
-
-        triplets.foreach { case (v, j, s) =>
-          j.block.next = merge
-        }
-        valPhi.block = merge
-        statePhi.block = merge
-
-        nodeBlock.next.replaceUpstream(nodeBlock, merge)
-        nodeBlock.next match {
-          case m: SSA.Merge =>
-            m.phis.foreach { phi =>
-              nodeBlock.nextPhis = nodeBlock.nextPhis.filter(_ != phi)
-              merge.nextPhis = Seq(phi) ++ merge.nextPhis
-              phi.replaceUpstream(nodeBlock, merge)
-            }
-          case _ => // do nothing
-        }
-
-        Util.replace(nextState, statePhi)
-        Util.replace(node, valPhi)
-        Seq(merge)
+      case _ => // do nothing
     }
 
-
-    calledStartBlock.startingState.downstreamList.foreach { d =>
-      d.replaceUpstream(calledStartBlock.startingState, node.state)
-      node.state.downstreamAdd(d)
-    }
-    log.pprint(calledStartBlock)
-    log.pprint(nodeBlock)
-    calledStartBlock.downstreamList.foreach { n =>
-      log.pprint(n)
-      n.replaceUpstream(calledStartBlock, nodeBlock)
-    }
-
+    // Wire up input block
     if (!calledBody.allTerminals.contains(calledStartBlock.next)){
-
+      // If the inlined method has internal control flow, the input block and output
+      // blocks are different and we have to wire them up properly
       nodeBlock.next = calledStartBlock.next
       nodeBlock.nextPhis = calledStartBlock.nextPhis
-
       nodeBlock.blockInvokes = calledStartBlock.blockInvokes ++ nodeBlock.blockInvokes.filter(_ != node)
     }else {
+      // If the inlined method has no internal control flow, the input and output blocks
+      // are the same and we do not need to fiddle with the enclosing block structure
       nodeBlock.blockInvokes = nodeBlock.blockInvokes.filter(_ != node)
     }
 
+    // Consolidate two method bodies in `visitedMethods`
     val newLiveBlocks =
       visitedMethods(edge.caller).liveBlocks ++
-        visitedMethods(edge.called).liveBlocks ++
-        addedBlocks
+      visitedMethods(edge.called).liveBlocks ++
+      Seq(inlinedLastBlock)
 
     visitedMethods(edge.caller) = visitedMethods(edge.caller).copy(
       inferred = visitedMethods(edge.caller).inferred ++ visitedMethods(edge.called).inferred,
@@ -258,15 +167,53 @@ object Inliner {
 
     visitedMethods(edge.caller).methodBody.allTerminals ++= throws
     visitedMethods(edge.caller).methodBody.removeDeadNodes()
-    visitedMethods(edge.caller).methodBody.checkLinks()
+    log.check(visitedMethods(edge.caller).methodBody.checkLinks())
     visitedMethods.remove(edge.called)
   }
 
-  def inlineWireParams(log: Logger.Global, node: SSA.Invoke, calledBody: MethodBody) = {
-    for ((arg, src) <- calledBody.args.zip(node.srcs)) {
-      src.downstreamRemove(node)
-      Util.replace(arg, src, log)
+  def prepareOutputNodes(classManager: ClassManager.ReadOnly, log: Logger.Global, nodeBlock: SSA.Block, returns: mutable.Buffer[(SSA.State, SSA.Jump, Option[SSA.Val])], nextState: SSA.ChangedState) = {
+    returns match {
+      case Seq((rState, ret, rValOpt)) =>
+        Util.replace(nextState, rState)
+        rState.downstreamRemoveAll(ret)
+        rValOpt.foreach(_.downstreamRemoveAll(ret))
+
+        (ret.block, rValOpt, rState)
+
+      case triplets => // multiple returns
+
+        log.pprint(triplets)
+        val valPhiOpt =
+          if (!returns.forall(_._3.isDefined)) None
+          else Some(new SSA.Phi(
+            null,
+            triplets.map { case (s, j, v) => (j.block, v.get) }.toSet,
+            classManager.mergeTypes(triplets.map { case (s, j, v) => v.get.jtype }).asInstanceOf[JType]
+          ))
+
+        val statePhi = new SSA.Phi(
+          null,
+          triplets.map { case (s, j, v) => (j.block, s) }.toSet,
+          JType.Prim.V
+        )
+
+        val merge = new SSA.Merge(
+          triplets.map(_._2.block).toSet,
+          next = nodeBlock.next,
+          phis = Seq(statePhi) ++ valPhiOpt
+        )
+
+        triplets.foreach { case (s, j, v) =>
+          j.block.next = merge
+          j.block.nextPhis ++= Seq(statePhi) ++ valPhiOpt
+          v.foreach(_.downstreamRemoveAll(j))
+          s.downstreamRemoveAll(j)
+        }
+
+        valPhiOpt.foreach(_.block = merge)
+        statePhi.block = merge
+
+        (merge, valPhiOpt, statePhi)
     }
-    node.state.downstreamRemove(node)
   }
 }
