@@ -10,7 +10,8 @@ object JOptimize{
   def run(getClassFile: String => Option[Array[Byte]],
           entrypoints: Seq[MethodSig],
           eliminateOldMethods: Boolean,
-          log: Logger.Global): Map[String, Array[Byte]] = {
+          log: Logger.Global,
+          inline: Boolean): Map[String, Array[Byte]] = {
 
     val classManager = new ClassManager(getClassFile)
     val frontend = new Frontend(classManager)
@@ -27,6 +28,7 @@ object JOptimize{
       classManager,
       eliminateOldMethods,
       log,
+      inline
     )
 
     serialize(log, outClasses)

@@ -100,7 +100,9 @@ object Inliner {
       Util.replace(arg, src)
     }
     Util.replace(calledStartBlock.startingState, node.state)
-
+    log.graph("INPUT PARAMS STATE BLOCK WIRED") {
+      Renderer.dumpSvg(visitedMethods(edge.caller).methodBody)
+    }
     // Collect returns
     val returns = mutable.Buffer.empty[(SSA.State, SSA.Jump, Option[SSA.Val])]
     val throws = mutable.Buffer.empty[SSA.AThrow]
@@ -111,14 +113,23 @@ object Inliner {
     }
 
     val Seq(nextState) = node.downstreamList.collect { case s: SSA.ChangedState => s }
-
-    val outputNodes = prepareOutputNodes(classManager, log, nodeBlock, returns, nextState, visitedMethods(edge.caller).methodBody)
-    val addedBlocks = outputNodes match{
+    log.pprint(visitedMethods(edge.called).inferred)
+    log.pprint(visitedMethods(edge.caller).inferred)
+    val outputNodes = prepareOutputNodes(
+      classManager,
+      log,
+      nodeBlock,
+      returns,
+      nextState,
+      visitedMethods(edge.called).inferred ++ visitedMethods(edge.caller).inferred
+    )
+    val (addedBlocks, inlinedFinalValOpt, inlinedFinalStateOpt) = outputNodes match{
       case Some((inlinedLastBlock, inlinedFinalValOpt, inlinedFinalState)) =>
 
         // Wire up return value, state and block
 
-        inlinedFinalValOpt.foreach(Util.replace(node, _))
+        log.pprint(inlinedFinalValOpt)
+        inlinedFinalValOpt.foreach(t => Util.replace(node, t._1))
 
         Util.replace(nextState, inlinedFinalState)
 
@@ -134,7 +145,7 @@ object Inliner {
             }
           case _ => // do nothing
         }
-        Seq(inlinedLastBlock)
+        (Seq(inlinedLastBlock), inlinedFinalValOpt, Some(inlinedFinalState))
       case None =>
         Util.replace(node, new SSA.ConstNull())
         val throwBlock = new SSA.ThrowBlock(nodeBlock.next)
@@ -146,7 +157,10 @@ object Inliner {
           case _ => //do nothing
         }
 
-        Nil
+        (Nil, None, None)
+    }
+    log.graph("RETURNS WIRED") {
+      Renderer.dumpSvg(visitedMethods(edge.caller).methodBody)
     }
 
     // Wire up input block
@@ -159,11 +173,18 @@ object Inliner {
 
     nodeBlock.blockInvokes = calledStartBlock.blockInvokes ++ nodeBlock.blockInvokes.filter(_ != node)
 
+    log.graph("INPUT BLOCK WIRED") {
+      Renderer.dumpSvg(visitedMethods(edge.caller).methodBody)
+    }
+
     // Consolidate two method bodies in `visitedMethods`
+    val newInferred = mutable.LinkedHashMap.empty[SSA.Val, IType]
+    visitedMethods(edge.caller).inferred.foreach(t => newInferred.put(t._1, t._2))
+    visitedMethods(edge.called).inferred.foreach(t => newInferred.put(t._1, t._2))
+    inlinedFinalValOpt.foreach(t => newInferred.put(t._1, t._2))
+    inlinedFinalStateOpt.map(_ -> JType.Prim.V).foreach(t => newInferred.put(t._1, t._2))
     visitedMethods(edge.caller) = visitedMethods(edge.caller).copy(
-      inferred =
-        visitedMethods(edge.caller).inferred ++
-        visitedMethods(edge.called).inferred,
+      inferred = newInferred,
       liveBlocks =
         visitedMethods(edge.caller).liveBlocks ++
         visitedMethods(edge.called).liveBlocks ++
@@ -182,6 +203,7 @@ object Inliner {
     log.graph("INLINED " + edge) {
       Renderer.dumpSvg(visitedMethods(edge.caller).methodBody)
     }
+    log.pprint(visitedMethods(edge.caller).inferred)
 
     log.check(visitedMethods(edge.caller).methodBody.checkLinks())
     visitedMethods.remove(edge.called)
@@ -192,25 +214,42 @@ object Inliner {
                          nodeBlock: SSA.Block,
                          returns: mutable.Buffer[(SSA.State, SSA.Jump, Option[SSA.Val])],
                          nextState: SSA.ChangedState,
-                         methodBody: MethodBody) = {
+                         inferred: mutable.LinkedHashMap[SSA.Val, IType]) = {
+    log.pprint(returns)
     returns match {
-      case Seq() => None
+      case Seq() =>
+        log.pprint("A")
+        None
       case Seq((returnedState, returnNode, returnedValOpt)) =>
+        log.pprint("B")
+        log.pprint(returnedValOpt)
+        log.pprint(inferred)
         returnedState.downstreamRemoveAll(returnNode)
         returnedValOpt.foreach(_.downstreamRemoveAll(returnNode))
 
-        Some((returnNode.block, returnedValOpt, returnedState))
+        Some((
+          returnNode.block,
+          returnedValOpt.flatMap(v => inferred.get(v).map((v, _))),
+          returnedState
+        ))
 
       case triplets => // multiple returns
-
+        log.pprint("C")
         log.pprint(triplets)
+        log.pprint(inferred)
         val valPhiOpt =
           if (!returns.forall(_._3.isDefined)) None
-          else Some(new SSA.Phi(
-            null,
-            triplets.map { case (s, j, v) => (j.block, v.get) }.toSet,
-            classManager.mergeTypes(triplets.map { case (s, j, v) => v.get.jtype }).asInstanceOf[JType]
-          ))
+          else {
+            val phi = new SSA.Phi(
+              null,
+              triplets.map { case (s, j, v) => (j.block, v.get) }.toSet,
+              classManager.mergeTypes(triplets.map { case (s, j, v) => v.get.jtype }).asInstanceOf[JType]
+            )
+            val inferredMerged = classManager.mergeTypes(
+              triplets.flatMap { case (s, j, v) => inferred.get(v.get)}
+            )
+            Some((phi, inferredMerged))
+          }
 
         val statePhi = new SSA.Phi(
           null,
@@ -221,20 +260,24 @@ object Inliner {
         val merge = new SSA.Merge(
           triplets.map(_._2.block).toSet,
           next = nodeBlock.next,
-          phis = Seq(statePhi) ++ valPhiOpt
+          phis = Seq(statePhi) ++ valPhiOpt.map(_._1)
         )
 
         triplets.foreach { case (s, j, v) =>
           j.block.next = merge
-          j.block.nextPhis ++= Seq(statePhi) ++ valPhiOpt
+          j.block.nextPhis ++= Seq(statePhi) ++ valPhiOpt.map(_._1)
           v.foreach(_.downstreamRemoveAll(j))
           s.downstreamRemoveAll(j)
         }
 
-        valPhiOpt.foreach(_.block = merge)
+        valPhiOpt.foreach(_._1.block = merge)
         statePhi.block = merge
 
-        Some((merge, valPhiOpt, statePhi))
+        Some((
+          merge,
+          valPhiOpt,
+          statePhi
+        ))
     }
   }
 }

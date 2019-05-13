@@ -18,7 +18,7 @@ object MainTestUtils {
   val testRoot = classesRoot / "test"
 
   def annotatedTest(implicit tp: TestPath) = {
-    os.remove.all(os.pwd / 'out / 'scratch)
+
 
     val rawCls = Class.forName(s"test.${tp.value.dropRight(1).mkString(".")}")
     val rawMethod = rawCls.getDeclaredMethods.find(_.getName == tp.value.last).get
@@ -27,92 +27,101 @@ object MainTestUtils {
       JType.fromJavaCls(rawMethod.getReturnType)
     )
 
-    os.remove.all(outRoot / tp.value)
     def loadIfExists(folderEnv: String, name: String): Option[Array[Byte]] = {
       val p = os.Path(sys.env(folderEnv)) / os.RelPath(name)
       if (os.exists(p)) Some(os.read.bytes(p))
       else None
     }
-    val outputFileMap = joptimize.JOptimize.run(
-      name => loadIfExists("CLASSES_FOLDER", name).orElse(loadIfExists("SCALA_FOLDER", name)),
-      Seq(MethodSig(s"test/${tp.value.dropRight(1).mkString("/")}", tp.value.last, methodDesc, static = true)),
-      eliminateOldMethods = true,
-//      log = joptimize.DummyLogger
-      log = new joptimize.FileLogger.Global(logRoot = outRoot)
-    )
 
-    for((k, bytes) <- outputFileMap){
-      os.write(outRoot / os.RelPath(k), bytes, createFolders = true)
-//      val subPath = os.RelPath(k).relativeTo(ignorePrefix)
-//      assert(subPath.ups == 0)
-//      os.write(outRoot / tp.value / subPath, bytes, createFolders = true)
-    }
-
-    val testAnnot = rawMethod.getAnnotation(classOf[Test])
-    val cases = testAnnot.inputs() match{
-      case Array() => Iterator(Array())
-      case multiple => multiple.grouped(rawMethod.getParameterCount)
-    }
-
-    val output = mutable.Buffer.empty[ujson.Value]
-    for (args <- cases) checkWithClassloader{ cl =>
-      val cls = cl.loadClass(s"test.${tp.value.dropRight(1).mkString(".")}")
-      val joptimizedMethod = cls.getDeclaredMethod(tp.value.last, rawMethod.getParameterTypes: _*)
-      joptimizedMethod.setAccessible(true)
-      rawMethod.setAccessible(true)
-
-      val boxedArgs =
-        for((a, p) <- args.zip(rawMethod.getParameterTypes))
-        yield {
-          if (p == classOf[Int]) Int.box(a)
-          else if (p == classOf[Char]) Char.box(a.toChar)
-          else if (p == classOf[Byte]) Byte.box(a.toByte)
-          else if (p == classOf[Boolean]) Boolean.box(a != 0)
-          else if (p == classOf[Short]) Short.box(a.toShort)
-          else if (p == classOf[Long]) Long.box(a.toLong)
-          else if (p == classOf[Float]) Float.box(a.toFloat)
-          else if (p == classOf[Double]) Double.box(a.toDouble)
-          else if (p == classOf[java.lang.String]) a.toString
-          else throw new Exception(p.toString)
-        }
-
-      val expectedResult = rawMethod.invoke(null, boxedArgs: _*)
-      val joptimizedResult = joptimizedMethod.invoke(null, boxedArgs: _*)
-
-      output.append(
-        ujson.Arr(
-          ujson.Arr(boxedArgs.map(sketchyToJson(_)):_*),
-          sketchyToJson(joptimizedResult)
-        )
+    for (inline <- Seq(false)) {
+      println(s"  test.MainTests.${tp.value.mkString(".")} inline: $inline")
+      os.remove.all(os.pwd / 'out / 'scratch)
+      os.remove.all(outRoot / tp.value)
+      val outputFileMap = joptimize.JOptimize.run(
+        name => loadIfExists("CLASSES_FOLDER", name).orElse(loadIfExists("SCALA_FOLDER", name)),
+        Seq(MethodSig(s"test/${tp.value.dropRight(1).mkString("/")}", tp.value.last, methodDesc, static = true)),
+        eliminateOldMethods = true,
+        //      log = joptimize.DummyLogger
+        log = new joptimize.FileLogger.Global(logRoot = outRoot),
+        inline = inline
       )
 
-      // Make sure the correct value is computed
-      (joptimizedResult, expectedResult) match {
-        case (a: Array[AnyRef], b: Array[AnyRef]) => assert(java.util.Arrays.deepEquals(a, b))
-        case (a: Array[_], b: Array[_]) =>
-          val lhs = a.toSeq
-          val rhs = b.toSeq
-          assert(lhs == rhs)
-
-        case _ =>
-          val argList = args.toList
-          assert {
-            identity(argList)
-            joptimizedResult == expectedResult
-          }
+      for ((k, bytes) <- outputFileMap) {
+        os.write(outRoot / os.RelPath(k), bytes, createFolders = true)
+        //      val subPath = os.RelPath(k).relativeTo(ignorePrefix)
+        //      assert(subPath.ups == 0)
+        //      os.write(outRoot / tp.value / subPath, bytes, createFolders = true)
       }
-    }
-    checkWithClassloader { cl =>
-      testAnnot.addedNumConst().foreach(checkAddedNumConst(cl, _))
-      testAnnot.removedNumConst().foreach(checkRemovedNumConst(cl, _))
-      testAnnot.checkPresent().foreach(checkPresent(cl, _))
-      testAnnot.checkRemoved().foreach(checkRemoved(cl, _))
-      testAnnot.checkMangled().foreach(checkMangled(cl, _))
-      testAnnot.checkNotMangled().foreach(checkNotMangled(cl, _))
-      testAnnot.checkClassRemoved().foreach(checkClassRemoved(cl, _))
-    }
 
-    ujson.Arr(output:_*)
+      val testAnnot = rawMethod.getAnnotation(classOf[Test])
+
+      val cases = testAnnot.inputs() match {
+        case Array() => Iterator(Array())
+        case multiple => multiple.grouped(rawMethod.getParameterCount)
+      }
+
+      val output = mutable.Buffer.empty[ujson.Value]
+      for (args <- cases) checkWithClassloader { cl =>
+        val cls = cl.loadClass(s"test.${tp.value.dropRight(1).mkString(".")}")
+        val joptimizedMethod = cls.getDeclaredMethod(tp.value.last, rawMethod.getParameterTypes: _*)
+        joptimizedMethod.setAccessible(true)
+        rawMethod.setAccessible(true)
+
+        val boxedArgs =
+          for ((a, p) <- args.zip(rawMethod.getParameterTypes))
+            yield {
+              if (p == classOf[Int]) Int.box(a)
+              else if (p == classOf[Char]) Char.box(a.toChar)
+              else if (p == classOf[Byte]) Byte.box(a.toByte)
+              else if (p == classOf[Boolean]) Boolean.box(a != 0)
+              else if (p == classOf[Short]) Short.box(a.toShort)
+              else if (p == classOf[Long]) Long.box(a.toLong)
+              else if (p == classOf[Float]) Float.box(a.toFloat)
+              else if (p == classOf[Double]) Double.box(a.toDouble)
+              else if (p == classOf[java.lang.String]) a.toString
+              else throw new Exception(p.toString)
+            }
+
+        val expectedResult = rawMethod.invoke(null, boxedArgs: _*)
+        val joptimizedResult = joptimizedMethod.invoke(null, boxedArgs: _*)
+
+        output.append(
+          ujson.Arr(
+            ujson.Arr(boxedArgs.map(sketchyToJson(_)): _*),
+            sketchyToJson(joptimizedResult)
+          )
+        )
+
+        // Make sure the correct value is computed
+        (joptimizedResult, expectedResult) match {
+          case (a: Array[AnyRef], b: Array[AnyRef]) => assert(java.util.Arrays.deepEquals(a, b))
+          case (a: Array[_], b: Array[_]) =>
+            val lhs = a.toSeq
+            val rhs = b.toSeq
+            assert(lhs == rhs)
+
+          case _ =>
+            val argList = args.toList
+            assert {
+              identity(argList)
+              joptimizedResult == expectedResult
+            }
+        }
+      }
+      if (testAnnot.assertOnInlined() == inline) {
+        checkWithClassloader { cl =>
+          testAnnot.addedNumConst().foreach(checkAddedNumConst(cl, _))
+          testAnnot.removedNumConst().foreach(checkRemovedNumConst(cl, _))
+          testAnnot.checkPresent().foreach(checkPresent(cl, _))
+          testAnnot.checkRemoved().foreach(checkRemoved(cl, _))
+          testAnnot.checkMangled().foreach(checkMangled(cl, _))
+          testAnnot.checkNotMangled().foreach(checkNotMangled(cl, _))
+          testAnnot.checkClassRemoved().foreach(checkClassRemoved(cl, _))
+        }
+      }
+
+      ujson.Arr(output: _*)
+    }
   }
 
   /**

@@ -18,7 +18,8 @@ object Backend {
             entrypoints: scala.Seq[MethodSig],
             classManager: ClassManager.ReadOnly,
             eliminateOldMethods: Boolean,
-            log: Logger.Global): Seq[ClassNode] = log.block{
+            log: Logger.Global,
+            inline: Boolean): Seq[ClassNode] = log.block{
 
 
     val loadMethodCache = classManager.loadMethodCache.collect{case (k, Some(v)) => (k, v)}.toMap
@@ -26,8 +27,9 @@ object Backend {
     //    pprint.log(loadMethodCache.keys)
 
 
-    val inlinedAnalyzerRes = Inliner.inlineAll(analyzerRes, classManager, log)
-//    val inlinedAnalyzerRes = analyzerRes
+    val inlinedAnalyzerRes =
+      if(inline) Inliner.inlineAll(analyzerRes, classManager, log)
+      else analyzerRes
 
     val combined =
       inlinedAnalyzerRes.visitedResolved.mapValues(Right(_)) ++
@@ -235,11 +237,8 @@ object Backend {
                         isInterface: JType.Cls => Option[Boolean]) = log.block{
 
     log.check(result.methodBody.checkLinks())
-    log.global().graph("XXX")(Renderer.dumpSvg(result.methodBody))
-    log.global().pprint(result.liveBlocks)
-    log.global().pprint(result.liveTerminals)
     result.methodBody.allTerminals = result.methodBody.allTerminals.filter(result.liveTerminals)
-    log.global().graph("YYY")(Renderer.dumpSvg(result.methodBody))
+
 //    result.methodBody.removeDeadNodes()
 //    log.global().graph("ZZZ")(Renderer.dumpSvg(result.methodBody))
     // Strip out the SSA.Invoke#block edges from the method body before proceeding with
@@ -268,13 +267,12 @@ object Backend {
       classExists,
       resolvedProperties
     )
-    log.global().graph("POST OPTIMISTIC SIMPLIFY")(Renderer.dumpSvg(result.methodBody))
-    log.global().pprint(result.liveBlocks)
+
     log.check(result.methodBody.checkLinks(checkDead = false))
     result.methodBody.removeDeadNodes()
 
     log.graph("POST OPTIMISTIC SIMPLIFY")(Renderer.dumpSvg(result.methodBody))
-    log.global().pprint(result.methodBody.getAllVertices())
+
     log.check(result.methodBody.checkLinks())
 
     val allVertices2 = result.methodBody.getAllVertices()

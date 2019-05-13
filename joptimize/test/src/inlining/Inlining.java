@@ -4,7 +4,7 @@ public class Inlining {
     @test.Test(
             inputs = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12},
             checkRemoved = {"Inlining.called"},
-            inline = true
+            assertOnInlined = true
     )
     static int simple(int a){
         return called(a);
@@ -17,7 +17,7 @@ public class Inlining {
     @test.Test(
             inputs = {0, 0, 0, 1, 1, 0, 1, 1},
             checkRemoved = {"Inlining.conditional0"},
-            inline = true
+            assertOnInlined = true
     )
     static int conditional(int a, int b) {
         return a == 0 ? conditional0(b) : -1;
@@ -30,7 +30,7 @@ public class Inlining {
     @test.Test(
             inputs = {0, 0, 0, 1, 1, 0, 1, 1},
             checkRemoved = {"Inlining.conditionalIf0"},
-            inline = true
+            assertOnInlined = true
     )
     static int conditionalIf(int a, int b) {
         if (a == 0){
@@ -50,7 +50,7 @@ public class Inlining {
     @test.Test(
             inputs = {0, 0, 0, 1, 1, 0, 1, 1},
             checkRemoved = {"Inlining.conditionalVoid0"},
-            inline = true
+            assertOnInlined = true
     )
     static int conditionalVoid(int a, int b) {
         int[] box = {0};
@@ -71,7 +71,7 @@ public class Inlining {
     @test.Test(
             inputs = {0, 0, 0, 1, 1, 0, 1, 1},
             checkRemoved = {"Inlining.conditionalIfVoid0"},
-            inline = true
+            assertOnInlined = true
     )
     static int conditionalIfVoid(int a, int b) {
         int[] box = {0};
@@ -95,7 +95,7 @@ public class Inlining {
     @test.Test(
             inputs = {0},
             checkRemoved = {"Inlining.thrower0"},
-            inline = true
+            assertOnInlined = true
     )
     static int thrower(int a) throws Exception {
         if (a != 0){
@@ -112,7 +112,7 @@ public class Inlining {
     @test.Test(
             inputs = {0},
             checkRemoved = {"Inlining.throwerComplex0"},
-            inline = true
+            assertOnInlined = true
     )
     static int throwerComplex(int a) throws Exception {
         if (a > 10) {
@@ -131,7 +131,7 @@ public class Inlining {
     @test.Test(
             inputs = {0},
             checkRemoved = {"Inlining.throwerPartialMerge0"},
-            inline = true
+            assertOnInlined = true
     )
     static int throwerPartialMerge(int a) throws Exception {
         int x = 0;
@@ -153,7 +153,7 @@ public class Inlining {
     @test.Test(
             inputs = {0},
             checkRemoved = {"Inlining.throwerFullMerge1", "Inlining.throwerFullMerge2"},
-            inline = true
+            assertOnInlined = true
     )
     static int throwerFullMerge(int a) throws Exception {
         int x = 0;
