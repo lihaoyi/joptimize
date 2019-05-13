@@ -43,6 +43,16 @@ object OptimisticSimplify {
     case p: SSA.ChangedState =>
 //      log.pprint(inferred.contains(p))
     // do nothing
+
+    case p: SSA.Phi =>
+      p.incoming = p.incoming.filter{t =>
+        val live = liveBlocks(t._1)
+        if (!live) {
+          t._1.next = null
+          t._2.downstreamRemove(p)
+        }
+        live
+      }
     case unInferred: SSA.Val if !inferred.contains(unInferred) =>
 //      log.pprint(unInferred)
     // do nothing
@@ -85,6 +95,9 @@ object OptimisticSimplify {
       }
 
     case p: SSA.Phi =>
+
+      log.global().pprint(p)
+      log.global().pprint(p.incoming)
       p.incoming = p.incoming.filter{t =>
         val live = liveBlocks(t._1)
         if (!live) {

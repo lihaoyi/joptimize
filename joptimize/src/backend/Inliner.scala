@@ -21,7 +21,8 @@ object Inliner {
       .collect { case Seq(singleEdge) => singleEdge }
 
     val singleCalledEdges = filteredCallgraph
-      .groupBy(_.caller)
+      .filter(_.node.nonEmpty)
+      .groupBy(_.node.get)
       .values
       .collect { case Seq(singleEdge) => singleEdge }
 

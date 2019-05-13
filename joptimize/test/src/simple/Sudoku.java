@@ -3,13 +3,30 @@ package test.simple;
 public class Sudoku {
     @test.Test()
     public static String quick() {
+        Sudoku.quickSolve(1, 1);
+        return "";
+    }
+
+
+    static boolean quickSolve(int i, int j) {
+        if (i == 1) {
+            if (j == 1) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    @test.Test()
+    public static String quick2() {
         int[][] grid = new int[9][9];
-        Sudoku.quickSolve(9, 9, grid);
+        Sudoku.quickSolve2(9, 9, grid);
         return Sudoku.writeMatrix(grid);
     }
 
 
-    static boolean quickSolve(int i, int j, int[][] cells) {
+    static boolean quickSolve2(int i, int j, int[][] cells) {
         if (i == 9) {
             if (j == 9)
                 return true;
@@ -19,7 +36,7 @@ public class Sudoku {
     }
 
     @test.Test(inputs = {0, 1, 2, 3, 4, 5, 6, 7, 9})
-    public static boolean quick2(int i) {
+    public static boolean quick3(int i) {
         int[] grid = new int[9];
 
         return Sudoku.quickSolve2(8, grid);

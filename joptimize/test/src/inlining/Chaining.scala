@@ -24,7 +24,7 @@ object Chaining {
   }
   @test.Test(inputs = Array(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12))
   def map(a: Int): Int = {
-    val xOpt = if (a % 2 == 0) Some(1) else None
+    val xOpt = if (a == 1) Some(1) else None
 
     val res = xOpt.map(x => x + a)
 

@@ -269,8 +269,10 @@ object Backend {
       resolvedProperties
     )
     log.global().graph("POST OPTIMISTIC SIMPLIFY")(Renderer.dumpSvg(result.methodBody))
+    log.global().pprint(result.liveBlocks)
     log.check(result.methodBody.checkLinks(checkDead = false))
     result.methodBody.removeDeadNodes()
+
     log.graph("POST OPTIMISTIC SIMPLIFY")(Renderer.dumpSvg(result.methodBody))
     log.global().pprint(result.methodBody.getAllVertices())
     log.check(result.methodBody.checkLinks())
