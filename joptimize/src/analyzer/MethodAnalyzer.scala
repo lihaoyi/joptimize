@@ -74,7 +74,8 @@ class MethodAnalyzer[T](methodBody: MethodBody,
     * The set of return instructions that have been seen in the course of this method body's
     * traversal, and their returned values. Grows monotonically
     */
-  val inferredReturns = mutable.LinkedHashMap.empty[SSA.Jump, Seq[T]]
+  val inferredReturns = mutable.LinkedHashMap.empty[SSA.Jump, T]
+  val inferredThrows = mutable.LinkedHashMap.empty[SSA.AThrow, T]
 
   def step(): MethodAnalyzer.Step[T] = {
 //    log.pprint(evaluated)
@@ -163,13 +164,13 @@ class MethodAnalyzer[T](methodBody: MethodBody,
       case n: SSA.Jump =>
         n match {
           case r: SSA.AThrow =>
-            inferredReturns(r) = Seq(bottom)
+            if (evaluated(r.src) != bottom) inferredThrows(r) = bottom
             Nil
           case r: SSA.Return =>
-            inferredReturns(r) = Seq(void)
+            if (evaluated(r.state) != bottom) inferredReturns(r) = void
             Nil
           case r: SSA.ReturnVal =>
-            inferredReturns(r) = Seq(evaluated(r.src))
+            if (evaluated(r.src) != bottom && evaluated(r.state) != bottom) inferredReturns(r) = evaluated(r.src)
             Nil
           case n: SSA.UnaBranch =>
             val valueA = evaluated(n.a)
@@ -294,35 +295,6 @@ class MethodAnalyzer[T](methodBody: MethodBody,
     }
     Step.Continue(Seq(v))
   }
-
-  /**
-    * Performs an optimistic analysis on the given method body.
-    *
-    * Walks the method body block-by-block, evaluating all phi nodes each time
-    * a block transition is made. The current evaluation environment is kept as
-    * a global mapping of phi nodes to [[T]], which is updated as evaluation
-    * occurs. Evaluation of non-phi nodes are cached, unless invalidated by a
-    * change in the value assigned to an upstream phi node.
-    *
-    * The phi-inference mapping can be shared by all blocks being evaluated, as
-    * the inferences monotonically widen as time goes on, and we never have two
-    * blocks which treat a single phi node as having multiple, incompatible
-    * inferences. If a block is re-visited with a set of phi-inferences
-    * different from what it was assigned earlier, the conflicting inferences
-    * are merged via [[Lattice.join]] and the block re-visited using the new
-    * inferences.
-    *
-    * As long as new blocks are being discovered, or phi node inferences are
-    * modified, the respective blocks are added to the worklist for processing.
-    * When the worklist is empty, inference is complete and the algorithm exits
-    */
-  def apply(): Result[T] = {
-    Result(
-      inferredReturns,
-      evaluated,
-      liveBlocks.toSet
-    )
-  }
 }
 object MethodAnalyzer {
   sealed trait Invalidate
@@ -348,7 +320,7 @@ object MethodAnalyzer {
     case class Continue[T](node: Seq[SSA.Val]) extends Step[T]
     case class Done[T]() extends Step[T]
   }
-  case class Result[T](inferredReturns: mutable.LinkedHashMap[SSA.Jump, Seq[T]],
+  case class Result[T](inferredTerminals: mutable.LinkedHashMap[SSA.Jump, T],
                        inferred: mutable.LinkedHashMap[SSA.Val, T],
                        liveBlocks: Set[SSA.Block])
 

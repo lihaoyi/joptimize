@@ -4,7 +4,7 @@ import joptimize.{Logger, Util}
 import joptimize.analyzer.ProgramAnalyzer.{CallEdge, MethodResult}
 import joptimize.analyzer.{ProgramAnalyzer, Renderer}
 import joptimize.frontend.ClassManager
-import joptimize.model.{InferredSig, JType, MethodBody, SSA}
+import joptimize.model.{IType, InferredSig, JType, MethodBody, SSA}
 
 import scala.collection.mutable
 
@@ -96,7 +96,7 @@ object Inliner {
 
     for ((arg, src) <- calledBody.args.zip(node.srcs)) {
       src.downstreamRemove(node)
-      Util.replace(arg, src, log)
+      Util.replace(arg, src)
     }
     Util.replace(calledStartBlock.startingState, node.state)
 
@@ -111,49 +111,52 @@ object Inliner {
 
     val Seq(nextState) = node.downstreamList.collect { case s: SSA.ChangedState => s }
 
-    val (inlinedLastBlock, inlinedFinalValOpt, inlinedFinalState) = prepareOutputNodes(
-      classManager,
-      log,
-      nodeBlock,
-      returns,
-      nextState
-    )
+    val outputNodes = prepareOutputNodes(classManager, log, nodeBlock, returns, nextState, visitedMethods(edge.caller).methodBody)
+    val addedBlocks = outputNodes match{
+      case Some((inlinedLastBlock, inlinedFinalValOpt, inlinedFinalState)) =>
 
-    // Wire up return value, state and block
-    inlinedFinalValOpt.foreach(Util.replace(node, _))
-    Util.replace(nextState, inlinedFinalState)
-    inlinedLastBlock.next = nodeBlock.next
+        // Wire up return value, state and block
 
-    // Wire up return block
-    nodeBlock.next.replaceUpstream(nodeBlock, inlinedLastBlock)
-    nodeBlock.next match {
-      case m: SSA.Merge =>
-        m.phis.foreach { phi =>
-          nodeBlock.nextPhis = nodeBlock.nextPhis.filter(_ != phi)
-          inlinedLastBlock.nextPhis = Seq(phi) ++ inlinedLastBlock.nextPhis
-          phi.replaceUpstream(nodeBlock, inlinedLastBlock)
+        inlinedFinalValOpt.foreach(Util.replace(node, _))
+
+        Util.replace(nextState, inlinedFinalState)
+
+        inlinedLastBlock.next = nodeBlock.next
+        // Wire up return block
+        nodeBlock.next.replaceUpstream(nodeBlock, inlinedLastBlock)
+        nodeBlock.next match {
+          case m: SSA.Merge =>
+            m.phis.foreach { phi =>
+              nodeBlock.nextPhis = nodeBlock.nextPhis.filter(_ != phi)
+              inlinedLastBlock.nextPhis = Seq(phi) ++ inlinedLastBlock.nextPhis
+              phi.replaceUpstream(nodeBlock, inlinedLastBlock)
+            }
+          case _ => // do nothing
         }
-      case _ => // do nothing
+        Seq(inlinedLastBlock)
+      case None =>
+        node.upstreamVals.foreach(_.downstreamRemove(node))
+        for(t <- throws){
+          t.block
+        }
+        Nil
     }
 
     // Wire up input block
-    if (!calledBody.allTerminals.contains(calledStartBlock.next)){
+    if (outputNodes.isEmpty || !calledBody.allTerminals.contains(calledStartBlock.next)){
       // If the inlined method has internal control flow, the input block and output
       // blocks are different and we have to wire them up properly
       nodeBlock.next = calledStartBlock.next
       nodeBlock.nextPhis = calledStartBlock.nextPhis
-      nodeBlock.blockInvokes = calledStartBlock.blockInvokes ++ nodeBlock.blockInvokes.filter(_ != node)
-    }else {
-      // If the inlined method has no internal control flow, the input and output blocks
-      // are the same and we do not need to fiddle with the enclosing block structure
-      nodeBlock.blockInvokes = nodeBlock.blockInvokes.filter(_ != node)
     }
+
+    nodeBlock.blockInvokes = calledStartBlock.blockInvokes ++ nodeBlock.blockInvokes.filter(_ != node)
 
     // Consolidate two method bodies in `visitedMethods`
     val newLiveBlocks =
       visitedMethods(edge.caller).liveBlocks ++
       visitedMethods(edge.called).liveBlocks ++
-      Seq(inlinedLastBlock)
+      addedBlocks
 
     visitedMethods(edge.caller) = visitedMethods(edge.caller).copy(
       inferred = visitedMethods(edge.caller).inferred ++ visitedMethods(edge.called).inferred,
@@ -161,24 +164,32 @@ object Inliner {
     )
 
     visitedMethods.remove(edge.called)
+
+    visitedMethods(edge.caller).methodBody.allTerminals =
+      visitedMethods(edge.caller).methodBody.allTerminals ++
+      throws
+    visitedMethods(edge.caller).methodBody.removeDeadNodes()
     log.graph("INLINED " + edge) {
       Renderer.dumpSvg(visitedMethods(edge.caller).methodBody)
     }
 
-    visitedMethods(edge.caller).methodBody.allTerminals ++= throws
-    visitedMethods(edge.caller).methodBody.removeDeadNodes()
     log.check(visitedMethods(edge.caller).methodBody.checkLinks())
     visitedMethods.remove(edge.called)
   }
 
-  def prepareOutputNodes(classManager: ClassManager.ReadOnly, log: Logger.Global, nodeBlock: SSA.Block, returns: mutable.Buffer[(SSA.State, SSA.Jump, Option[SSA.Val])], nextState: SSA.ChangedState) = {
+  def prepareOutputNodes(classManager: ClassManager.ReadOnly,
+                         log: Logger.Global,
+                         nodeBlock: SSA.Block,
+                         returns: mutable.Buffer[(SSA.State, SSA.Jump, Option[SSA.Val])],
+                         nextState: SSA.ChangedState,
+                         methodBody: MethodBody) = {
     returns match {
-      case Seq((rState, ret, rValOpt)) =>
-        Util.replace(nextState, rState)
-        rState.downstreamRemoveAll(ret)
-        rValOpt.foreach(_.downstreamRemoveAll(ret))
+      case Seq() => None
+      case Seq((returnedState, returnNode, returnedValOpt)) =>
+        returnedState.downstreamRemoveAll(returnNode)
+        returnedValOpt.foreach(_.downstreamRemoveAll(returnNode))
 
-        (ret.block, rValOpt, rState)
+        Some((returnNode.block, returnedValOpt, returnedState))
 
       case triplets => // multiple returns
 
@@ -213,7 +224,7 @@ object Inliner {
         valPhiOpt.foreach(_.block = merge)
         statePhi.block = merge
 
-        (merge, valPhiOpt, statePhi)
+        Some((merge, valPhiOpt, statePhi))
     }
   }
 }

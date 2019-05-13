@@ -321,19 +321,15 @@ object Util{
   }
 
 
-  def replace(current: SSA.Val, replacement: SSA.Val, log: Logger = DummyLogger): Seq[SSA.Node] = {
-    log.pprint(current.upstream)
+  def replace(current: SSA.Val, replacement: SSA.Val): Seq[SSA.Node] = {
     current.upstream.collect{
       case v: SSA.Val =>
-        log.pprint((v, current))
         v.downstreamRemoveAll(current)
       case v: SSA.Block => v.nextPhis = v.nextPhis.filter(_ != current)
     }
 
-    log.pprint(current.downstreamList)
     for (down <- current.downstreamList if down != current) {
       replacement.downstreamAdd(down)
-      log.pprint((down, current, replacement))
       down.replaceUpstream(current, replacement)
     }
     replacement +: replacement.downstreamList

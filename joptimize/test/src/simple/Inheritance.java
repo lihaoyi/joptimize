@@ -194,6 +194,13 @@ public class Inheritance {
         return s.toString();
     }
 
+    public static Integer apply0(int a){ return Integer.valueOf(a);}
+
+    @test.Test(inputs = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12})
+    public static int lambdaSpecialized0(int a){
+        return apply0(a).intValue();
+    }
+
     interface Func1<T1, R> {
         R apply(T1 v);
     }

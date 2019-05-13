@@ -110,7 +110,8 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
         frontend.cachedMethodBodies(k).get,
         analyses(k).evaluated,
         analyses(k).liveBlocks.toSet,
-        props
+        props,
+        analyses(k).inferredReturns.keys.toSet ++ analyses(k).inferredThrows.keys.toSet
       )
     }
 
@@ -294,7 +295,8 @@ object ProgramAnalyzer {
   case class MethodResult(methodBody: MethodBody,
                           inferred: mutable.LinkedHashMap[SSA.Val, IType],
                           liveBlocks: Set[SSA.Block],
-                          props: Properties)
+                          props: Properties,
+                          liveTerminals: Set[SSA.Jump])
 
   case class Properties(inferredReturn: IType,
                         pure: Boolean,
@@ -419,21 +421,20 @@ object ProgramAnalyzer {
                    currentAnalysis: MethodAnalyzer[IType],
                    api: HandlerApi) = {
     //    println("DONE")
-    val optimisticResult = currentAnalysis.apply()
-    val retTypes = currentAnalysis.apply()
-      .inferredReturns
-      .flatMap(_._2)
+
+    val retTypes = currentAnalysis.inferredReturns
+      .valuesIterator
       .toSeq
 
     val inferredReturn = api.classManager.mergeTypes(retTypes)
 
-    val computedPurity = computePurity(isig, optimisticResult, api)
+    val computedPurity = computePurity(isig, currentAnalysis.evaluated, api)
 
     val clinitSig = MethodSig(isig.method.cls, "<clinit>", Desc(Nil, JType.Prim.V), true)
     val props = Properties(
       inferredReturn,
       computedPurity && !(isig.method.static && api.classManager.loadMethod(clinitSig).nonEmpty),
-      optimisticResult.inferred.collect { case (a: SSA.Arg, _) => a.index }.toSet
+      currentAnalysis.evaluated.collect { case (a: SSA.Arg, _) => a.index }.toSet
     )
 
     val evaluated = for {
@@ -448,8 +449,10 @@ object ProgramAnalyzer {
     )
   }
 
-  def computePurity(isig: InferredSig, optResult: MethodAnalyzer.Result[IType], api: HandlerApi) = {
-    optResult.inferred.keysIterator.forall {
+  def computePurity(isig: InferredSig,
+                    inferred: mutable.LinkedHashMap[SSA.Val, IType],
+                    api: HandlerApi) = {
+    inferred.keysIterator.forall {
       case n: SSA.New => false
       case n: SSA.CheckCast => false
       case n: SSA.InstanceOf => true
@@ -488,10 +491,10 @@ object ProgramAnalyzer {
 
       case n: SSA.InvokeDynamic => n.bootstrap == Util.makeConcatWithConstants
       case n: SSA.Invoke =>
-        if (n.srcs.exists(!optResult.inferred.contains(_))) true
+        if (n.srcs.exists(!inferred.contains(_))) true
         else {
 
-          val key = n.inferredSig(optResult.inferred)
+          val key = n.inferredSig(inferred)
           val default = api.isCalledFrom(isig, key)
           if (api.classManager.loadClass(key.method.cls).isEmpty) false
           else if (n.isInstanceOf[SSA.InvokeSpecial]) api.getMethodProps(key).fold(default)(_.pure)

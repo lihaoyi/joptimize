@@ -10,7 +10,7 @@ import scala.collection.mutable
 /**
   * Represents the combined control/data-flow graph of a SSA program.
   */
-case class MethodBody(var args: Seq[SSA.Arg], var allTerminals: Seq[SSA.Control]){
+case class MethodBody(var args: Seq[SSA.Arg], var allTerminals: Seq[SSA.Jump]){
   def getAllVertices() = Util.breadthFirstSeen[SSA.Node](allTerminals.toSet)(_.upstream)
 
   def checkLinks(checkDead: Boolean = true) = {

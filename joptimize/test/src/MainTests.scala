@@ -119,6 +119,7 @@ object MainTests extends TestSuite{
         'staticInheritance - annotatedTest
         'staticInheritanceMethod - annotatedTest
         'moreStrings - annotatedTest
+        'lambdaSpecialized0 - annotatedTest
         'lambdaSpecialized - annotatedTest
       }
 //      'Exceptions - {
