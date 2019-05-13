@@ -97,7 +97,7 @@ object ControlFlowExtraction {
           (insn, n, i) :: Nil
 
         case (ATHROW, insn) =>
-          val n = new SSA.AThrow(frames(i).state, findStartRegion(i), frameTop(i, 0))
+          val n = new SSA.AThrow(frames(i).state, findStartRegion(i), frameTop(i, 0), None)
           findStartRegion(i).next = n
           (insn, n, i) :: Nil
 

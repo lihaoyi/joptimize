@@ -88,7 +88,7 @@ object SSA{
   sealed abstract class Block() extends Control(){
     var nextPhis: Seq[Phi] = Nil
     var blockInvokes: Seq[Invoke] = Nil
-    def downstreamList = nextPhis ++ blockInvokes
+    def downstreamList: Seq[Node] = nextPhis ++ blockInvokes
     def next: SSA.Control
     def next_=(v: SSA.Control)
   }
@@ -363,15 +363,30 @@ object SSA{
     def downstreamList = Nil
     def downstreamSize = 0
   }
-  class AThrow(var state: State, var block: Block, var src: Val) extends Jump() with Stateful{
+  class ThrowBlock(var next: Control) extends Block{
+    def controls = Nil
+
+    def replaceUpstream(swap: Swapper): Unit = {
+      next = swap(next)
+    }
+
+    override def upstream = Nil
+    override def downstreamList = Seq(next) ++ nextPhis
+    def downstreamSize = downstreamList.length
+  }
+
+  class AThrow(var state: State,
+               var block: Block,
+               var src: Val,
+               var next: Option[SSA.Block]) extends Jump() with Stateful{
     def upstream = Seq(state, block, src)
     def replaceUpstream(swap: Swapper): Unit = {
       state = swap(state)
       block = swap(block)
       src = swap(src)
     }
-    def downstreamList = Nil
-    def downstreamSize = 0
+    def downstreamList = next.toList
+    def downstreamSize = downstreamList.size
   }
   trait Switch extends Jump{
     def src: SSA.Val
