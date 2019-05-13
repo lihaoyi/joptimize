@@ -235,6 +235,13 @@ object Backend {
                         isInterface: JType.Cls => Option[Boolean]) = log.block{
 
     log.check(result.methodBody.checkLinks())
+    log.global().graph("XXX")(Renderer.dumpSvg(result.methodBody))
+    log.global().pprint(result.liveBlocks)
+    log.global().pprint(result.liveTerminals)
+    result.methodBody.allTerminals = result.methodBody.allTerminals.filter(result.liveTerminals)
+    log.global().graph("YYY")(Renderer.dumpSvg(result.methodBody))
+//    result.methodBody.removeDeadNodes()
+//    log.global().graph("ZZZ")(Renderer.dumpSvg(result.methodBody))
     // Strip out the SSA.Invoke#block edges from the method body before proceeding with
     // simplification and code generation.
     //

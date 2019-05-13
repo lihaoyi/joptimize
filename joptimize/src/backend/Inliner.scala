@@ -159,14 +159,17 @@ object Inliner {
     nodeBlock.blockInvokes = calledStartBlock.blockInvokes ++ nodeBlock.blockInvokes.filter(_ != node)
 
     // Consolidate two method bodies in `visitedMethods`
-    val newLiveBlocks =
-      visitedMethods(edge.caller).liveBlocks ++
-      visitedMethods(edge.called).liveBlocks ++
-      addedBlocks
-
     visitedMethods(edge.caller) = visitedMethods(edge.caller).copy(
-      inferred = visitedMethods(edge.caller).inferred ++ visitedMethods(edge.called).inferred,
-      liveBlocks = newLiveBlocks
+      inferred =
+        visitedMethods(edge.caller).inferred ++
+        visitedMethods(edge.called).inferred,
+      liveBlocks =
+        visitedMethods(edge.caller).liveBlocks ++
+        visitedMethods(edge.called).liveBlocks ++
+        addedBlocks,
+      liveTerminals =
+        visitedMethods(edge.caller).liveTerminals ++
+        visitedMethods(edge.called).liveTerminals.filter(_.isInstanceOf[SSA.AThrow])
     )
 
     visitedMethods.remove(edge.called)

@@ -98,12 +98,11 @@ public class Inlining {
             inline = true
     )
     static int thrower(int a) throws Exception {
-        int[] box = {0};
         if (a != 0){
             thrower0();
-            return box[0];
+            return 123;
         }else{
-            return box[0];
+            return 456;
         }
     }
 
@@ -116,20 +115,17 @@ public class Inlining {
             inline = true
     )
     static int throwerComplex(int a) throws Exception {
-        int[] box = {0};
-        if (a != 0){
+        if (a > 10) {
             throwerComplex0(a);
-            if (a != 10) return box[0] + 123;
-            else throw new Exception("hello");
-        }else{
-            return box[0];
+            if (a > 100) return 123;
+            else return 456;
         }
+        return 1;
     }
 
     static void throwerComplex0(int a) throws Exception{
         int x = 1;
         if (a > 100) x += 2;
-        else x += 3;
         throw new Exception(String.valueOf(x));
     }
     @test.Test(
