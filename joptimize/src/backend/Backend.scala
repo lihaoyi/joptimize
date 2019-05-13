@@ -238,7 +238,6 @@ object Backend {
 
     log.check(result.methodBody.checkLinks())
     log.graph("PROCESSMETHODBODY")(Renderer.dumpSvg(result.methodBody))
-    result.methodBody.allTerminals = result.methodBody.allTerminals.filter(result.liveTerminals)
 
 //    result.methodBody.removeDeadNodes()
 //    log.global().graph("ZZZ")(Renderer.dumpSvg(result.methodBody))
