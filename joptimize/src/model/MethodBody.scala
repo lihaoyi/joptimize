@@ -27,7 +27,26 @@ case class MethodBody(var args: Seq[SSA.Arg], var allTerminals: Seq[SSA.Control]
       } yield (v, down)
 
       assert(missing.isEmpty, "Downstream nodes not part of allVertices: " + missing.mkString(", "))
+
+      val allEdges = allVertices
+        .toSeq
+        .flatMap{v =>
+
+          v.upstream.map(_ -> v) ++ v.downstreamList.map(_ -> v)
+        }
+
+      val allEdgeCount = allEdges.groupBy(x => x).map{case (k, v) => (k, v.size)}
+
+      for((src, dest) <- allEdgeCount.keysIterator){
+        val downstream = allEdgeCount((src, dest))
+        val upstream = allEdgeCount((dest, src))
+        assert(
+          downstream == upstream,
+          s"Unmatched upstream and downstream edges between ($src, $dest): downstream $downstream vs upstream $upstream"
+        )
+      }
     }
+
   }
 
   def transform(visit: PartialFunction[SSA.Node, Seq[SSA.Node]]) = {

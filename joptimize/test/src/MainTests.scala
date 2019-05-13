@@ -212,6 +212,10 @@ object MainTests extends TestSuite{
       'BooleanJumpFlatten - {
         'simpleTrue - annotatedTest
         'simpleFalse - annotatedTest
+        'nested1 - annotatedTest
+        'nested2 - annotatedTest
+        'nested3 - annotatedTest
+        'nested4 - annotatedTest
       }
 
       'InstanceofJumpFlatten - {

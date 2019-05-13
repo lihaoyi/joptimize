@@ -136,9 +136,8 @@ object Backend {
 //      pprint.log(analyzerRes.visitedMethods.keys)
 //      pprint.log(edge)
       while({
-        if (analyzerRes.visitedMethods.contains(caller)) {
+        if (visitedMethods.contains(caller)) {
           inlineSingleMethod(
-            analyzerRes,
             classManager,
             log,
             visitedMethods,
@@ -163,21 +162,20 @@ object Backend {
     )
   }
 
-  def inlineSingleMethod(analyzerRes: ProgramAnalyzer.ProgramResult,
-                         classManager: ClassManager.ReadOnly,
+  def inlineSingleMethod(classManager: ClassManager.ReadOnly,
                          log: Logger.Global,
                          visitedMethods: mutable.LinkedHashMap[InferredSig, MethodResult],
                          edge: CallEdge,
                          node: SSA.Invoke) = {
     val nodeBlock = node.block.get
-    val calledMethod = analyzerRes.visitedMethods(edge.called)
+    val calledMethod = visitedMethods(edge.called)
     log.pprint(node)
     log.pprint(edge)
     log.graph("edge.caller") {
-      Renderer.dumpSvg(analyzerRes.visitedMethods(edge.caller).methodBody)
+      Renderer.dumpSvg(visitedMethods(edge.caller).methodBody)
     }
     log.graph("edge.called") {
-      Renderer.dumpSvg(analyzerRes.visitedMethods(edge.called).methodBody)
+      Renderer.dumpSvg(visitedMethods(edge.called).methodBody)
     }
     val calledBody = calledMethod.methodBody
     val calledStartBlock = calledMethod.liveBlocks.collect { case s: SSA.Start => s }.head
@@ -332,21 +330,25 @@ object Backend {
       nodeBlock.blockInvokes = nodeBlock.blockInvokes.filter(_ != node)
     }
 
+    val newLiveBlocks =
+      visitedMethods(edge.caller).liveBlocks ++
+      visitedMethods(edge.called).liveBlocks ++
+      addedBlocks
+
     visitedMethods(edge.caller) = visitedMethods(edge.caller).copy(
       inferred = visitedMethods(edge.caller).inferred ++ visitedMethods(edge.called).inferred,
-      liveBlocks =
-        visitedMethods(edge.caller).liveBlocks ++
-        visitedMethods(edge.called).liveBlocks ++
-        addedBlocks
+      liveBlocks = newLiveBlocks
     )
+
     visitedMethods.remove(edge.called)
     log.graph("INLINED " + edge) {
-      Renderer.dumpSvg(analyzerRes.visitedMethods(edge.caller).methodBody)
+      Renderer.dumpSvg(visitedMethods(edge.caller).methodBody)
     }
-    analyzerRes.visitedMethods(edge.caller).methodBody.allTerminals ++= throws
-    analyzerRes.visitedMethods(edge.caller).methodBody.removeDeadNodes()
-    analyzerRes.visitedMethods(edge.caller).methodBody.checkLinks()
-    analyzerRes.visitedMethods.remove(edge.called)
+
+    visitedMethods(edge.caller).methodBody.allTerminals ++= throws
+    visitedMethods(edge.caller).methodBody.removeDeadNodes()
+    visitedMethods(edge.caller).methodBody.checkLinks()
+    visitedMethods.remove(edge.called)
   }
 
   def inlineWireParams(log: Logger.Global, node: SSA.Invoke, calledBody: MethodBody) = {
@@ -491,6 +493,7 @@ object Backend {
                         argMapping: Map[Int, Int],
                         isInterface: JType.Cls => Option[Boolean]) = log.block{
 
+    result.methodBody.checkLinks()
     // Strip out the SSA.Invoke#block edges from the method body before proceeding with
     // simplification and code generation.
     //
@@ -517,10 +520,11 @@ object Backend {
       classExists,
       resolvedProperties
     )
-
+    log.global().graph("POST OPTIMISTIC SIMPLIFY")(Renderer.dumpSvg(result.methodBody))
     log.check(result.methodBody.checkLinks(checkDead = false))
     result.methodBody.removeDeadNodes()
     log.graph("POST OPTIMISTIC SIMPLIFY")(Renderer.dumpSvg(result.methodBody))
+    log.global().pprint(result.methodBody.getAllVertices())
     log.check(result.methodBody.checkLinks())
 
     val allVertices2 = result.methodBody.getAllVertices()

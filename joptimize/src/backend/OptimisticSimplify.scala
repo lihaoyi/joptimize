@@ -20,7 +20,7 @@ object OptimisticSimplify {
 
 //    log.pprint(argMapping)
     for(n <- methodBody.getAllVertices()){
-      log.graph(n.toString())(Renderer.dumpSvg(methodBody))
+      // log.global().graph(n.toString())(Renderer.dumpSvg(methodBody))
 //      log.pprint(n)
 //      n match{case n: SSA.Val => log.pprint(inferred.get(n)) case _ =>}
       simplifyNode(n, inferred, classExists, log, liveBlocks, resolvedProperties, argMapping)

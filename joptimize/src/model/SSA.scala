@@ -46,7 +46,7 @@ object SSA{
     }
     private[this] val downstream = mutable.LinkedHashMap.empty[Node, Int]
     override def downstreamContains(n: Node) = downstream.contains(n)
-    def downstreamList: Seq[SSA.Node] = downstream.keysIterator.toArray[SSA.Node]
+    def downstreamList: Seq[SSA.Node] = downstream.flatMap{case (k, n) => Array.fill(n)(k)}.toArray[SSA.Node]
     def downstreamSize: Int = downstream.valuesIterator.sum
     def downstreamAdd(n: Node) = downstream(n) = downstream.getOrElse(n, 0) + 1
     def downstreamRemove(n: Node) = downstream.get(n) match{
@@ -129,7 +129,7 @@ object SSA{
 
   class Phi(var block: Merge, var incoming: Set[(SSA.Block, SSA.Val)], var tpe: JType) extends Val(tpe) with SSA.State{
     override def upstream: Seq[SSA.Node] =
-      Seq(block) ++ incoming.flatMap(x => Seq(x._1, x._2)).toArray[SSA.Node]
+      Seq(block) ++ incoming.toArray[(SSA.Node, SSA.Node)].flatMap(x => Seq(x._1, x._2))
     override def toString = s"Phi@${Integer.toHexString(System.identityHashCode(this))}(${incoming.size})"
     def replaceUpstream(swap: Swapper): Unit = {
       block = swap(block)
