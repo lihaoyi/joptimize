@@ -171,6 +171,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
     val isig = current.maxBy(callStackSets(_).size)
 
     current.remove(isig)
+    globalLog.pprint(isig.toString)
 //    println(isig.toString)
 
     val methodLog = globalLog.method(isig.method)
@@ -362,7 +363,7 @@ object ProgramAnalyzer {
 
     if (api.isCalledFrom(isig, calledSig)) {
       StepResult(
-        edges = Seq(CallEdge(calledSig, Some(invoke), isig)),
+        edges = Seq(CallEdge(isig, Some(invoke), calledSig)),
         calledSignatures = Seq(calledSig),
         evaluated = Seq((isig, invoke, IType.Bottom))
       )

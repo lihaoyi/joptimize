@@ -15,7 +15,6 @@ object MainTestUtils {
 
   val classesRoot = os.Path(sys.env("CLASSES_FOLDER"), os.pwd)
   val outRoot = os.Path("out/scratch", os.pwd)
-  val testRoot = classesRoot / "test"
 
   def annotatedTest(implicit tp: TestPath) = {
 
@@ -41,24 +40,25 @@ object MainTestUtils {
     val output = mutable.Buffer.empty[ujson.Value]
     for (inline <- Seq(false, true)){
       println(s"  test.MainTests.${tp.value.mkString(".")} inline: $inline")
-      for(args <- cases){
-        os.remove.all(os.pwd / 'out / 'scratch)
-        os.remove.all(outRoot / tp.value)
-        val outputFileMap = joptimize.JOptimize.run(
-          name => loadIfExists("CLASSES_FOLDER", name).orElse(loadIfExists("SCALA_FOLDER", name)),
-          Seq(MethodSig(s"test/${tp.value.dropRight(1).mkString("/")}", tp.value.last, methodDesc, static = true)),
-          eliminateOldMethods = true,
-          //      log = joptimize.DummyLogger
-          log = new joptimize.FileLogger.Global(logRoot = outRoot),
-          inline = inline
-        )
+      os.remove.all(os.pwd / 'out / 'scratch)
+      os.remove.all(outRoot / tp.value)
+      val outputFileMap = joptimize.JOptimize.run(
+        name => loadIfExists("CLASSES_FOLDER", name),
+        Seq(MethodSig(s"test/${tp.value.dropRight(1).mkString("/")}", tp.value.last, methodDesc, static = true)),
+        eliminateOldMethods = true,
+        //      log = joptimize.DummyLogger
+        log = new joptimize.FileLogger.Global(logRoot = outRoot),
+        inline = inline
+      )
 
-        for ((k, bytes) <- outputFileMap) {
-          os.write(outRoot / os.RelPath(k), bytes, createFolders = true)
-          //      val subPath = os.RelPath(k).relativeTo(ignorePrefix)
-          //      assert(subPath.ups == 0)
-          //      os.write(outRoot / tp.value / subPath, bytes, createFolders = true)
-        }
+      for ((k, bytes) <- outputFileMap) {
+        os.write(outRoot / os.RelPath(k), bytes, createFolders = true)
+        //      val subPath = os.RelPath(k).relativeTo(ignorePrefix)
+        //      assert(subPath.ups == 0)
+        //      os.write(outRoot / tp.value / subPath, bytes, createFolders = true)
+      }
+
+      for(args <- cases){
         val boxedArgs =
           for ((a, p) <- args.zip(rawMethod.getParameterTypes))
             yield {
@@ -74,18 +74,17 @@ object MainTestUtils {
               else throw new Exception(p.toString)
             }
 
-
-        val expectedResult = checkWithClassloader { cl =>
-          val rawCls = cl.loadClass(s"test.${tp.value.dropRight(1).mkString(".")}")
-          val rawMethod = rawCls.getDeclaredMethods.find(_.getName == tp.value.last).get
-          rawMethod.setAccessible(true)
-          rawMethod.invoke(null, boxedArgs: _*)
-        }
-        val joptimizedResult = checkWithClassloader { cl =>
+        val expectedResult = withClassloader(classesRoot) { cl =>
           val cls = cl.loadClass(s"test.${tp.value.dropRight(1).mkString(".")}")
-          val joptimizedMethod = cls.getDeclaredMethod(tp.value.last, rawMethod.getParameterTypes: _*)
-          joptimizedMethod.setAccessible(true)
-          joptimizedMethod.invoke(null, boxedArgs: _*)
+          val method = cls.getDeclaredMethod(tp.value.last, rawMethod.getParameterTypes: _*)
+          method.setAccessible(true)
+          method.invoke(null, boxedArgs: _*)
+        }
+        val joptimizedResult = withClassloader(outRoot) { cl =>
+          val cls = cl.loadClass(s"test.${tp.value.dropRight(1).mkString(".")}")
+          val method = cls.getDeclaredMethod(tp.value.last, rawMethod.getParameterTypes: _*)
+          method.setAccessible(true)
+          method.invoke(null, boxedArgs: _*)
         }
         output.append(
           ujson.Arr(
@@ -109,16 +108,16 @@ object MainTestUtils {
               joptimizedResult == expectedResult
             }
         }
-        if (testAnnot.assertOnInlined() == inline) {
-          checkWithClassloader { cl =>
-            testAnnot.addedNumConst().foreach(checkAddedNumConst(cl, _))
-            testAnnot.removedNumConst().foreach(checkRemovedNumConst(cl, _))
-            testAnnot.checkPresent().foreach(checkPresent(cl, _))
-            testAnnot.checkRemoved().foreach(checkRemoved(cl, _))
-            testAnnot.checkMangled().foreach(checkMangled(cl, _))
-            testAnnot.checkNotMangled().foreach(checkNotMangled(cl, _))
-            testAnnot.checkClassRemoved().foreach(checkClassRemoved(cl, _))
-          }
+      }
+      if (testAnnot.assertOnInlined() == inline) {
+        withClassloader(outRoot) { cl =>
+          testAnnot.addedNumConst().foreach(checkAddedNumConst(cl, _))
+          testAnnot.removedNumConst().foreach(checkRemovedNumConst(cl, _))
+          testAnnot.checkPresent().foreach(checkPresent(cl, _))
+          testAnnot.checkRemoved().foreach(checkRemoved(cl, _))
+          testAnnot.checkMangled().foreach(checkMangled(cl, _))
+          testAnnot.checkNotMangled().foreach(checkNotMangled(cl, _))
+          testAnnot.checkClassRemoved().foreach(checkClassRemoved(cl, _))
         }
       }
     }
@@ -147,9 +146,9 @@ object MainTestUtils {
     case n: Array[_] => ujson.Arr(n.map(c => sketchyToJson(c.asInstanceOf[AnyRef])):_*)
   }
 
-  def checkWithClassloader[T](f: URLClassLoader => T)(implicit tp: TestPath): T = {
+  def withClassloader[T](clRoot: os.Path)(f: URLClassLoader => T)(implicit tp: TestPath): T = {
     val cl = new URLClassLoader(
-      Array(outRoot.toNIO.toUri.toURL),
+      Array(clRoot.toNIO.toUri.toURL),
       ClassLoader.getSystemClassLoader().getParent()
     )
     try f(cl)

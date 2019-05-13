@@ -42,9 +42,17 @@ object joptimize extends ScalaModule{
 
       PathRef(T.ctx().dest)
     }
+
+    def classScalaFolder = T{
+      for(base <- Seq(compile().classes.path, unzippedScalaFolder().path)){
+        for(sub <- os.list(base)){
+          os.copy(sub, T.ctx().dest / sub.relativeTo(base))
+        }
+      }
+      PathRef(T.ctx().dest)
+    }
     def forkEnv = Map(
-      "SCALA_FOLDER" -> unzippedScalaFolder().path.toString,
-      "CLASSES_FOLDER" -> compile().classes.path.toString()
+      "CLASSES_FOLDER" -> classScalaFolder().path.toString
     )
     def scalacOptions = super.scalacOptions() ++ Seq("-Ydelambdafy:inline")
   }

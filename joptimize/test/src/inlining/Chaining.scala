@@ -54,7 +54,7 @@ object Chaining {
 
     if (res.isEmpty) -1 else res.get
   }
-  @test.Test(inputs = Array(1, 2, 3))
+  @test.Test(inputs = Array(1, 2, 3, 4))
   def flatMapMap(a: Int, b: Int): Int = {
     val xOpt = if (a % 2 == 0) Some(1) else None
     val yOpt = if (b % 3 == 0) Some(1) else None
@@ -73,7 +73,7 @@ object Chaining {
     if (res1.isEmpty && res2.isEmpty) 1 else 0
   }
 
-  @test.Test(inputs = Array(1, 2, 3))
+  @test.Test(inputs = Array(1, 2, 3, 4))
   def mapTwice2(a: Int, b: Int): Int = {
     val xOpt = if (a % 2 == 0) Some(1) else None
     val yOpt = if (b % 3 == 0) Some(1) else None

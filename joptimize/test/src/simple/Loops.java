@@ -8,7 +8,7 @@ public class Loops {
         return c;
     }
 
-    @test.Test(inputs = {0, 1, 2, 3, 4, 5, 6, 7, 9})
+    @test.Test(inputs = {0, 1, 3, 7})
     public static int basicFor(int a) {
         int c = 1;
         for (int i = 1; i < a; i++) c = c * i;
@@ -16,7 +16,7 @@ public class Loops {
     }
 
 
-    @test.Test(inputs = {0, 1, 2, 3, 4, 5, 6, 7, 9})
+    @test.Test(inputs = {0, 1, 3, 7})
     public static int nestedFor(int a) {
         int c = 1;
         for (int i = 0; i < a; i++) {
@@ -29,7 +29,7 @@ public class Loops {
     }
 
 
-    @test.Test(inputs = {0, 1, 2, 3, 4, 5, 6, 7, 9})
+    @test.Test(inputs = {0, 1, 3, 7})
     public static int nestedFor2(int a) {
         int c = 1;
         for (int i = 0; i < a; i++) {
@@ -44,7 +44,7 @@ public class Loops {
         return c;
     }
 
-    @test.Test(inputs = {0, 1, 2, 3, 4, 5, 6, 7, 9})
+    @test.Test(inputs = {0, 1, 3, 7})
     public static int liftableFor(int a) {
         int c0 = 0;
         int c = c0 + 3;
@@ -56,7 +56,7 @@ public class Loops {
         return c + 7;
     }
 
-    @test.Test(inputs = {0, 1, 2, 3, 4, 5, 6, 7, 9})
+    @test.Test(inputs = {0, 1, 3, 7})
     public static int unliftableFor(int a) {
         int c0 = 0;
         int c = c0 + 3;
@@ -68,7 +68,7 @@ public class Loops {
         return c + 7;
     }
 
-    @test.Test(inputs = {0, 1, 2, 3, 4, 5, 6, 7, 9})
+    @test.Test(inputs = {0, 1, 3, 7})
     public static int mixedLiftableFor(int a) {
         int c0 = 0;
         int c = c0 + 3;
@@ -83,7 +83,7 @@ public class Loops {
         return c + 2;
     }
 
-    @test.Test(inputs = {0, 1, 2, 3, 4, 5, 6, 7, 9})
+    @test.Test(inputs = {0, 1, 3, 7})
     public static int nestedMixedLiftableFor(int a) {
         int c0 = 0;
         int c = c0 + 3;
@@ -108,7 +108,7 @@ public class Loops {
     }
 
 
-    @test.Test(inputs = {0, 1, 2, 3, 4, 5, 6, 7, 9})
+    @test.Test(inputs = {0, 1, 3, 7})
     public static int nestedUnliftableFor(int a) {
         int c = 1;
 
@@ -120,7 +120,7 @@ public class Loops {
         return c;
     }
 
-    @test.Test(inputs = {0, 1, 2, 3, 4, 5, 6, 7, 9})
+    @test.Test(inputs = {0, 1, 3, 7})
     public static int nestedLiftableFor(int a) {
         int c = 1;
         for (int i = 0; i < a; i++) {
@@ -132,7 +132,7 @@ public class Loops {
         return c;
     }
 
-    @test.Test(inputs = {0, 1, 2, 3, 4, 5, 6, 7, 9})
+    @test.Test(inputs = {0, 1, 3, 7})
     public static int nestedLiftableFor2(int a) {
         int c = 1;
         for (int i = 0; i < a; i++) {
@@ -151,14 +151,14 @@ public class Loops {
         return c;
     }
 
-    @test.Test(inputs = {0, 1, 2, 3, 4, 5, 6, 7, 9})
+    @test.Test(inputs = {0, 1, 3, 7})
     public static int basicWhile(int a) {
         int c = 1;
         while (c < a) c = c * 2;
         return c;
     }
 
-    @test.Test(inputs = {0, 1, 2, 3, 4, 5, 6, 7, 9})
+    @test.Test(inputs = {0, 1, 3, 7})
     public static int alternatingWhile(int a) {
         int c = 1;
         int b = 1;
