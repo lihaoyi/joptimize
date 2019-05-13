@@ -350,6 +350,10 @@ object MainTests extends TestSuite{
         'conditionalIf - annotatedTest
         'conditionalVoid - annotatedTest
         'conditionalIfVoid - annotatedTest
+        'thrower - annotatedTest
+        'throwerComplex - annotatedTest
+        'throwerPartialMerge - annotatedTest
+        'throwerFullMerge - annotatedTest
       }
     }
   }

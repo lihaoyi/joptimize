@@ -112,7 +112,7 @@ object Inliner {
     val Seq(nextState) = node.downstreamList.collect { case s: SSA.ChangedState => s }
 
     val outputNodes = prepareOutputNodes(classManager, log, nodeBlock, returns, nextState, visitedMethods(edge.caller).methodBody)
-    val addedBlocks = outputNodes match{
+    val (addedBlocks, eliminatedControls) = outputNodes match{
       case Some((inlinedLastBlock, inlinedFinalValOpt, inlinedFinalState)) =>
 
         // Wire up return value, state and block
@@ -133,13 +133,34 @@ object Inliner {
             }
           case _ => // do nothing
         }
-        Seq(inlinedLastBlock)
+        (Seq(inlinedLastBlock), Nil)
       case None =>
-        node.upstreamVals.foreach(_.downstreamRemove(node))
-        for(t <- throws){
-          t.block
+        Util.replace(node, new SSA.ConstNull())
+        val eliminatedControls = mutable.LinkedHashSet.empty[SSA.Control]
+        val workQueue = mutable.Queue.empty[SSA.Control]
+        workQueue.enqueue(nodeBlock.next)
+        while(workQueue.nonEmpty) {
+          val current = workQueue.dequeue()
+          if (!eliminatedControls.contains(current)){
+            eliminatedControls.add(current)
+            current match{
+              case b: SSA.Block =>
+                current.downstreamList.collect{
+                  case n: SSA.Merge =>
+                    n.incoming = n.incoming - b
+                    if (n.incoming.isEmpty) workQueue.enqueue(n)
+                  case n: SSA.Control => workQueue.enqueue(n)
+                }
+              case _ =>
+                current.downstreamList.collect{
+                  case n: SSA.Control => workQueue.enqueue(n)
+                }
+            }
+          }
         }
-        Nil
+        log.pprint(eliminatedControls)
+
+        (Nil, eliminatedControls.toSeq)
     }
 
     // Wire up input block
@@ -166,7 +187,7 @@ object Inliner {
     visitedMethods.remove(edge.called)
 
     visitedMethods(edge.caller).methodBody.allTerminals =
-      visitedMethods(edge.caller).methodBody.allTerminals ++
+      visitedMethods(edge.caller).methodBody.allTerminals.filter(!eliminatedControls.contains(_)) ++
       throws
     visitedMethods(edge.caller).methodBody.removeDeadNodes()
     log.graph("INLINED " + edge) {

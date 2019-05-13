@@ -186,7 +186,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
 
     val step = currentAnalysis.step()
 
-    globalLog.pprint(step)
+//    globalLog.pprint(step)
     val results: Seq[ProgramAnalyzer.StepResult] = step match {
       case MethodAnalyzer.Step.Continue(nodes) =>
         nodes.map{
