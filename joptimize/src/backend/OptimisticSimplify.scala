@@ -138,23 +138,26 @@ object OptimisticSimplify {
     * Removes a node entirely and replace it with a constant value
     */
   def constantFoldNode(inferred: mutable.LinkedHashMap[SSA.Val, IType],
-                       r: SSA.Val,
-                       n: SSA.Val) = {
-    inferred(r) = inferred(n)
-    var upstreamState: SSA.ChangedState = null
-    n.upstreamVals.foreach {
+                       replacement: SSA.Val,
+                       original: SSA.Val) = {
+    inferred(replacement) = inferred(original)
+    var upstreamState: SSA.State = null
+    original.upstreamVals.foreach {
       case s: SSA.ChangedState =>
         upstreamState = s
-        s.downstreamRemoveAll(n)
-      case u => u.downstreamRemoveAll(n)
+        s.downstreamRemoveAll(original)
+      case s: SSA.Phi if s.getSize == 0 =>
+        upstreamState = s
+        s.downstreamRemoveAll(original)
+      case u => u.downstreamRemoveAll(original)
     }
-    n.downstreamList.foreach {
+    original.downstreamList.foreach {
       case s: SSA.ChangedState if upstreamState != null =>
         s.parent = upstreamState
         upstreamState.downstreamAdd(s)
       case d =>
-        r.downstreamAdd(d)
-        d.replaceUpstream(n, r)
+        replacement.downstreamAdd(d)
+        d.replaceUpstream(original, replacement)
     }
   }
 

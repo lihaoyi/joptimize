@@ -35,10 +35,7 @@ object Chaining {
     def apply(x: Integer) = Integer.valueOf(x.intValue() + a)
   }
 
-  @test.Test(
-    inputs = Array(1, 2, 3),
-    checkClassRemoved = Array("Chaining$NamedFunction")
-  )
+  @test.Test(inputs = Array(1, 2, 3))
   def mapInnerClass(a: Int): Int = {
 
     val res = None.map(new NamedFunction(a))
