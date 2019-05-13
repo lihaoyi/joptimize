@@ -218,7 +218,7 @@ object Backend {
           .find { cls =>
 
             val key = isig.copy(method = isig.method.copy(cls = cls))
-            val res = analyzerRes.visitedResolved.contains(key)
+            val res = combined.contains(key)
             res
           }
           .get
