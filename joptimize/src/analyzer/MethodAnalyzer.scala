@@ -284,16 +284,21 @@ class MethodAnalyzer[T](methodBody: MethodBody,
   }
 
   def evaluateVal(v: SSA.Val): Step[T] = {
-    if (!evaluated.contains(v)){
+    if (evaluated.contains(v)) Step.Continue(Nil)
+    else{
       val upstream = v.upstream.collect{case v: SSA.Val => evaluated(v)}
-      if (upstream.contains(bottom)) evaluated(v) = bottom
-      else v match{
-        case n: SSA.Invoke =>
-        case n: SSA.InvokeDynamic =>
-        case _ => evaluated(v) = lattice.transferValue(v, evaluated)
+      if (upstream.contains(bottom)) {
+        evaluated(v) = bottom
+        Step.Continue(Nil)
+      } else {
+        v match{
+          case n: SSA.Invoke =>
+          case n: SSA.InvokeDynamic =>
+          case _ => evaluated(v) = lattice.transferValue(v, evaluated)
+        }
+        Step.Continue(Seq(v))
       }
     }
-    Step.Continue(Seq(v))
   }
 }
 object MethodAnalyzer {

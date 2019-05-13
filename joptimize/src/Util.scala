@@ -9,8 +9,15 @@ import org.objectweb.asm.tree._
 
 import scala.collection.mutable
 import collection.JavaConverters._
+import scala.util.control.NoStackTrace
+class LabeledException(label: String, e: Throwable) extends Exception(label, e) with NoStackTrace
 object Util{
-
+  def labelExceptions[T](label: String)(t: => T): T = {
+    try t
+    catch{ case e: Throwable =>
+      throw new LabeledException(label, e)
+    }
+  }
   def removeFromJavaList[T](list: java.util.List[T])(pred: T => Boolean) = {
     import collection.JavaConverters._
     list.iterator.asScala.indexWhere(pred) match{

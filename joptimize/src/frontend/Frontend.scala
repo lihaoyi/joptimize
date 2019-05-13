@@ -19,25 +19,27 @@ class Frontend(val classManager: ClassManager) {
     cachedMethodBodies.getOrElseUpdate(isig, loadMethodBody0(isig.method, log))
   }
 
-  def loadMethodBody0(originalSig: MethodSig, log: Logger.Method) = log.block{
-    val printer = new Textifier
-    val methodPrinter = new TraceMethodVisitor(printer)
-    val mn = classManager.loadMethod(originalSig).getOrElse(throw new Exception("Unknown Sig: " + originalSig))
-    if(mn.instructions.size() == 0) None
-    else {
-      log(Renderer.renderInsns(mn.instructions, printer, methodPrinter))
+  def loadMethodBody0(originalSig: MethodSig, log: Logger.Method) = log.block {
+    Util.labelExceptions(originalSig.toString) {
+      val printer = new Textifier
+      val methodPrinter = new TraceMethodVisitor(printer)
+      val mn = classManager.loadMethod(originalSig).getOrElse(throw new Exception("Unknown Sig: " + originalSig))
+      if (mn.instructions.size() == 0) None
+      else {
+        log(Renderer.renderInsns(mn.instructions, printer, methodPrinter))
 
-      val methodBody = ConstructSSA.apply(originalSig, mn, log)
-      log.graph("RAW")(Renderer.dumpSvg(methodBody))
-      log.check(methodBody.checkLinks(checkDead = false))
-      methodBody.removeDeadNodes()
-      log.graph("removeDeadNodes")(Renderer.dumpSvg(methodBody))
-      log.check(methodBody.checkLinks())
+        val methodBody = ConstructSSA.apply(originalSig, mn, log)
+        log.graph("RAW")(Renderer.dumpSvg(methodBody))
+        log.check(methodBody.checkLinks(checkDead = false))
+        methodBody.removeDeadNodes()
+        log.graph("removeDeadNodes")(Renderer.dumpSvg(methodBody))
+        log.check(methodBody.checkLinks())
 
-      simplifyPhiMerges(methodBody)
-      log.graph("simplifyPhiMerges")(Renderer.dumpSvg(methodBody))
-      log.check(methodBody.checkLinks())
-      Some(methodBody)
+        simplifyPhiMerges(methodBody)
+        log.graph("simplifyPhiMerges")(Renderer.dumpSvg(methodBody))
+        log.check(methodBody.checkLinks())
+        Some(methodBody)
+      }
     }
   }
 

@@ -115,7 +115,7 @@ object Backend {
         (isig, result) <- combined.toList
         if loadClassCache.contains(isig.method.cls)
         if loadMethodCache.contains(isig.method)
-      } yield {
+      } yield Util.labelExceptions(isig.toString){
         val liveArgs =
           if (entrypoints.contains(isig.method)) (_: Int) => true
           else {
@@ -237,6 +237,7 @@ object Backend {
                         isInterface: JType.Cls => Option[Boolean]) = log.block{
 
     log.check(result.methodBody.checkLinks())
+    log.graph("PROCESSMETHODBODY")(Renderer.dumpSvg(result.methodBody))
     result.methodBody.allTerminals = result.methodBody.allTerminals.filter(result.liveTerminals)
 
 //    result.methodBody.removeDeadNodes()
@@ -259,6 +260,7 @@ object Backend {
     log.pprint(result.liveTerminals)
     log.pprint(result.liveBlocks)
 
+    log.graph("PRE OPTIMISTIC SIMPLIFY")(Renderer.dumpSvg(result.methodBody))
     OptimisticSimplify.apply(
       originalSig.static,
       argMapping,
@@ -269,11 +271,11 @@ object Backend {
       classExists,
       resolvedProperties
     )
-
+    log.graph("POST OPTIMISTIC SIMPLIFY")(Renderer.dumpSvg(result.methodBody))
     log.check(result.methodBody.checkLinks(checkDead = false))
     result.methodBody.removeDeadNodes()
 
-    log.graph("POST OPTIMISTIC SIMPLIFY")(Renderer.dumpSvg(result.methodBody))
+    log.graph("POST OPTIMISTIC SIMPLIFY CLEANUP")(Renderer.dumpSvg(result.methodBody))
 
     log.check(result.methodBody.checkLinks())
 

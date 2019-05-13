@@ -170,72 +170,74 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
 //    println(pprint.apply(current.map(_.method.toString.stripPrefix("joptimize.examples.simple."))))
     val isig = current.maxBy(callStackSets(_).size)
 
-    current.remove(isig)
-    globalLog.pprint(isig.toString)
-//    println(isig.toString)
+    Util.labelExceptions(isig.toString){
+      current.remove(isig)
+      globalLog.pprint(isig.toString)
+  //    println(isig.toString)
 
-    val methodLog = globalLog.method(isig.method)
-    val inferredLog = globalLog.inferredMethod(isig)
-    val methodBody = frontend.loadMethodBody(isig, methodLog).get
-    val currentAnalysis = analyses.getOrElseUpdate(
-      isig,
-      optimisticAnalyze(
-        (if (isig.method.static) Nil else Seq(isig.method.cls)) ++ isig.inferred,
-        inferredLog,
-        methodBody,
-        Nil
+      val methodLog = globalLog.method(isig.method)
+      val inferredLog = globalLog.inferredMethod(isig)
+      val methodBody = frontend.loadMethodBody(isig, methodLog).get
+      val currentAnalysis = analyses.getOrElseUpdate(
+        isig,
+        optimisticAnalyze(
+          (if (isig.method.static) Nil else Seq(isig.method.cls)) ++ isig.inferred,
+          inferredLog,
+          methodBody,
+          Nil
+        )
       )
-    )
 
-    val step = currentAnalysis.step()
+      val step = currentAnalysis.step()
 
-//    globalLog.pprint(step)
-    val results: Seq[ProgramAnalyzer.StepResult] = step match {
-      case MethodAnalyzer.Step.Continue(nodes) =>
-        nodes.map{
-          case n: SSA.GetField => ProgramAnalyzer.handleFieldReference(isig, n.owner, false, this)
-          case n: SSA.PutField => ProgramAnalyzer.handleFieldReference(isig, n.owner, false, this)
-          case n: SSA.GetStatic => ProgramAnalyzer.handleFieldReference(isig, n.cls, true, this)
-          case n: SSA.PutStatic => ProgramAnalyzer.handleFieldReference(isig, n.cls, true, this)
+  //    globalLog.pprint(step)
+      val results: Seq[ProgramAnalyzer.StepResult] = step match {
+        case MethodAnalyzer.Step.Continue(nodes) =>
+          nodes.map{
+            case n: SSA.GetField => ProgramAnalyzer.handleFieldReference(isig, n.owner, false, this)
+            case n: SSA.PutField => ProgramAnalyzer.handleFieldReference(isig, n.owner, false, this)
+            case n: SSA.GetStatic => ProgramAnalyzer.handleFieldReference(isig, n.cls, true, this)
+            case n: SSA.PutStatic => ProgramAnalyzer.handleFieldReference(isig, n.cls, true, this)
 
-          case n: SSA.New => ProgramAnalyzer.handleNew(isig, n, this)
-          case invoke: SSA.Invoke => ProgramAnalyzer.handleInvoke(isig, currentAnalysis, invoke, this)
-          case indy: SSA.InvokeDynamic =>
-            if (indy.bootstrap == Util.metafactory || indy.bootstrap == Util.altMetafactory) ???
-            else if(indy.bootstrap == Util.makeConcatWithConstants){
-              ProgramAnalyzer.StepResult(evaluated = Seq((isig, indy, JType.Cls("java/lang/String"))))
-            } else ???
+            case n: SSA.New => ProgramAnalyzer.handleNew(isig, n, this)
+            case invoke: SSA.Invoke => ProgramAnalyzer.handleInvoke(isig, currentAnalysis, invoke, this)
+            case indy: SSA.InvokeDynamic =>
+              if (indy.bootstrap == Util.metafactory || indy.bootstrap == Util.altMetafactory) ???
+              else if(indy.bootstrap == Util.makeConcatWithConstants){
+                ProgramAnalyzer.StepResult(evaluated = Seq((isig, indy, JType.Cls("java/lang/String"))))
+              } else ???
 
-          case _ => ProgramAnalyzer.StepResult()
-        }
-
-
-      case MethodAnalyzer.Step.Done() =>
-        Seq(ProgramAnalyzer.handleReturn(isig, inferredLog, currentAnalysis, this))
-    }
-
-    for(result <- results){
-      result.edges.foreach(addCallEdge)
-      result.staticFieldReferencedClasses.foreach(staticFieldReferencedClasses.add)
-      result.calledSignatures.foreach(calledSignatures.add)
-      for((sig, invoke, tpe) <- result.evaluated) {
-        val merged = classManager.mergeTypes(Seq(tpe) ++ analyses(sig).evaluated.get(invoke))
-        if (!analyses(sig).evaluated.get(invoke).contains(merged)){
-          analyses(sig).evaluated(invoke) = merged
-          invoke match{
-            case n: SSA.Invoke =>
-              analyses(sig).invalidateWorkList.add(MethodAnalyzer.Invalidate.Invoke(n))
-            case _ => // do nothing
+            case _ => ProgramAnalyzer.StepResult()
           }
-          current.add(sig)
+
+
+        case MethodAnalyzer.Step.Done() =>
+          Seq(ProgramAnalyzer.handleReturn(isig, inferredLog, currentAnalysis, this))
+      }
+
+      for(result <- results){
+        result.edges.foreach(addCallEdge)
+        result.staticFieldReferencedClasses.foreach(staticFieldReferencedClasses.add)
+        result.calledSignatures.foreach(calledSignatures.add)
+        for((sig, invoke, tpe) <- result.evaluated) {
+          val merged = classManager.mergeTypes(Seq(tpe) ++ analyses(sig).evaluated.get(invoke))
+          if (!analyses(sig).evaluated.get(invoke).contains(merged)){
+            analyses(sig).evaluated(invoke) = merged
+            invoke match{
+              case n: SSA.Invoke =>
+                analyses(sig).invalidateWorkList.add(MethodAnalyzer.Invalidate.Invoke(n))
+              case _ => // do nothing
+            }
+            current.add(sig)
+          }
+        }
+        for((sig, props) <- result.setProps) {
+          methodProps(sig) = props
         }
       }
-      for((sig, props) <- result.setProps) {
-        methodProps(sig) = props
-      }
-    }
 
-    if (!step.isInstanceOf[MethodAnalyzer.Step.Done[_]]) current.add(isig)
+      if (!step.isInstanceOf[MethodAnalyzer.Step.Done[_]]) current.add(isig)
+    }
   }
   def getMethodProps(isig: InferredSig): Option[ProgramAnalyzer.Properties] = methodProps.get(isig)
 
@@ -495,6 +497,7 @@ object ProgramAnalyzer {
       case n: SSA.InvokeDynamic => n.bootstrap == Util.makeConcatWithConstants
       case n: SSA.Invoke =>
         if (n.srcs.exists(!inferred.contains(_))) true
+        else if (n.srcs.exists(inferred(_) == IType.Bottom)) true
         else {
 
           val key = n.inferredSig(inferred)
