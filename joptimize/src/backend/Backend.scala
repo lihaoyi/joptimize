@@ -256,6 +256,8 @@ object Backend {
     }
 
     log.pprint(argMapping)
+    log.pprint(result.liveTerminals)
+    log.pprint(result.liveBlocks)
 
     OptimisticSimplify.apply(
       originalSig.static,

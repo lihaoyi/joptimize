@@ -164,7 +164,7 @@ class MethodAnalyzer[T](methodBody: MethodBody,
       case n: SSA.Jump =>
         n match {
           case r: SSA.AThrow =>
-            if (evaluated(r.src) != bottom) inferredThrows(r) = bottom
+            inferredThrows(r) = bottom
             Nil
           case r: SSA.Return =>
             if (evaluated(r.state) != bottom) inferredReturns(r) = void

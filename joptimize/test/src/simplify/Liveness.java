@@ -3,14 +3,14 @@ package test.simplify;
 class Liveness {
 
     @test.Test(
-        inputs = {1, 2, 3, 4, 5, 6, 7, 8}
+        inputs = {1, 2, 3}
     )
     static int entrypointUnused0(int i) {
         return 123;
     }
 
     @test.Test(
-        inputs = {1, 2, 3, 4, 5, 6, 7, 8}
+        inputs = {1, 2, 3, 4}
     )
     static int entrypointUnused1(int i, int j) {
         return 123 + j;
@@ -18,7 +18,7 @@ class Liveness {
     }
 
     @test.Test(
-        inputs = {1, 2, 3, 4, 5, 6, 7, 8}
+        inputs = {1, 2, 3, 4}
     )
     static int entrypointUnused2(int i, int j) {
         return 123 + i;
@@ -141,7 +141,7 @@ class Liveness {
 
 
     @test.Test(
-            inputs = {1, 2, 3, 4, 5, 6, 7, 8},
+            inputs = {1, 2, 3},
             removedNumConst = {123},
             addedNumConst = {456}
     )
@@ -159,7 +159,7 @@ class Liveness {
 
 
     @test.Test(
-            inputs = {1, 2, 3, 4, 5, 6, 7, 8},
+            inputs = {1, 2, 3},
             removedNumConst = {456},
             addedNumConst = {123}
     )
@@ -177,13 +177,13 @@ class Liveness {
 
 
     @test.Test(
-            inputs = {1, 2, 3, 4, 5, 6, 7, 8}
+            inputs = {1, 2, 3}
     )
     static int implement2a(int i) {
         return (new Bar2()).choose(i + 123, i + 456);
     }
     @test.Test(
-            inputs = {1, 2, 3, 4, 5, 6, 7, 8},
+            inputs = {1, 2, 3},
             addedNumConst = {123, 456}
     )
     static int implement2b(int i) {
@@ -208,7 +208,7 @@ class Liveness {
 
 
     @test.Test(
-            inputs = {1, 2, 3, 4, 5, 6, 7, 8},
+            inputs = {1, 2, 3},
             addedNumConst = {123, 456}
     )
     static int implement3(int i) {
@@ -233,7 +233,7 @@ class Liveness {
 
 
     @test.Test(
-            inputs = {1, 2, 3, 4, 5, 6, 7, 8},
+            inputs = {1, 2, 3},
             removedNumConst = {123},
             addedNumConst = {456}
     )
@@ -253,7 +253,7 @@ class Liveness {
 
 
     @test.Test(
-            inputs = {1, 2, 3, 4, 5, 6, 7, 8},
+            inputs = {1, 2, 3},
             removedNumConst = {456},
             addedNumConst = {123}
     )
@@ -273,7 +273,7 @@ class Liveness {
 
 
     @test.Test(
-            inputs = {1, 2, 3, 4, 5, 6, 7, 8},
+            inputs = {1, 2, 3},
             addedNumConst = {123, 456}
     )
     static int override2(int i) {
@@ -294,7 +294,7 @@ class Liveness {
 
 
     @test.Test(
-            inputs = {1, 2, 3, 4, 5, 6, 7, 8},
+            inputs = {1, 2, 3},
             addedNumConst = {123},
             removedNumConst = {456}
     )
@@ -316,7 +316,7 @@ class Liveness {
 
 
     @test.Test(
-            inputs = {1, 2, 3, 4, 5, 6, 7, 8},
+            inputs = {1, 2, 3},
             addedNumConst = {123, 456}
     )
     static int override4(int i) {
@@ -341,7 +341,7 @@ class Liveness {
 
 
     @test.Test(
-            inputs = {1, 2, 3, 4, 5, 6, 7, 8},
+            inputs = {1, 2, 3},
             addedNumConst = {123}
     )
     static int deadLoopCounter(int i) {

@@ -1,28 +1,28 @@
 package test.inlining
 
 object Chaining {
-  @test.Test(inputs = Array(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12))
+  @test.Test(inputs = Array(1, 2, 3))
   def noneGet(a: Int): Int = {
     if (a > 100) None.get else a
   }
-  @test.Test(inputs = Array(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12))
+  @test.Test(inputs = Array(1, 2, 3))
   def someGet(a: Int): Int = {
     if (a % 2 == 0) Some(123).get else a
   }
-  @test.Test(inputs = Array(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12))
+  @test.Test(inputs = Array(1, 2, 3))
   def castSomeGet(a: Int): Int = {
     val res = if (a % 2 == 0) Some(1) else None
 
     if (res.isEmpty) -1 else res.asInstanceOf[Some[Int]].get
   }
 
-  @test.Test(inputs = Array(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12))
+  @test.Test(inputs = Array(1, 2, 3))
   def get(a: Int): Int = {
     val res = if (a % 2 == 0) Some(1) else None
 
     if (res.isEmpty) -1 else res.get
   }
-  @test.Test(inputs = Array(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12))
+  @test.Test(inputs = Array(1, 2, 3))
   def map(a: Int): Int = {
     val xOpt = if (a == 1) Some(1) else None
 
@@ -36,7 +36,7 @@ object Chaining {
   }
 
   @test.Test(
-    inputs = Array(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12),
+    inputs = Array(1, 2, 3),
     checkClassRemoved = Array("Chaining$NamedFunction")
   )
   def mapInnerClass(a: Int): Int = {
@@ -46,7 +46,7 @@ object Chaining {
     if (res.isEmpty) -1 else 1
   }
 
-  @test.Test(inputs = Array(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12))
+  @test.Test(inputs = Array(1, 2, 3))
   def flatMap(a: Int): Int = {
     val xOpt = if (a % 2 == 0) Some(1) else None
 
@@ -54,7 +54,7 @@ object Chaining {
 
     if (res.isEmpty) -1 else res.get
   }
-  @test.Test(inputs = Array(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12))
+  @test.Test(inputs = Array(1, 2, 3))
   def flatMapMap(a: Int, b: Int): Int = {
     val xOpt = if (a % 2 == 0) Some(1) else None
     val yOpt = if (b % 3 == 0) Some(1) else None
@@ -63,7 +63,7 @@ object Chaining {
 
     if (res.isEmpty) -1 else res.get
   }
-  @test.Test(inputs = Array(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12))
+  @test.Test(inputs = Array(1, 2, 3))
   def mapTwice(a: Int): Int = {
     val xOpt = if (a % 2 == 0) Some(1) else None
 
@@ -73,7 +73,7 @@ object Chaining {
     if (res1.isEmpty && res2.isEmpty) 1 else 0
   }
 
-  @test.Test(inputs = Array(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12))
+  @test.Test(inputs = Array(1, 2, 3))
   def mapTwice2(a: Int, b: Int): Int = {
     val xOpt = if (a % 2 == 0) Some(1) else None
     val yOpt = if (b % 3 == 0) Some(1) else None
@@ -89,7 +89,7 @@ object Chaining {
     }
   }
 
-  @test.Test(inputs = Array(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12))
+  @test.Test(inputs = Array(1, 2, 3))
   def flatMapMapChain(a: Int, b: Int, c: Int): Int = {
     val xOpt = if (a % 2 == 0) Some(1) else None
     val yOpt = if (b % 2 == 0) Some(2) else None

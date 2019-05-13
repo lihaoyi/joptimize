@@ -106,6 +106,8 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
 
     val visitedMethods = mutable.LinkedHashMap.empty[InferredSig, ProgramAnalyzer.MethodResult]
     for((k, props) <- methodProps) {
+      globalLog.inferredMethod(k).pprint(analyses(k).inferredReturns.keys)
+      globalLog.inferredMethod(k).pprint(analyses(k).inferredThrows.keys)
       visitedMethods(k) = ProgramAnalyzer.MethodResult(
         frontend.cachedMethodBodies(k).get,
         analyses(k).evaluated,
