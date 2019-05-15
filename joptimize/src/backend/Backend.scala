@@ -27,9 +27,10 @@ object Backend {
     //    pprint.log(loadMethodCache.keys)
 
 
-    val inlinedAnalyzerRes =
-      if(inline) Inliner.inlineAll(analyzerRes, classManager, log)
-      else analyzerRes
+    val inlinedAnalyzerRes = analyzerRes
+//    val inlinedAnalyzerRes =
+//      if(inline) Inliner.inlineAll(analyzerRes, classManager, log)
+//      else analyzerRes
 
     val combined =
       inlinedAnalyzerRes.visitedResolved.mapValues(Right(_)) ++
@@ -241,19 +242,7 @@ object Backend {
 
 //    result.methodBody.removeDeadNodes()
 //    log.global().graph("ZZZ")(Renderer.dumpSvg(result.methodBody))
-    // Strip out the SSA.Invoke#block edges from the method body before proceeding with
-    // simplification and code generation.
-    //
-    // These edges are necessary for simplifying the inlining step done earlier, but once
-    // inlining is done, they are unnecessary. They also seem to cause problems with downstream
-    // code generations for unknown reasons
-    result.methodBody.getAllVertices().foreach{
-      case i: SSA.Block => i.blockInvokes = Nil
-      case i: SSA.InvokeStatic => i.block = None
-      case i: SSA.InvokeVirtual=> i.block = None
-      case i: SSA.InvokeSpecial => i.block = None
-      case _ =>
-    }
+
 
     log.pprint(argMapping)
     log.pprint(result.liveTerminals)

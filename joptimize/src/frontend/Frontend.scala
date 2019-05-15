@@ -59,16 +59,15 @@ object Frontend{
 
     case merge: SSA.Merge =>
       if (merge.incoming.size == 1 && merge.next != null) {
-        for(next <- Option(merge.next) ++ merge.nextPhis ++ merge.blockInvokes){
-
-          next.replaceUpstream(merge, merge.incoming.head)
+        for(next <- Option(merge.next) ++ merge.nextPhis ++ Option(merge.nextState)){
+          next.replaceUpstream(merge, merge.incoming.head._1)
         }
 
-        merge.incoming.head.next = merge.next
-        merge.incoming.head.nextPhis = merge.nextPhis
-        merge.incoming.head.blockInvokes = merge.blockInvokes
+        merge.incoming.head._1.next = merge.next
+        merge.incoming.head._1.nextPhis = merge.nextPhis
+        merge.incoming.head._1.nextState = merge.nextState
         merge.next = null
-        (merge.incoming.head +: merge.phis) ++ merge.nextPhis ++ merge.blockInvokes
+        (merge.incoming.head._1 +: merge.phis) ++ merge.nextPhis ++ Option(merge.nextState)
       }
       else Nil
   }

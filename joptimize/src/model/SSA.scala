@@ -71,7 +71,7 @@ object SSA{
     }
     override def update() = {
       parent match{
-        case s: SSA.Start => s.startingState = this
+        case s: SSA.Block => s.nextState = this
         case _ =>
       }
       super.update()
@@ -87,8 +87,9 @@ object SSA{
   }
   sealed abstract class Block() extends Control(){
     var nextPhis: Seq[Phi] = Nil
-    var blockInvokes: Seq[Invoke] = Nil
-    def downstreamList: Seq[Node] = nextPhis ++ blockInvokes
+    var nextState: SSA.ChangedState = null
+    def downstreamList: Seq[Node] = nextPhis ++ Option(nextState)
+    def downstreamSize = nextPhis.length + (if (nextState == null) 0 else 1)
     def next: SSA.Control
     def next_=(v: SSA.Control)
   }
@@ -106,8 +107,8 @@ object SSA{
     def next: SSA.Control
     def next_=(v: SSA.Control)
     def block: SSA.Block
-    override def downstreamList = Option(next).toSeq ++ nextPhis ++ blockInvokes
-    def downstreamSize = 1 + nextPhis.length
+    override def downstreamList = super.downstreamList ++ Option(next).toSeq
+    override def downstreamSize = super.downstreamSize + (if (next == null) 0 else 1)
   }
 
   case class Code[T] (i: Int, tpe: JType = JType.Prim.V)
@@ -127,7 +128,7 @@ object SSA{
     def lookup(i: Int) = lookup0(i)
   }
 
-  class Phi(var block: Merge, var incoming: Set[(SSA.Block, SSA.Val)], var tpe: JType) extends Val(tpe) with SSA.State{
+  class Phi(var block: Merge, var incoming: Set[(SSA.Block, SSA.Val)], var tpe: JType) extends Val(tpe) {
     override def upstream: Seq[SSA.Node] =
       Seq(block) ++ incoming.toArray[(SSA.Node, SSA.Node)].flatMap(x => Seq(x._1, x._2))
     override def toString = s"Phi@${Integer.toHexString(System.identityHashCode(this))}(${incoming.size})"
@@ -138,7 +139,7 @@ object SSA{
     override def checkLinks() = {
       super.checkLinks()
       val phiIncomingBlocks = incoming.map(_._1)
-      val blockIncomingBlocks = block.upstream.toSet
+      val blockIncomingBlocks = block.incoming.map(_._1)
       assert(
         phiIncomingBlocks == blockIncomingBlocks,
         s"$this incoming blocks doesn't match block $block incoming blocks, $phiIncomingBlocks != $blockIncomingBlocks"
@@ -152,24 +153,21 @@ object SSA{
 //    }
   }
 
-  class Start(next: SSA.Control,
-              var startingState: SSA.ChangedState) extends Merge(Set(), next, Nil){
+  class Start(next: SSA.Control) extends Merge(Set(), next, Nil){
     override def toString = s"Start@${Integer.toHexString(System.identityHashCode(this))}"
-    override def downstreamList = super.downstreamList ++ Seq(startingState)
-    override def downstreamSize = super.downstreamSize + 1
   }
-  class Merge(var incoming: Set[Block],
+  class Merge(var incoming: Set[(Block, State)],
               var next: SSA.Control,
               var phis: Seq[SSA.Phi]) extends Block() {
-    def controls = upstream
-    def upstream = incoming.toSeq
+    def controls = incoming.toSeq.map(_._1)
+    def upstream = incoming.toSeq.flatMap(x => Seq(x._1, x._2))
 
     override def toString = s"Merge@${Integer.toHexString(System.identityHashCode(this))}(${incoming.size})"
     def replaceUpstream(swap: Swapper): Unit = {
-      incoming = incoming.map(swap(_))
+      incoming = incoming.map(t => (swap(t._1), swap(t._2)))
     }
     override def downstreamList = Option(next).toSeq ++ phis ++ super.downstreamList
-    def downstreamSize = 1 + phis.length + nextPhis.length
+    override def downstreamSize = 1 + phis.length + super.downstreamSize
   }
   class True(var branch: Jump, var next: SSA.Control) extends SimpleBlock(){
     def controls = Seq(branch)
@@ -371,8 +369,8 @@ object SSA{
     }
 
     override def upstream = Nil
-    override def downstreamList = Seq(next) ++ nextPhis
-    def downstreamSize = downstreamList.length
+    override def downstreamList = Seq(next) ++ super.downstreamList
+    override def downstreamSize = 1 + super.downstreamSize
   }
 
   class AThrow(var state: State,
@@ -525,7 +523,6 @@ object SSA{
     override def update() = {
       upstream.filter(_ != null).collect{
         case c: SSA.Val => c.downstreamAdd(this)
-        case c: SSA.Block => c.blockInvokes ++= Seq(this)
       }
       this
     }

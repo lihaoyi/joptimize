@@ -1,5 +1,6 @@
 package joptimize.frontend
 
+import joptimize.model.SSA
 import org.objectweb.asm.{Opcodes, Type}
 import org.objectweb.asm.tree._
 import org.objectweb.asm.tree.analysis.{AnalyzerException, Value}
@@ -15,7 +16,7 @@ import scala.collection.mutable
   * @param < V> type of the Value used for the analysis.
   * @author Eric Bruneton
   */
-class Frame[V <: Value, S <: V, B] (var numLocals: Int, val numStack0: Int){
+class Frame[V <: Value, S <: V] (var numLocals: Int, val numStack0: Int){
 
   /**
     * The local variables and the operand stack of this frame. The first {@link #numLocals} elements
@@ -32,7 +33,7 @@ class Frame[V <: Value, S <: V, B] (var numLocals: Int, val numStack0: Int){
     *
     * @param frame a frame.
     */
-  def this(frame: Frame[V, S, B]) {
+  def this(frame: Frame[V, S]) {
     this(frame.numLocals, frame.values.length - frame.numLocals)
     init(frame) // NOPMD(ConstructorCallsOverridableMethod): can't fix for backward compatibility.
 
@@ -44,7 +45,7 @@ class Frame[V <: Value, S <: V, B] (var numLocals: Int, val numStack0: Int){
     * @param frame a frame.
     * @return this frame.
     */
-  def init(frame: Frame[V, S, B]) = {
+  def init(frame: Frame[V, S]) = {
     System.arraycopy(frame.values, 0, values, 0, values.length)
     numStack = frame.numStack
     state = frame.state
@@ -157,14 +158,16 @@ class Frame[V <: Value, S <: V, B] (var numLocals: Int, val numStack0: Int){
     */
   @throws[AnalyzerException]
   def execute(insn: AbstractInsnNode,
-              interpreter: Interpreter[V, S, B],
-              block: B): Unit = {
+              interpreter: Interpreter[V, S],
+              blockStartState: Option[S]): Unit = {
     var value1: V = null.asInstanceOf[V]
     var value2: V = null.asInstanceOf[V]
     var value3: V = null.asInstanceOf[V]
     var value4: V = null.asInstanceOf[V]
     var `var` = 0
     import Opcodes._
+    for(s <- blockStartState) state = s
+
     insn.getOpcode match {
       case NOP =>
       case ACONST_NULL | ICONST_M1 | ICONST_0 | ICONST_1 | ICONST_2 | ICONST_3 |
@@ -377,7 +380,7 @@ class Frame[V <: Value, S <: V, B] (var numLocals: Int, val numStack0: Int){
           i -= 1
         }
         if (insn.getOpcode != Opcodes.INVOKESTATIC) valueList.insert(0, pop())
-        val (res, newState) = interpreter.naryOperation(insn, valueList, state, block)
+        val (res, newState) = interpreter.naryOperation(insn, valueList, state)
         state = newState
         if (Type.getReturnType(methodDescriptor) ne Type.VOID_TYPE) push(res)
 
@@ -390,7 +393,7 @@ class Frame[V <: Value, S <: V, B] (var numLocals: Int, val numStack0: Int){
           valueList.insert(0, pop())
           i -= 1
         }
-        val (res, newState) = interpreter.naryOperation(insn, valueList, state, block)
+        val (res, newState) = interpreter.naryOperation(insn, valueList, state)
         if (Type.getReturnType(methodDescriptor) ne Type.VOID_TYPE) push(res)
         state = newState
 
@@ -417,7 +420,7 @@ class Frame[V <: Value, S <: V, B] (var numLocals: Int, val numStack0: Int){
           valueList.insert(0, pop())
           i -= 1
         }
-        val (res, newState) = interpreter.naryOperation(insn, valueList, state, block)
+        val (res, newState) = interpreter.naryOperation(insn, valueList, state)
         push(res)
         state = newState
       case IFNULL | IFNONNULL => interpreter.unaryCommand(insn, pop())
@@ -436,10 +439,9 @@ class Frame[V <: Value, S <: V, B] (var numLocals: Int, val numStack0: Int){
     */
   def merge(insnIndex: Int,
             targetInsnIndex: Int,
-            frame: Frame[V, S, B],
-            interpreter: Interpreter[V, S, B]) = {
+            frame: Frame[V, S],
+            interpreter: Interpreter[V, S]) = {
     if (numStack != frame.numStack) throw new AnalyzerException(null, "Incompatible stack heights")
-    state = interpreter.merge(state, frame.state, insnIndex, targetInsnIndex)
     for(i <- 0 until (numLocals + numStack)){
       val v = interpreter.merge(values(i), frame.values(i), insnIndex, targetInsnIndex)
       if (v != values(i)) {
@@ -456,8 +458,7 @@ class Frame[V <: Value, S <: V, B] (var numLocals: Int, val numStack0: Int){
     *                    { @literal false} otherwise.
     * @throws AnalyzerException if the frames have incompatible sizes.
     */
-  def merge0(insnIndex: Int, targetInsnIndex: Int, interpreter: Interpreter[V, S, B]) = {
-    state = interpreter.merge0(state, insnIndex, targetInsnIndex)
+  def merge0(insnIndex: Int, targetInsnIndex: Int, interpreter: Interpreter[V, S]) = {
     for(i <- 0 until (numLocals + numStack)){
       val v = interpreter.merge0(values(i), insnIndex, targetInsnIndex)
       if (v != values(i)) {

@@ -28,13 +28,13 @@ object ConstructSSA {
     val startRegionLookup = ControlFlowExtraction.findStartRegionLookup(insns, regionStarts)
 
     val argMapping = Util.argMapping(sig, _ => true).map(_.swap)
+    val blockStartStates = regionStarts.map(_.map(new SSA.ChangedState(_)))
     val program = ControlFlowExtraction.extractControlFlow(
       insns,
       i => regionStarts(insnIndices(i)),
       joptimize.frontend.DataflowExecutor.analyze(
-        sig.cls.name, mn, regionStarts,
-        new BytecodeToSSAInterpreter(phiMerges0, startRegionLookup, regionStarts, argMapping),
-        new SSA.ChangedState(regionStarts(0).get)
+        sig.cls.name, mn, blockStartStates,
+        new BytecodeToSSAInterpreter(phiMerges0, startRegionLookup, regionStarts, argMapping)
       ),
       startRegionLookup
     )

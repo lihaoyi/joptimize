@@ -64,9 +64,9 @@ object PartialEvaluator {
 
       case r: SSA.Merge =>
         r.incoming = r.incoming.flatMap { x =>
-          if (x == directNext) Some(branch.block)
-          else if (branchBlocks(x)) {
-            x.next = null
+          if (x._1 == directNext) Some(branch.block -> branch.block.nextState)
+          else if (branchBlocks(x._1)) {
+            x._1.next = null
             None
           }
           else Some(x)

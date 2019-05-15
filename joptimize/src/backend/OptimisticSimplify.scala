@@ -95,8 +95,8 @@ object OptimisticSimplify {
       }
     case m: SSA.Merge =>
       m.incoming = m.incoming.filter{ t =>
-        val live = liveBlocks(t)
-        if (!live) t.next = null
+        val live = liveBlocks(t._1)
+        if (!live) t._1.next = null
         live
       }
 
@@ -144,9 +144,6 @@ object OptimisticSimplify {
     var upstreamState: SSA.State = null
     original.upstreamVals.foreach {
       case s: SSA.ChangedState =>
-        upstreamState = s
-        s.downstreamRemoveAll(original)
-      case s: SSA.Phi if s.getSize == 0 =>
         upstreamState = s
         s.downstreamRemoveAll(original)
       case u => u.downstreamRemoveAll(original)

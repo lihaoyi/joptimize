@@ -2,7 +2,7 @@ package joptimize.analyzer
 
 import joptimize.graph.TarjansStronglyConnectedComponents
 import joptimize.model._
-import MethodAnalyzer.{Evaluate, Invalidate, Result, Step, topoSort}
+import MethodAnalyzer.{BlockJump, Evaluate, Invalidate, Result, Step, topoSort}
 import joptimize.{FileLogger, Logger, Util}
 
 import scala.collection.mutable
@@ -51,6 +51,7 @@ class MethodAnalyzer[T](methodBody: MethodBody,
     * A queue of tasks to perform when traversing new previously-unseen code.
     */
   val evaluateWorkList = mutable.LinkedHashSet[Evaluate](Evaluate.Block(initialBlock))
+  val jumpWorkList = mutable.LinkedHashSet[BlockJump]()
   /**
     * A queue of tasks to perform when traversing invalidated already-seen code. Takes
     * priority over [[evaluateWorkList]] during traversal, as we would like to complete
@@ -78,7 +79,7 @@ class MethodAnalyzer[T](methodBody: MethodBody,
   val inferredThrows = mutable.LinkedHashMap.empty[SSA.AThrow, T]
 
   def step(): MethodAnalyzer.Step[T] = {
-//    log.pprint(evaluated)
+//    log.pprint(evaluateWorkList)
     //    pprint.log(workList)
     if (invalidateWorkList.nonEmpty){
       val item = invalidateWorkList.head
@@ -102,14 +103,7 @@ class MethodAnalyzer[T](methodBody: MethodBody,
 
           log.pprint(currentBlock)
           queueSortedUpstreams(currentBlock.next.upstreamVals.toSet)
-          evaluateWorkList.add(Evaluate.BlockJump(currentBlock))
-          Step.Continue(Nil)
-
-        case Evaluate.BlockJump(currentBlock) =>
-          val nextBlocks = computeNextBlocks(currentBlock)
-          for(nextBlock <- nextBlocks){
-            evaluateWorkList.add(Evaluate.Transition(currentBlock, nextBlock))
-          }
+          jumpWorkList.add(BlockJump(currentBlock))
           Step.Continue(Nil)
 
         case Evaluate.Transition(currentBlock, nextBlock) =>
@@ -117,7 +111,19 @@ class MethodAnalyzer[T](methodBody: MethodBody,
           Step.Continue(Nil)
       }
 
-    }else {
+    }else if (jumpWorkList.nonEmpty) {
+      val item = jumpWorkList.head
+      jumpWorkList.remove(item)
+      item match{
+
+        case BlockJump(currentBlock) =>
+          val nextBlocks = computeNextBlocks(currentBlock)
+          for(nextBlock <- nextBlocks){
+            evaluateWorkList.add(Evaluate.Transition(currentBlock, nextBlock))
+          }
+          Step.Continue(Nil)
+      }
+    }else{
       Step.Done()
     }
   }
@@ -136,7 +142,7 @@ class MethodAnalyzer[T](methodBody: MethodBody,
       case i: SSA.Invoke => invalidateWorkList.add(Invalidate.Invoke(i))
       case i: SSA.InvokeDynamic => invalidateWorkList.add(Invalidate.InvokeDynamic(i))
       case nextV: SSA.Val => invalidateWorkList.add(Invalidate.Incremental(nextV))
-      case j: SSA.Jump => evaluateWorkList.add(Evaluate.BlockJump(j.block))
+      case j: SSA.Jump => jumpWorkList.add(BlockJump(j.block))
     }
     Step.Continue(downstreams.collect{case v: SSA.Val => v})
   }
@@ -261,7 +267,11 @@ class MethodAnalyzer[T](methodBody: MethodBody,
 
 
   def queueSortedUpstreams(set: Set[SSA.Val]) = {
-    topoSort(set.filter(!_.isInstanceOf[SSA.Phi])).foreach { v =>
+    val topoed = topoSort(set.filter(!_.isInstanceOf[SSA.Phi]))
+
+    log.pprint(set)
+    log.pprint(topoed)
+    topoed.foreach { v =>
       evaluateWorkList.add(Evaluate.Val(v))
     }
   }
@@ -315,10 +325,10 @@ object MethodAnalyzer {
   object Evaluate{
     case class Val(value: SSA.Val) extends Evaluate
     case class Block(value: SSA.Block) extends Evaluate
-    case class BlockJump(value: SSA.Block) extends Evaluate
     case class Transition(src: SSA.Block, dest: SSA.Block) extends Evaluate
-
   }
+
+  case class BlockJump(value: SSA.Block)
 
   sealed trait Step[T]
   object Step{

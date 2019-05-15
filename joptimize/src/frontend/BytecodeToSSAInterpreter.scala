@@ -20,7 +20,7 @@ class BytecodeToSSAInterpreter(merges: mutable.LinkedHashSet[SSA.Phi],
                                findBlockStart: Int => SSA.Block,
                                findBlockDest: Int => Option[SSA.Merge],
                                argMapping: Map[Int, Int])
-  extends Interpreter[SSA.Val, SSA.State, SSA.Block]{
+  extends Interpreter[SSA.Val, SSA.State]{
 
   /**
     * ACONST_NULL, ICONST_M1, ICONST_0, ICONST_1, ICONST_2, ICONST_3, ICONST_4, ICONST_5,
@@ -235,7 +235,7 @@ class BytecodeToSSAInterpreter(merges: mutable.LinkedHashSet[SSA.Phi],
     * INVOKEVIRTUAL, INVOKESPECIAL, INVOKESTATIC, INVOKEINTERFACE, MULTIANEWARRAY and
     * INVOKEDYNAMIC
     */
-  def naryOperation(insn: AbstractInsnNode, vs: Seq[SSA.Val], state: SSA.State, block: SSA.Block): (SSA.Val, SSA.State) = {
+  def naryOperation(insn: AbstractInsnNode, vs: Seq[SSA.Val], state: SSA.State): (SSA.Val, SSA.State) = {
     insn.getOpcode match{
       case MULTIANEWARRAY =>
         val insn2 = insn.asInstanceOf[MultiANewArrayInsnNode]
@@ -256,19 +256,19 @@ class BytecodeToSSAInterpreter(merges: mutable.LinkedHashSet[SSA.Phi],
 
       case INVOKESTATIC =>
         val insn2 = insn.asInstanceOf[MethodInsnNode]
-        val op = new SSA.InvokeStatic(Some(block), state, vs, insn2.owner, insn2.name, Desc.read(insn2.desc))
+        val op = new SSA.InvokeStatic(None, state, vs, insn2.owner, insn2.name, Desc.read(insn2.desc))
         (op, new SSA.ChangedState(op))
       case INVOKEVIRTUAL =>
         val insn2 = insn.asInstanceOf[MethodInsnNode]
-        val op = new SSA.InvokeVirtual(Some(block), state, vs, insn2.owner, insn2.name, Desc.read(insn2.desc), false)
+        val op = new SSA.InvokeVirtual(None, state, vs, insn2.owner, insn2.name, Desc.read(insn2.desc), false)
         (op, new SSA.ChangedState(op))
       case INVOKEINTERFACE =>
         val insn2 = insn.asInstanceOf[MethodInsnNode]
-        val op = new SSA.InvokeVirtual(Some(block), state, vs, insn2.owner, insn2.name, Desc.read(insn2.desc), true)
+        val op = new SSA.InvokeVirtual(None, state, vs, insn2.owner, insn2.name, Desc.read(insn2.desc), true)
         (op, new SSA.ChangedState(op))
       case INVOKESPECIAL =>
         val insn2 = insn.asInstanceOf[MethodInsnNode]
-        val op = new SSA.InvokeSpecial(Some(block), state, vs, insn2.owner, insn2.name, Desc.read(insn2.desc))
+        val op = new SSA.InvokeSpecial(None, state, vs, insn2.owner, insn2.name, Desc.read(insn2.desc))
         (op, new SSA.ChangedState(op))
     }
 
