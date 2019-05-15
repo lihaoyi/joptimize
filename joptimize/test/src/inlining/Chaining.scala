@@ -51,6 +51,27 @@ object Chaining {
 
     if (res.isEmpty) -1 else res.get
   }
+
+  abstract class Func[-A, +B]{
+    def apply(a: A): B
+  }
+  class IntFunc() extends Func[Int, Int]{
+    def apply(a: Int): Int = 456
+  }
+  sealed abstract class Option2[+A]
+  final class Some2[+A](value: A) extends Option2[A] {
+    def get: A = value
+    def map[B](f: Func[A, B]): B = f(this.get)
+  }
+
+  @test.Test(inputs = Array(1, 2, 3, 4))
+  def flatMapMapSimple(a: Int, b: Int): Int = {
+
+    (new Some2(123)).map(new IntFunc())
+
+    123
+  }
+
   @test.Test(inputs = Array(1, 2, 3, 4))
   def flatMapMap(a: Int, b: Int): Int = {
     val xOpt = if (a % 2 == 0) Some(1) else None
@@ -60,6 +81,7 @@ object Chaining {
 
     if (res.isEmpty) -1 else res.get
   }
+
   @test.Test(inputs = Array(1, 2, 3))
   def mapTwice(a: Int): Int = {
     val xOpt = if (a % 2 == 0) Some(1) else None

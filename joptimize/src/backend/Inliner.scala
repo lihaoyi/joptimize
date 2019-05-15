@@ -78,7 +78,7 @@ object Inliner {
                          log: Logger.Global,
                          visitedMethods: mutable.LinkedHashMap[InferredSig, MethodResult],
                          edge: CallEdge,
-                         node: SSA.Invoke) = {
+                         node: SSA.Invoke) = Util.labelExceptions(edge.toString){
     val nodeBlock = node.block.get
     val calledMethod = visitedMethods(edge.called)
     log.pprint(node)
@@ -90,7 +90,7 @@ object Inliner {
       Renderer.dumpSvg(visitedMethods(edge.called).methodBody)
     }
     val calledBody = calledMethod.methodBody
-    val calledStartBlock = calledMethod.liveBlocks.collect { case s: SSA.Start => s }.head
+    val calledStartBlock = calledMethod.methodBody.getAllVertices().collect { case s: SSA.Start => s }.head
 
     // Wire up input params, state and block
     calledStartBlock.downstreamList.foreach(_.replaceUpstream(calledStartBlock, nodeBlock))
@@ -113,8 +113,6 @@ object Inliner {
     }
 
     val Seq(nextState) = node.downstreamList.collect { case s: SSA.ChangedState => s }
-    log.pprint(visitedMethods(edge.called).inferred)
-    log.pprint(visitedMethods(edge.caller).inferred)
     val outputNodes = prepareOutputNodes(
       classManager,
       log,
@@ -128,7 +126,6 @@ object Inliner {
 
         // Wire up return value, state and block
 
-        log.pprint(inlinedFinalValOpt)
         inlinedFinalValOpt.foreach(t => Util.replace(node, t._1))
 
         Util.replace(nextState, inlinedFinalState)
@@ -203,7 +200,6 @@ object Inliner {
     log.graph("INLINED " + edge) {
       Renderer.dumpSvg(visitedMethods(edge.caller).methodBody)
     }
-    log.pprint(visitedMethods(edge.caller).inferred)
 
     log.check(visitedMethods(edge.caller).methodBody.checkLinks())
     visitedMethods.remove(edge.called)
@@ -222,8 +218,6 @@ object Inliner {
         None
       case Seq((returnedState, returnNode, returnedValOpt)) =>
         log.pprint("B")
-        log.pprint(returnedValOpt)
-        log.pprint(inferred)
         returnedState.downstreamRemoveAll(returnNode)
         returnedValOpt.foreach(_.downstreamRemoveAll(returnNode))
 
@@ -235,8 +229,6 @@ object Inliner {
 
       case triplets => // multiple returns
         log.pprint("C")
-        log.pprint(triplets)
-        log.pprint(inferred)
         val valPhiOpt =
           if (!returns.forall(_._3.isDefined)) None
           else {

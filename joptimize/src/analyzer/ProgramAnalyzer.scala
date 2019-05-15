@@ -172,7 +172,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
 
     Util.labelExceptions(isig.toString){
       current.remove(isig)
-      globalLog.pprint(isig.toString)
+//      globalLog.pprint(isig.toString)
   //    println(isig.toString)
 
       val methodLog = globalLog.method(isig.method)

@@ -340,6 +340,7 @@ object MainTests extends TestSuite{
         'map - annotatedTest
         'mapInnerClass - annotatedTest
         'flatMap - annotatedTest
+        'flatMapMapSimple - annotatedTest
         'flatMapMap - annotatedTest
         'mapTwice - annotatedTest
         'mapTwice2 - annotatedTest
