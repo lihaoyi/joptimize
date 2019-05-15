@@ -259,13 +259,22 @@ object Backend {
     log.pprint(result.liveTerminals)
     log.pprint(result.liveBlocks)
 
+    val liveBlocks = {
+      val (_, startBlock, _, blockEdges) = analyzeBlockStructure(result.methodBody)
+      val blockEdgeMap = blockEdges.groupBy(_._1).map { case (k, v) => (k, v.map(_._2)) }
+      Util.breadthFirstSeen(Set(startBlock: SSA.Block))(blockEdgeMap.getOrElse(_, Nil))
+    }
+
+    log.pprint(liveBlocks)
+    log.pprint(result.liveBlocks)
+
     log.graph("PRE OPTIMISTIC SIMPLIFY")(Renderer.dumpSvg(result.methodBody))
     OptimisticSimplify.apply(
       originalSig.static,
       argMapping,
       result.methodBody,
       result.inferred,
-      result.liveBlocks,
+      result.liveBlocks.intersect(liveBlocks),
       log,
       classExists,
       resolvedProperties
@@ -323,7 +332,7 @@ object Backend {
 
   def analyzeBlockStructure(methodBody: MethodBody) = {
     val controlFlowEdges = Renderer.findControlFlowGraph(methodBody)
-    val startBlock = (controlFlowEdges.map(_._1).toSet -- controlFlowEdges.map(_._2)).head.asInstanceOf[SSA.Block]
+    val startBlock = controlFlowEdges.collect{case (s: SSA.Start, _) => s}.head
     val allBlocks = controlFlowEdges
       .flatMap { case (k, v) => Seq(k, v) }
       .collect { case b: SSA.Block => b }

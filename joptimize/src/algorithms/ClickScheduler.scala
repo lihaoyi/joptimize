@@ -1,10 +1,12 @@
 package joptimize.algorithms
 
+import joptimize.Logger
 import joptimize.model.SSA
 
 import scala.collection.mutable
 
-abstract class ClickScheduler(dominators: Dominator.Result[SSA.Block]) {
+abstract class ClickScheduler(dominators: Dominator.Result[SSA.Block],
+                              log: Logger.InferredMethod) {
   def downstream(ssa: SSA.Node): Seq[SSA.Node]
   def upstream(ssa: SSA.Node): Seq[SSA.Val]
   def isPinned(ssa: SSA.Node): Boolean
@@ -34,6 +36,7 @@ abstract class ClickScheduler(dominators: Dominator.Result[SSA.Block]) {
 
   def scheduleLate(n: SSA.Val): Unit = {
     if (!visited.contains(n) && !n.isInstanceOf[SSA.Phi]){
+      log.pprint(n)
       visited.put(n, ())
       scheduleLateRoot(n)
       if (!isPinned(n)){
@@ -53,6 +56,8 @@ abstract class ClickScheduler(dominators: Dominator.Result[SSA.Block]) {
 
         var best = lca
         while(lca != block(n)){
+          log.pprint(lca)
+          log.pprint(best)
           if (loopNest(lca) < loopNest(best)) best = lca
           lca = dominators.immediateDominators(lca)
         }

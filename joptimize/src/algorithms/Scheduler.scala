@@ -21,7 +21,7 @@ object Scheduler {
 
     recLoop(loopTree, 0)
 
-    val scheduler = new ClickScheduler(dominators) {
+    val scheduler = new ClickScheduler(dominators, log) {
       override def downstream(ssa: SSA.Node) = ssa.downstreamList.toSeq
 
       override def upstream(ssa: SSA.Node) = ssa.upstream.collect{case ssa: SSA.Val => ssa}
