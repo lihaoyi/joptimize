@@ -16,7 +16,7 @@ import scala.collection.mutable
   * @param < V> type of the Value used for the analysis.
   * @author Eric Bruneton
   */
-class Frame[V <: Value, S <: V] (var numLocals: Int, val numStack0: Int){
+class Frame[V <: Value, S] (var numLocals: Int, val numStack0: Int){
 
   /**
     * The local variables and the operand stack of this frame. The first {@link #numLocals} elements

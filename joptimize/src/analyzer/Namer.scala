@@ -41,7 +41,7 @@ object Namer {
 
             }.flatten
             scheduledVals.get(v).exists(c => downstreamControls.exists(_ != c)) ||
-            v.downstreamList.exists(_.isInstanceOf[SSA.ChangedState])
+            v.downstreamList.exists(_.isInstanceOf[SSA.State])
           case _ => false
         }
         (k.upstream.nonEmpty || k.isInstanceOf[SSA.New]) && (k.downstreamSize > 1 || scheduled)
@@ -50,7 +50,7 @@ object Namer {
         case k: SSA.Phi => k
         case c: SSA.Copy => c
         case b: SSA.Control => b
-        case b: SSA.ChangedState => b
+        case b: SSA.State => b
       }
 
     val savedLocals = mutable.Map[SSA.Val, (Int, String)]()

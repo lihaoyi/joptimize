@@ -28,7 +28,7 @@ object ConstructSSA {
     val startRegionLookup = ControlFlowExtraction.findStartRegionLookup(insns, regionStarts)
 
     val argMapping = Util.argMapping(sig, _ => true).map(_.swap)
-    val blockStartStates = regionStarts.map(_.map(new SSA.ChangedState(_)))
+    val blockStartStates = regionStarts.map(_.map(new SSA.State(_)))
     val program = ControlFlowExtraction.extractControlFlow(
       insns,
       i => regionStarts(insnIndices(i)),

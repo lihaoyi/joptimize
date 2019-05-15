@@ -248,7 +248,7 @@ object Renderer {
     def renderStmt(r: SSA.Node, leftOffset: Int): Option[Seq[Str]] = r match{
       case _: SSA.Arg => None
       case r: SSA.Phi if r.getSize == 0 => None
-      case v: SSA.ChangedState => None
+      case v: SSA.State => None
       case _ =>
         val out = mutable.Buffer.empty[Str]
         val (lhs, rhs) = r match {
@@ -405,7 +405,8 @@ object Renderer {
         LogMessage.Graph.Node(
           x.toString + " " + name(x),
           x match {
-            case n: SSA.Val => if (n.getSize == 0) "blue" else "cyan"
+            case n: SSA.Val => "cyan"
+            case n: SSA.State => "blue"
             case c: SSA.Block => "magenta"
             case c: SSA.Control => "red"
           },

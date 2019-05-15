@@ -132,6 +132,7 @@ class MethodAnalyzer[T](methodBody: MethodBody,
     val downstreams = v.downstreamList.filter{
       case v: SSA.Val => evaluated.contains(v)
       case j: SSA.Jump => liveBlocks.contains(j.block)
+      case s: SSA.State => false
     }
     downstreams.foreach {
       case phi: SSA.Phi =>
@@ -173,10 +174,10 @@ class MethodAnalyzer[T](methodBody: MethodBody,
             inferredThrows(r) = bottom
             Nil
           case r: SSA.Return =>
-            if (evaluated(r.state) != bottom) inferredReturns(r) = void
+            inferredReturns(r) = void
             Nil
           case r: SSA.ReturnVal =>
-            if (evaluated(r.src) != bottom && evaluated(r.state) != bottom) inferredReturns(r) = evaluated(r.src)
+            if (evaluated(r.src) != bottom) inferredReturns(r) = evaluated(r.src)
             Nil
           case n: SSA.UnaBranch =>
             val valueA = evaluated(n.a)

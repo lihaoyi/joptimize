@@ -55,7 +55,7 @@ object ControlFlowExtraction {
 
     def mergeBlocks(lhs: SSA.Merge, rhs: SSA.Block, rhsState: SSA.State): Unit = {
       lhs.asInstanceOf[SSA.Merge].incoming += ((rhs, rhsState))
-      rhsState.downstreamAdd(lhs)
+      rhsState.next = lhs
       rhs.next = lhs
     }
 
@@ -114,11 +114,11 @@ object ControlFlowExtraction {
           val n = new SSA.LookupSwitch(frames(i).state, startRegion, frameTop(i, 0), keys, null, null)
           val cases = for((k, l) <- keys.zip(labels)) yield {
             val caseNode = new SSA.Case(n, k, null)
-            mergeJumpTarget(caseNode, l, startRegion, new SSA.ChangedState(caseNode))
+            mergeJumpTarget(caseNode, l, startRegion, new SSA.State(caseNode))
             k -> caseNode
           }
           val default = new SSA.Default(n, null)
-          mergeJumpTarget(default, insn.dflt, startRegion, new SSA.ChangedState(default))
+          mergeJumpTarget(default, insn.dflt, startRegion, new SSA.State(default))
           n.cases = mutable.LinkedHashMap.empty[Int, SSA.Case] ++ cases
           n.default = default
           Nil
@@ -130,11 +130,11 @@ object ControlFlowExtraction {
           val n = new SSA.TableSwitch(frames(i).state, startRegion, frameTop(i, 0), insn.min, insn.max, null, null)
           val cases = for((k, l) <- keys.zip(labels)) yield{
             val caseNode = new SSA.Case(n, k, null)
-            mergeJumpTarget(caseNode, l, startRegion, new SSA.ChangedState(caseNode))
+            mergeJumpTarget(caseNode, l, startRegion, new SSA.State(caseNode))
             k -> caseNode
           }
           val default = new SSA.Default(n, null)
-          mergeJumpTarget(default, insn.dflt, startRegion, new SSA.ChangedState(default))
+          mergeJumpTarget(default, insn.dflt, startRegion, new SSA.State(default))
           n.cases = mutable.LinkedHashMap.empty[Int, SSA.Case] ++ cases
           n.default = default
           Nil
@@ -152,8 +152,8 @@ object ControlFlowExtraction {
 
           val trueBranch = new SSA.True(n, null)
           val falseBranch = new SSA.False(n, null)
-          mergeJumpTarget(trueBranch, insn.label, startRegion, new SSA.ChangedState(trueBranch))
-          mergeJumpTarget(falseBranch, insn.getNext, startRegion, new SSA.ChangedState(falseBranch))
+          mergeJumpTarget(trueBranch, insn.label, startRegion, new SSA.State(trueBranch))
+          mergeJumpTarget(falseBranch, insn.getNext, startRegion, new SSA.State(falseBranch))
           startRegion.next = n
           Nil
 
@@ -172,8 +172,8 @@ object ControlFlowExtraction {
 
           val trueBranch = new SSA.True(n, null)
           val falseBranch = new SSA.False(n, null)
-          mergeJumpTarget(trueBranch, insn.label, startRegion, new SSA.ChangedState(trueBranch))
-          mergeJumpTarget(falseBranch, insn.getNext, startRegion, new SSA.ChangedState(falseBranch))
+          mergeJumpTarget(trueBranch, insn.label, startRegion, new SSA.State(trueBranch))
+          mergeJumpTarget(falseBranch, insn.getNext, startRegion, new SSA.State(falseBranch))
           startRegion.next = n
           Nil
 

@@ -66,7 +66,7 @@ object CodeGenMethod{
           for(node <- blockNodes){
             if (naming.savedLocals.contains(node) && !node.isInstanceOf[SSA.Arg]){
               val nodeInsns =
-                if (node.isInstanceOf[SSA.ChangedState]) {
+                if (node.isInstanceOf[SSA.State]) {
                   generateStateChangeBytecode(node, savedLocalNumbers, isInterface)
                 }
                 else generateValBytecode(node, savedLocalNumbers, isInterface)
@@ -144,7 +144,7 @@ object CodeGenMethod{
   def rec(ssa: SSA.Val,
           savedLocals: Map[SSA.Val, Int],
           isInterface: JType.Cls => Option[Boolean]): Seq[AbstractInsnNode] = {
-    if (ssa.isInstanceOf[SSA.ChangedState]) generateStateChangeBytecode(ssa, savedLocals, isInterface)
+    if (ssa.isInstanceOf[SSA.State]) generateStateChangeBytecode(ssa, savedLocals, isInterface)
     else if (ssa.isInstanceOf[SSA.Phi] && ssa.getSize == 0) Nil
     else if (savedLocals.contains(ssa)) Seq(new VarInsnNode(loadOp(ssa), savedLocals(ssa)))
     else generateValBytecode(ssa, savedLocals, isInterface)
@@ -190,7 +190,7 @@ object CodeGenMethod{
     else {
       val upstreams = ssa.upstreamVals.flatMap(rec(_, savedLocals, isInterface))
       val current: Seq[AbstractInsnNode] = ssa match{
-        case _: SSA.ChangedState => Nil
+        case _: SSA.State => Nil
         case _: SSA.Copy => Nil
 
         case _: SSA.Phi => Nil

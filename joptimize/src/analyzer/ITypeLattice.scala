@@ -15,7 +15,6 @@ class ITypeLattice(merge: (IType, IType) => IType,
         else if (merged == inferredSrc) JType.Prim.Z
         else CType.I(0)
 
-      case n: SSA.ChangedState => JType.Prim.V
       case n: SSA.Arg => inferredArgs(n.index)
 
       case n: SSA.ConstI => CType.I(n.value)

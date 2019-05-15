@@ -15,7 +15,7 @@ import org.objectweb.asm.tree.analysis.Value
   * @param < V> type of the Value used for the analysis.
   * @author Eric Bruneton
   */
-abstract class Interpreter[V <: Value, S <: V] {
+abstract class Interpreter[V <: Value, S] {
   /**
     * Creates a new value that represents the given parameter type. This method is called to
     * initialize the value of a local corresponding to a method parameter in a frame.

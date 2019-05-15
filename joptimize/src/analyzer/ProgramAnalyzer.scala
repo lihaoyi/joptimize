@@ -462,7 +462,6 @@ object ProgramAnalyzer {
       case n: SSA.CheckCast => false
       case n: SSA.InstanceOf => true
 
-      case n: SSA.ChangedState => true
       case n: SSA.Arg => true
 
       case n: SSA.ConstI => true

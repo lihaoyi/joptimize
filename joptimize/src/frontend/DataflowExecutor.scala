@@ -14,7 +14,7 @@ import scala.collection.mutable
   * graph's incoming edges during the {@link Interpreter#merge}
   */
 object DataflowExecutor{
-  def analyze[V <: Value, S <: V](owner: String,
+  def analyze[V <: Value, S](owner: String,
                                   method: MethodNode,
                                   blockStartStates: IndexedSeq[Option[S]],
                                   interpreter: Interpreter[V, S]): Array[Frame[V, S]] = {
@@ -146,7 +146,7 @@ object DataflowExecutor{
     * @param method the method to be analyzed.
     * @return the initial execution stack frame of the 'method'.
     */
-  private def computeInitialFrame[V <: Value, S <: V, B](owner: String,
+  private def computeInitialFrame[V <: Value, S, B](owner: String,
                                                          method: MethodNode,
                                                          interpreter: Interpreter[V, S]) = {
     val frame = new Frame[V, S](method.maxLocals, method.maxStack)

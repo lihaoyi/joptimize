@@ -51,6 +51,7 @@ abstract class ClickScheduler(dominators: Dominator.Result[SSA.Block],
             case c: SSA.SimpleBlock => lca = findLca(lca, c.block)
             case c: SSA.Jump => lca = findLca(lca, c.block)
             case v: SSA.Val => lca = findLca(lca, block(v))
+            case s: SSA.State => // do nothing
           }
         }
 

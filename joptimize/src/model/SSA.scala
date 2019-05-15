@@ -29,7 +29,10 @@ object SSA{
     def downstreamSize: Int
 
     def update(): Node = {
-      upstream.filter(_ != null).collect{case c: SSA.Val => c.downstreamAdd(this)}
+      upstream.filter(_ != null).collect{
+        case c: SSA.Val => c.downstreamAdd(this)
+        case s: SSA.State => s.next = this
+      }
       this
     }
 
@@ -62,9 +65,10 @@ object SSA{
   }
   sealed trait Stateful extends Node{
     def state: State
+    def state_=(s: State): Unit
   }
-  sealed trait State extends Val
-  class ChangedState(var parent: Node) extends Val(JType.Prim.V) with State{
+
+  class State(var parent: Node) extends Node{
     override def upstream = Seq(parent)
     def replaceUpstream(swap: Swapper): Unit = {
       parent = swap(parent)
@@ -76,6 +80,11 @@ object SSA{
       }
       super.update()
     }
+
+    var next: SSA.Node = null
+    def downstreamList = Option(next).toList
+
+    def downstreamSize = downstreamList.size
   }
 
   sealed abstract class Control() extends Node{
@@ -87,7 +96,7 @@ object SSA{
   }
   sealed abstract class Block() extends Control(){
     var nextPhis: Seq[Phi] = Nil
-    var nextState: SSA.ChangedState = null
+    var nextState: SSA.State = null
     def downstreamList: Seq[Node] = nextPhis ++ Option(nextState)
     def downstreamSize = nextPhis.length + (if (nextState == null) 0 else 1)
     def next: SSA.Control
@@ -513,61 +522,47 @@ object SSA{
     def name_=(v: String): Unit
     def desc: Desc
     def desc_=(v: Desc): Unit
-    def block: Option[Block]
-    def block_=(v: Option[Block]): Unit
 
     def sig = MethodSig(cls, name, desc, this.isInstanceOf[InvokeStatic])
     def inferredSig(inferred: SSA.Val => IType) = {
       InferredSig(sig, srcs.drop(if (sig.static) 0 else 1).map(inferred))
     }
-    override def update() = {
-      upstream.filter(_ != null).collect{
-        case c: SSA.Val => c.downstreamAdd(this)
-      }
-      this
-    }
   }
-  class InvokeStatic(var block: Option[Block],
-                     var state: State,
+  class InvokeStatic(var state: State,
                      var srcs: Seq[Val],
                      var cls: JType.Cls,
                      var name: String,
                      var desc: Desc) extends Val(desc.ret) with Invoke {
-    def upstream = block.toSeq ++ Seq(state) ++ srcs
+    def upstream = Option(state).toSeq ++ srcs
     def replaceUpstream(swap: Swapper): Unit = {
-      block = block.map(swap(_))
-      state = swap(state)
+      if (state != null) state = swap(state)
       srcs = srcs.map(swap(_))
     }
     override def toString = s"${super.toString()}(${cls.name}, $name, $desc)"
   }
 
-  class InvokeSpecial(var block: Option[Block],
-                      var state: State,
+  class InvokeSpecial(var state: State,
                       var srcs: Seq[Val],
                       var cls: JType.Cls,
                       var name: String,
                       var desc: Desc) extends Val(desc.ret) with Invoke{
-    def upstream = block.toSeq ++ Seq(state) ++ srcs
+    def upstream = Option(state).toSeq ++ srcs
     def replaceUpstream(swap: Swapper): Unit = {
-      block = block.map(swap(_))
-      state = swap(state)
+      if (state != null) state = swap(state)
       srcs = srcs.map(swap(_))
     }
     override def toString = s"${super.toString()}(${cls.name}, $name, $desc)"
   }
 
-  class InvokeVirtual(var block: Option[Block],
-                      var state: State,
+  class InvokeVirtual(var state: State,
                       var srcs: Seq[Val],
                       var cls: JType.Cls,
                       var name: String,
                       var desc: Desc,
                       var interface: Boolean) extends Val(desc.ret) with Invoke{
-    def upstream = block.toSeq ++ Seq(state) ++ srcs
+    def upstream = Option(state).toSeq ++ srcs
     def replaceUpstream(swap: Swapper): Unit = {
-      block = block.map(swap(_))
-      state = swap(state)
+      if (state != null) state = swap(state)
       srcs = srcs.map(swap(_))
     }
     override def toString = s"${super.toString()}(${cls.name}, $name, $desc, $interface)"

@@ -20,10 +20,10 @@ object OptimisticSimplify {
 
 //    log.pprint(argMapping)
     for(n <- methodBody.getAllVertices()){
-      // log.global().graph(n.toString())(Renderer.dumpSvg(methodBody))
 //      log.pprint(n)
-//      n match{case n: SSA.Val => log.pprint(inferred.get(n)) case _ =>}
+      //      n match{case n: SSA.Val => log.pprint(inferred.get(n)) case _ =>}
       simplifyNode(n, inferred, classExists, log, liveBlocks, resolvedProperties, argMapping)
+      log.graph(n.toString())(Renderer.dumpSvg(methodBody))
     }
 
 //    log.pprint(liveBlocks.map(x => (x, x.next)))
@@ -40,25 +40,17 @@ object OptimisticSimplify {
                    liveBlocks: Set[SSA.Block],
                    resolvedProperties: (InferredSig, Boolean) => ProgramAnalyzer.Properties,
                    argMapping: Map[Int, Int]) = node match {
-    case p: SSA.ChangedState =>
-//      log.pprint(inferred.contains(p))
-    // do nothing
-    case unInferred: SSA.Val if !inferred.contains(unInferred) =>
-//      log.pprint(unInferred)
-    // do nothing
+    case p: SSA.State => // do nothing
+    case unInferred: SSA.Val if !inferred.contains(unInferred) => // do nothing
     case n: SSA.Invoke =>
       val inferredSig = n.inferredSig(inferred)
       val properties = resolvedProperties(
         inferredSig,
         n.isInstanceOf[SSA.InvokeSpecial]
       )
-      //      log.pprint(n)
       val (mangledName, mangledDesc, liveArgsOpt) =
         if (n.name == "<init>" || !classExists(n.cls)) (n.name, n.desc, None)
         else {
-          //          log.pprint(n.sig)
-//          log.pprint(inferredArgs)
-//          log.pprint(liveArgs)
           val (name, desc) = Util.mangle(
             inferredSig,
             inferred.getOrElseUpdate(n, n.desc.ret),
@@ -142,16 +134,16 @@ object OptimisticSimplify {
                        original: SSA.Val) = {
     inferred(replacement) = inferred(original)
     var upstreamState: SSA.State = null
-    original.upstreamVals.foreach {
-      case s: SSA.ChangedState =>
+    original.upstream.foreach {
+      case s: SSA.State =>
         upstreamState = s
-        s.downstreamRemoveAll(original)
-      case u => u.downstreamRemoveAll(original)
+        s.next = null
+      case u: SSA.Val => u.downstreamRemoveAll(original)
     }
     original.downstreamList.foreach {
-      case s: SSA.ChangedState if upstreamState != null =>
+      case s: SSA.State if upstreamState != null =>
         s.parent = upstreamState
-        upstreamState.downstreamAdd(s)
+        upstreamState.next = s
       case d =>
         replacement.downstreamAdd(d)
         d.replaceUpstream(original, replacement)
@@ -161,25 +153,26 @@ object OptimisticSimplify {
   /**
     * Leaves a node in place but removes its effect on the state edges
     */
-  def purifyNode(n: SSA.Val) = {
-    var upstreamState: SSA.ChangedState = null
-    n.upstreamVals.foreach {
-      case s: SSA.ChangedState =>
+  def purifyNode(n: SSA.Invoke) = {
+    var upstreamState: SSA.State = null
+    n.upstream.foreach {
+      case s: SSA.State =>
         upstreamState = s
       case _ => // do nothing
     }
 
-    var downstreamState: SSA.ChangedState = null
+    var downstreamState: SSA.State = null
     n.downstreamList.foreach {
-      case s: SSA.ChangedState if upstreamState != null =>
+      case s: SSA.State if upstreamState != null =>
         downstreamState = s
         s.parent = upstreamState
-        upstreamState.downstreamAdd(s)
+        upstreamState.next = s
       case _ => // do nothing
     }
     if (upstreamState != null) {
       n.downstreamRemove(downstreamState)
     }
+    n.state = null
   }
 
   def mangleInvocation(n: SSA.Invoke,
