@@ -94,6 +94,15 @@ object Chaining {
 
   @test.Test(inputs = Array(1, 2, 3, 4))
   def mapTwice2(a: Int, b: Int): Int = {
+    val xOpt: Option[Int] = None
+    val res1 = xOpt.map(x => 1)
+    xOpt.map(y => 2)
+
+    123
+  }
+
+  @test.Test(inputs = Array(1, 2, 3, 4))
+  def mapTwice3(a: Int, b: Int): Int = {
     val xOpt = if (a % 2 == 0) Some(1) else None
     val yOpt = if (b % 3 == 0) Some(1) else None
 

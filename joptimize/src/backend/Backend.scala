@@ -4,7 +4,7 @@ import joptimize.{FileLogger, Logger, Util}
 import joptimize.algorithms.{Dominator, MultiBiMap, Scheduler}
 import joptimize.analyzer.ProgramAnalyzer.{CallEdge, MethodResult}
 import joptimize.analyzer.{Namer, ProgramAnalyzer, Renderer}
-import joptimize.frontend.ClassManager
+import joptimize.frontend.{ClassManager, Frontend}
 import joptimize.graph.HavlakLoopTree
 import joptimize.model._
 import org.objectweb.asm.Opcodes
@@ -272,6 +272,9 @@ object Backend {
     )
     log.graph("POST OPTIMISTIC SIMPLIFY")(Renderer.dumpSvg(result.methodBody))
     log.check(result.methodBody.checkLinks(checkDead = false))
+
+    Frontend.simplifyPhiMerges(result.methodBody)
+
     result.methodBody.removeDeadNodes()
 
     log.graph("POST OPTIMISTIC SIMPLIFY CLEANUP")(Renderer.dumpSvg(result.methodBody))
@@ -284,6 +287,7 @@ object Backend {
 //    pprint.log(result.program)
     val (controlFlowEdges, startBlock, allBlocks, blockEdges) =
       analyzeBlockStructure(result.methodBody)
+
     val loopTree2 = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)
 
     val dominators2 = Dominator.findDominators(blockEdges, allBlocks)
@@ -323,6 +327,7 @@ object Backend {
     val allBlocks = controlFlowEdges
       .flatMap { case (k, v) => Seq(k, v) }
       .collect { case b: SSA.Block => b }
+      .distinct
 
     val blockEdges = controlFlowEdges.flatMap {
       case (k: SSA.Block, v: SSA.Jump) => Nil

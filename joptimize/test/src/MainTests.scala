@@ -344,6 +344,7 @@ object MainTests extends TestSuite{
         'flatMapMap - annotatedTest
         'mapTwice - annotatedTest
         'mapTwice2 - annotatedTest
+        'mapTwice3 - annotatedTest
         'flatMapMapChain - annotatedTest
       }
       'Inlining - {

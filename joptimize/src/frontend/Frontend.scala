@@ -35,7 +35,7 @@ class Frontend(val classManager: ClassManager) {
         log.graph("removeDeadNodes")(Renderer.dumpSvg(methodBody))
         log.check(methodBody.checkLinks())
 
-        simplifyPhiMerges(methodBody)
+        Frontend.simplifyPhiMerges(methodBody)
         log.graph("simplifyPhiMerges")(Renderer.dumpSvg(methodBody))
         log.check(methodBody.checkLinks())
         Some(methodBody)
@@ -43,6 +43,9 @@ class Frontend(val classManager: ClassManager) {
     }
   }
 
+
+}
+object Frontend{
 
   def simplifyPhiMerges(methodBody: MethodBody) = methodBody.transform{
     case phi: SSA.Phi =>

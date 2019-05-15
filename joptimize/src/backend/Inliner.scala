@@ -51,7 +51,7 @@ object Inliner {
         if (visitedMethods.contains(caller)) {
           inlineSingleMethod(
             classManager,
-            log,
+            log.inferredMethod(caller),
             visitedMethods,
             edge.copy(caller = caller),
             node
@@ -75,7 +75,7 @@ object Inliner {
   }
 
   def inlineSingleMethod(classManager: ClassManager.ReadOnly,
-                         log: Logger.Global,
+                         log: Logger.InferredMethod,
                          visitedMethods: mutable.LinkedHashMap[InferredSig, MethodResult],
                          edge: CallEdge,
                          node: SSA.Invoke) = Util.labelExceptions(edge.toString){
@@ -170,10 +170,6 @@ object Inliner {
 
     nodeBlock.blockInvokes = calledStartBlock.blockInvokes ++ nodeBlock.blockInvokes.filter(_ != node)
 
-    log.graph("INPUT BLOCK WIRED") {
-      Renderer.dumpSvg(visitedMethods(edge.caller).methodBody)
-    }
-
     // Consolidate two method bodies in `visitedMethods`
     val newInferred = mutable.LinkedHashMap.empty[SSA.Val, IType]
     visitedMethods(edge.caller).inferred.foreach(t => newInferred.put(t._1, t._2))
@@ -206,7 +202,7 @@ object Inliner {
   }
 
   def prepareOutputNodes(classManager: ClassManager.ReadOnly,
-                         log: Logger.Global,
+                         log: Logger.InferredMethod,
                          nodeBlock: SSA.Block,
                          returns: mutable.Buffer[(SSA.State, SSA.Jump, Option[SSA.Val])],
                          nextState: SSA.ChangedState,
