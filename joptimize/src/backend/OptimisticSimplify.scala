@@ -79,19 +79,22 @@ object OptimisticSimplify {
       }
 
     case p: SSA.Phi =>
-      p.incoming = p.incoming.filter{t =>
-        val live = liveBlocks(t._1)
-        if (!live) {
-          t._1.next = null
-          t._2.downstreamRemove(p)
+      for((k, v) <- p.incoming.toArray){
+        val live = liveBlocks(k)
+        if (!live){
+          k.next = null
+          v.downstreamRemove(p)
+          p.incoming.remove(k)
         }
-        live
       }
+
     case m: SSA.Merge =>
-      m.incoming = m.incoming.filter{ t =>
-        val live = liveBlocks(t._1)
-        if (!live) t._1.next = null
-        live
+      for((k, v) <- m.incoming.toArray){
+        val live = liveBlocks(k)
+        if (!live) {
+          k.next = null
+          m.incoming.remove(k)
+        }
       }
 
     case n: SSA.Val =>

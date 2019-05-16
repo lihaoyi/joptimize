@@ -138,18 +138,21 @@ object SSA{
     def lookup(i: Int) = lookup0(i)
   }
 
-  class Phi(var block: Merge, var incoming: Set[(SSA.Block, SSA.Val)], var tpe: JType) extends Val(tpe) {
+  class Phi(var block: Merge, val incoming: mutable.LinkedHashMap[SSA.Block, SSA.Val], var tpe: JType) extends Val(tpe) {
     override def upstream: Seq[SSA.Node] =
       Seq(block) ++ incoming.toArray[(SSA.Node, SSA.Node)].flatMap(x => Seq(x._1, x._2))
     override def toString = s"Phi@${Integer.toHexString(System.identityHashCode(this))}(${incoming.size})"
     def replaceUpstream(swap: Swapper): Unit = {
       block = swap(block)
-      incoming = incoming.map(x => (swap(x._1), swap(x._2)))
+
+      val arr = incoming.toArray
+      incoming.clear()
+      for((k, v) <- arr) incoming(swap(k)) = swap(v)
     }
     override def checkLinks() = {
       super.checkLinks()
-      val phiIncomingBlocks = incoming.map(_._1)
-      val blockIncomingBlocks = block.incoming.map(_._1)
+      val phiIncomingBlocks = incoming.map(_._1).toSet
+      val blockIncomingBlocks = block.incoming.map(_._1).toSet
       assert(
         phiIncomingBlocks == blockIncomingBlocks,
         s"$this incoming blocks doesn't match block $block incoming blocks, $phiIncomingBlocks != $blockIncomingBlocks"
@@ -157,10 +160,10 @@ object SSA{
     }
   }
 
-  class Start(next: SSA.Control) extends Merge(Set(), next, Nil){
+  class Start(next: SSA.Control) extends Merge(mutable.LinkedHashMap.empty, next, Nil){
     override def toString = s"Start@${Integer.toHexString(System.identityHashCode(this))}"
   }
-  class Merge(var incoming: Set[(Block, State)],
+  class Merge(val incoming: mutable.LinkedHashMap[Block, State],
               var next: SSA.Control,
               var phis: Seq[SSA.Phi]) extends Block() {
     def controls = incoming.toSeq.map(_._1)
@@ -168,7 +171,9 @@ object SSA{
 
     override def toString = s"Merge@${Integer.toHexString(System.identityHashCode(this))}(${incoming.size})"
     def replaceUpstream(swap: Swapper): Unit = {
-      incoming = incoming.map(t => (swap(t._1), swap(t._2)))
+      val arr = incoming.toArray
+      incoming.clear()
+      for((k, v) <- arr) incoming(swap(k)) = swap(v)
     }
     override def downstreamList = Option(next).toSeq ++ phis ++ super.downstreamList
     override def downstreamSize = 1 + phis.length + super.downstreamSize

@@ -291,7 +291,7 @@ class BytecodeToSSAInterpreter(merges: mutable.LinkedHashSet[SSA.Phi],
     findBlockDest(targetInsnIndex) match{
       case Some(dest) if insnIndex != targetInsnIndex =>
         val src = findBlockStart(insnIndex)
-        val phiStub = new SSA.Phi(dest, Set(src -> value1), value1.jtype)
+        val phiStub = new SSA.Phi(dest, mutable.LinkedHashMap(src -> value1), value1.jtype)
         src.nextPhis ++= Seq(phiStub)
         dest.phis ++= Seq(phiStub)
         merges.add(phiStub)

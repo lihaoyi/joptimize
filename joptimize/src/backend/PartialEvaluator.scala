@@ -54,27 +54,28 @@ object PartialEvaluator {
 
     branchBlocks.flatMap(_.downstreamList).collect {
       case phi: SSA.Phi =>
-        phi.incoming = phi.incoming.flatMap(x =>
-          if (x._1 == directNext) Some(branch.block -> x._2)
-          else if (branchBlocks(x._1)) {
-            x._1.next = null
-            x._2.downstreamRemove(phi)
-            None
+        val arr = phi.incoming.toArray
+        phi.incoming.clear()
+        for((k, v) <- arr){
+          if (k == directNext) phi.incoming(branch.block) = v
+          else if (branchBlocks(k)) {
+            k.next = null
+            v.downstreamRemove(phi)
           }
-          else {
-            Some(x)
-          }
-        )
+          else phi.incoming(k) = v
+
+        }
         phi
 
       case r: SSA.Merge =>
-        r.incoming = r.incoming.flatMap { x =>
-          if (x._1 == directNext) Some(branch.block -> branch.block.nextState)
-          else if (branchBlocks(x._1)) {
-            x._1.next = null
-            None
+        val arr = r.incoming.toArray
+        r.incoming.clear()
+        for((k, v) <- r.incoming.toArray){
+          if (k == directNext) r.incoming(branch.block) = branch.block.nextState
+          else if (branchBlocks(k)) {
+            k.next = null
           }
-          else Some(x)
+          else r.incoming(k) = v
         }
         r
     }

@@ -44,7 +44,7 @@ object ControlFlowExtraction {
             first = false
             Some(new SSA.Start(null))
           }
-          else Some(new SSA.Merge(Set(), null, Nil))
+          else Some(new SSA.Merge(mutable.LinkedHashMap(), null, Nil))
         }
     regionStarts
   }
@@ -78,13 +78,16 @@ object ControlFlowExtraction {
       startRegion
         .downstreamList
         .collect { case phi: SSA.Phi if phi.block == startRegion =>
-          phi.incoming = phi.incoming.map {
-            case (k, v) if k == startReg =>
+          val arr = phi.incoming.toArray
+          phi.incoming.clear()
+          for((k, v) <- arr){
+            if (k == startReg){
               destBlock.nextPhis ++= Seq(phi)
               startReg.nextPhis = startReg.nextPhis.filter(_ != phi)
-              (destBlock, v)
-
-            case (k, v) => (k, v)
+              phi.incoming(destBlock) = v
+            }else{
+              phi.incoming(k) = v
+            }
           }
         }
     }

@@ -46,7 +46,10 @@ class CodeGenMethod(log: Logger.InferredMethod,
           val nextState = next.incoming.collect{case (k, v) if k == block => v}.flatMap(rec)
           val nextVals = next.phis.flatMap{ phi =>
             val value = phi.incoming.collect{case (k, v) if k == block => v}
-            value.flatMap(rec) ++ Seq(new VarInsnNode(saveOp(phi), savedLocalNumbers(phi)))
+            log.pprint(value)
+            val flatted = value.flatMap(rec)
+            log.pprint(flatted)
+            flatted ++ Seq(new VarInsnNode(saveOp(phi), savedLocalNumbers(phi)))
           }
           val suffix = Nil
           (nextState, nextVals, suffix)
@@ -78,6 +81,7 @@ class CodeGenMethod(log: Logger.InferredMethod,
     log.println("================ OUTPUT BYTECODE ================")
     log(Renderer.renderBlockCode(blockCode, finalInsns))
 
+    log.pprint(savedLocalNumbers)
     finalInsns
   }
 
@@ -103,25 +107,29 @@ class CodeGenMethod(log: Logger.InferredMethod,
   }
 
 
-  def rec(ssa: SSA.ValOrState): Seq[AbstractInsnNode] = ssa match{
-    case ssa: SSA.State => ssa.upstream.collect{case s: SSA.ValOrState => s}.flatMap(rec)
-    case n: SSA.Val =>
-      if (savedLocalNumbers.contains(n)) Seq(new VarInsnNode(loadOp(n), savedLocalNumbers(n)))
-      else if (n.upstream.isEmpty && !n.isInstanceOf[SSA.New]) recVal(n)
-      else n.downstreamList.count(!_.isInstanceOf[SSA.State]) match {
-        case 0 => recVal(n) ++ Seq(new InsnNode(if (n.getSize == 1) POP else POP2))
-        case 1 => recVal(n)
-        case _ =>
-          val localEntry = currentLocalsSize
-          savedLocalNumbers(n) = localEntry
-          currentLocalsSize += n.getSize
-          recVal(n) ++
-          Seq(
-            new InsnNode(if (n.getSize == 1) DUP else DUP2),
-            new VarInsnNode(saveOp(n), localEntry)
-          )
-      }
-    case _ => Nil //ignore other node types
+  def rec(ssa: SSA.ValOrState): Seq[AbstractInsnNode] = {
+    log.pprint(ssa)
+    ssa match{
+      case ssa: SSA.State => ssa.upstream.collect{case s: SSA.ValOrState => s}.flatMap(rec)
+      case n: SSA.Val =>
+        if (savedLocalNumbers.contains(n)) Seq(new VarInsnNode(loadOp(n), savedLocalNumbers(n)))
+        else if (n.upstream.isEmpty && !n.isInstanceOf[SSA.New]) recVal(n)
+        else n.downstreamList.count(!_.isInstanceOf[SSA.State]) match {
+          case 0 => recVal(n) ++ Seq(new InsnNode(if (n.getSize == 1) POP else POP2))
+          case 1 => recVal(n)
+          case _ =>
+            log.pprint(n)
+            val localEntry = currentLocalsSize
+            savedLocalNumbers(n) = localEntry
+            currentLocalsSize += n.getSize
+            recVal(n) ++
+              Seq(
+                new InsnNode(if (n.getSize == 1) DUP else DUP2),
+                new VarInsnNode(saveOp(n), localEntry)
+              )
+        }
+      case _ => Nil //ignore other node types
+    }
   }
 
   def generateJumpBytecode(ssa: SSA.Jump): Seq[AbstractInsnNode] = {
