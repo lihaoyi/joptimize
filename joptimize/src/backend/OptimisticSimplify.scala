@@ -69,8 +69,10 @@ object OptimisticSimplify {
         replacement match{
           case Some(r) => constantFoldNode(inferred, r, n)
           case None =>
-//            purifyNode(n)
-            mangleInvocation(n, liveArgsOpt, mangledName, mangledDesc, mangledCls)
+            // We only purify a node and remove it from the program graph
+            // if it is both stateless and its return type is not used.
+            if (n.downstreamList.forall(_.isInstanceOf[SSA.State])) purifyNode(n)
+            else mangleInvocation(n, liveArgsOpt, mangledName, mangledDesc, mangledCls)
         }
       }else{
         mangleInvocation(n, liveArgsOpt, mangledName, mangledDesc, mangledCls)

@@ -146,170 +146,6 @@ object Renderer {
     fansi.Str.join(out:_*)
   }
 
-  def renderSSA(methodBody: MethodBody,
-                naming: Namer.Result,
-                scheduledVals: Map[SSA.Val, SSA.Control] = Map.empty): fansi.Str = {
-
-    def apply(lhs: String, operands: Tree*) = pprint.Tree.Apply(lhs, operands.toIterator)
-    def atom(lhs: String) = pprint.Tree.Lazy(ctx => Iterator(lhs))
-    def literal(lhs: String) = pprint.Tree.Literal(lhs)
-    def infix(lhs: Tree, op: String, rhs: Tree) = pprint.Tree.Infix(lhs, op, rhs)
-
-    def renderBlock(block: SSA.Control) = {
-      fansi.Color.Magenta(naming.savedLocals(block)._2).toString
-    }
-    def rec(ssa: SSA.Node): Tree = ssa match{
-      case x: SSA.Control => atom(naming.savedLocals(x)._2)
-      case x: SSA.Val =>
-        if (naming.savedLocals.contains(x)) atom(fansi.Color.Cyan(naming.savedLocals(x)._2).toString())
-        else recVal(x)
-    }
-
-    def recVal(ssa: SSA.Val): Tree = ssa match{
-      case n: SSA.Arg => literal("arg" + n.index)
-      case n: SSA.Copy => apply("copy", rec(n.src))
-      case phi: SSA.Phi =>
-        val block = Seq(atom(renderBlock(phi.block)))
-        val children = phi.incoming.map{case (block, ssa) => infix(atom(renderBlock(block)), ":", rec(ssa))}.toSeq
-        apply("phi", block ++ children:_*)
-      case n: SSA.BinOp => infix(rec(n.a), binOpString(n.opcode), rec(n.b))
-      case n: SSA.UnaOp => apply(unaryOpString(n.opcode), rec(n.a))
-      case n: SSA.CheckCast => apply("cast", rec(n.src), atom(n.desc.name))
-      case n: SSA.ArrayLength => apply("arraylength", rec(n.src))
-      case n: SSA.InstanceOf => apply("instanceof", rec(n.src), atom(n.desc.name))
-      case n: SSA.ConstI => literal(n.value + "")
-      case n: SSA.ConstJ => literal(n.value + "L")
-      case n: SSA.ConstF => literal(n.value + "F")
-      case n: SSA.ConstD => literal(n.value + "D")
-      case n: SSA.ConstStr => literal(pprint.Util.literalize(n.value))
-      case n: SSA.ConstNull => literal("null")
-      case n: SSA.ConstCls => literal(n.value.name)
-      case n: SSA.InvokeStatic => apply(n.cls.javaName + "." + n.name + n.desc.unparse, n.srcs.map(rec):_*)
-      case n: SSA.InvokeSpecial => apply(n.cls.javaName + "##" + n.name + n.desc.unparse, n.srcs.map(rec):_*)
-      case n: SSA.InvokeVirtual => apply(n.cls.javaName + "#" + n.name + n.desc.unparse, n.srcs.map(rec):_*)
-      case n: SSA.InvokeDynamic =>
-        apply(
-          n.bootstrap.owner.javaName + "." + n.name,
-          (
-            n.bootstrapArgs.map{
-              case SSA.InvokeDynamic.StringArg(s: String) => pprint.treeify(s)
-              case SSA.InvokeDynamic.IntArg(i: Int) => pprint.treeify(i)
-              case SSA.InvokeDynamic.LongArg(i: Long) => pprint.treeify(i)
-              case SSA.InvokeDynamic.FloatArg(i: Float) => pprint.treeify(i)
-              case SSA.InvokeDynamic.DoubleArg(i: Double) => pprint.treeify(i)
-              case SSA.InvokeDynamic.ClsArg(i: JType.Cls) => pprint.treeify(i.name)
-              case SSA.InvokeDynamic.HandleArg(cls: JType.Cls, name: String, desc: Desc, tag: Int) =>
-                pprint.treeify(cls + " " + name + desc.unparse)
-              case SSA.InvokeDynamic.MethodArg(i: Desc) => pprint.treeify(i.unparse)
-            } ++
-            Seq(literal("--")) ++
-            n.srcs.map(rec)
-          ):_*
-        )
-      case n: SSA.New => apply("new", atom(n.cls.name))
-      case n: SSA.NewArray => apply("newarray", rec(n.size), atom(n.typeRef.name))
-      case n: SSA.MultiANewArray =>
-        val atoms = atom(n.desc.name) +: n.dims.map(rec)
-        apply("multianewarray", atoms:_*)
-      case n: SSA.PutStatic => apply("putstatic", rec(n.src), atom(n.cls.name), atom(n.name), atom(n.desc.name))
-      case n: SSA.GetStatic => apply("getstatic", atom(n.cls.name), atom(n.name), atom(n.desc.name))
-      case n: SSA.PutField => apply("putfield", rec(n.src), rec(n.obj), atom(n.owner.name), atom(n.name), atom(n.desc.name))
-      case n: SSA.GetField => apply("getfield", rec(n.obj), atom(n.owner.name), atom(n.name), atom(n.desc.name))
-      case n: SSA.PutArray => apply("putarray", rec(n.src), rec(n.indexSrc), rec(n.array))
-      case n: SSA.GetArray => apply("getarray", rec(n.array), rec(n.indexSrc))
-      case n: SSA.MonitorEnter => ???
-      case n: SSA.MonitorExit => ???
-    }
-
-    def recBlock(block: SSA.Control): (Str, Tree) = block match{
-      case n: SSA.True => (renderBlock(n), apply("true", atom(fansi.Color.Magenta(naming.savedLocals(n.branch)._2).toString)))
-      case n: SSA.False => (renderBlock(n), apply("false", atom(fansi.Color.Magenta(naming.savedLocals(n.branch)._2).toString)))
-
-      case reg: SSA.Merge =>
-        val name = if (reg.upstream.isEmpty) "start" else "merge"
-        val rhs = apply(name, reg.upstream.iterator.map(x => atom(fansi.Color.Magenta(naming.savedLocals(x)._2).toString)).toSeq:_*)
-        (fansi.Color.Magenta(naming.savedLocals(reg)._2), rhs)
-
-      case n: SSA.AThrow => (renderBlock(n), apply("throw", rec(n.src)))
-      case n: SSA.TableSwitch => (renderBlock(n), apply("tableswitch", rec(n.src)))
-      case n: SSA.LookupSwitch => (renderBlock(n), apply("lookupswitch", rec(n.src)))
-      case n: SSA.Case => (renderBlock(n), apply("case", rec(n.branch)))
-      case n: SSA.Default => (renderBlock(n), apply("default", rec(n.branch)))
-
-      case n: SSA.ReturnVal =>
-        (renderBlock(n), apply("return", atom(renderBlock(n.block)), rec(n.src)))
-
-      case n: SSA.Return =>
-        (renderBlock(n), apply("return", atom(renderBlock(n.block))))
-
-      case n: SSA.UnaBranch =>
-        val rhs = apply("if", atom(renderBlock(n.block)), rec(n.a), atom(unaryBranchString(n.opcode)))
-        (fansi.Color.Magenta(naming.savedLocals(n)._2), rhs)
-
-      case n: SSA.BinBranch =>
-        val rhs = apply("if", atom(renderBlock(n.block)), infix(rec(n.a), binBranchString(n.opcode), rec(n.b)))
-        (fansi.Color.Magenta(naming.savedLocals(n)._2), rhs)
-    }
-
-    def renderStmt(r: SSA.Node, leftOffset: Int): Option[Seq[Str]] = r match{
-      case _: SSA.Arg => None
-      case r: SSA.Phi if r.getSize == 0 => None
-      case v: SSA.State => None
-      case _ =>
-        val out = mutable.Buffer.empty[Str]
-        val (lhs, rhs) = r match {
-          case r: SSA.Control => recBlock(r)
-          case r: SSA.Val => (fansi.Color.Cyan(naming.savedLocals(r)._2), recVal(r))
-        }
-
-        val printLeft = r match{
-          case s: SSA.Val => s.getSize != 0
-          case _ => true
-        }
-        if (printLeft) out.append(lhs, " = ")
-
-        out.appendAll(
-          new pprint.Renderer(80, fansi.Color.Yellow, fansi.Color.Green, 2)
-            .rec(rhs, lhs.length + " = ".length, leftOffset).iter
-        )
-        Some(out)
-    }
-
-    val out =
-      if (scheduledVals.nonEmpty){
-        renderGraph(
-          Renderer.findControlFlowGraph(methodBody),
-          (l, rhs, indent) => fansi.Str.join(renderStmt(l, indent.length / 2).get:_*),
-          (l, indent) => {
-
-            val n = scheduledVals
-              .collect{case (a, b) if b == l && naming.saveable(a) => a}
-              .toSeq
-              .sortBy(naming.finalOrderingMap(_))
-              .map{ a =>
-                renderStmt(a, indent.length / 2).map(x => fansi.Str.join(fansi.Str(indent) +: x:_*))
-              }
-
-            n.flatten.toSeq
-          }
-        )
-      }else{
-        fansi.Str.join(
-          naming.saveable
-            .toSeq
-            .sortBy(naming.finalOrderingMap)
-            .flatMap(
-              renderStmt(_, 0) match{
-                case None => Nil
-                case Some(x) => fansi.Str("\n") +: x
-              }
-            ):_*
-        )
-      }
-
-    out
-  }
-
 
   def binOpString(op: SSA.BinOp.Code): String = {
     import SSA.BinOp._
@@ -391,9 +227,9 @@ object Renderer {
     controlFlowEdges
   }
 
-  def dumpSvg(methodBody: MethodBody, naming: Namer.Result = null): LogMessage.Graph = {
+  def dumpSvg(methodBody: MethodBody): LogMessage.Graph = {
 
-    def name(x: SSA.Node) = if (naming == null) "" else naming(x).getOrElse("")
+
 
     val live = Util.breadthFirstSeen[SSA.Node](methodBody.allTerminals.toSet)(_.upstream)
 
@@ -409,7 +245,7 @@ object Renderer {
       allGraphvizNodes.put(
         x,
         LogMessage.Graph.Node(
-          x.toString + " " + name(x),
+          x.toString,
           x match {
             case n: SSA.Val => "cyan"
             case n: SSA.State => "blue"

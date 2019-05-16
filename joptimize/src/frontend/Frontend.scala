@@ -58,13 +58,16 @@ object Frontend{
 
     case merge: SSA.Merge =>
       if (merge.incoming.size == 1 && merge.next != null) {
-        for(next <- Option(merge.next) ++ merge.nextPhis ++ Option(merge.nextState)){
+        for(next <- Option(merge.next) ++ merge.nextPhis){
           next.replaceUpstream(merge, merge.incoming.head._1)
         }
-
+        val nextState = merge.nextState
+        val incomingState = merge.incoming.head._2
+        nextState.parent = incomingState
+        incomingState.next = nextState
         merge.incoming.head._1.next = merge.next
         merge.incoming.head._1.nextPhis = merge.nextPhis
-        merge.incoming.head._1.nextState = merge.nextState
+
         merge.next = null
         (merge.incoming.head._1 +: merge.phis) ++ merge.nextPhis ++ Option(merge.nextState)
       }

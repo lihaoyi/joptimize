@@ -1,7 +1,7 @@
 package joptimize.backend
 
 import joptimize.{Logger, Util}
-import joptimize.analyzer.Namer
+import joptimize.analyzer.Renderer
 import joptimize.model.JType
 import joptimize.model.{MethodBody, SSA}
 import org.objectweb.asm.Handle
@@ -17,57 +17,55 @@ import scala.collection.mutable
   * constant-folded instructions
   */
 
-class CodeGenMethod(naming: Namer.Result,
-                    log: Logger.InferredMethod,
+class CodeGenMethod(log: Logger.InferredMethod,
                     isInterface: JType.Cls => Option[Boolean],
                     methodBody: MethodBody,
                     allVertices: Set[SSA.Node],
                     nodesToBlocks: Map[SSA.ValOrState, SSA.Block],
                     cfg: Seq[(SSA.Control, SSA.Control)]){
   val blocksToNodes = nodesToBlocks.groupBy(_._2).map{case (k, v) => (k, v.keys)}
-  val sortedControls = sortControlFlowGraph(cfg)
-  val blockIndices = sortedControls.zipWithIndex.toMap
-  val labels = sortedControls.map(_ -> new LabelNode()).toMap
-  val savedLocalNumbers = naming.savedLocals.collect{case (k: SSA.Val, v) => (k, v._1)}
-
+  val sortedBlocks = sortControlFlowGraph(cfg).collect{case b: SSA.Block => b}
+  val blockIndices = sortedBlocks.zipWithIndex.toMap
+  val labels = sortedBlocks.map(_ -> new LabelNode()).toMap
+  val savedLocalNumbers = mutable.LinkedHashMap.empty[SSA.Val, Int]
+  var currentLocalsSize = 0
+  val seen = mutable.LinkedHashSet.empty[SSA.ValOrState]
 
   def apply() = log.block{
-    log.pprint(nodesToBlocks)
-    log.pprint(blocksToNodes)
-    val blockCode = for(control <- sortedControls.toArray) yield {
-      log.pprint(control)
+    val allPhis = methodBody.getAllVertices().collect{case p: SSA.Phi => p}
+    for(a <- methodBody.args ++ allPhis){
+      savedLocalNumbers(a) = currentLocalsSize
+      currentLocalsSize += a.getSize
+    }
 
-      val label = labels(control)
-      val body = control match{
-        case block: SSA.Block =>
-          val nodes = blocksToNodes.getOrElse(block, Nil)
-          for{
-            node <- nodes.toSeq.sortBy(naming.finalOrderingMap)
-            if naming.savedLocals.contains(node) && !node.isInstanceOf[SSA.Arg] && node.isInstanceOf[SSA.Val]
-            res <- generateValBytecode(node.asInstanceOf[SSA.Val])
-          } yield res
+    val blockCode = for(block <- sortedBlocks.toArray) yield{
+      log.pprint(block -> block.next)
+      val label = labels(block)
+      val (nextState, nextVals, suffix) = block.next match{
+        case next: SSA.Merge =>
+          val nextState = next.incoming.collect{case (k, v) if k == block => v}.flatMap(rec)
+          val nextVals = next.phis.flatMap{ phi =>
+            val value = phi.incoming.collect{case (k, v) if k == block => v}
+            value.flatMap(rec) ++ Seq(new VarInsnNode(saveOp(phi), savedLocalNumbers(phi)))
+          }
+          val suffix = Nil
+          (nextState, nextVals, suffix)
 
-        case jump: SSA.Jump => generateJumpBytecode(jump)
+        case next: SSA.Jump =>
+          val nextState = Seq(next.state).flatMap(rec)
+          val nextVals = next.upstreamVals.flatMap(rec)
+          val suffix = generateJumpBytecode(next)
+          (nextState, nextVals, suffix)
       }
 
-      val downstreamBlocks = control.downstreamList.collect{case b: SSA.Control => b}
+      val downstreamBlocks = block.downstreamList.collect{case b: SSA.Control => b}
 
       val gotoFooter = downstreamBlocks match{
-        case Seq(d) if blockIndices(d) != blockIndices(control) + 1 => Some(new JumpInsnNode(GOTO, labels(d)))
+        case Seq(d: SSA.Block) if blockIndices(d) != blockIndices(block) + 1 => Some(new JumpInsnNode(GOTO, labels(d)))
         case _ => None
       }
 
-      (label +: body) -> gotoFooter
-    }
-
-    naming.savedLocals.keysIterator.foreach{
-      case phi: SSA.Phi =>
-        for((k, v) <- phi.incoming){
-          val (insns, gotoFooter) = blockCode(blockIndices(k))
-          val added = rec(v) ++ Seq(new VarInsnNode(saveOp(phi), savedLocalNumbers(phi)))
-          blockCode(blockIndices(k)) = (insns ++ added, gotoFooter)
-        }
-      case _ => //do nothing
+      (Seq(label) ++ nextState ++ nextVals ++ suffix) -> gotoFooter
     }
 
 
@@ -77,7 +75,10 @@ class CodeGenMethod(naming: Namer.Result,
       footer.foreach(finalInsns.add)
     }
 
-    (blockCode, finalInsns)
+    log.println("================ OUTPUT BYTECODE ================")
+    log(Renderer.renderBlockCode(blockCode, finalInsns))
+
+    finalInsns
   }
 
 
@@ -102,26 +103,28 @@ class CodeGenMethod(naming: Namer.Result,
   }
 
 
-  def rec(ssa: SSA.ValOrState): Seq[AbstractInsnNode] = {
-    log.pprint(ssa)
-    ssa match{
-      case ssa: SSA.State =>
-        log.pprint(ssa.upstream)
-        ssa.upstream
-          .collect {
-            case v: SSA.Val if !savedLocalNumbers.contains(v) => generateValBytecodeSideEffects(v)
-            case s: SSA.State => generateValBytecodeSideEffects(s)
-          }
-          .flatten
-      case ssa: SSA.Val =>
-        if (savedLocalNumbers.contains(ssa)) Seq(new VarInsnNode(loadOp(ssa), savedLocalNumbers(ssa)))
-        else generateValBytecode(ssa)
-      case _ => Nil //ignore other node types
-    }
+  def rec(ssa: SSA.ValOrState): Seq[AbstractInsnNode] = ssa match{
+    case ssa: SSA.State => ssa.upstream.collect{case s: SSA.ValOrState => s}.flatMap(rec)
+    case n: SSA.Val =>
+      if (savedLocalNumbers.contains(n)) Seq(new VarInsnNode(loadOp(n), savedLocalNumbers(n)))
+      else if (n.upstream.isEmpty && !n.isInstanceOf[SSA.New]) recVal(n)
+      else n.downstreamList.count(!_.isInstanceOf[SSA.State]) match {
+        case 0 => recVal(n) ++ Seq(new InsnNode(if (n.getSize == 1) POP else POP2))
+        case 1 => recVal(n)
+        case _ =>
+          val localEntry = currentLocalsSize
+          savedLocalNumbers(n) = localEntry
+          currentLocalsSize += n.getSize
+          recVal(n) ++
+          Seq(
+            new InsnNode(if (n.getSize == 1) DUP else DUP2),
+            new VarInsnNode(saveOp(n), localEntry)
+          )
+      }
+    case _ => Nil //ignore other node types
   }
 
   def generateJumpBytecode(ssa: SSA.Jump): Seq[AbstractInsnNode] = {
-    val upstreams = ssa.upstream.collect{case v: SSA.ValOrState => v}.flatMap(rec)
 
     def computeSwitchLabels(n: SSA.Switch) = (
       this.labels(n.downstreamList.collect{case t: SSA.Default => t}.head),
@@ -132,7 +135,7 @@ class CodeGenMethod(naming: Namer.Result,
       case n: SSA.Branch =>
         val destination = n.downstreamList.collect{case t: SSA.False => t}.head
         val goto =
-          if (blockIndices(destination) == blockIndices(ssa) + 1) None
+          if (blockIndices(destination) == blockIndices(ssa.block) + 1) None
           else Some(new JumpInsnNode(GOTO, labels(destination)))
 
         val jump = Seq(new JumpInsnNode(n.opcode.i, labels(n.downstreamList.collect{case t: SSA.True => t}.head)))
@@ -150,142 +153,78 @@ class CodeGenMethod(naming: Namer.Result,
         Seq(new LookupSwitchInsnNode(default, n.keys.toArray, labels.toArray))
     }
 
+    current
+  }
+
+  def recVal(ssa: SSA.Val): Seq[AbstractInsnNode] = {
+    val upstreams = ssa.upstreamVals.flatMap(rec)
+    val current: Seq[AbstractInsnNode] = ssa match{
+      case _: SSA.Copy => Nil
+      case n: SSA.BinOp => Seq(new InsnNode(n.opcode.i))
+      case n: SSA.UnaOp => Seq(new InsnNode(n.opcode.i))
+      case n: SSA.CheckCast => Seq(new TypeInsnNode(CHECKCAST, n.desc.name))
+      case n: SSA.ArrayLength => Seq(new InsnNode(ARRAYLENGTH))
+      case n: SSA.InstanceOf => Seq(new TypeInsnNode(INSTANCEOF, n.desc.name))
+      case n: SSA.ConstI => Seq(n.value match{
+        case -1 => new InsnNode(ICONST_M1)
+        case 0 => new InsnNode(ICONST_0)
+        case 1 => new InsnNode(ICONST_1)
+        case 2 => new InsnNode(ICONST_2)
+        case 3 => new InsnNode(ICONST_3)
+        case 4 => new InsnNode(ICONST_4)
+        case 5 => new InsnNode(ICONST_5)
+        case _ =>
+          if (-128 <= n.value && n.value < 127) new IntInsnNode(BIPUSH, n.value)
+          else if (-32768 <= n.value && n.value <= 32767) new IntInsnNode(SIPUSH, n.value)
+          else new LdcInsnNode(n.value)
+      })
+      case n: SSA.ConstJ => Seq(n.value match{
+        case 0 => new InsnNode(LCONST_0)
+        case 1 => new InsnNode(LCONST_1)
+        case _ => new LdcInsnNode(n.value)
+      })
+      case n: SSA.ConstF => Seq(n.value match{
+        case 0 => new InsnNode(FCONST_0)
+        case 1 => new InsnNode(FCONST_1)
+        case 2 => new InsnNode(FCONST_2)
+        case _ => new LdcInsnNode(n.value)
+      })
+      case n: SSA.ConstD => Seq(n.value match{
+        case 0 => new InsnNode(DCONST_0)
+        case 1 => new InsnNode(DCONST_1)
+        case _ => new LdcInsnNode(n.value)
+      })
+      case n: SSA.ConstStr => Seq(new LdcInsnNode(n.value))
+      case n: SSA.ConstNull => Seq(new InsnNode(ACONST_NULL))
+      case n: SSA.ConstCls =>
+        Seq(new LdcInsnNode(org.objectweb.asm.Type.getObjectType(n.value.name)))
+      case n: SSA.InvokeStatic =>
+        Seq(new MethodInsnNode(INVOKESTATIC, n.cls.name, n.name, n.desc.unparse))
+      case n: SSA.InvokeSpecial =>
+        Seq(new MethodInsnNode(INVOKESPECIAL, n.cls.name, n.name, n.desc.unparse))
+      case n: SSA.InvokeVirtual =>
+        val opcode = if (isInterface(n.cls).getOrElse(n.interface)) INVOKEINTERFACE else INVOKEVIRTUAL
+        Seq(new MethodInsnNode(opcode, n.cls.name, n.name, n.desc.unparse))
+      case n: SSA.InvokeDynamic=>
+        Seq(new InvokeDynamicInsnNode(
+          n.name, n.desc.unparse,
+          new Handle(n.bootstrap.tag, n.bootstrap.owner.name, n.bootstrap.name, n.bootstrap.desc.unparse),
+          n.bootstrapArgs.map(SSA.InvokeDynamic.argToAny):_*
+        ))
+      case n: SSA.New => Seq(new TypeInsnNode(NEW, n.cls.name))
+      case n: SSA.NewArray => Seq(newArrayOp(n.typeRef))
+      case n: SSA.MultiANewArray => Seq(new MultiANewArrayInsnNode(n.desc.name, n.dims.length))
+      case n: SSA.PutStatic => Seq(new FieldInsnNode(PUTSTATIC, n.cls.name, n.name, n.desc.internalName))
+      case n: SSA.GetStatic => Seq(new FieldInsnNode(GETSTATIC, n.cls.name, n.name, n.desc.internalName))
+      case n: SSA.PutField => Seq(new FieldInsnNode(PUTFIELD, n.owner.name, n.name, n.desc.internalName))
+      case n: SSA.GetField => Seq(new FieldInsnNode(GETFIELD, n.owner.name, n.name, n.desc.internalName))
+      case n: SSA.PutArray => Seq(new InsnNode(arrayStoreOp(n.src)))
+      case n: SSA.GetArray => Seq(new InsnNode(arrayLoadOp(n.tpe)))
+      case n: SSA.MonitorEnter => ???
+      case n: SSA.MonitorExit => ???
+    }
+
     upstreams ++ current
-
-  }
-
-  def generateValBytecode(ssa: SSA.Val): Seq[AbstractInsnNode] = {
-    if (ssa.isInstanceOf[SSA.Phi]) Nil
-    else {
-      val upstreams = ssa.upstreamVals.flatMap(rec)
-      val current: Seq[AbstractInsnNode] = ssa match{
-        case _: SSA.Copy => Nil
-
-        case _: SSA.Phi => Nil
-        case n: SSA.Arg => Nil
-        case n: SSA.BinOp => Seq(new InsnNode(n.opcode.i))
-        case n: SSA.UnaOp => Seq(new InsnNode(n.opcode.i))
-        case n: SSA.CheckCast => Seq(new TypeInsnNode(CHECKCAST, n.desc.name))
-        case n: SSA.ArrayLength => Seq(new InsnNode(ARRAYLENGTH))
-        case n: SSA.InstanceOf => Seq(new TypeInsnNode(INSTANCEOF, n.desc.name))
-        case n: SSA.ConstI => Seq(n.value match{
-          case -1 => new InsnNode(ICONST_M1)
-          case 0 => new InsnNode(ICONST_0)
-          case 1 => new InsnNode(ICONST_1)
-          case 2 => new InsnNode(ICONST_2)
-          case 3 => new InsnNode(ICONST_3)
-          case 4 => new InsnNode(ICONST_4)
-          case 5 => new InsnNode(ICONST_5)
-          case _ =>
-            if (-128 <= n.value && n.value < 127) new IntInsnNode(BIPUSH, n.value)
-            else if (-32768 <= n.value && n.value <= 32767) new IntInsnNode(SIPUSH, n.value)
-            else new LdcInsnNode(n.value)
-        })
-        case n: SSA.ConstJ => Seq(n.value match{
-          case 0 => new InsnNode(LCONST_0)
-          case 1 => new InsnNode(LCONST_1)
-          case _ => new LdcInsnNode(n.value)
-        })
-        case n: SSA.ConstF => Seq(n.value match{
-          case 0 => new InsnNode(FCONST_0)
-          case 1 => new InsnNode(FCONST_1)
-          case 2 => new InsnNode(FCONST_2)
-          case _ => new LdcInsnNode(n.value)
-        })
-        case n: SSA.ConstD => Seq(n.value match{
-          case 0 => new InsnNode(DCONST_0)
-          case 1 => new InsnNode(DCONST_1)
-          case _ => new LdcInsnNode(n.value)
-        })
-        case n: SSA.ConstStr => Seq(new LdcInsnNode(n.value))
-        case n: SSA.ConstNull => Seq(new InsnNode(ACONST_NULL))
-        case n: SSA.ConstCls =>
-          Seq(new LdcInsnNode(org.objectweb.asm.Type.getObjectType(n.value.name)))
-        case n: SSA.InvokeStatic =>
-          Seq(new MethodInsnNode(INVOKESTATIC, n.cls.name, n.name, n.desc.unparse))
-        case n: SSA.InvokeSpecial =>
-          Seq(new MethodInsnNode(INVOKESPECIAL, n.cls.name, n.name, n.desc.unparse))
-        case n: SSA.InvokeVirtual =>
-          val opcode = if (isInterface(n.cls).getOrElse(n.interface)) INVOKEINTERFACE else INVOKEVIRTUAL
-          Seq(new MethodInsnNode(opcode, n.cls.name, n.name, n.desc.unparse))
-        case n: SSA.InvokeDynamic=>
-          Seq(new InvokeDynamicInsnNode(
-            n.name, n.desc.unparse,
-            new Handle(n.bootstrap.tag, n.bootstrap.owner.name, n.bootstrap.name, n.bootstrap.desc.unparse),
-            n.bootstrapArgs.map(SSA.InvokeDynamic.argToAny):_*
-          ))
-        case n: SSA.New => Seq(new TypeInsnNode(NEW, n.cls.name))
-        case n: SSA.NewArray => Seq(newArrayOp(n.typeRef))
-        case n: SSA.MultiANewArray => Seq(new MultiANewArrayInsnNode(n.desc.name, n.dims.length))
-        case n: SSA.PutStatic => Seq(new FieldInsnNode(PUTSTATIC, n.cls.name, n.name, n.desc.internalName))
-        case n: SSA.GetStatic => Seq(new FieldInsnNode(GETSTATIC, n.cls.name, n.name, n.desc.internalName))
-        case n: SSA.PutField => Seq(new FieldInsnNode(PUTFIELD, n.owner.name, n.name, n.desc.internalName))
-        case n: SSA.GetField => Seq(new FieldInsnNode(GETFIELD, n.owner.name, n.name, n.desc.internalName))
-        case n: SSA.PutArray => Seq(new InsnNode(arrayStoreOp(n.src)))
-        case n: SSA.GetArray => Seq(new InsnNode(arrayLoadOp(n.tpe)))
-        case n: SSA.MonitorEnter => ???
-        case n: SSA.MonitorExit => ???
-      }
-
-      val save = ssa match{
-        case n: SSA.Val if savedLocalNumbers.contains(n) && n.getSize > 0 =>
-          Seq(new VarInsnNode(saveOp(n), savedLocalNumbers(n)))
-        case _ => Nil
-      }
-
-      upstreams ++ current ++ save
-
-    }
-  }
-
-
-  def generateValBytecodeSideEffects(ssa: SSA.Node): Seq[AbstractInsnNode] = {
-    log.pprint(ssa)
-    if (ssa.isInstanceOf[SSA.Phi]) Nil
-    else {
-      val upstreams = ssa.upstreamVals.flatMap(rec)
-      val current: Seq[AbstractInsnNode] = ssa match{
-        case _: SSA.State | _: SSA.Copy | _: SSA.Phi | _: SSA.Arg => Nil
-        case n: SSA.BinOp => Seq(new InsnNode(n.opcode.i), new InsnNode(POP))
-        case n: SSA.UnaOp => Seq(new InsnNode(n.opcode.i), new InsnNode(POP))
-        case n: SSA.CheckCast => Seq(new TypeInsnNode(CHECKCAST, n.desc.name), new InsnNode(POP))
-        case n: SSA.ArrayLength => Seq(new InsnNode(ARRAYLENGTH), new InsnNode(POP))
-        case n: SSA.InstanceOf => Seq(new TypeInsnNode(INSTANCEOF, n.desc.name), new InsnNode(POP))
-        case _: SSA.ConstI | _: SSA.ConstJ | _: SSA.ConstF | _: SSA.ConstD |
-             _: SSA.ConstStr | _: SSA.ConstNull | _: SSA.ConstCls  => Nil
-
-        case n: SSA.InvokeStatic =>
-          Seq(new MethodInsnNode(INVOKESTATIC, n.cls.name, n.name, n.desc.unparse)) ++
-          (if (n.desc.ret.size == 0) Nil else Seq(new InsnNode(POP)))
-        case n: SSA.InvokeSpecial =>
-          Seq(new MethodInsnNode(INVOKESPECIAL, n.cls.name, n.name, n.desc.unparse)) ++
-          (if (n.desc.ret.size == 0) Nil else Seq(new InsnNode(POP)))
-        case n: SSA.InvokeVirtual =>
-          val opcode = if (isInterface(n.cls).getOrElse(n.interface)) INVOKEINTERFACE else INVOKEVIRTUAL
-          Seq(new MethodInsnNode(opcode, n.cls.name, n.name, n.desc.unparse)) ++
-          (if (n.desc.ret.size == 0) Nil else Seq(new InsnNode(POP)))
-        case n: SSA.InvokeDynamic =>
-          Seq(new InvokeDynamicInsnNode(
-            n.name, n.desc.unparse,
-            new Handle(n.bootstrap.tag, n.bootstrap.owner.name, n.bootstrap.name, n.bootstrap.desc.unparse),
-            n.bootstrapArgs.map(SSA.InvokeDynamic.argToAny):_*
-          ))
-        case n: SSA.New => ???
-        case n: SSA.NewArray => Seq(newArrayOp(n.typeRef), new InsnNode(POP))
-        case n: SSA.MultiANewArray => Seq(new MultiANewArrayInsnNode(n.desc.name, n.dims.length), new InsnNode(POP))
-        case n: SSA.PutStatic => Seq(new FieldInsnNode(PUTSTATIC, n.cls.name, n.name, n.desc.internalName))
-        case n: SSA.GetStatic => Seq(new FieldInsnNode(GETSTATIC, n.cls.name, n.name, n.desc.internalName), new InsnNode(POP))
-        case n: SSA.PutField => Seq(new FieldInsnNode(PUTFIELD, n.owner.name, n.name, n.desc.internalName))
-        case n: SSA.GetField => Seq(new FieldInsnNode(GETFIELD, n.owner.name, n.name, n.desc.internalName), new InsnNode(POP))
-        case n: SSA.PutArray => Seq(new InsnNode(arrayStoreOp(n.src)))
-        case n: SSA.GetArray => Seq(new InsnNode(arrayLoadOp(n.tpe)), new InsnNode(POP))
-        case n: SSA.MonitorEnter => ???
-        case n: SSA.MonitorExit => ???
-      }
-
-      upstreams ++ current
-
-    }
   }
 
   def newArrayOp(typeRef: JType) = {

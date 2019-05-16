@@ -46,7 +46,7 @@ object MainTestUtils {
         name => loadIfExists("CLASSES_FOLDER", name),
         Seq(MethodSig(s"test/${tp.value.dropRight(1).mkString("/")}", tp.value.last, methodDesc, static = true)),
         eliminateOldMethods = true,
-  //      log = joptimize.DummyLogger,
+//        log = joptimize.DummyLogger,
         log = new joptimize.FileLogger.Global(logRoot = outRoot),
         inline = inline
       )

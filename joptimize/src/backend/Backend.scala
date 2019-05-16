@@ -3,7 +3,7 @@ package joptimize.backend
 import joptimize.{FileLogger, Logger, Util}
 import joptimize.algorithms.{Dominator, MultiBiMap, Scheduler}
 import joptimize.analyzer.ProgramAnalyzer.{CallEdge, MethodResult}
-import joptimize.analyzer.{Namer, ProgramAnalyzer, Renderer}
+import joptimize.analyzer.{ProgramAnalyzer, Renderer}
 import joptimize.frontend.{ClassManager, Frontend}
 import joptimize.graph.HavlakLoopTree
 import joptimize.model._
@@ -292,20 +292,22 @@ object Backend {
 
     RegisterAllocator.apply(result.methodBody, dominators2.immediateDominators, log)
 
+    log.graph("COPY INSERTED")(Renderer.dumpSvg(result.methodBody))
+
     val nodesToBlocks = Scheduler.apply(
       loopTree2, dominators2, startBlock,
       allVertices2, log
     )
+//
+//    val postRegisterAllocNaming = Namer.apply(
+//      result.methodBody,
+//      nodesToBlocks,
+//      result.methodBody.getAllVertices(),
+//      log
+//    )
 
-    val postRegisterAllocNaming = Namer.apply(
-      result.methodBody,
-      nodesToBlocks,
-      result.methodBody.getAllVertices(),
-      log
-    )
-
-    val (blockCode, finalInsns) = new CodeGenMethod(
-      postRegisterAllocNaming,
+    val finalInsns = new CodeGenMethod(
+//      postRegisterAllocNaming,
       log,
       isInterface,
       result.methodBody,
@@ -314,8 +316,7 @@ object Backend {
       analyzeBlockStructure(result.methodBody)._1
     ).apply()
 
-    log.println("================ OUTPUT BYTECODE ================")
-    log(Renderer.renderBlockCode(blockCode, finalInsns))
+
     finalInsns
   }
 
