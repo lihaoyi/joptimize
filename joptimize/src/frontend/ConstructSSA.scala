@@ -1,4 +1,4 @@
-package frontend
+package joptimize.frontend
 
 import joptimize.{FileLogger, Logger, Util}
 import joptimize.analyzer.Renderer
@@ -34,28 +34,28 @@ object ConstructSSA {
       new BytecodeToSSAInterpreter(phiMerges0, startRegionLookup, regionStarts, argMapping)
     )
 
-    log.println(
-      Renderer
-        .renderInsns(
-          mn.instructions,
-          printer,
-          methodPrinter,
-          decorate =
-            insns
-              .indices
-              .map(x =>
-                insns(x) ->
-                pprint.apply((
-                  frames(x).state,
-                  blockStartStates(x),
-                  for(i <- 0 until frames(x).getStackSize) yield frames(x).getStack(i),
-                  for(i <- 0 until frames(x).getLocals) yield frames(x).getLocal(i)
-                ))
-              )
-              .toMap
-        )
-        .toString
-    )
+//    log.println(
+//      Renderer
+//        .renderInsns(
+//          mn.instructions,
+//          printer,
+//          methodPrinter,
+//          decorate =
+//            insns
+//              .indices
+//              .map(x =>
+//                insns(x) ->
+//                pprint.apply((
+//                  frames(x).state,
+//                  blockStartStates(x),
+//                  for(i <- 0 until frames(x).getStackSize) yield frames(x).getStack(i),
+//                  for(i <- 0 until frames(x).getLocals) yield frames(x).getLocal(i)
+//                ))
+//              )
+//              .toMap
+//        )
+//        .toString
+//    )
 
     val program = ControlFlowExtraction.extractControlFlow(
       insns,
