@@ -36,7 +36,6 @@ abstract class ClickScheduler(dominators: Dominator.Result[SSA.Block],
 
   def scheduleLate(n: SSA.Val): Unit = {
     if (!visited.contains(n) && !n.isInstanceOf[SSA.Phi]){
-      log.pprint(n)
       visited.put(n, ())
       scheduleLateRoot(n)
       if (!isPinned(n)){
@@ -57,8 +56,6 @@ abstract class ClickScheduler(dominators: Dominator.Result[SSA.Block],
 
         var best = lca
         while(lca != block(n)){
-          log.pprint(lca)
-          log.pprint(best)
           if (loopNest(lca) < loopNest(best)) best = lca
           lca = dominators.immediateDominators(lca)
         }

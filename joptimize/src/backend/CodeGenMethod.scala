@@ -46,9 +46,7 @@ class CodeGenMethod(log: Logger.InferredMethod,
           val nextState = next.incoming.collect{case (k, v) if k == block => v}.flatMap(rec)
           val nextVals = next.phis.flatMap{ phi =>
             val value = phi.incoming.collect{case (k, v) if k == block => v}
-            log.pprint(value)
             val flatted = value.flatMap(rec)
-            log.pprint(flatted)
             flatted ++ Seq(new VarInsnNode(saveOp(phi), savedLocalNumbers(phi)))
           }
           val suffix = Nil
@@ -87,13 +85,7 @@ class CodeGenMethod(log: Logger.InferredMethod,
 
 
   def sortControlFlowGraph(cfg: Seq[(SSA.Control, SSA.Control)]) = {
-    val predecessor = cfg.groupBy(_._2).map { case (k, v) => (k, v.map(_._1)) }
-
-    val startBlock = cfg
-      .flatMap { case (a, b) => Seq(a, b) }
-      .find(!predecessor.contains(_))
-      .get
-
+    val Seq(startBlock) = cfg.collect{case (s: SSA.Start, _) => s}
     val successor = cfg.groupBy(_._1).map { case (k, v) => (k, v.map(_._2)) }
     val sortedControls = mutable.LinkedHashSet.empty[SSA.Control]
 
@@ -108,7 +100,6 @@ class CodeGenMethod(log: Logger.InferredMethod,
 
 
   def rec(ssa: SSA.ValOrState): Seq[AbstractInsnNode] = {
-    log.pprint(ssa)
     ssa match{
       case ssa: SSA.State => ssa.upstream.collect{case s: SSA.ValOrState => s}.flatMap(rec)
       case n: SSA.Val =>
@@ -118,7 +109,6 @@ class CodeGenMethod(log: Logger.InferredMethod,
           case 0 => recVal(n) ++ Seq(new InsnNode(if (n.getSize == 1) POP else POP2))
           case 1 => recVal(n)
           case _ =>
-            log.pprint(n)
             val localEntry = currentLocalsSize
             savedLocalNumbers(n) = localEntry
             currentLocalsSize += n.getSize
