@@ -40,7 +40,8 @@ object SSA{
     update()
   }
 
-  sealed abstract class Val(val jtype: JType) extends org.objectweb.asm.tree.analysis.Value with Node{
+  sealed trait ValOrState extends Node
+  sealed abstract class Val(val jtype: JType) extends org.objectweb.asm.tree.analysis.Value with ValOrState {
     def getSize = jtype.size
     def internalName = toString
     override def update(): Val = {
@@ -68,7 +69,7 @@ object SSA{
     def state_=(s: State): Unit
   }
 
-  class State(var parent: Node) extends Node{
+  class State(var parent: Node) extends ValOrState {
     override def upstream = Seq(parent)
     def replaceUpstream(swap: Swapper): Unit = {
       parent = swap(parent)
@@ -102,7 +103,7 @@ object SSA{
     def next: SSA.Control
     def next_=(v: SSA.Control)
   }
-  sealed abstract class Jump() extends Control(){
+  sealed abstract class Jump() extends Control() with Stateful{
     def controls = Seq(block)
     def block: SSA.Block
     override def update(): Control = {
@@ -154,12 +155,6 @@ object SSA{
         s"$this incoming blocks doesn't match block $block incoming blocks, $phiIncomingBlocks != $blockIncomingBlocks"
       )
     }
-//    override def update() = {
-//      block match{
-//        case s: SSA.Merge => s.phis = s.phis ++ Seq(this)
-//      }
-//      super.update()
-//    }
   }
 
   class Start(next: SSA.Control) extends Merge(Set(), next, Nil){
@@ -295,6 +290,7 @@ object SSA{
   trait Branch extends Jump{
     def trueBranch: SSA.True
     def falseBranch: SSA.False
+    def opcode: SSA.Code[_]
   }
   class UnaBranch(var state: State,
                   var block: Block,

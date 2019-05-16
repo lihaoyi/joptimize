@@ -16,9 +16,14 @@ import collection.mutable
 object Renderer {
 
 
-  def prettyprint(insnNode: AbstractInsnNode,
-                  printer: Textifier,
-                  methodPrinter: TraceMethodVisitor) = {
+  def prettyprint(insnNode: AbstractInsnNode) = {
+    val printer = new Textifier
+    val methodPrinter = new TraceMethodVisitor(printer)
+    prettyprint0(insnNode, printer, methodPrinter)
+  }
+  def prettyprint0(insnNode: AbstractInsnNode,
+                   printer: Textifier,
+                   methodPrinter: TraceMethodVisitor) = {
     insnNode.accept(methodPrinter)
     val sw = new StringWriter
     printer.print(new PrintWriter(sw))
@@ -38,7 +43,7 @@ object Renderer {
     fansi.Str.join(
       prefix ++ listing
         .flatMap{ k =>
-          val rhs = prettyprint(k, printer, methodPrinter)
+          val rhs = prettyprint0(k, printer, methodPrinter)
           val splitIndex0 = rhs.indexWhere(_ != ' ')
           val splitIndex = rhs.indexWhere(_ == ' ', splitIndex0) match{
             case -1 => rhs.length
@@ -50,6 +55,7 @@ object Renderer {
             fansi.Color.Magenta("#" + indices(k).toString.padTo(3, ' ')),
             fansi.Color.Yellow(opcode),
             fansi.Color.Green(rest),
+            " ",
             decorate(k)
           )
         }

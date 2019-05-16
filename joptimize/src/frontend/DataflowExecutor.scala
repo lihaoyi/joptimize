@@ -37,11 +37,11 @@ object DataflowExecutor{
       val oldFrame = frames(targetInsnIndex)
       if (oldFrame != null) oldFrame.merge(insnIndex, targetInsnIndex, frame, interpreter)
       else {
-        val blockStartState = blockStartStates(targetInsnIndex)
         frames(targetInsnIndex) = new Frame[V, S](frame)
+        frames(targetInsnIndex).initFrom(frames(insnIndex))
         frames(targetInsnIndex).merge0(insnIndex, targetInsnIndex, interpreter)
         inInstructionsToProcess(targetInsnIndex) = true
-        blockStartState.foreach{s =>
+        blockStartStates(targetInsnIndex).foreach{s =>
           frames(targetInsnIndex).state = s
         }
         instructionsToProcess(numInstructionsToProcess) = targetInsnIndex
@@ -69,29 +69,31 @@ object DataflowExecutor{
       }
     }
     // Initializes the data structures for the control flow analysis.
-    val currentFrame = computeInitialFrame(owner, method, interpreter)
-    merge(0, 0, currentFrame)
+    val initialFrame = computeInitialFrame(owner, method, interpreter)
+    merge(0, 0, initialFrame)
     // Control flow analysis.
 
     while (numInstructionsToProcess > 0) {
       // Get and remove one instruction from the list of instructions to process.
       numInstructionsToProcess -= 1
       val insnIndex = instructionsToProcess(numInstructionsToProcess)
-      val oldFrame = frames(insnIndex)
+      val currentFrame = frames(insnIndex)
       inInstructionsToProcess(insnIndex) = false
       // Simulate the execution of this instruction.
       var insnNode: AbstractInsnNode = null
       try {
         insnNode = method.instructions.get(insnIndex)
+
         val insnOpcode = insnNode.getOpcode
         val insnType = insnNode.getType
 
         insnType match{
           case AbstractInsnNode.LABEL | AbstractInsnNode.LINE | AbstractInsnNode.FRAME =>
-            merge(insnIndex, insnIndex + 1, oldFrame)
+            merge(insnIndex, insnIndex + 1, currentFrame)
 
           case _ =>
-            currentFrame.init(oldFrame).execute(insnNode, interpreter, blockStartStates(insnIndex))
+            currentFrame.execute(insnNode, interpreter, blockStartStates(insnIndex))
+
             insnNode match {
               case jumpInsn: JumpInsnNode =>
                 if (insnOpcode != Opcodes.GOTO) merge(insnIndex, insnIndex + 1, currentFrame)
@@ -124,7 +126,7 @@ object DataflowExecutor{
               if (tryCatchBlock.`type` == null) Type.getObjectType("java/lang/Throwable")
               else Type.getObjectType(tryCatchBlock.`type`)
 
-            val handler = new Frame[V, S](oldFrame)
+            val handler = new Frame[V, S](currentFrame)
             handler.clearStack()
             handler.push(interpreter.newExceptionValue(tryCatchBlock, catchType))
             merge(insnIndex, insnList.indexOf(tryCatchBlock.handler), handler)

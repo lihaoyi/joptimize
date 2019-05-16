@@ -18,7 +18,7 @@ object Namer {
   }
 
   def apply(methodBody: MethodBody,
-            scheduledVals: Map[SSA.Val, SSA.Control],
+            scheduledVals: Map[SSA.ValOrState, SSA.Control],
             allVertices: Set[SSA.Node],
             log: Logger.InferredMethod): Result = log.block{
 

@@ -304,15 +304,15 @@ object Backend {
       log
     )
 
-    val (blockCode, finalInsns) = CodeGenMethod(
+    val (blockCode, finalInsns) = new CodeGenMethod(
+      postRegisterAllocNaming,
+      log,
+      isInterface,
       result.methodBody,
       allVertices2,
       nodesToBlocks,
-      analyzeBlockStructure(result.methodBody)._1,
-      postRegisterAllocNaming,
-      log,
-      isInterface
-    )
+      analyzeBlockStructure(result.methodBody)._1
+    ).apply()
 
     log.println("================ OUTPUT BYTECODE ================")
     log(Renderer.renderBlockCode(blockCode, finalInsns))

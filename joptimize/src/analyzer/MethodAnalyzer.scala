@@ -79,11 +79,8 @@ class MethodAnalyzer[T](methodBody: MethodBody,
   val inferredThrows = mutable.LinkedHashMap.empty[SSA.AThrow, T]
 
   def step(): MethodAnalyzer.Step[T] = {
-//    log.pprint(evaluateWorkList)
-    //    pprint.log(workList)
     if (invalidateWorkList.nonEmpty){
       val item = invalidateWorkList.head
-//      log.pprint(item)
       invalidateWorkList.remove(item)
       item match {
         case Invalidate.Phi(v) => queueDownstreamInvalidations(v)
@@ -92,7 +89,7 @@ class MethodAnalyzer[T](methodBody: MethodBody,
       }
     } else if (evaluateWorkList.nonEmpty){
       val item = evaluateWorkList.head
-//      log.pprint(item)
+      log.pprint(item)
       evaluateWorkList.remove(item)
       item match{
         case Evaluate.Val(v) =>
@@ -102,7 +99,7 @@ class MethodAnalyzer[T](methodBody: MethodBody,
         case Evaluate.Block(currentBlock) =>
 
           log.pprint(currentBlock)
-          queueSortedUpstreams(currentBlock.next.upstreamVals.toSet)
+          queueSortedUpstreams(currentBlock.next.upstream.collect{case v: SSA.ValOrState => v}.toSet)
           jumpWorkList.add(BlockJump(currentBlock))
           Step.Continue(Nil)
 
@@ -267,12 +264,10 @@ class MethodAnalyzer[T](methodBody: MethodBody,
   }
 
 
-  def queueSortedUpstreams(set: Set[SSA.Val]) = {
+  def queueSortedUpstreams(set: Set[SSA.ValOrState]) = {
     val topoed = topoSort(set.filter(!_.isInstanceOf[SSA.Phi]))
-
-    log.pprint(set)
     log.pprint(topoed)
-    topoed.foreach { v =>
+    topoed.collect { case v: SSA.Val =>
       evaluateWorkList.add(Evaluate.Val(v))
     }
   }
@@ -341,9 +336,9 @@ object MethodAnalyzer {
                        liveBlocks: Set[SSA.Block])
 
 
-  def topoSort[T](set: Set[SSA.Val]) = {
-    val agg = Util.breadthFirstSeen(set)(
-      v => v.upstreamVals.filter(!_.isInstanceOf[SSA.Phi])
+  def topoSort[T](set: Set[SSA.ValOrState]) = {
+    val agg = Util.breadthFirstSeen[SSA.ValOrState](set)(
+      _.upstream.collect{ case s: SSA.ValOrState if !s.isInstanceOf[SSA.Phi] => s}
     )
 
     val aggArray = agg.toArray

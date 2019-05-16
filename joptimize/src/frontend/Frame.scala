@@ -35,7 +35,7 @@ class Frame[V <: Value, S] (var numLocals: Int, val numStack0: Int){
     */
   def this(frame: Frame[V, S]) {
     this(frame.numLocals, frame.values.length - frame.numLocals)
-    init(frame) // NOPMD(ConstructorCallsOverridableMethod): can't fix for backward compatibility.
+    initFrom(frame) // NOPMD(ConstructorCallsOverridableMethod): can't fix for backward compatibility.
 
   }
 
@@ -45,7 +45,7 @@ class Frame[V <: Value, S] (var numLocals: Int, val numStack0: Int){
     * @param frame a frame.
     * @return this frame.
     */
-  def init(frame: Frame[V, S]) = {
+  def initFrom(frame: Frame[V, S]) = {
     System.arraycopy(frame.values, 0, values, 0, values.length)
     numStack = frame.numStack
     state = frame.state
@@ -166,7 +166,10 @@ class Frame[V <: Value, S] (var numLocals: Int, val numStack0: Int){
     var value4: V = null.asInstanceOf[V]
     var `var` = 0
     import Opcodes._
-    for(s <- blockStartState) state = s
+//    for(s <- blockStartState) {
+//      pprint.log(state -> s)
+//      state = s
+//    }
 
     insn.getOpcode match {
       case NOP =>

@@ -11,7 +11,7 @@ object Scheduler {
             dominators: Dominator.Result[SSA.Block],
             startBlock: SSA.Block,
             allVertices: Set[SSA.Node],
-            log: Logger.InferredMethod): Map[SSA.Val, SSA.Block] = {
+            log: Logger.InferredMethod): Map[SSA.ValOrState, SSA.Block] = {
 
     val loopNestMap = mutable.LinkedHashMap.empty[SSA.Node, Int]
     def recLoop(loop: HavlakLoopTree.Loop[SSA.Block], depth: Int): Unit = {
@@ -24,7 +24,7 @@ object Scheduler {
     val scheduler = new ClickScheduler(dominators, log) {
       override def downstream(ssa: SSA.Node) = ssa.downstreamList.toSeq
 
-      override def upstream(ssa: SSA.Node) = ssa.upstream.collect{case ssa: SSA.Val => ssa}
+      override def upstream(ssa: SSA.Node) = ssa.upstream.collect{case ssa: SSA.ValOrState => ssa}
 
       override def isPinned(ssa: SSA.Node) = ssa.isInstanceOf[SSA.Control]
 
@@ -37,6 +37,11 @@ object Scheduler {
     allVertices.collect{
       case c: SSA.Phi => scheduler.block(c) = c.block
       case c: SSA.Val if c.upstream.isEmpty => scheduler.block(c) = startBlock
+      case c: SSA.State =>
+        c.parent match{
+          case b: SSA.Block => scheduler.block(c) = b
+          case _ =>
+        }
     }
 
     allVertices.collect{

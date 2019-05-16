@@ -8,12 +8,12 @@ import scala.collection.mutable
 abstract class ClickScheduler(dominators: Dominator.Result[SSA.Block],
                               log: Logger.InferredMethod) {
   def downstream(ssa: SSA.Node): Seq[SSA.Node]
-  def upstream(ssa: SSA.Node): Seq[SSA.Val]
+  def upstream(ssa: SSA.Node): Seq[SSA.ValOrState]
   def isPinned(ssa: SSA.Node): Boolean
   def loopNest(block: SSA.Node): Int
   val visited = mutable.Map[SSA.Val, Unit]()
 
-  val block = mutable.LinkedHashMap.empty[SSA.Val, SSA.Block]
+  val block = mutable.LinkedHashMap.empty[SSA.ValOrState, SSA.Block]
 
   def scheduleEarlyRoot(n: SSA.Node): Unit = {
     for(in <- upstream(n)){
@@ -21,7 +21,7 @@ abstract class ClickScheduler(dominators: Dominator.Result[SSA.Block],
     }
   }
 
-  def scheduleEarly(n: SSA.Val): Unit = {
+  def scheduleEarly(n: SSA.ValOrState): Unit = {
     assert(!n.isInstanceOf[SSA.Phi])
     scheduleEarlyRoot(n)
     block(n) = upstream(n).map(block).maxBy(dominators.dominatorDepth)
@@ -51,7 +51,7 @@ abstract class ClickScheduler(dominators: Dominator.Result[SSA.Block],
             case c: SSA.SimpleBlock => lca = findLca(lca, c.block)
             case c: SSA.Jump => lca = findLca(lca, c.block)
             case v: SSA.Val => lca = findLca(lca, block(v))
-            case s: SSA.State => // do nothing
+            case s: SSA.State => lca = findLca(lca, block(s))
           }
         }
 

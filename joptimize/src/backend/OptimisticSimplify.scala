@@ -23,7 +23,7 @@ object OptimisticSimplify {
 //      log.pprint(n)
       //      n match{case n: SSA.Val => log.pprint(inferred.get(n)) case _ =>}
       simplifyNode(n, inferred, classExists, log, liveBlocks, resolvedProperties, argMapping)
-      log.graph(n.toString())(Renderer.dumpSvg(methodBody))
+//      log.graph(n.toString())(Renderer.dumpSvg(methodBody))
     }
 
 //    log.pprint(liveBlocks.map(x => (x, x.next)))

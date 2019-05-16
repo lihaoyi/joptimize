@@ -59,22 +59,7 @@ object MainTests extends TestSuite{
         'stringSwitch - annotatedTest
         'stringSwitchTwo - annotatedTest
       }
-      'Statics - {
-        'helloWorld - annotatedTest
-        'timesTwo - annotatedTest
-        'helloWorld2 - annotatedTest
-        'timesTwo2 - annotatedTest
-        'call - annotatedTest
-        'callAtPhiBoundary - annotatedTest
-        'voidCall - annotatedTest
-        'tailFactorial - annotatedTest
-        'tailFactorialLong - annotatedTest
-        'tailFactorialVoid - annotatedTest
-        'fibonacci - annotatedTest
-        'staticInit - annotatedTest
-        'regression - annotatedTest
 
-      }
       'Arrays - {
         'length - annotatedTest
         'get1 - annotatedTest
@@ -92,6 +77,22 @@ object MainTests extends TestSuite{
         'getAndSetLoop1 - annotatedTest
         'getAndSetLoop2 - annotatedTest
         'getAndSetLoop3 - annotatedTest
+      }
+      'Statics - {
+        'helloWorld - annotatedTest
+        'timesTwo - annotatedTest
+        'helloWorld2 - annotatedTest
+        'timesTwo2 - annotatedTest
+        'call - annotatedTest
+        'callAtPhiBoundary - annotatedTest
+        'voidCall - annotatedTest
+        'tailFactorial - annotatedTest
+        'tailFactorialLong - annotatedTest
+        'tailFactorialVoid - annotatedTest
+        'fibonacci - annotatedTest
+        'staticInit - annotatedTest
+        'regression - annotatedTest
+
       }
       'InvokeDynamic - {
 //        'lambda - annotatedTest
