@@ -47,6 +47,11 @@ object PartialEvaluator {
     //                            e ----
     val branchBlocks = branch.downstreamList.toSet
 
+    val upState = branch.state
+    val downState = directNext.nextState
+    upState.next = downState
+    downState.parent = upState
+
     branchBlocks.flatMap(_.downstreamList).collect {
       case phi: SSA.Phi =>
         phi.incoming = phi.incoming.flatMap(x =>

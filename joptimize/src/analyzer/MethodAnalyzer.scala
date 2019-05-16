@@ -99,7 +99,12 @@ class MethodAnalyzer[T](methodBody: MethodBody,
         case Evaluate.Block(currentBlock) =>
 
           log.pprint(currentBlock)
-          queueSortedUpstreams(currentBlock.next.upstream.collect{case v: SSA.ValOrState => v}.toSet)
+          val set = currentBlock.next match{
+            case next: SSA.Merge => next.incoming.find(_._1 == currentBlock).map(_._2: SSA.ValOrState).toSet
+            case next => next.upstream.collect{case v: SSA.ValOrState => v}.toSet
+          }
+
+          queueSortedUpstreams(set)
           jumpWorkList.add(BlockJump(currentBlock))
           Step.Continue(Nil)
 

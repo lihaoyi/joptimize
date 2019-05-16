@@ -200,14 +200,14 @@ public class Loops {
     @test.Test(inputs = {1, 9, 121, 10000})
     public static double sqrtFinder(int n0) {
         double n = (double)n0;
-        double guess = n / 2 + 5;
+        double guess = n;
 
         while (true) {
-            double errorSquared = guess * guess - n;
-            errorSquared = errorSquared * errorSquared;
+            double error = guess * guess - n;
+            double errorSquared = error * error;
             if (errorSquared / n < 0.1) return guess;
             else {
-                guess = ((guess * guess) - n) / (2 * guess);
+                guess = error / (2 * guess);
             }
         }
     }
