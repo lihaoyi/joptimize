@@ -69,7 +69,7 @@ object OptimisticSimplify {
         replacement match{
           case Some(r) => constantFoldNode(inferred, r, n)
           case None =>
-            purifyNode(n)
+//            purifyNode(n)
             mangleInvocation(n, liveArgsOpt, mangledName, mangledDesc, mangledCls)
         }
       }else{
