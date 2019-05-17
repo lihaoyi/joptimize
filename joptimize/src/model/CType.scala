@@ -9,7 +9,7 @@ object CType{
     case CType.F(_) => JType.Prim.F
     case CType.D(_) => JType.Prim.D
     case CType.Intersect(classes) => fallback
-    case IType.Bottom => JType.Cls("scala/runtime/Nothing$")
+    case IType.Bottom => JType.Prim.V
   }
 
   case class Intersect(classes: Seq[JType.Cls]) extends IType{

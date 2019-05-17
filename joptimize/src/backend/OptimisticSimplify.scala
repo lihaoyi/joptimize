@@ -18,9 +18,10 @@ object OptimisticSimplify {
 
     methodBody.args = methodBody.args.filter(a => argMapping.contains(a.index) || (a.index == 0 && !isStatic))
 
+//    log.pprint(inferred)
     for(n <- methodBody.getAllVertices()){
       simplifyNode(n, inferred, classExists, log, liveBlocks, resolvedProperties, argMapping)
-      log.graph(n.toString())(Renderer.dumpSvg(methodBody))
+//      log.graph(n.toString())(Renderer.dumpSvg(methodBody))
     }
 
     methodBody.allTerminals = methodBody.allTerminals.filter{

@@ -100,9 +100,9 @@ public class Inlining {
     static int thrower(int a) throws Exception {
         if (a != 0){
             thrower0();
-            return 123;
+            return (a + 123) * 456;
         }else{
-            return 456;
+            return 789;
         }
     }
 
