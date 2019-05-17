@@ -290,9 +290,9 @@ object Backend {
 
     val dominators2 = Dominator.findDominators(blockEdges, allBlocks)
 
-    RegisterAllocator.apply(result.methodBody, dominators2.immediateDominators, log)
-
-    log.graph("COPY INSERTED")(Renderer.dumpSvg(result.methodBody))
+//    RegisterAllocator.apply(result.methodBody, dominators2.immediateDominators, log)
+//
+//    log.graph("COPY INSERTED")(Renderer.dumpSvg(result.methodBody))
 
     val nodesToBlocks = Scheduler.apply(
       loopTree2, dominators2, startBlock,
