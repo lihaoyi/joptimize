@@ -37,6 +37,7 @@ class CodeGenMethod(log: Logger.InferredMethod,
     }
 
     val blockCode = for(block <- sortedBlocks.toArray) yield{
+//      log.pprint(block -> block.next)
       val insns = block.next match{
         case next: SSA.Merge =>
 
@@ -49,7 +50,8 @@ class CodeGenMethod(log: Logger.InferredMethod,
             .unzip
           val nextState = next.incoming.collect{case (k, v) if k == block => v}.flatMap(rec(_, fromVal = false, block))
           val rest = saveValueInsnsForOtherBlocks(block)
-          nextVals.flatten ++ rest ++ phiStores.reverse ++ nextState
+
+          nextVals.flatten ++ nextState ++ rest ++ phiStores.reverse
 
         case next: SSA.Jump =>
           val nextVals = next.upstreamVals.flatMap(rec(_, fromVal = true, block))
@@ -88,19 +90,14 @@ class CodeGenMethod(log: Logger.InferredMethod,
 
   def saveValueInsnsForOtherBlocks(block: SSA.Block) = {
     blocksToNodes(block)
+      .toSeq
       .collect { case n: SSA.Val if !(n.upstream.isEmpty && !n.isInstanceOf[SSA.New]) && !n.isInstanceOf[SSA.Phi] =>
         val (downstreamValsOrJumps, downstreamState, downstreamOtherBlock) = getValProperties(n, block)
-        if (downstreamValsOrJumps == 0 && downstreamOtherBlock) {
-          log.pprint(n)
-
-          val localEntry =
-            if (savedLocalNumbers.contains(n)) savedLocalNumbers(n)
-            else {
-              val localEntry = currentLocalsSize
-              savedLocalNumbers(n) = currentLocalsSize
-              currentLocalsSize += n.getSize
-              localEntry
-            }
+        if (downstreamValsOrJumps == 0 && !downstreamState && downstreamOtherBlock) {
+          assert(!savedLocalNumbers.contains(n))
+          val localEntry = currentLocalsSize
+          savedLocalNumbers(n) = currentLocalsSize
+          currentLocalsSize += n.getSize
           recVal(n, block) ++
           Seq(new VarInsnNode(CodeGenMethod.saveOp(n), localEntry))
         } else Nil
