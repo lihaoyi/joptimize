@@ -331,17 +331,27 @@ object ProgramAnalyzer {
     val superClassMethodMap = superClassCallList
       .groupBy(t => (t._1.name, t._1.desc))
       .map{case (k, v) => (k, v.map(_._2))}
+
+    val newlyImplementedEdges = for {
+      loadedClsNode <- api.classManager.loadClass(n.cls).toSeq
+      mn <- loadedClsNode.methods.asScala
+      if (mn.access & (Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC)) == 0
+      edge <- superClassMethodMap.getOrElse((mn.name, Desc.read(mn.desc)), Nil)
+      node <- edge.node
+    } yield {
+      val msig = edge.called.method.copy(cls = n.cls)
+      CallEdge(edge.caller, Some(node), edge.called.copy(method = msig))
+    }
+
+    val initMethodEdge = CallEdge(
+      isig,
+      None,
+      InferredSig(MethodSig(n.cls, "<init>", n.desc, false), n.desc.args)
+    )
     StepResult(
-      for {
-        loadedClsNode <- api.classManager.loadClass(n.cls).toSeq
-        mn <- loadedClsNode.methods.asScala
-        if (mn.access & (Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC)) == 0
-        edge <- superClassMethodMap.getOrElse((mn.name, Desc.read(mn.desc)), Nil)
-        node <- edge.node
-      } yield {
-        val msig = edge.called.method.copy(cls = n.cls)
-        CallEdge(edge.caller, Some(node), edge.called.copy(method = msig))
-      }
+      Seq(initMethodEdge)
+        .filter(e => api.classManager.loadMethod(initMethodEdge.called.method).nonEmpty) ++
+      newlyImplementedEdges
     )
   }
 

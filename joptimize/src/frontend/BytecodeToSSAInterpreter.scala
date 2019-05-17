@@ -60,7 +60,7 @@ class BytecodeToSSAInterpreter(merges: mutable.LinkedHashSet[SSA.Phi],
           case _: Handle => ???
         }
       case JSR => ???
-      case NEW => new SSA.New(insn.asInstanceOf[TypeInsnNode].desc)
+      case NEW => new SSA.New0(insn.asInstanceOf[TypeInsnNode].desc)
     }
   }
   /**

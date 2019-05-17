@@ -90,8 +90,7 @@ class CodeGenMethod(log: Logger.InferredMethod,
 
   def saveValueInsnsForOtherBlocks(block: SSA.Block) = {
     blocksToNodes(block)
-      .toSeq
-      .collect { case n: SSA.Val if !(n.upstream.isEmpty && !n.isInstanceOf[SSA.New]) && !n.isInstanceOf[SSA.Phi] =>
+      .collect { case n: SSA.Val if n.upstream.nonEmpty && !n.isInstanceOf[SSA.Phi] =>
         val (downstreamValsOrJumps, downstreamState, downstreamOtherBlock) = getValProperties(n, block)
         if (downstreamValsOrJumps == 0 && !downstreamState && downstreamOtherBlock) {
           assert(!savedLocalNumbers.contains(n))
@@ -166,7 +165,7 @@ class CodeGenMethod(log: Logger.InferredMethod,
           if (fromVal) Seq(new VarInsnNode(CodeGenMethod.loadOp(n), savedLocalNumbers(n)))
           else Nil
         }
-        else if (n.upstream.isEmpty && !n.isInstanceOf[SSA.New]) recTrivialVal(n)
+        else if (n.upstream.isEmpty) recTrivialVal(n)
         else if (nodesToBlocks(ssa) != currentBlock){
           val currentLocal = currentLocalsSize
           savedLocalNumbers(n) = currentLocalsSize
@@ -250,45 +249,47 @@ class CodeGenMethod(log: Logger.InferredMethod,
   }
 
   def recVal(ssa: SSA.Val, currentBlock: SSA.Block): Seq[AbstractInsnNode] = {
-    val upstreams = ssa
+    def upstreams = ssa
       .upstream
       .collect{case v: SSA.ValOrState => v}
       .flatMap(rec(_, fromVal = true, currentBlock))
 
-    val current: Seq[AbstractInsnNode] = ssa match{
-      case _: SSA.Copy => Nil
-      case n: SSA.BinOp => Seq(new InsnNode(n.opcode.i))
-      case n: SSA.UnaOp => Seq(new InsnNode(n.opcode.i))
-      case n: SSA.CheckCast => Seq(new TypeInsnNode(CHECKCAST, n.desc.name))
-      case n: SSA.ArrayLength => Seq(new InsnNode(ARRAYLENGTH))
-      case n: SSA.InstanceOf => Seq(new TypeInsnNode(INSTANCEOF, n.desc.name))
+    ssa match{
+      case n: SSA.BinOp => upstreams ++ Seq(new InsnNode(n.opcode.i))
+      case n: SSA.UnaOp => upstreams ++ Seq(new InsnNode(n.opcode.i))
+      case n: SSA.CheckCast => upstreams ++ Seq(new TypeInsnNode(CHECKCAST, n.desc.name))
+      case n: SSA.ArrayLength => upstreams ++ Seq(new InsnNode(ARRAYLENGTH))
+      case n: SSA.InstanceOf => upstreams ++ Seq(new TypeInsnNode(INSTANCEOF, n.desc.name))
       case n: SSA.InvokeStatic =>
-        Seq(new MethodInsnNode(INVOKESTATIC, n.cls.name, n.name, n.desc.unparse))
+        upstreams ++ Seq(new MethodInsnNode(INVOKESTATIC, n.cls.name, n.name, n.desc.unparse))
       case n: SSA.InvokeSpecial =>
-        Seq(new MethodInsnNode(INVOKESPECIAL, n.cls.name, n.name, n.desc.unparse))
+        upstreams ++ Seq(new MethodInsnNode(INVOKESPECIAL, n.cls.name, n.name, n.desc.unparse))
       case n: SSA.InvokeVirtual =>
         val opcode = if (isInterface(n.cls).getOrElse(n.interface)) INVOKEINTERFACE else INVOKEVIRTUAL
-        Seq(new MethodInsnNode(opcode, n.cls.name, n.name, n.desc.unparse))
+        upstreams ++ Seq(new MethodInsnNode(opcode, n.cls.name, n.name, n.desc.unparse))
       case n: SSA.InvokeDynamic=>
-        Seq(new InvokeDynamicInsnNode(
+        upstreams ++ Seq(new InvokeDynamicInsnNode(
           n.name, n.desc.unparse,
           new Handle(n.bootstrap.tag, n.bootstrap.owner.name, n.bootstrap.name, n.bootstrap.desc.unparse),
           n.bootstrapArgs.map(SSA.InvokeDynamic.argToAny):_*
         ))
-      case n: SSA.New => Seq(new TypeInsnNode(NEW, n.cls.name))
-      case n: SSA.NewArray => Seq(CodeGenMethod.newArrayOp(n.typeRef))
-      case n: SSA.MultiANewArray => Seq(new MultiANewArrayInsnNode(n.desc.name, n.dims.length))
-      case n: SSA.PutStatic => Seq(new FieldInsnNode(PUTSTATIC, n.cls.name, n.name, n.desc.internalName))
-      case n: SSA.GetStatic => Seq(new FieldInsnNode(GETSTATIC, n.cls.name, n.name, n.desc.internalName))
-      case n: SSA.PutField => Seq(new FieldInsnNode(PUTFIELD, n.owner.name, n.name, n.desc.internalName))
-      case n: SSA.GetField => Seq(new FieldInsnNode(GETFIELD, n.owner.name, n.name, n.desc.internalName))
-      case n: SSA.PutArray => Seq(new InsnNode(CodeGenMethod.arrayStoreOp(n.src)))
-      case n: SSA.GetArray => Seq(new InsnNode(CodeGenMethod.arrayLoadOp(n.tpe)))
+      case n: SSA.New =>
+        Seq(new TypeInsnNode(NEW, n.cls.name), new InsnNode(DUP)) ++
+        upstreams ++
+        Seq(new MethodInsnNode(INVOKESPECIAL, n.cls.name, "<init>", n.desc.unparse))
+
+      case n: SSA.NewArray => upstreams ++ Seq(CodeGenMethod.newArrayOp(n.typeRef))
+      case n: SSA.MultiANewArray => upstreams ++ Seq(new MultiANewArrayInsnNode(n.desc.name, n.dims.length))
+      case n: SSA.PutStatic => upstreams ++ Seq(new FieldInsnNode(PUTSTATIC, n.cls.name, n.name, n.desc.internalName))
+      case n: SSA.GetStatic => upstreams ++ Seq(new FieldInsnNode(GETSTATIC, n.cls.name, n.name, n.desc.internalName))
+      case n: SSA.PutField => upstreams ++ Seq(new FieldInsnNode(PUTFIELD, n.owner.name, n.name, n.desc.internalName))
+      case n: SSA.GetField => upstreams ++ Seq(new FieldInsnNode(GETFIELD, n.owner.name, n.name, n.desc.internalName))
+      case n: SSA.PutArray => upstreams ++ Seq(new InsnNode(CodeGenMethod.arrayStoreOp(n.src)))
+      case n: SSA.GetArray => upstreams ++ Seq(new InsnNode(CodeGenMethod.arrayLoadOp(n.tpe)))
       case n: SSA.MonitorEnter => ???
       case n: SSA.MonitorExit => ???
     }
 
-    upstreams ++ current
   }
 
 }

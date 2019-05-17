@@ -64,10 +64,9 @@ object OptimisticSimplify {
         replacement match{
           case Some(r) => constantFoldNode(inferred, r, n)
           case None =>
-            // We only purify a node and remove it from the program graph
-            // if it is both stateless and its return type is not used.
-            if (n.downstreamList.forall(_.isInstanceOf[SSA.State])) purifyNode(n)
-            else mangleInvocation(n, liveArgsOpt, mangledName, mangledDesc, mangledCls)
+            purifyNode(n)
+
+            mangleInvocation(n, liveArgsOpt, mangledName, mangledDesc, mangledCls)
         }
       }else{
         mangleInvocation(n, liveArgsOpt, mangledName, mangledDesc, mangledCls)
@@ -154,15 +153,11 @@ object OptimisticSimplify {
     * Leaves a node in place but removes its effect on the state edges
     */
   def purifyNode(n: SSA.Invoke) = {
-    var upstreamState: SSA.State = null
-    n.upstream.foreach {
-      case s: SSA.State =>
-        upstreamState = s
-      case _ => // do nothing
-    }
+
+    val upstreamState = n.state
 
     var downstreamState: SSA.State = null
-    n.downstreamList.foreach {
+    n.downstreamList.toArray.foreach {
       case s: SSA.State if upstreamState != null =>
         downstreamState = s
         s.parent = upstreamState

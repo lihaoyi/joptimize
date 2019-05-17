@@ -450,12 +450,6 @@ object SSA{
       branch = swap(branch)
     }
   }
-  class Copy(var src: Val) extends Val(src.jtype){
-    def upstream = Seq(src)
-    def replaceUpstream(swap: Swapper): Unit = {
-      src = swap(src)
-    }
-  }
   class CheckCast(var state: State, var src: Val, var desc: JType) extends Val(desc) with Stateful{
     def upstream = Seq(state, src)
     def replaceUpstream(swap: Swapper): Unit = {
@@ -627,10 +621,21 @@ object SSA{
       case SSA.InvokeDynamic.HandleArg(cls, name, desc, tag) => new Handle(tag, cls.name, name, desc.unparse)
     }
   }
-  class New(var cls: JType.Cls) extends Val(cls){
+  class New0(var cls: JType.Cls) extends Val(cls){
     def upstream = Nil
     def replaceUpstream(swap: Swapper): Unit = {}
     override def toString = s"${super.toString()}(${cls.name})"
+  }
+  class New(var cls: JType.Cls,
+            var state: State,
+            var srcs: Seq[Val],
+            var desc: Desc) extends Val(cls) {
+    def upstream = Seq(state) ++ srcs
+    def replaceUpstream(swap: Swapper): Unit = {
+      state = swap(state)
+      srcs = srcs.map(swap(_))
+    }
+    override def toString = s"${super.toString()}(${cls.name}, ${desc.unparse})"
   }
   class NewArray(var state: State, var size: Val, var typeRef: JType)
     extends Val(JType.Arr(typeRef)) with Stateful{

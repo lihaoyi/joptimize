@@ -47,6 +47,10 @@ class Frontend(val classManager: ClassManager) {
 object Frontend{
 
   def simplifyPhiMerges(methodBody: MethodBody) = methodBody.transform{
+    case n: SSA.InvokeSpecial if n.name == "<init>" && n.srcs(0).isInstanceOf[SSA.New0] =>
+      val newNode = new SSA.New(n.cls, n.state, n.srcs.drop(1), n.desc)
+      Util.replace(n, newNode)
+      Util.replace(n.srcs(0), newNode)
     case phi: SSA.Phi =>
       val filteredValues = phi.incoming.filter(_._2 != phi)
 
