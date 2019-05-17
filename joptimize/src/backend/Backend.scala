@@ -311,7 +311,6 @@ object Backend {
       log,
       isInterface,
       result.methodBody,
-      allVertices2,
       nodesToBlocks,
       analyzeBlockStructure(result.methodBody)._1
     ).apply()

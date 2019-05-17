@@ -11,7 +11,7 @@ object Scheduler {
             dominators: Dominator.Result[SSA.Block],
             startBlock: SSA.Block,
             allVertices: Set[SSA.Node],
-            log: Logger.InferredMethod): Map[SSA.ValOrState, SSA.Block] = {
+            log: Logger.InferredMethod): mutable.LinkedHashMap[SSA.ValOrState, SSA.Block] = {
 
     val loopNestMap = mutable.LinkedHashMap.empty[SSA.Node, Int]
     def recLoop(loop: HavlakLoopTree.Loop[SSA.Block], depth: Int): Unit = {
@@ -56,6 +56,6 @@ object Scheduler {
         scheduler.scheduleLateRoot(scheduleRoot)
     }
 
-    scheduler.block.filter{case (k, v) => v != null}.toMap
+    scheduler.block.filter{case (k, v) => v != null}
   }
 }

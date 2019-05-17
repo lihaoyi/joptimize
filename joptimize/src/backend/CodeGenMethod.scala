@@ -20,10 +20,9 @@ import scala.collection.mutable
 class CodeGenMethod(log: Logger.InferredMethod,
                     isInterface: JType.Cls => Option[Boolean],
                     methodBody: MethodBody,
-                    allVertices: Set[SSA.Node],
-                    nodesToBlocks: Map[SSA.ValOrState, SSA.Block],
+                    nodesToBlocks: mutable.LinkedHashMap[SSA.ValOrState, SSA.Block],
                     cfg: Seq[(SSA.Control, SSA.Control)]){
-  val blocksToNodes = nodesToBlocks.groupBy(_._2).map{case (k, v) => (k, v.keys)}
+  val blocksToNodes = nodesToBlocks.groupBy(_._2).map{case (k, v) => (k, v.keys.toSeq)}
   val sortedBlocks = CodeGenMethod.sortControlFlowGraph(cfg).collect{case b: SSA.Block => b}
   val blockIndices = sortedBlocks.zipWithIndex.toMap
   val labels = sortedBlocks.map(_ -> new LabelNode()).toMap
@@ -31,7 +30,6 @@ class CodeGenMethod(log: Logger.InferredMethod,
   var currentLocalsSize = 0
 
   def apply() = log.block{
-    log.pprint(nodesToBlocks)
     val allPhis = methodBody.getAllVertices().collect{case p: SSA.Phi => p}
     for(a <- methodBody.args ++ allPhis){
       savedLocalNumbers(a) = currentLocalsSize
@@ -39,7 +37,6 @@ class CodeGenMethod(log: Logger.InferredMethod,
     }
 
     val blockCode = for(block <- sortedBlocks.toArray) yield{
-      log.pprint(block -> block.next)
       val insns = block.next match{
         case next: SSA.Merge =>
 
@@ -94,6 +91,7 @@ class CodeGenMethod(log: Logger.InferredMethod,
       .collect { case n: SSA.Val if !(n.upstream.isEmpty && !n.isInstanceOf[SSA.New]) && !n.isInstanceOf[SSA.Phi] =>
         val (downstreamValsOrJumps, downstreamState, downstreamOtherBlock) = getValProperties(n, block)
         if (downstreamValsOrJumps == 0 && downstreamOtherBlock) {
+          log.pprint(n)
 
           val localEntry =
             if (savedLocalNumbers.contains(n)) savedLocalNumbers(n)
@@ -104,7 +102,7 @@ class CodeGenMethod(log: Logger.InferredMethod,
               localEntry
             }
           recVal(n, block) ++
-            Seq(new VarInsnNode(CodeGenMethod.saveOp(n), localEntry))
+          Seq(new VarInsnNode(CodeGenMethod.saveOp(n), localEntry))
         } else Nil
       }
       .flatten
@@ -173,7 +171,6 @@ class CodeGenMethod(log: Logger.InferredMethod,
         }
         else if (n.upstream.isEmpty && !n.isInstanceOf[SSA.New]) recTrivialVal(n)
         else if (nodesToBlocks(ssa) != currentBlock){
-          log.pprint((ssa, nodesToBlocks(ssa), currentBlock))
           val currentLocal = currentLocalsSize
           savedLocalNumbers(n) = currentLocalsSize
           currentLocalsSize += n.getSize
@@ -254,6 +251,7 @@ class CodeGenMethod(log: Logger.InferredMethod,
     case n: SSA.ConstCls =>
       Seq(new LdcInsnNode(org.objectweb.asm.Type.getObjectType(n.value.name)))
   }
+
   def recVal(ssa: SSA.Val, currentBlock: SSA.Block): Seq[AbstractInsnNode] = {
     val upstreams = ssa
       .upstream
