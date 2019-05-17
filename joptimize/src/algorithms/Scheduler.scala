@@ -49,16 +49,13 @@ object Scheduler {
       case scheduleRoot: SSA.Control => scheduler.scheduleEarlyRoot(scheduleRoot)
     }
 
-    //    pprint.log(scheduler.block.map{case (k, v) => (k, mapping(v))}, height=9999)
-
     allVertices.collect{
       case scheduleRoot: SSA.Phi => scheduler.scheduleLateRoot(scheduleRoot)
       case scheduleRoot: SSA.Control => scheduler.scheduleLateRoot(scheduleRoot)
+      case scheduleRoot if scheduleRoot.upstreamVals.isEmpty =>
+        scheduler.scheduleLateRoot(scheduleRoot)
     }
 
-    //    pprint.log(scheduler.block.map{case (k, v) => (k, mapping(v))}, height=9999)
-
-    //    ???
     scheduler.block.filter{case (k, v) => v != null}.toMap
   }
 }
