@@ -18,16 +18,11 @@ object OptimisticSimplify {
 
     methodBody.args = methodBody.args.filter(a => argMapping.contains(a.index) || (a.index == 0 && !isStatic))
 
-//    log.pprint(argMapping)
     for(n <- methodBody.getAllVertices()){
-//      log.pprint(n)
-      //      n match{case n: SSA.Val => log.pprint(inferred.get(n)) case _ =>}
       simplifyNode(n, inferred, classExists, log, liveBlocks, resolvedProperties, argMapping)
-//      log.graph(n.toString())(Renderer.dumpSvg(methodBody))
+      log.graph(n.toString())(Renderer.dumpSvg(methodBody))
     }
 
-//    log.pprint(liveBlocks.map(x => (x, x.next)))
-//    log.pprint(program.allTerminals.map{ case j: SSA.Jump => j -> j.block })
     methodBody.allTerminals = methodBody.allTerminals.filter{
       case j: SSA.Jump => liveBlocks.contains(j.block)
     }

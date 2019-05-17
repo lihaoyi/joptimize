@@ -70,7 +70,7 @@ object PartialEvaluator {
       case r: SSA.Merge =>
         val arr = r.incoming.toArray
         r.incoming.clear()
-        for((k, v) <- r.incoming.toArray){
+        for((k, v) <- arr){
           if (k == directNext) r.incoming(branch.block) = branch.block.nextState
           else if (branchBlocks(k)) {
             k.next = null
