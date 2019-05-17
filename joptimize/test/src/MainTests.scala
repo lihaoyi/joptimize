@@ -259,9 +259,9 @@ object MainTests extends TestSuite{
 
 
       'Liveness - {
-//        'entrypointUnused0 - annotatedTest
-//        'entrypointUnused1 - annotatedTest
-//        'entrypointUnused2 - annotatedTest
+        'entrypointUnused0 - annotatedTest
+        'entrypointUnused1 - annotatedTest
+        'entrypointUnused2 - annotatedTest
 
         'trivialUnused - annotatedTest
         'longUnusedRight - annotatedTest
@@ -271,23 +271,23 @@ object MainTests extends TestSuite{
         'simple2a - annotatedTest
         'simple2b - annotatedTest
 
-//        'chained - annotatedTest
-//        'chained2a - annotatedTest
-//        'chained2b - annotatedTest
-//
-//        'implement0 - annotatedTest
-//        'implement1 - annotatedTest
-//        'implement2a - annotatedTest
-//        'implement2b - annotatedTest
-//        'implement3 - annotatedTest
-//
-//        'override0 - annotatedTest
-//        'override1 - annotatedTest
-//        'override2 - annotatedTest
-//        'override3 - annotatedTest
-//        'override4 - annotatedTest
-//
-//        'deadLoopCounter - annotatedTest
+        'chained - annotatedTest
+        'chained2a - annotatedTest
+        'chained2b - annotatedTest
+
+        'implement0 - annotatedTest
+        'implement1 - annotatedTest
+        'implement2a - annotatedTest
+        'implement2b - annotatedTest
+        'implement3 - annotatedTest
+
+        'override0 - annotatedTest
+        'override1 - annotatedTest
+        'override2 - annotatedTest
+        'override3 - annotatedTest
+        'override4 - annotatedTest
+
+        'deadLoopCounter - annotatedTest
       }
 
     }
