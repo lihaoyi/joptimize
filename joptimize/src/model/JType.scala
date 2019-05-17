@@ -195,7 +195,17 @@ object JType{
     }
   }
 
+  case object Bottom extends JType{
+    def name = "Bottom"
 
+    def internalName = "Lscala/runtime/Nothing$;"
+
+    def javaName = "scala.runtime.Nothing$"
+
+    def realCls = ???
+
+    def size = 0
+  }
 }
 /**
   * Represents all variable types within the Metascala VM
@@ -255,7 +265,12 @@ object Desc{
       args.append(argString.substring(index, split+1))
       index = split +1
     }
-    Desc(args.map(JType.read), JType.read(ret))
+    Desc(
+      args.map(JType.read),
+      JType.read(ret) match{
+        case l => if (l.name == "scala/runtime/Nothing$") JType.Bottom else l
+      }
+    )
   }
   def unparse(t: JType): String = {
     t match{
@@ -283,7 +298,7 @@ case class MethodSig(cls: JType.Cls, name: String, desc: Desc, static: Boolean){
 
 case class InferredSig(method: MethodSig, inferred: Seq[IType]){
   assert(method.desc.args.length == inferred.length)
-  assert(!inferred.contains(IType.Bottom))
+  assert(!inferred.contains(JType.Bottom))
   override def toString = {
     method.toString + inferred.map(_.name).mkString("(", ", ", ")")
   }

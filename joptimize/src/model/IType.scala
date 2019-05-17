@@ -16,11 +16,3 @@ trait IType extends java.io.Serializable{
   def widen: IType
   def isConstant: Boolean
 }
-
-object IType{
-  case object Bottom extends IType{
-    def name = "Bottom"
-    def widen = ???
-    def isConstant = false
-  }
-}

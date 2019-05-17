@@ -151,9 +151,9 @@ class MethodAnalyzer[T](methodBody: MethodBody,
   }
 
   def invalidateValue(v: SSA.Val): MethodAnalyzer.Step[T] = {
-    val upstream = v.upstream.collect{case v: SSA.Val => evaluated.getOrElse(v, IType.Bottom)}
+    val upstream = v.upstream.collect{case v: SSA.Val => evaluated.getOrElse(v, JType.Bottom)}
 
-    if (upstream.contains(IType.Bottom)) Step.Continue(Seq(v)) // do nothing
+    if (upstream.contains(JType.Bottom)) Step.Continue(Seq(v)) // do nothing
     else {
       val newValue = lattice.transferValue(v, evaluated)
       if (evaluated(v) == newValue) Step.Continue(Seq(v))

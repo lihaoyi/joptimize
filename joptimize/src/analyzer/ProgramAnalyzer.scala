@@ -274,7 +274,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
       new ITypeLattice((x, y) => classManager.mergeTypes(Seq(x, y)), inferredArgs),
       log,
       ITypeBrancher,
-      IType.Bottom,
+      JType.Bottom,
       JType.Prim.V
     )
   }
@@ -377,7 +377,7 @@ object ProgramAnalyzer {
       StepResult(
         edges = Seq(CallEdge(isig, Some(invoke), calledSig)),
         calledSignatures = Seq(calledSig),
-        evaluated = Seq((isig, invoke, IType.Bottom))
+        evaluated = Seq((isig, invoke, JType.Bottom))
       )
     } else if (api.classManager.loadClass(calledSig.method.cls).isEmpty) {
       StepResult(evaluated = Seq((isig, invoke, calledSig.method.desc.ret)))
@@ -506,7 +506,7 @@ object ProgramAnalyzer {
       case n: SSA.InvokeDynamic => n.bootstrap == Util.makeConcatWithConstants
       case n: SSA.Invoke =>
         if (n.srcs.exists(!inferred.contains(_))) true
-        else if (n.srcs.exists(inferred(_) == IType.Bottom)) true
+        else if (n.srcs.exists(inferred(_) == JType.Bottom)) true
         else {
 
           val key = n.inferredSig(inferred)
@@ -521,7 +521,7 @@ object ProgramAnalyzer {
   }
 
   def dummyProps(originalSig: MethodSig, optimistic: Boolean) = Properties(
-    if (optimistic) IType.Bottom else originalSig.desc.ret,
+    if (optimistic) JType.Bottom else originalSig.desc.ret,
     optimistic,
     if (optimistic) Set.empty
     else Range.inclusive(0, originalSig.desc.args.length + (if (originalSig.static) 0 else 1)).toSet
