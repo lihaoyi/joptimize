@@ -20,6 +20,12 @@ object MainTests extends TestSuite{
         'localS - annotatedTest
         'localF - annotatedTest
         'localD - annotatedTest
+        'overrideArg1 - annotatedTest
+        'overrideArg2 - annotatedTest
+        'overrideArg3 - annotatedTest
+        'overrideArg4 - annotatedTest
+        'overrideArg5 - annotatedTest
+        'overrideArg6 - annotatedTest
       }
       'IfElse - {
         'basicIf - annotatedTest

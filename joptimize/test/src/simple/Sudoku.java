@@ -42,26 +42,6 @@ public class Sudoku {
         return Sudoku.quickSolve2(8, grid);
     }
 
-    static boolean solve(int i, int j, int[][] cells) {
-        if (i == 9) {
-            i = 0;
-            if (++j == 9)
-                return true;
-        }
-        if (cells[i][j] != 0)  // skip filled cells
-            return solve(i + 1, j, cells);
-
-        for (int val = 1; val <= 9; ++val) {
-            if (legal(i, j, val, cells)) {
-                cells[i][j] = val;
-                if (solve(i + 1, j, cells))
-                    return true;
-            }
-        }
-        cells[i][j] = 0; // reset on backtrack
-        return false;
-    }
-
     static boolean quickSolve2(int i, int[] cells) {
         if (i == 9) {
             i = 0;
@@ -89,6 +69,26 @@ public class Sudoku {
         };
         Sudoku.solve(0, 0, grid);
         return Sudoku.writeMatrix(grid);
+    }
+
+    static boolean solve(int i, int j, int[][] cells) {
+        if (i == 9) {
+            i = 0;
+            if (++j == 9)
+                return true;
+        }
+        if (cells[i][j] != 0)  // skip filled cells
+            return solve(i + 1, j, cells);
+
+        for (int val = 1; val <= 9; ++val) {
+            if (legal(i, j, val, cells)) {
+                cells[i][j] = val;
+                if (solve(i + 1, j, cells))
+                    return true;
+            }
+        }
+        cells[i][j] = 0; // reset on backtrack
+        return false;
     }
 
     static boolean legal(int i, int j, int val, int[][] cells) {
