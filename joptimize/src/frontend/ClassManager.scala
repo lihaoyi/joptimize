@@ -142,6 +142,9 @@ class ClassManager(getClassFile: String => Option[Array[Byte]]) extends ClassMan
         }
       )
     }
+    else if (flattened.forall(t => t.isInstanceOf[JType.Cls] || t.isInstanceOf[JType.Arr])){
+      Some(JType.Cls("java.lang.Object"))
+    }
     else throw new Exception("DUNNO WHAT IS THIS " + itypes)
   }
 }

@@ -339,6 +339,18 @@ object MainTests extends TestSuite{
 
     }
     'inlining - {
+
+      'Inlining - {
+        'simple - annotatedTest
+        'conditional - annotatedTest
+        'conditionalIf - annotatedTest
+        'conditionalVoid - annotatedTest
+        'conditionalIfVoid - annotatedTest
+        'thrower - annotatedTest
+        'throwerComplex - annotatedTest
+        'throwerPartialMerge - annotatedTest
+        'throwerFullMerge - annotatedTest
+      }
       'Chaining - {
         'noneGet - annotatedTest
         'someGet - annotatedTest
@@ -354,16 +366,8 @@ object MainTests extends TestSuite{
         'mapTwice3 - annotatedTest
         'flatMapMapChain - annotatedTest
       }
-      'Inlining - {
-        'simple - annotatedTest
-        'conditional - annotatedTest
-        'conditionalIf - annotatedTest
-        'conditionalVoid - annotatedTest
-        'conditionalIfVoid - annotatedTest
-        'thrower - annotatedTest
-        'throwerComplex - annotatedTest
-        'throwerPartialMerge - annotatedTest
-        'throwerFullMerge - annotatedTest
+      'ArrayChaining - {
+        'equals - annotatedTest
       }
     }
   }

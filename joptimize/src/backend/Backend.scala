@@ -179,7 +179,7 @@ object Backend {
                 }
               },
               argMapping,
-              cls => classManager.loadClassCache(cls).map(c => (c.access & Opcodes.ACC_INTERFACE) != 0)
+              cls => classManager.loadClassCache.get(cls).flatten.map(c => (c.access & Opcodes.ACC_INTERFACE) != 0)
             )
         }
         newNode.desc = mangledDesc.unparse

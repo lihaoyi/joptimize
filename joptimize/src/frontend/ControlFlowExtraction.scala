@@ -57,7 +57,6 @@ object ControlFlowExtraction {
     def frameTop(i: Int, n: Int) = frames(i).getStack(frames(i).getStackSize - 1 - n)
 
     def mergeBlocks(lhs: SSA.Merge, rhs: SSA.Block, rhsState: SSA.State): Unit = {
-      log.pprint((lhs, rhs, rhsState))
       lhs.asInstanceOf[SSA.Merge].incoming += ((rhs, rhsState))
       rhsState.next = lhs
       rhs.next = lhs
@@ -111,7 +110,7 @@ object ControlFlowExtraction {
           (insn, n, i) :: Nil
 
         case (GOTO, insn: JumpInsnNode) =>
-          mergeBlocks(regionStarts(insn.label).get, findStartRegion(i), frames(i - 1).state)
+          mergeBlocks(regionStarts(insn.label).get, findStartRegion(i), frames(i).state)
           Nil
 
         case (LOOKUPSWITCH, insn: LookupSwitchInsnNode) =>
@@ -157,6 +156,10 @@ object ControlFlowExtraction {
             null
           )
 
+          log.pprint(n)
+          log.pprint(n.state)
+          log.pprint(frames(i - 1).state)
+          log.pprint(frames(i - 1).state.next)
           val trueBranch = new SSA.True(n, null)
           val falseBranch = new SSA.False(n, null)
           mergeJumpTarget(trueBranch, insn.label, startRegion, new SSA.State(trueBranch))
@@ -186,6 +189,9 @@ object ControlFlowExtraction {
 
         case (_, insn) =>
           if (Option(insn.getNext).exists(regionStarts(_).isDefined)){
+            log.pprint(regionStarts(insn.getNext).get)
+            log.pprint(findStartRegion(i))
+            log.pprint(frames(i).state)
             mergeBlocks(regionStarts(insn.getNext).get, findStartRegion(i), frames(i).state)
           }
           Nil

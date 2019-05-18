@@ -224,10 +224,8 @@ object Inliner {
     log.pprint(returns)
     returns match {
       case Seq() =>
-        log.pprint("A")
         None
       case Seq((returnedState, returnNode, returnedValOpt)) =>
-        log.pprint("B")
 //        returnedState.downstreamRemoveAll(returnNode)
         returnedValOpt.foreach(_.downstreamRemoveAll(returnNode))
 
@@ -238,7 +236,6 @@ object Inliner {
         ))
 
       case triplets => // multiple returns
-        log.pprint("C")
         val valPhiOpt =
           if (!returns.forall(_._3.isDefined)) None
           else {
