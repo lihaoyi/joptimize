@@ -242,12 +242,14 @@ object Inliner {
             val phi = new SSA.Phi(
               null,
               mutable.LinkedHashMap.empty,
-              classManager.mergeTypes(triplets.map { case (s, j, v) => v.get.jtype }).asInstanceOf[JType]
+              classManager.mergeTypes(triplets.map { case (s, j, v) => v.get.jtype }).get.asInstanceOf[JType]
             )
             triplets.map { case (s, j, v) => phi.incoming.put(j.block, v.get) }
-            val inferredMerged = classManager.mergeTypes(
-              triplets.flatMap { case (s, j, v) => inferred.get(v.get)}
-            )
+            val inferredMerged = classManager
+              .mergeTypes(
+                triplets.flatMap { case (s, j, v) => inferred.get(v.get)}
+              )
+              .get
             Some((phi, inferredMerged))
           }
 

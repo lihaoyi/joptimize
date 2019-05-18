@@ -8,11 +8,12 @@ object ArrayChaining {
     else 2
   }
 
-  @test.Test(inputs = Array(0, 1, 2))
+  @test.Test(inputs = Array(0, 2, 4))
   def builder(a: Int): Array[Int] = {
-    val elems = new Array[Int](0)
-    val newelems = new Array[Int](0)
-    if (a > 0) Array.copy(elems, 0, newelems, 0, a)
-    newelems
+    val elems = Array(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+    if (elems.getClass.isArray) {
+      java.lang.System.arraycopy(elems, 0, elems, 5, a)
+    }
+    elems
   }
 }

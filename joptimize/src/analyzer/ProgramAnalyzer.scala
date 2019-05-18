@@ -220,7 +220,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
         result.staticFieldReferencedClasses.foreach(staticFieldReferencedClasses.add)
         result.calledSignatures.foreach(calledSignatures.add)
         for((sig, invoke, tpe) <- result.evaluated) {
-          val merged = classManager.mergeTypes(Seq(tpe) ++ analyses(sig).evaluated.get(invoke))
+          val merged = classManager.mergeTypes(Seq(tpe) ++ analyses(sig).evaluated.get(invoke)).get
           if (!analyses(sig).evaluated.get(invoke).contains(merged)){
             analyses(sig).evaluated(invoke) = merged
             invoke match{
@@ -247,7 +247,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
 
       val resolvedProps = copied.flatMap(methodProps.get)
       ProgramAnalyzer.Properties(
-        classManager.mergeTypes(resolvedProps.map(_.inferredReturn)),
+        classManager.mergeTypes(resolvedProps.map(_.inferredReturn)).get,
         resolvedProps.forall(_.pure),
         resolvedProps.flatMap(_.liveArgs).toSet
       )
@@ -417,7 +417,7 @@ object ProgramAnalyzer {
           val merged = api.classManager.mergeTypes(
             api.getAnalysesEvaluated(isig, invoke).toSeq ++
             subs.flatMap(api.getMethodProps(_).toSeq).map(_.inferredReturn)
-          )
+          ).get
 
           StepResult(
             edges =
@@ -441,7 +441,7 @@ object ProgramAnalyzer {
       .valuesIterator
       .toSeq
 
-    val inferredReturn = api.classManager.mergeTypes(retTypes)
+    val inferredReturn = api.classManager.mergeTypes(retTypes).get
 
     val computedPurity = computePurity(isig, currentAnalysis.evaluated, api)
 

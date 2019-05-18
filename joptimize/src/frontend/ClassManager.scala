@@ -15,7 +15,7 @@ object ClassManager{
     def loadClassCache: collection.Map[JType.Cls, Option[ClassNode]]
     def loadMethodCache: collection.Map[MethodSig, Option[MethodNode]]
     def resolvePossibleSigs(sig: MethodSig): Option[Seq[MethodSig]]
-    def mergeTypes(itypes: Seq[IType]): IType
+    def mergeTypes(itypes: Seq[IType]): Option[IType]
   }
 }
 class ClassManager(getClassFile: String => Option[Array[Byte]]) extends ClassManager.ReadOnly {
@@ -103,17 +103,14 @@ class ClassManager(getClassFile: String => Option[Array[Byte]]) extends ClassMan
       }
     }.toSeq
   }
-  def mergeTypes(itypes: Seq[IType]): IType = {
-    mergeTypes0(itypes).getOrElse(JType.Bottom)
-  }
-  def mergeTypes0(itypes: Seq[IType]): Option[IType] = {
+  def mergeTypes(itypes: Seq[IType]): Option[IType] = {
     val flattened = itypes.flatMap{
       case JType.Bottom => Nil
       case CType.Intersect(values) => values
       case j => Seq(j)
     }.distinct
     if (flattened.length == 1) Some(flattened.head)
-    else if(flattened.length == 0) None
+    else if(flattened.length == 0) Some(JType.Bottom)
     else if(flattened.forall(_.widen == JType.Prim.V)) Some(JType.Prim.V)
     else if(flattened.forall(_.widen == JType.Prim.I)) Some(JType.Prim.I)
     else if(flattened.forall(_.widen == JType.Prim.F)) Some(JType.Prim.F)
@@ -132,7 +129,7 @@ class ClassManager(getClassFile: String => Option[Array[Byte]]) extends ClassMan
     else if (flattened.forall(_.isInstanceOf[JType.Arr])){
       Some(
 
-        mergeTypes0(flattened.map{case a: JType.Arr => a.innerType}) match{
+        mergeTypes(flattened.map{case a: JType.Arr => a.innerType}) match{
           case None => JType.Cls("java.lang.Object")
           case Some(merged) =>
             merged match{
@@ -145,6 +142,6 @@ class ClassManager(getClassFile: String => Option[Array[Byte]]) extends ClassMan
     else if (flattened.forall(t => t.isInstanceOf[JType.Cls] || t.isInstanceOf[JType.Arr])){
       Some(JType.Cls("java.lang.Object"))
     }
-    else throw new Exception("DUNNO WHAT IS THIS " + itypes)
+    else None
   }
 }

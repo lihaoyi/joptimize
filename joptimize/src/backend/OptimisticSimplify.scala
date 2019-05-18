@@ -58,7 +58,10 @@ object OptimisticSimplify {
 
       val mangledCls =
         if (n.isInstanceOf[SSA.InvokeStatic] || n.isInstanceOf[SSA.InvokeSpecial]) n.cls
-        else inferred(n.srcs(0)).asInstanceOf[JType.Cls]
+        else inferred(n.srcs(0)) match{
+          case j: JType.Cls => j
+          case a: JType.Arr => JType.Cls("java/lang/Object")
+        }
 
       if (properties.pure){
         val replacement = prepareNodeReplacement(inferred, n)
