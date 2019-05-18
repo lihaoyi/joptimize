@@ -629,7 +629,7 @@ object SSA{
   class New(var cls: JType.Cls,
             var state: State,
             var srcs: Seq[Val],
-            var desc: Desc) extends Val(cls) {
+            var desc: Desc) extends Val(cls) with Stateful{
     def upstream = Seq(state) ++ srcs
     def replaceUpstream(swap: Swapper): Unit = {
       state = swap(state)

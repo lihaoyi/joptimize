@@ -88,16 +88,11 @@ object Inliner {
       Renderer.dumpSvg(visitedMethods(edge.called).methodBody)
     }
     def findBlock(current: SSA.Node): SSA.Block = {
+
       current match{
         case b: SSA.Block => b
-        case _ =>
-          findBlock(
-            current
-              .upstream
-              .collect{case s: SSA.State => s case b: SSA.Block => b}
-              .head
-          )
-
+        case s: SSA.State => findBlock(s.parent)
+        case s: SSA.Stateful => findBlock(s.state)
       }
     }
     val nodeBlock = findBlock(node)
@@ -114,8 +109,6 @@ object Inliner {
       Util.replace(arg, src)
     }
 
-    log.pprint(node.state)
-    log.pprint(calledStartBlock.nextState)
     node.state.next = calledStartBlock.nextState
     calledStartBlock.nextState.parent = node.state
 
