@@ -369,6 +369,9 @@ object MainTests extends TestSuite{
       'ArrayChaining - {
         'equals - annotatedTest
         'builder - annotatedTest
+        'builder2 - annotatedTest
+        'builder3 - annotatedTest
+        'map - annotatedTest
       }
     }
   }

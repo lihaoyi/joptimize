@@ -118,6 +118,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
     }
 
     classManager.loadClass("scala/runtime/Nothing$")
+    classManager.loadClass("scala/runtime/Null$")
     globalLog.graph("PROGRAM CALL GRAPH") {
       val allNodes = callGraph.flatMap(edge => Seq(edge.called, edge.caller)).toArray
       val allNodeIndices = allNodes.zipWithIndex.toMap

@@ -16,4 +16,20 @@ object ArrayChaining {
     }
     elems
   }
+
+  @test.Test(inputs = Array(0, 2, 4))
+  def builder2(a: Int): Array[Int] = {
+    new collection.mutable.ArrayBuilder.ofInt().result()
+  }
+
+
+  @test.Test(inputs = Array(0, 2, 4))
+  def builder3(a: Int): Array[String] = {
+    java.util.Arrays.copyOf[String](new Array[String](a), 0)
+  }
+
+  @test.Test(inputs = Array(0, 2, 4))
+  def map(a: Int): Array[Int] = {
+    Array(1, 2, 3).map(x => x + 1)
+  }
 }

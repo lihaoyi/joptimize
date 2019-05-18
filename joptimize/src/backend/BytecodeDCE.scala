@@ -33,6 +33,7 @@ object BytecodeDCE {
     val seenMethods = mutable.LinkedHashSet.empty[MethodSig]
     val seenClasses = mutable.LinkedHashSet.empty[JType.Cls]
     seenClasses.add("scala/runtime/Nothing$")
+    seenClasses.add("scala/runtime/Null$")
 
     while(queue.nonEmpty){
       val current = queue.dequeue()

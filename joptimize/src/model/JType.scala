@@ -42,7 +42,11 @@ object JType{
     */
   case class Arr(innerType: JType) extends Ref{
     def size = 1
-    def name = "[" + innerType.name
+    def name = innerType match{
+      case tpe: Cls => "[L" + tpe.name + ";"
+      case tpe: Prim[_] => "[" + tpe.internalName
+      case tpe => "[" + tpe.javaName
+    }
     def realCls = innerType.realCls
     def javaName = innerType match{
       case tpe: Cls => "[L" + tpe.javaName + ";"
