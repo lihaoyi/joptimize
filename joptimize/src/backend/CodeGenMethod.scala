@@ -1,13 +1,12 @@
 package joptimize.backend
 
-import joptimize.{Logger, Util}
+import joptimize.Logger
 import joptimize.analyzer.Renderer
 import joptimize.model.JType
 import joptimize.model.{MethodBody, SSA}
 import org.objectweb.asm.Handle
 import org.objectweb.asm.Opcodes._
 import org.objectweb.asm.tree._
-import org.objectweb.asm.util.{Textifier, TraceMethodVisitor}
 
 import scala.collection.mutable
 
@@ -23,22 +22,42 @@ class CodeGenMethod(log: Logger.InferredMethod,
                     nodesToBlocks: mutable.LinkedHashMap[SSA.ValOrState, SSA.Block],
                     cfg: Seq[(SSA.Control, SSA.Control)]){
   val blocksToNodes = nodesToBlocks.groupBy(_._2).map{case (k, v) => (k, v.keys.toSeq)}
-  val sortedBlocks = CodeGenMethod.sortControlFlowGraph(cfg).collect{case b: SSA.Block => b}
+  val sortedBlocks: collection.Set[SSA.Block] = CodeGenMethod.sortControlFlowGraph(cfg).collect{case b: SSA.Block => b}
   val blockIndices = sortedBlocks.zipWithIndex.toMap
   val labels = sortedBlocks.map(_ -> new LabelNode()).toMap
-  val savedLocalNumbers = mutable.LinkedHashMap.empty[SSA.Val, Int]
-  var currentLocalsSize = 0
+  val sortedAllNodes = sortedBlocks.flatMap(b => blocksToNodes(b).map(_ -> b))
+  val allProps = sortedAllNodes
+    .collect { case (k: SSA.Val, b) => (k, CodeGenMethod.getValProperties(k, b, nodesToBlocks)) }
+    .toMap
+
+  val (savedLocalNumbers, seen) = CodeGenMethod.computeSavedLocalNumbers(
+    methodBody,
+    sortedAllNodes,
+    allProps
+  )
 
   def apply() = log.block{
-    val allPhis = methodBody.getAllVertices().collect{case p: SSA.Phi => p}
-    for(a <- methodBody.args ++ allPhis){
-      savedLocalNumbers(a) = currentLocalsSize
-      currentLocalsSize += a.getSize
-    }
-
-    val blockCode = for(block <- sortedBlocks.toArray) yield{
+    // Generates serialized bytecode on a block-by-block basis, walking the blocks in
+    // depth-first order, starting from the terminal nodes of each block and walking
+    // upstream in depth-first post-order. This includes:
+    //
+    // - Values computed in that block but used unchanged in other blocks, saved
+    //   to a local for other blocks to access
+    //
+    // - Operations that are required to produce the final state of the block. If
+    //   these return an unused value, the value is POPed and discarded
+    //
+    // - If the block is followed by a jump, the value needed for that jump is left
+    //   on the stack for the jump to use
+    //
+    // - If the block is followed by a merge, values needed for those phis are
+    //   accumulated on the stack, then assigned to their respective phi's local slot
+    //
+    // Each block starts ends with an empty operand stack, and any values that are
+    // passed between blocks do so in local slots
+    val insnsPerBlock = for(block <- sortedBlocks.toArray) yield{
 //      log.pprint(block -> block.next)
-      val insns = block.next match{
+      val (valsForNextControlInsns, nextStateNodes, suffixInsns) = block.next match{
         case next: SSA.Merge =>
 
           val (nextVals, phiStores) = next.phis
@@ -48,40 +67,41 @@ class CodeGenMethod(log: Logger.InferredMethod,
               (flatted, new VarInsnNode(CodeGenMethod.saveOp(phi), savedLocalNumbers(phi)))
             }
             .unzip
-          val nextState = next.incoming.collect{case (k, v) if k == block => v}.flatMap(rec(_, fromVal = false, block))
-          val rest = saveValueInsnsForOtherBlocks(block)
 
-          nextVals.flatten ++ nextState ++ rest ++ phiStores.reverse
+          val nextStateNodes = next.incoming.collect{case (k, v) if k == block => v}
+
+          (nextVals.flatten, nextStateNodes, phiStores.reverse)
 
         case next: SSA.Jump =>
           val nextVals = next.upstreamVals.flatMap(rec(_, fromVal = true, block))
-          val nextState = Seq(next.state).flatMap(rec(_, fromVal = false, block))
-          val suffix = generateJumpBytecode(next)
-          val rest = saveValueInsnsForOtherBlocks(block)
-
-          nextVals ++ rest ++ nextState ++ suffix
+          (nextVals, Seq(next.state), generateJumpBytecode(next))
       }
 
-      val downstreamBlocks = block.downstreamList.collect{case b: SSA.Control => b}
+      val valsSavedForOtherBlockInsns = saveValueInsnsForOtherBlocks(block)
 
-      val gotoFooter = downstreamBlocks match{
+      val gotoFooterInsns = block.downstreamList.collect{case b: SSA.Control => b} match{
         case Seq(d: SSA.Block) if blockIndices(d) != blockIndices(block) + 1 => Some(new JumpInsnNode(GOTO, labels(d)))
         case _ => None
       }
 
-      val body = Seq(labels(block)) ++ insns
-      body -> gotoFooter
+      val nextStateInsns = nextStateNodes.flatMap(rec(_, fromVal = false, block))
+
+      Seq(labels(block)) ++
+      valsForNextControlInsns ++
+      valsSavedForOtherBlockInsns ++
+      nextStateInsns ++
+      suffixInsns ++
+      gotoFooterInsns
     }
 
 
     val finalInsns = new InsnList()
-    for((insns, footer) <- blockCode){
-      insns.foreach(finalInsns.add)
-      footer.foreach(finalInsns.add)
+    for(blockInsns <- insnsPerBlock){
+      blockInsns.foreach(finalInsns.add)
     }
 
     log.println("================ OUTPUT BYTECODE ================")
-    log(Renderer.renderBlockCode(blockCode, finalInsns))
+    log(Renderer.renderBlockCode(insnsPerBlock, finalInsns))
 
     log.pprint(savedLocalNumbers)
     finalInsns
@@ -91,14 +111,10 @@ class CodeGenMethod(log: Logger.InferredMethod,
   def saveValueInsnsForOtherBlocks(block: SSA.Block) = {
     blocksToNodes(block)
       .collect { case n: SSA.Val if n.upstream.nonEmpty && !n.isInstanceOf[SSA.Phi] =>
-        val (downstreamValsOrJumps, downstreamState, downstreamOtherBlock) = getValProperties(n, block)
-        if (downstreamValsOrJumps == 0 && !downstreamState && downstreamOtherBlock) {
-          assert(!savedLocalNumbers.contains(n))
-          val localEntry = currentLocalsSize
-          savedLocalNumbers(n) = currentLocalsSize
-          currentLocalsSize += n.getSize
+        val props = allProps(n)
+        if (props.valUses == 0 && !props.stateUse && props.otherBlockUse) {
           recVal(n, block) ++
-          Seq(new VarInsnNode(CodeGenMethod.saveOp(n), localEntry))
+          Seq(new VarInsnNode(CodeGenMethod.saveOp(n), savedLocalNumbers(n)))
         } else Nil
       }
       .flatten
@@ -111,7 +127,7 @@ class CodeGenMethod(log: Logger.InferredMethod,
       n.downstreamList.collect{case t: SSA.Case => t}.map(this.labels),
     )
 
-    val current: Seq[AbstractInsnNode] = ssa match{
+    ssa match{
       case n: SSA.Branch =>
         val destination = n.downstreamList.collect{case t: SSA.False => t}.head
         val goto =
@@ -132,84 +148,52 @@ class CodeGenMethod(log: Logger.InferredMethod,
         val (default, labels) = computeSwitchLabels(n)
         Seq(new LookupSwitchInsnNode(default, n.keys.toArray, labels.toArray))
     }
-
-    current
   }
 
-  def getValProperties(n: SSA.Val, currentBlock: SSA.Block) = {
-    var downstreamValsOrJumps = 0
-    var downstreamState = false
-    var downstreamOtherBlock = false
-    n.downstreamList.foreach {
-      case down: SSA.Phi =>
-        if (down.incoming.find(_._2 == n).get._1 == currentBlock) downstreamValsOrJumps += 1
-        else downstreamOtherBlock = true
-      case down: SSA.Val =>
-        if (nodesToBlocks(down) == currentBlock) downstreamValsOrJumps += 1
-        else downstreamOtherBlock = true
-      case down: SSA.State => downstreamState = true
-      case down: SSA.Jump =>
-        if (down.block == currentBlock) downstreamValsOrJumps += 1
-        else downstreamOtherBlock = true
 
-      case _ => // do nothing
-    }
-    (downstreamValsOrJumps, downstreamState, downstreamOtherBlock)
-  }
-  def rec(ssa: SSA.ValOrState, fromVal: Boolean, currentBlock: SSA.Block): Seq[AbstractInsnNode] = {
-    ssa match{
-      case ssa: SSA.State =>
-        ssa.upstream.collect{case s: SSA.ValOrState => s}.flatMap(rec(_, fromVal = false, currentBlock))
-      case n: SSA.Val =>
-        if (savedLocalNumbers.contains(n)) {
-          if (fromVal) Seq(new VarInsnNode(CodeGenMethod.loadOp(n), savedLocalNumbers(n)))
-          else Nil
+  def rec(ssa: SSA.ValOrState,
+          fromVal: Boolean,
+          currentBlock: SSA.Block): Seq[AbstractInsnNode] = ssa match{
+
+    case ssa: SSA.State =>
+      ssa.upstream.collect{case s: SSA.ValOrState => s}.flatMap(rec(_, fromVal = false, currentBlock))
+    case n: SSA.Val =>
+
+      if (n.upstream.isEmpty && !n.isInstanceOf[SSA.Arg]) recTrivialVal(n)
+      else if (seen(n)) {
+        if (fromVal) Seq(new VarInsnNode(CodeGenMethod.loadOp(n), savedLocalNumbers(n)))
+        else Nil
+      } else {
+        val props = allProps(n)
+
+        (props.valUses, props.stateUse, props.otherBlockUse, fromVal) match {
+
+          case (0, true, false, false) =>
+            recVal(n, currentBlock) ++
+            (n.getSize match {
+              case 0 => Nil
+              case 1 => Seq(new InsnNode(POP))
+              case 2 => Seq(new InsnNode(POP2))
+            })
+
+          case (0, true, true, false) =>
+            recVal(n, currentBlock) ++
+            Seq(new VarInsnNode(CodeGenMethod.saveOp(n), savedLocalNumbers(n)))
+
+          case (1, _, false, true) => recVal(n, currentBlock)
+
+          case (_, true, _, false) => Nil
+
+          case (_, _, _, true) =>
+            recVal(n, currentBlock) ++
+            Seq(
+              new InsnNode(if (n.getSize == 1) DUP else DUP2),
+              new VarInsnNode(CodeGenMethod.saveOp(n), savedLocalNumbers(n))
+            )
+
+          case _ => ???
         }
-        else if (n.upstream.isEmpty) recTrivialVal(n)
-        else if (nodesToBlocks(ssa) != currentBlock){
-          val currentLocal = currentLocalsSize
-          savedLocalNumbers(n) = currentLocalsSize
-          currentLocalsSize += n.getSize
-          Seq(new VarInsnNode(CodeGenMethod.loadOp(n), currentLocal))
-        }
-        else {
-          val (downstreamValsOrJumps, downstreamState, downstreamOtherBlock) = getValProperties(n, currentBlock)
-
-          (downstreamValsOrJumps, downstreamState, downstreamOtherBlock, fromVal) match {
-
-            case (0, true, false, _ /*false*/) =>
-              val pops = n.getSize match {
-                case 0 => Nil
-                case 1 => Seq(new InsnNode(POP))
-                case 2 => Seq(new InsnNode(POP2))
-              }
-              recVal(n, currentBlock) ++ pops
-
-            case (0, true, true, _ /*false*/) =>
-              val localEntry = currentLocalsSize
-              savedLocalNumbers(n) = localEntry
-              currentLocalsSize += n.getSize
-              recVal(n, currentBlock) ++
-              Seq(new VarInsnNode(CodeGenMethod.saveOp(n), localEntry))
-
-            case (1, _, false, true) => recVal(n, currentBlock)
-
-            case (_, true, _, false) => Nil
-
-            case (_, _, _, true) =>
-              assert(downstreamValsOrJumps > 1 || (downstreamValsOrJumps == 1 && downstreamOtherBlock))
-              val localEntry = currentLocalsSize
-              savedLocalNumbers(n) = localEntry
-              currentLocalsSize += n.getSize
-              recVal(n, currentBlock) ++
-              Seq(
-                new InsnNode(if (n.getSize == 1) DUP else DUP2),
-                new VarInsnNode(CodeGenMethod.saveOp(n), localEntry)
-              )
-          }
-        }
-      case _ => Nil //ignore other node types
-    }
+      }
   }
 
   def recTrivialVal(ssa: SSA.Val): Seq[AbstractInsnNode] = ssa match{
@@ -249,6 +233,7 @@ class CodeGenMethod(log: Logger.InferredMethod,
   }
 
   def recVal(ssa: SSA.Val, currentBlock: SSA.Block): Seq[AbstractInsnNode] = {
+    seen.add(ssa)
     def upstreams = ssa
       .upstream
       .collect{case v: SSA.ValOrState => v}
@@ -300,7 +285,67 @@ class CodeGenMethod(log: Logger.InferredMethod,
 
 }
 object CodeGenMethod{
+  case class ValDownstreamProps(valUses: Int, stateUse: Boolean, otherBlockUse: Boolean)
+  def getValProperties(n: SSA.Val,
+                       currentBlock: SSA.Block,
+                       nodesToBlocks: collection.Map[SSA.ValOrState, SSA.Block]) = {
+    var downstreamValsOrJumps = 0
+    var downstreamState = false
+    var downstreamOtherBlock = false
+    n.downstreamList.foreach {
+      case down: SSA.Phi =>
+        if (down.incoming.find(_._2 == n).get._1 == currentBlock) downstreamValsOrJumps += 1
+        else downstreamOtherBlock = true
+      case down: SSA.Val =>
+        if (nodesToBlocks(down) == currentBlock) downstreamValsOrJumps += 1
+        else downstreamOtherBlock = true
+      case down: SSA.State => downstreamState = true
+      case down: SSA.Jump =>
+        if (down.block == currentBlock) downstreamValsOrJumps += 1
+        else downstreamOtherBlock = true
 
+      case _ => // do nothing
+    }
+    ValDownstreamProps(downstreamValsOrJumps, downstreamState, downstreamOtherBlock)
+  }
+  def computeSavedLocalNumbers(methodBody: MethodBody,
+                               sortedAllNodes: collection.Set[(SSA.ValOrState, SSA.Block)],
+                               allProps: Map[SSA.Val, ValDownstreamProps])
+      : (collection.Map[SSA.Val, Int], mutable.LinkedHashSet[SSA.Val]) = {
+
+    val seen = mutable.LinkedHashSet.empty[SSA.Val]
+    val savedLocalNumbers = mutable.LinkedHashMap.empty[SSA.Val, Int]
+    var currentLocalsSize = 0
+
+    def saveLocal(n: SSA.Val) = {
+      val localEntry = currentLocalsSize
+      savedLocalNumbers(n) = currentLocalsSize
+      currentLocalsSize += n.getSize
+      localEntry
+    }
+
+    for(arg <- methodBody.args ){
+      saveLocal(arg)
+      seen.add(arg)
+    }
+
+    sortedAllNodes.foreach {
+      case (p: SSA.Phi, _) =>
+        seen.add(p)
+        saveLocal(p)
+      case (n: SSA.Val, _) if n.upstream.nonEmpty =>
+        allProps(n) match {
+          case ValDownstreamProps(0, false, true) => saveLocal(n)
+          case ValDownstreamProps(0, true, true) => saveLocal(n)
+          case ValDownstreamProps(1, true, _) => saveLocal(n)
+          case ValDownstreamProps(1, _, true) => saveLocal(n)
+          case ValDownstreamProps(downs, _, _) if downs > 1 => saveLocal(n)
+          case _ => // do nothing
+        }
+      case _ => // do nothing
+    }
+    (savedLocalNumbers, seen)
+  }
 
   def sortControlFlowGraph(cfg: Seq[(SSA.Control, SSA.Control)]) = {
     val Seq(startBlock) = cfg.collect{case (s: SSA.Start, _) => s}

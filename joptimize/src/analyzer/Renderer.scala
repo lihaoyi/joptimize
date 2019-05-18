@@ -64,13 +64,13 @@ object Renderer {
     )
   }
 
-  def renderBlockCode(blockCode: Seq[(Seq[AbstractInsnNode], Option[AbstractInsnNode])],
+  def renderBlockCode(blockCode: Seq[Seq[AbstractInsnNode]],
                       finalInsns: InsnList) = {
     val output = mutable.Buffer.empty[fansi.Str]
     val printer = new Textifier
     val methodPrinter = new TraceMethodVisitor(printer)
-    for((insns, footer) <- blockCode){
-      for(insn <- insns ++ footer) {
+    for(insns <- blockCode){
+      for(insn <- insns) {
         output.append(
           Renderer.renderInsns(finalInsns, printer, methodPrinter, insn, prefix = Nil)
         )
