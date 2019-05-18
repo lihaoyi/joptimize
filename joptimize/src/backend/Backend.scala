@@ -27,10 +27,10 @@ object Backend {
     //    pprint.log(loadMethodCache.keys)
 
 
-    val inlinedAnalyzerRes = analyzerRes
-//    val inlinedAnalyzerRes =
-//      if(inline) Inliner.inlineAll(analyzerRes, classManager, log)
-//      else analyzerRes
+//    val inlinedAnalyzerRes = analyzerRes
+    val inlinedAnalyzerRes =
+      if(inline) Inliner.inlineAll(analyzerRes, classManager, log)
+      else analyzerRes
 
     val combined =
       inlinedAnalyzerRes.visitedResolved.mapValues(Right(_)) ++
