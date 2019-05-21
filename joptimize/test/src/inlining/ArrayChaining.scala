@@ -124,4 +124,35 @@ object ArrayChaining {
     TestCons(1L, TestCons(2L, TestCons(3L, TestNil))).foreach(x => holder(0) += x.toInt)
     holder
   }
+
+  class TestArraySeq[T](inner: Array[T]){
+    def foreach(f: T => Unit) = {
+      var i = 0
+      while (i < inner.length){
+        f(inner(i))
+        i += 1
+      }
+    }
+  }
+  @test.Test()
+  def foreach2(): Array[Int] = {
+    val holder = Array(1)
+    val arr = new TestArraySeq[String](Array("a", "bb", "CCC"))
+    arr.foreach(x => holder(0) += x.length)
+
+    holder
+  }
+
+
+  @test.Test()
+  def foreach3(): Array[Int] = {
+    val holder = Array(1)
+    val arr = new collection.mutable.ArraySeq[String](3)
+    arr(0) = "a"
+    arr(1) = "bb"
+    arr(2) = "ccc"
+    arr.foreach(x => holder(0) += x.length)
+
+    holder
+  }
 }

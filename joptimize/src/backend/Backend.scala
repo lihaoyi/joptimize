@@ -87,19 +87,19 @@ object Backend {
     }
     def ignore(s: String) = s.startsWith("java/")
 
-    val outClasses = log.block{
-      BytecodeDCE.apply(
-        entrypoints,
-        grouped.keys.toSeq,
-        resolvePossibleSigs = classManager.resolvePossibleSigs(_).toSeq.flatten,
-        getLinearSuperclasses = classManager.getLinearSuperclasses,
-        getAllSupertypes = classManager.getAllSupertypes,
-        ignore = ignore,
-        log = log
-      )
-    }
-    outClasses
-//    grouped.keys.toSeq
+//    val outClasses = log.block{
+//      BytecodeDCE.apply(
+//        entrypoints,
+//        grouped.keys.toSeq,
+//        resolvePossibleSigs = classManager.resolvePossibleSigs(_).toSeq.flatten,
+//        getLinearSuperclasses = classManager.getLinearSuperclasses,
+//        getAllSupertypes = classManager.getAllSupertypes,
+//        ignore = ignore,
+//        log = log
+//      )
+//    }
+//    outClasses
+    grouped.keys.toSeq
   }
 
 

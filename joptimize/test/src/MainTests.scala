@@ -378,6 +378,8 @@ object MainTests extends TestSuite{
         'manifestFactory - annotatedTest
         'pkg - annotatedTest
         'foreach - annotatedTest
+        'foreach2 - annotatedTest
+        'foreach3 - annotatedTest
       }
     }
   }
