@@ -371,6 +371,7 @@ object MainTests extends TestSuite{
         'builder - annotatedTest
         'builder2 - annotatedTest
         'builder3 - annotatedTest
+        'initArray - annotatedTest
         'pkg - annotatedTest
         'foreach - annotatedTest
       }

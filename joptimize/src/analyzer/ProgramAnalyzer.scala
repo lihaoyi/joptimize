@@ -17,7 +17,7 @@ import scala.collection.mutable
   */
 class ProgramAnalyzer(entrypoints: Seq[MethodSig],
                       val classManager: ClassManager,
-                      globalLog: Logger.Global,
+                      val globalLog: Logger.Global,
                       frontend: Frontend) extends ProgramAnalyzer.HandlerApi {
 
   /**
@@ -199,6 +199,14 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
             case n: SSA.PutField => ProgramAnalyzer.handleFieldReference(isig, n.owner, false, this)
             case n: SSA.GetStatic => ProgramAnalyzer.handleFieldReference(isig, n.cls, true, this)
             case n: SSA.PutStatic => ProgramAnalyzer.handleFieldReference(isig, n.cls, true, this)
+            case n: SSA.NewArray =>
+              def rec(typeRef: JType): ProgramAnalyzer.StepResult = typeRef match{
+                case cls: JType.Cls => ProgramAnalyzer.handleFieldReference(isig, cls, true, this)
+                case arr: JType.Arr => rec(arr.innerType)
+                case _ => ProgramAnalyzer.StepResult()
+              }
+              rec(n.typeRef)
+
 
             case n: SSA.New => ProgramAnalyzer.handleNew(isig, n, this)
             case invoke: SSA.Invoke => ProgramAnalyzer.handleInvoke(isig, currentAnalysis, invoke, this)
@@ -309,6 +317,7 @@ object ProgramAnalyzer {
                         liveArgs: Set[Int])
 
   trait HandlerApi{
+    def globalLog: Logger.Global
     def classManager: ClassManager
     def callGraph: Iterable[CallEdge]
     def analyzeClinits(cls: JType.Cls): Seq[InferredSig]
@@ -361,6 +370,7 @@ object ProgramAnalyzer {
                            static: Boolean,
                            api: HandlerApi): StepResult = {
 
+    api.globalLog.pprint(cls)
     val clinits = api.analyzeClinits(cls)
     StepResult(
       edges = clinits.map(CallEdge(isig, None, _)),

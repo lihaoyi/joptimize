@@ -27,6 +27,17 @@ object ArrayChaining {
   def builder3(a: Int): Array[String] = {
     java.util.Arrays.copyOf[String](new Array[String](a), 0)
   }
+
+  object Test {
+    val x = new Array[Test](0)
+  }
+  class Test
+
+  @test.Test()
+  def initArray(): Int = {
+    Test.toString.length
+  }
+
   @test.Test(inputs = Array(0, 2, 4))
   def pkg(a: Int): Integer = {
     scala.Predef.int2Integer(a)
