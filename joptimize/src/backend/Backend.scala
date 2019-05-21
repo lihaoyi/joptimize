@@ -93,6 +93,7 @@ object Backend {
         grouped.keys.toSeq,
         resolvePossibleSigs = classManager.resolvePossibleSigs(_).toSeq.flatten,
         getLinearSuperclasses = classManager.getLinearSuperclasses,
+        getAllSupertypes = classManager.getAllSupertypes,
         ignore = ignore,
         log = log
       )

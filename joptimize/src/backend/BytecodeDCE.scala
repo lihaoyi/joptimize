@@ -19,6 +19,7 @@ object BytecodeDCE {
             classNodes: Seq[ClassNode],
             resolvePossibleSigs: MethodSig => Seq[MethodSig],
             getLinearSuperclasses: JType.Cls => Seq[JType.Cls],
+            getAllSupertypes: JType.Cls => Seq[JType.Cls],
             ignore: String => Boolean,
             log: Logger.Global): Seq[ClassNode] = {
 
@@ -85,6 +86,12 @@ object BytecodeDCE {
             val clinitMethod = MethodSig(current.owner, "<clinit>", Desc.read("()V"), true)
             if (methodSigMap.contains(clinitMethod)) queue.enqueue(clinitMethod)
             seenClasses.add(current.owner)
+
+          case current: TypeInsnNode if current.getOpcode == Opcodes.ANEWARRAY =>
+            getAllSupertypes(current.desc).foreach(seenClasses.add)
+
+          case current: MultiANewArrayInsnNode if current.getOpcode == Opcodes.ANEWARRAY =>
+            getAllSupertypes(current.desc).foreach(seenClasses.add)
 
           case current: TypeInsnNode => seenClasses.add(JType.Cls(current.desc))
 

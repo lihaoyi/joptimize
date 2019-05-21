@@ -52,6 +52,32 @@ object ArrayChaining {
     TestCls.toString.substring(0, TestCls.toString.indexOf('@'))
   }
 
+  object TestCls3 {
+    new Array[TestCls3](1)
+  }
+
+  class TestCls3() extends TestAbstractCls3
+
+  abstract class TestAbstractCls3
+
+  @test.Test()
+  def initArray3(): String = {
+    TestCls3.toString.substring(0, TestCls3.toString.indexOf('@'))
+  }
+
+  object TestCls4 {
+    new Array[Array[TestCls3]](1)
+  }
+
+  class TestCls4() extends TestAbstractCls4
+
+  abstract class TestAbstractCls4
+
+  @test.Test()
+  def initArray4(): String = {
+    TestCls4.toString.substring(0, TestCls3.toString.indexOf('@'))
+  }
+
   @test.Test(inputs = Array(0, 2, 4))
   def pkg(a: Int): Integer = {
     scala.Predef.int2Integer(a)

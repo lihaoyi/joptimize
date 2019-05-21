@@ -199,6 +199,14 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
             case n: SSA.PutField => ProgramAnalyzer.handleFieldReference(isig, n.owner, false, this)
             case n: SSA.GetStatic => ProgramAnalyzer.handleFieldReference(isig, n.cls, true, this)
             case n: SSA.PutStatic => ProgramAnalyzer.handleFieldReference(isig, n.cls, true, this)
+            case n: SSA.MultiANewArray =>
+              def rec(typeRef: JType): ProgramAnalyzer.StepResult = typeRef match{
+                case cls: JType.Cls => ProgramAnalyzer.handleFieldReference(isig, cls, true, this)
+                case arr: JType.Arr => rec(arr.innerType)
+                case _ => ProgramAnalyzer.StepResult()
+              }
+              rec(n.jtype)
+
             case n: SSA.NewArray =>
               def rec(typeRef: JType): ProgramAnalyzer.StepResult = typeRef match{
                 case cls: JType.Cls => ProgramAnalyzer.handleFieldReference(isig, cls, true, this)
