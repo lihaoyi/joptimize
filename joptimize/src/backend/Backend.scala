@@ -68,7 +68,7 @@ object Backend {
 
     log.pprint(visitedInterfaces)
     val grouped =
-      (visitedInterfaces ++ inlinedAnalyzerRes.staticFieldReferencedClasses.map(_.name))
+      (visitedInterfaces ++ inlinedAnalyzerRes.staticFieldReferencedClasses.flatMap(classManager.getAllSupertypes).map(_.name))
         .filter(s => loadClassCache.contains(JType.Cls(s)))
         .map(loadClassCache(_) -> Nil)
         .toMap ++

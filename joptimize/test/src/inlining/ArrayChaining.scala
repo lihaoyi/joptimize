@@ -34,8 +34,22 @@ object ArrayChaining {
   class Test
 
   @test.Test()
-  def initArray(): Int = {
-    Test.toString.length
+  def initArray(): String = {
+    Test.toString.substring(0, Test.toString.indexOf('@'))
+  }
+
+
+  object TestCls {
+    new Array[TestCls](1)
+  }
+
+  final class TestCls() extends TestTrait
+
+  trait TestTrait
+
+  @test.Test()
+  def initArray2(): String = {
+    TestCls.toString.substring(0, TestCls.toString.indexOf('@'))
   }
 
   @test.Test(inputs = Array(0, 2, 4))

@@ -10,6 +10,7 @@ import scala.collection.mutable
 object ClassManager{
   trait ReadOnly{
     def getAllSubtypes(cls: JType.Cls): Seq[JType.Cls]
+    def getAllSupertypes(current0: JType.Cls): Seq[JType.Cls]
     def getLinearSuperclasses(cls: JType.Cls): Seq[JType.Cls]
     def supertypeMap: mutable.LinkedHashMap[JType.Cls, List[JType.Cls]]
     def loadClassCache: collection.Map[JType.Cls, Option[ClassNode]]
