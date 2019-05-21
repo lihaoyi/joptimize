@@ -1,7 +1,5 @@
 package test.inlining
 
-import scala.collection.mutable
-
 object ArrayChaining {
 
   @test.Test()
@@ -109,8 +107,8 @@ object ArrayChaining {
 
   case object TestNil extends TestList[Nothing] {
     def isEmpty = true
-    def head = ???
-    def tail = ???
+    def head = throw new Exception()
+    def tail = throw new Exception()
   }
 
   case class TestCons[B](head: B, tl: TestList[B]) extends TestList[B] {
@@ -118,11 +116,12 @@ object ArrayChaining {
     def isEmpty = false
   }
 
-  @test.Test(inputs = Array(0, 2, 4))
-  def foreach(a: Int): Array[Int] = {
+  @test.Test()
+  def foreach(): Array[Int] = {
     val holder = Array(1)
 
     TestCons(1, TestCons(2, TestCons(3, TestNil))).foreach(x => holder(0) += x)
+    TestCons(1L, TestCons(2L, TestCons(3L, TestNil))).foreach(x => holder(0) += x.toInt)
     holder
   }
 }
