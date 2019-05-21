@@ -107,6 +107,7 @@ class ClassManager(getClassFile: String => Option[Array[Byte]]) extends ClassMan
   def mergeTypes(itypes: Seq[IType]): Option[IType] = {
     val flattened = itypes.flatMap{
       case JType.Bottom => Nil
+      case CType.Null => Nil
       case CType.Intersect(values) => values
       case j => Seq(j)
     }.distinct

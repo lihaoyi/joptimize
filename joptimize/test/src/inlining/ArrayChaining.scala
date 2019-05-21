@@ -1,5 +1,7 @@
 package test.inlining
 
+import scala.collection.mutable
+
 object ArrayChaining {
 
   @test.Test()
@@ -91,10 +93,36 @@ object ArrayChaining {
     scala.Predef.int2Integer(123).toString
   }
 
+  sealed abstract class TestList[+A] {
+    def isEmpty: Boolean
+    def head: A
+    def tail: TestList[A]
+
+    def foreach[U](f: A => U) {
+      var these = this
+      while (!these.isEmpty) {
+        f(these.head)
+        these = these.tail
+      }
+    }
+  }
+
+  case object TestNil extends TestList[Nothing] {
+    def isEmpty = true
+    def head = ???
+    def tail = ???
+  }
+
+  case class TestCons[B](head: B, tl: TestList[B]) extends TestList[B] {
+    def tail = tl
+    def isEmpty = false
+  }
+
   @test.Test(inputs = Array(0, 2, 4))
   def foreach(a: Int): Array[Int] = {
     val holder = Array(1)
-    Array(1, 2, 3).foreach(x => holder(0) += x)
+
+    TestCons(1, TestCons(2, TestCons(3, TestNil))).foreach(x => holder(0) += x)
     holder
   }
 }
