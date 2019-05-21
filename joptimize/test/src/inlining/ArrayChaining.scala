@@ -126,7 +126,7 @@ object ArrayChaining {
   }
 
   class TestArraySeq[T](inner: Array[T]){
-    def foreach(f: T => Unit) = {
+    def foreach[V](f: T => V) = {
       var i = 0
       while (i < inner.length){
         f(inner(i))
@@ -144,15 +144,40 @@ object ArrayChaining {
   }
 
 
+  abstract class TestFunc[-T1, +R] {
+    def apply(v1: T1): R
+  }
+  class TestFuncOne() extends  TestFunc[String, Integer]{
+    def apply(v1: String): Integer = Integer.valueOf(v1.length)
+  }
+  class TestFuncTwo() extends TestFunc[Integer, String]{
+    def apply(v1: Integer): String = v1.toString
+  }
   @test.Test()
-  def foreach3(): Array[Int] = {
-    val holder = Array(1)
-    val arr = new collection.mutable.ArraySeq[String](3)
-    arr(0) = "a"
-    arr(1) = "bb"
-    arr(2) = "ccc"
-    arr.foreach(x => holder(0) += x.length)
+  def foreach3(): Integer = {
 
-    holder
+
+    val f1 = new TestFuncOne()
+    val f2 = new TestFuncTwo()
+
+    Integer.valueOf(f1("abcd").intValue() + f2(Integer.valueOf(Integer.SIZE)).length)
+  }
+
+  abstract class TestFunction[-T1, +R] {
+    def apply(v1: T1): R
+  }
+  class TestFunctionOne() extends TestFunction[Integer, String]{
+    def apply(v1: Integer): String = v1.toString
+  }
+  class TestFunctionTwo() extends TestFunction[String, Integer]{
+    def apply(v1: String): Integer = Integer.valueOf(v1.length)
+  }
+  @test.Test()
+  def foreach4(): Integer = {
+    val f1 = new TestFunctionOne()
+    val f2: TestFunction[String, Integer] = new TestFunctionTwo()
+//    val f2 = new TestFunctionTwo()
+
+    f2("abcd")
   }
 }

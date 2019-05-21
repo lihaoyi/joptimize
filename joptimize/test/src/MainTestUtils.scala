@@ -38,7 +38,7 @@ object MainTestUtils {
       else None
     }
     val output = mutable.Buffer.empty[ujson.Value]
-    for (inline <- Seq(false, true)){
+    for (inline <- Seq(false)){
       println(s"  test.MainTests.${tp.value.mkString(".")} inline: $inline")
       os.remove.all(os.pwd / 'out / 'scratch)
       os.remove.all(outRoot / tp.value)
