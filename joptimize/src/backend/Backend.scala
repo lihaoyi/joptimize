@@ -64,7 +64,7 @@ object Backend {
 
     val visitedInterfaces =
       Util.findSeenInterfaces(loadClassCache, newMethods.map(_._1)) ++
-      Seq("scala/runtime/Nothing$")
+      Seq("scala/runtime/Nothing$", "scala/runtime/Null$")
 
     log.pprint(visitedInterfaces)
     val grouped =

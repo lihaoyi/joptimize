@@ -78,9 +78,17 @@ object ArrayChaining {
     TestCls4.toString.substring(0, TestCls3.toString.indexOf('@'))
   }
 
-  @test.Test(inputs = Array(0, 2, 4))
-  def pkg(a: Int): Integer = {
-    scala.Predef.int2Integer(a)
+  @test.Test()
+  def manifestFactory(): String = {
+    scala.reflect.ManifestFactory.toString.substring(
+      0,
+      scala.reflect.ManifestFactory.toString.indexOf('@')
+    )
+  }
+
+  @test.Test()
+  def pkg(): String = {
+    scala.Predef.int2Integer(123).toString
   }
 
   @test.Test(inputs = Array(0, 2, 4))
