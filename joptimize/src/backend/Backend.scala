@@ -30,7 +30,6 @@ object Backend {
 
     val actualMethodInferredSigs = inlinedAnalyzerRes.visitedResolved.keysIterator
       .++(inlinedAnalyzerRes.visitedMethods.keysIterator)
-      .filter(k => loadMethodCache.contains(k.method))
       .to[mutable.LinkedHashSet]
 
     val highestMethodDefiners = computeHighestMethodDefiners(
@@ -128,7 +127,7 @@ object Backend {
       else resolveDefsiteProps(isig)
     }
 
-    for (isig <- actualMethodInferredSigs.toArray) yield Util.labelExceptions(isig.toString){
+    for (isig <- actualMethodInferredSigs.toArray if loadMethodCache.contains(isig.method)) yield Util.labelExceptions(isig.toString){
       val props = resolveDefsiteProps(isig)
 
       val liveArgs =
@@ -176,7 +175,7 @@ object Backend {
                                    loadMethodCache: Map[MethodSig, MethodNode],
                                    loadClassCache: Map[JType.Cls, ClassNode],
                                    actualMethodInferredSigs: mutable.LinkedHashSet[InferredSig]) = log.block {
-    for (isig <- actualMethodInferredSigs ++ analyzerRes.visitedResolved.keys) yield {
+    for (isig <- actualMethodInferredSigs) yield {
       var parentClasses = List.empty[JType.Cls]
       var current = isig.method.cls
       while ( {
@@ -194,8 +193,7 @@ object Backend {
 
       val highestCls = parentClasses
         .find { cls =>
-          val key = isig.copy(method = isig.method.copy(cls = cls))
-          analyzerRes.visitedResolved.contains(key) || analyzerRes.visitedMethods.contains(key)
+          actualMethodInferredSigs.contains(isig.copy(method = isig.method.copy(cls = cls)))
         }
         .get
 

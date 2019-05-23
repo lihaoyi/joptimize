@@ -1,5 +1,6 @@
 package joptimize.backend
 
+import joptimize.analyzer.Renderer
 import joptimize.{Logger, Util}
 import joptimize.model.{Desc, JType, MethodSig, SSA}
 import org.objectweb.asm.tree._
@@ -74,6 +75,7 @@ object BytecodeDCE {
             val possibleSigs = resolvePossibleSigs(sig)
 
             seenClasses.add(sig.cls)
+
             possibleSigs.foreach(sig => seenClasses.add(sig.cls))
 
             queue.enqueue(possibleSigs.filter(methodSigMap.contains):_*)
@@ -88,10 +90,20 @@ object BytecodeDCE {
             seenClasses.add(current.owner)
 
           case current: TypeInsnNode if current.getOpcode == Opcodes.ANEWARRAY =>
-            getAllSupertypes(current.desc).foreach(seenClasses.add)
+            def rec(t: JType): Unit = t match{
+              case arr: JType.Arr => rec(arr.innerType)
+              case cls: JType.Cls => getAllSupertypes(cls).foreach(seenClasses.add)
+              case _ => // do nothing
+            }
+            rec(JType.read(current.desc))
 
           case current: MultiANewArrayInsnNode if current.getOpcode == Opcodes.ANEWARRAY =>
-            getAllSupertypes(current.desc).foreach(seenClasses.add)
+            def rec(t: JType): Unit = t match{
+              case arr: JType.Arr => rec(arr.innerType)
+              case cls: JType.Cls => getAllSupertypes(cls).foreach(seenClasses.add)
+              case _ => // do nothing
+            }
+            rec(JType.read(current.desc))
 
           case current: TypeInsnNode => seenClasses.add(JType.Cls(current.desc))
 
