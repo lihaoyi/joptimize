@@ -25,8 +25,8 @@ object ClassManager{
     extends ClassManager {
     def getSubtypes(cls: JType.Cls) = subtypeMap.get(cls)
     def getSupertypes(cls: JType.Cls) = supertypeMap.get(cls)
-    def loadClass(cls: JType.Cls) = loadClassCache(cls)
-    def loadMethod(sig: MethodSig) = loadMethodCache(sig)
+    def loadClass(cls: JType.Cls) = loadClassCache.getOrElse(cls, None)
+    def loadMethod(sig: MethodSig) = loadMethodCache.getOrElse(sig, None)
     def allClasses = loadClassCache.valuesIterator.flatten
   }
 
