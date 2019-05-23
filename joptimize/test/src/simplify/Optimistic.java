@@ -5,13 +5,13 @@ class Optimistic {
     @test.Test(inputs = {1, 2, 3}, removedNumConst = {13}, addedNumConst = {14})
     static int trivial(int x) {
         int z = 13;
-        return z + 1 + x ;
+        return z + 1 + x;
     }
 
     @test.Test(inputs = {1, 2, 3}, removedNumConst = {26}, addedNumConst = {20})
     static int loopConstant(int x) {
         int z = 13;
-        while(x > 0){
+        while (x > 0) {
             z = 26 - z;
             x -= 1;
         }
@@ -21,7 +21,7 @@ class Optimistic {
     @test.Test(inputs = {1, 2, 3}, removedNumConst = {10}, addedNumConst = {8})
     static int branchConstant(int x) {
         int z = 9;
-        if (z > 10){
+        if (z > 10) {
             z = z + x;
         }
         return z - 1;
@@ -81,6 +81,7 @@ class Optimistic {
             return generalRecursiveHelper(z);
         }
     }
+
     public static int generalRecursiveHelper(int z) {
         return z * z;
     }
@@ -119,7 +120,6 @@ class Optimistic {
         if (x > 2) return x + z;
         else return mutualRecursivePureDeadArg1(x + 1, y, z);
     }
-
 
 
     @test.Test(
@@ -171,16 +171,19 @@ class Optimistic {
         int first = foo.call() + 123;
         return first;
     }
-    static abstract class Foo{
+
+    static abstract class Foo {
         abstract int call();
     }
-    static class Bar extends Foo{
-        int call(){
+
+    static class Bar extends Foo {
+        int call() {
             return 1;
         }
     }
-    static class Qux extends Foo{
-        int call(){
+
+    static class Qux extends Foo {
+        int call() {
             return 2;
         }
     }

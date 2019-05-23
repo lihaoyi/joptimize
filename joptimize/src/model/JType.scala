@@ -38,6 +38,7 @@ object JType{
 
   /**
     * Array Types
+    *
     * @param innerType The type of the components of the array
     */
   case class Arr(innerType: JType) extends Ref{
@@ -62,6 +63,7 @@ object JType{
 
   /**
     * Class Types
+    *
     * @param name the fully qualified name of the class
     */
   class Cls private (val name: String) extends Ref {

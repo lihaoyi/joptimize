@@ -2,9 +2,9 @@ package test.simplify;
 
 class BooleanJumpFlatten {
     @test.Test(
-        inputs = {1, 2},
-        checkPresent = {"BooleanJumpFlatten.leaf1"},
-        checkRemoved = {"BooleanJumpFlatten.leaf2"}
+            inputs = {1, 2},
+            checkPresent = {"BooleanJumpFlatten.leaf1"},
+            checkRemoved = {"BooleanJumpFlatten.leaf2"}
     )
     static int simpleTrue(int x, int y) {
         return call(true, x, y);
@@ -26,10 +26,12 @@ class BooleanJumpFlatten {
             return leaf2(y);
         }
     }
+
     @test.Test(inputs = {1, 2})
     static int nested1(int x, int y) {
         return nestedCall(false, false, x, y);
     }
+
     @test.Test(inputs = {1, 2})
     static int nested2(int x, int y) {
         return nestedCall(false, true, x, y);
@@ -39,6 +41,7 @@ class BooleanJumpFlatten {
     static int nested3(int x, int y) {
         return nestedCall(true, false, x, y);
     }
+
     @test.Test(inputs = {1, 2})
     static int nested4(int x, int y) {
         return nestedCall(true, true, x, y);

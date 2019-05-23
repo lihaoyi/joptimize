@@ -12,7 +12,7 @@ class SimpleDce {
     static int deadLoopVariable(int x) {
         int y = 1;
         int z = 13;
-        while(y < x){
+        while (y < x) {
             y += 1;
             z += 1;
         }
@@ -21,9 +21,9 @@ class SimpleDce {
 
 
     @test.Test(
-        inputs = {1, 2},
-        checkPresent = {"SimpleDce.call1", "SimpleDce.call2"},
-        checkRemoved = {"SimpleDce.call3"}
+            inputs = {1, 2},
+            checkPresent = {"SimpleDce.call1", "SimpleDce.call2"},
+            checkRemoved = {"SimpleDce.call3"}
     )
     static int main(int x, int y) {
         return call1(x) + call2(y);

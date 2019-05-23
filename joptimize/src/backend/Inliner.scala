@@ -9,9 +9,11 @@ import joptimize.model.{IType, InferredSig, JType, MethodBody, SSA}
 import scala.collection.mutable
 
 object Inliner {
-  def inlineAll(analyzerRes: ProgramAnalyzer.ProgramResult,
-                classManager: ClassManager.Frozen,
-                log: Logger.Global) = log.block{
+  def inlineAll(
+    analyzerRes: ProgramAnalyzer.ProgramResult,
+    classManager: ClassManager.Frozen,
+    log: Logger.Global
+  ) = log.block {
 
     val filteredCallgraph = analyzerRes
       .callGraph
@@ -27,18 +29,21 @@ object Inliner {
       .values
       .collect { case Seq(singleEdge) => singleEdge }
 
-    val callGraphLookup = filteredCallgraph.groupBy(_.called).collect{
+    val callGraphLookup = filteredCallgraph.groupBy(_.called).collect {
       case (src, Seq(dest)) => (src, dest.caller)
     }
-    val inlineableEdgesSet = singleCallerEdges.to[mutable.LinkedHashSet]
+    val inlineableEdgesSet = singleCallerEdges
+      .to[mutable.LinkedHashSet]
       .intersect(singleCalledEdges.to[mutable.LinkedHashSet])
-      .filter{ edge => edge.caller != edge.called}
+      .filter { edge =>
+        edge.caller != edge.called
+      }
 
     log.pprint(inlineableEdgesSet.map(_.toString))
 
     val inlinedMethodsSet = inlineableEdgesSet.map(_.called)
     val visitedMethods = mutable.LinkedHashMap.empty[InferredSig, MethodResult]
-    for((k, v) <- analyzerRes.visitedMethods){
+    for ((k, v) <- analyzerRes.visitedMethods) {
       visitedMethods.put(k, v)
     }
 
@@ -49,7 +54,7 @@ object Inliner {
       var caller = edge.caller
       //      pprint.log(analyzerRes.visitedMethods.keys)
       //      pprint.log(edge)
-      while({
+      while ({
         if (visitedMethods.contains(caller)) {
           inlineSingleMethod(
             classManager,
@@ -59,28 +64,29 @@ object Inliner {
             node
           )
           false
-        }
-        else{
+        } else {
           caller = callGraphLookup(caller)
           true
         }
-      })()
+      }) ()
 
     }
 
     ProgramAnalyzer.ProgramResult(
       visitedMethods,
-      analyzerRes.visitedResolved.filter{case (k, v) => !inlinedMethodsSet.contains(k)},
+      analyzerRes.visitedResolved.filter { case (k, v) => !inlinedMethodsSet.contains(k) },
       analyzerRes.staticFieldReferencedClasses,
       analyzerRes.callGraph.filter(!inlineableEdgesSet(_))
     )
   }
 
-  def inlineSingleMethod(classManager: ClassManager.Frozen,
-                         log: Logger.InferredMethod,
-                         visitedMethods: mutable.LinkedHashMap[InferredSig, MethodResult],
-                         edge: CallEdge,
-                         node: SSA.Invoke) = Util.labelExceptions(edge.toString){
+  def inlineSingleMethod(
+    classManager: ClassManager.Frozen,
+    log: Logger.InferredMethod,
+    visitedMethods: mutable.LinkedHashMap[InferredSig, MethodResult],
+    edge: CallEdge,
+    node: SSA.Invoke
+  ) = Util.labelExceptions(edge.toString) {
     log.pprint(node)
     log.pprint(edge)
     log.graph("edge.caller") {
@@ -91,7 +97,7 @@ object Inliner {
     }
     def findBlock(current: SSA.Node): SSA.Block = {
 
-      current match{
+      current match {
         case b: SSA.Block => b
         case s: SSA.State => findBlock(s.parent)
         case s: SSA.Stateful => findBlock(s.state)
@@ -101,7 +107,8 @@ object Inliner {
     val calledMethod = visitedMethods(edge.called)
 
     val calledBody = calledMethod.methodBody
-    val calledStartBlock = calledMethod.methodBody.getAllVertices().collect { case s: SSA.Start => s }.head
+    val calledStartBlock =
+      calledMethod.methodBody.getAllVertices().collect { case s: SSA.Start => s }.head
 
     // Wire up input params, state and block
     calledStartBlock.downstreamList.foreach(_.replaceUpstream(calledStartBlock, nodeBlock))
@@ -138,7 +145,7 @@ object Inliner {
       nextState,
       visitedMethods(edge.called).inferred ++ visitedMethods(edge.caller).inferred
     )
-    val (addedBlocks, inlinedFinalValOpt, inlinedFinalStateOpt) = outputNodes match{
+    val (addedBlocks, inlinedFinalValOpt, inlinedFinalStateOpt) = outputNodes match {
       case Some((inlinedLastBlock, inlinedFinalValOpt, inlinedFinalState)) =>
         // Wire up return value, state and block
         nextState.parent = inlinedFinalState
@@ -165,7 +172,7 @@ object Inliner {
         nextState.parent = throwBlock
         throwBlock.nextState = nextState
         nodeBlock.next.replaceUpstream(nodeBlock, throwBlock)
-        nodeBlock.next match{
+        nodeBlock.next match {
           case b: SSA.Merge =>
             b.phis.foreach(_.replaceUpstream(nodeBlock, throwBlock))
             throwBlock.nextPhis ++= b.phis
@@ -179,7 +186,7 @@ object Inliner {
     }
 
     // Wire up input block
-    if (outputNodes.isEmpty || !calledBody.allTerminals.contains(calledStartBlock.next)){
+    if (outputNodes.isEmpty || !calledBody.allTerminals.contains(calledStartBlock.next)) {
       // If the inlined method has internal control flow, the input block and output
       // blocks are different and we have to wire them up properly
       nodeBlock.next = calledStartBlock.next
@@ -217,12 +224,14 @@ object Inliner {
     visitedMethods.remove(edge.called)
   }
 
-  def prepareOutputNodes(classManager: ClassManager.Frozen,
-                         log: Logger.InferredMethod,
-                         nodeBlock: SSA.Block,
-                         returns: mutable.Buffer[(SSA.State, SSA.Jump, Option[SSA.Val])],
-                         nextState: SSA.State,
-                         inferred: mutable.LinkedHashMap[SSA.Val, IType]) = {
+  def prepareOutputNodes(
+    classManager: ClassManager.Frozen,
+    log: Logger.InferredMethod,
+    nodeBlock: SSA.Block,
+    returns: mutable.Buffer[(SSA.State, SSA.Jump, Option[SSA.Val])],
+    nextState: SSA.State,
+    inferred: mutable.LinkedHashMap[SSA.Val, IType]
+  ) = {
     log.pprint(returns)
     returns match {
       case Seq() =>
@@ -231,11 +240,13 @@ object Inliner {
 //        returnedState.downstreamRemoveAll(returnNode)
         returnedValOpt.foreach(_.downstreamRemoveAll(returnNode))
 
-        Some((
-          returnNode.block,
-          returnedValOpt.flatMap(v => inferred.get(v).map((v, _))),
-          returnedState
-        ))
+        Some(
+          (
+            returnNode.block,
+            returnedValOpt.flatMap(v => inferred.get(v).map((v, _))),
+            returnedState
+          )
+        )
 
       case triplets => // multiple returns
         val valPhiOpt =
@@ -246,7 +257,7 @@ object Inliner {
               mutable.LinkedHashMap.empty,
               classManager
                 .mergeTypes(
-                  triplets.collect{ case (s, j, v) if inferred.contains(v.get) => v.get.jtype }
+                  triplets.collect { case (s, j, v) if inferred.contains(v.get) => v.get.jtype }
                 )
                 .get
                 .asInstanceOf[JType]
@@ -254,12 +265,11 @@ object Inliner {
             triplets.map { case (s, j, v) => phi.incoming.put(j.block, v.get) }
             val inferredMerged = classManager
               .mergeTypes(
-                triplets.flatMap { case (s, j, v) => inferred.get(v.get)}
+                triplets.flatMap { case (s, j, v) => inferred.get(v.get) }
               )
               .get
             Some((phi, inferredMerged))
           }
-
 
         val merge = new SSA.Merge(
           mutable.LinkedHashMap.empty,
@@ -269,25 +279,28 @@ object Inliner {
 
         val returnedState = new SSA.State(merge)
 
-        for((s, j, v) <- triplets){
+        for ((s, j, v) <- triplets) {
           merge.incoming.put(j.block, s)
           s.next = merge
           valPhiOpt.foreach(t => v.foreach(_.downstreamAdd(t._1)))
         }
 
-        triplets.foreach { case (s, j, v) =>
-          j.block.next = merge
-          j.block.nextPhis ++= valPhiOpt.map(_._1)
-          v.foreach(_.downstreamRemoveAll(j))
+        triplets.foreach {
+          case (s, j, v) =>
+            j.block.next = merge
+            j.block.nextPhis ++= valPhiOpt.map(_._1)
+            v.foreach(_.downstreamRemoveAll(j))
         }
 
         valPhiOpt.foreach(_._1.block = merge)
 
-        Some((
-          merge,
-          valPhiOpt,
-          returnedState
-        ))
+        Some(
+          (
+            merge,
+            valPhiOpt,
+            returnedState
+          )
+        )
     }
   }
 }

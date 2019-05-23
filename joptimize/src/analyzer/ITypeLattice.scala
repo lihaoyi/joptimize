@@ -2,22 +2,21 @@ package joptimize.analyzer
 
 import joptimize.model._
 
-class ITypeLattice(merge: (IType, IType) => Option[IType],
-                   inferredArgs: Seq[IType]) extends Lattice[IType]{
+class ITypeLattice(merge: (IType, IType) => Option[IType], inferredArgs: Seq[IType])
+    extends Lattice[IType] {
   def transferValue(node: SSA.Val, inferences: SSA.Val => IType) = {
-    node match{
+    node match {
       case n: SSA.New => n.cls
       case n: SSA.CheckCast => n.desc
       case n: SSA.InstanceOf =>
         val inferredSrc = inferences(n.src)
-        merge(inferredSrc, n.desc) match{
+        merge(inferredSrc, n.desc) match {
           case None => CType.I(0)
           case Some(merged) =>
             if (merged == n.desc) CType.I(1)
             else if (merged == inferredSrc) JType.Prim.Z
             else CType.I(0)
         }
-
 
       case n: SSA.Arg => inferredArgs(n.index)
 
@@ -64,7 +63,6 @@ class ITypeLattice(merge: (IType, IType) => Option[IType],
               }
             )
           case (a: CType.J, b: CType.J) =>
-
             n.opcode match {
               case SSA.BinOp.LADD => CType.J(a.value + b.value)
               case SSA.BinOp.LSUB => CType.J(a.value - b.value)
@@ -87,7 +85,6 @@ class ITypeLattice(merge: (IType, IType) => Option[IType],
               }
             )
           case (a: CType.F, b: CType.F) =>
-
             n.opcode match {
               case SSA.BinOp.FADD => CType.F(a.value + b.value)
               case SSA.BinOp.FSUB => CType.F(a.value - b.value)
@@ -95,18 +92,19 @@ class ITypeLattice(merge: (IType, IType) => Option[IType],
               case SSA.BinOp.FDIV => CType.F(a.value / b.value)
               case SSA.BinOp.FREM => CType.F(a.value % b.value)
 
-              case SSA.BinOp.FCMPL => CType.I(
-                if (java.lang.Float.isNaN(a.value) || java.lang.Float.isNaN(b.value)) -1
-                else java.lang.Float.compare(a.value, b.value)
-              )
-              case SSA.BinOp.FCMPG => CType.I(
-                if (java.lang.Float.isNaN(a.value) || java.lang.Float.isNaN(b.value)) 1
-                else java.lang.Float.compare(a.value, b.value)
-              )
+              case SSA.BinOp.FCMPL =>
+                CType.I(
+                  if (java.lang.Float.isNaN(a.value) || java.lang.Float.isNaN(b.value)) -1
+                  else java.lang.Float.compare(a.value, b.value)
+                )
+              case SSA.BinOp.FCMPG =>
+                CType.I(
+                  if (java.lang.Float.isNaN(a.value) || java.lang.Float.isNaN(b.value)) 1
+                  else java.lang.Float.compare(a.value, b.value)
+                )
             }
 
           case (a: CType.D, b: CType.D) =>
-
             n.opcode match {
               case SSA.BinOp.DADD => CType.D(a.value + b.value)
               case SSA.BinOp.DSUB => CType.D(a.value - b.value)
@@ -114,19 +112,20 @@ class ITypeLattice(merge: (IType, IType) => Option[IType],
               case SSA.BinOp.DDIV => CType.D(a.value / b.value)
               case SSA.BinOp.DREM => CType.D(a.value % b.value)
 
-              case SSA.BinOp.DCMPL => CType.I(
-                if (java.lang.Double.isNaN(a.value) || java.lang.Double.isNaN(b.value)) -1
-                else java.lang.Double.compare(a.value, b.value)
-              )
-              case SSA.BinOp.DCMPG => CType.I(
-                if (java.lang.Double.isNaN(a.value) || java.lang.Double.isNaN(b.value)) 1
-                else java.lang.Double.compare(a.value, b.value)
-              )
+              case SSA.BinOp.DCMPL =>
+                CType.I(
+                  if (java.lang.Double.isNaN(a.value) || java.lang.Double.isNaN(b.value)) -1
+                  else java.lang.Double.compare(a.value, b.value)
+                )
+              case SSA.BinOp.DCMPG =>
+                CType.I(
+                  if (java.lang.Double.isNaN(a.value) || java.lang.Double.isNaN(b.value)) 1
+                  else java.lang.Double.compare(a.value, b.value)
+                )
             }
           case _ => n.opcode.tpe
         }
       case n: SSA.UnaOp =>
-
         inferences(n.a) match {
           case a: CType.I =>
             n.opcode match {
@@ -171,4 +170,3 @@ class ITypeLattice(merge: (IType, IType) => Option[IType],
     res
   }
 }
-

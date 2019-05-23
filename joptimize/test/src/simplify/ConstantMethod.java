@@ -2,29 +2,29 @@ package test.simplify;
 
 class ConstantMethod {
     @test.Test(
-        inputs = {0, 1},
-        checkPresent = {"ConstantMethod.intMain0"},
-        checkRemoved = {"ConstantMethod.callInt"},
-        checkNotMangled = {"ConstantMethod.callInt"}
+            inputs = {0, 1},
+            checkPresent = {"ConstantMethod.intMain0"},
+            checkRemoved = {"ConstantMethod.callInt"},
+            checkNotMangled = {"ConstantMethod.callInt"}
     )
     static int intMain0(int b) {
         return callInt(true);
     }
 
     @test.Test(
-        inputs = {0, 1},
-        checkPresent = {"ConstantMethod.intMain"},
-        checkRemoved = {"ConstantMethod.callInt"},
-        checkNotMangled = {"ConstantMethod.callInt"}
+            inputs = {0, 1},
+            checkPresent = {"ConstantMethod.intMain"},
+            checkRemoved = {"ConstantMethod.callInt"},
+            checkNotMangled = {"ConstantMethod.callInt"}
     )
     static int intMain(int b) {
         return b != 0 ? callInt(true) : callInt(false);
     }
 
     @test.Test(
-        inputs = {0, 1},
-        checkPresent = {"ConstantMethod.nonFoldedIntMain", "ConstantMethod.callInt"},
-        checkNotMangled = {"ConstantMethod.callInt"}
+            inputs = {0, 1},
+            checkPresent = {"ConstantMethod.nonFoldedIntMain", "ConstantMethod.callInt"},
+            checkNotMangled = {"ConstantMethod.callInt"}
     )
 
     static int nonFoldedIntMain(int b) {
@@ -37,10 +37,10 @@ class ConstantMethod {
     }
 
     @test.Test(
-        inputs = {0, 1},
-        checkPresent = {"ConstantMethod.boolMain"},
-        checkRemoved = {"ConstantMethod.callBool"},
-        checkNotMangled = {"ConstantMethod.callBool"}
+            inputs = {0, 1},
+            checkPresent = {"ConstantMethod.boolMain"},
+            checkRemoved = {"ConstantMethod.callBool"},
+            checkNotMangled = {"ConstantMethod.callBool"}
     )
     static boolean boolMain(int b) {
         return b != 0 ? callBool(true) : callBool(false);
@@ -51,9 +51,9 @@ class ConstantMethod {
     }
 
     @test.Test(
-        inputs = {0, 1},
-        checkPresent = {"ConstantMethod.impureMain"},
-        checkMangled = {"ConstantMethod.callImpure"}
+            inputs = {0, 1},
+            checkPresent = {"ConstantMethod.impureMain"},
+            checkMangled = {"ConstantMethod.callImpure"}
     )
     static boolean impureMain(int b) {
         return b != 0 ? callImpure(true) : callImpure(false);

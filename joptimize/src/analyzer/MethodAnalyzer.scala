@@ -36,14 +36,16 @@ import scala.collection.mutable
   * return type inferred, and insert the value into the current `evaluated` dictionary
   * before continuing to step through this [[MethodAnalyzer]]
   */
-class MethodAnalyzer[T](methodBody: MethodBody,
-                        initialValues: Map[SSA.Val, T],
-                        initialBlock: SSA.Block,
-                        lattice: Lattice[T],
-                        log: Logger.InferredMethod,
-                        brancher: Brancher[T],
-                        bottom: T,
-                        void: T){
+class MethodAnalyzer[T](
+  methodBody: MethodBody,
+  initialValues: Map[SSA.Val, T],
+  initialBlock: SSA.Block,
+  lattice: Lattice[T],
+  log: Logger.InferredMethod,
+  brancher: Brancher[T],
+  bottom: T,
+  void: T
+) {
 
   log.graph("PRE OPTIMISTIC ANALYSIS")(Renderer.dumpSvg(methodBody))
 
@@ -52,6 +54,7 @@ class MethodAnalyzer[T](methodBody: MethodBody,
     */
   val evaluateWorkList = mutable.LinkedHashSet[Evaluate](Evaluate.Block(initialBlock))
   val jumpWorkList = mutable.LinkedHashSet[BlockJump]()
+
   /**
     * A queue of tasks to perform when traversing invalidated already-seen code. Takes
     * priority over [[evaluateWorkList]] during traversal, as we would like to complete
@@ -79,7 +82,7 @@ class MethodAnalyzer[T](methodBody: MethodBody,
   val inferredThrows = mutable.LinkedHashMap.empty[SSA.AThrow, T]
 
   def step(): MethodAnalyzer.Step[T] = {
-    if (invalidateWorkList.nonEmpty){
+    if (invalidateWorkList.nonEmpty) {
       val item = invalidateWorkList.head
       invalidateWorkList.remove(item)
       item match {
@@ -87,21 +90,21 @@ class MethodAnalyzer[T](methodBody: MethodBody,
         case Invalidate.Invoke(v) => queueDownstreamInvalidations(v)
         case Invalidate.Incremental(v) => invalidateValue(v)
       }
-    } else if (evaluateWorkList.nonEmpty){
+    } else if (evaluateWorkList.nonEmpty) {
       val item = evaluateWorkList.head
       log.pprint(item)
       evaluateWorkList.remove(item)
-      item match{
+      item match {
         case Evaluate.Val(v) =>
           if (!evaluated.contains(v)) evaluateVal(v)
           else Step.Continue(Nil)
 
         case Evaluate.Block(currentBlock) =>
-
           log.pprint(currentBlock)
-          val set = currentBlock.next match{
-            case next: SSA.Merge => next.incoming.find(_._1 == currentBlock).map(_._2: SSA.ValOrState).toSet
-            case next => next.upstream.collect{case v: SSA.ValOrState => v}.toSet
+          val set = currentBlock.next match {
+            case next: SSA.Merge =>
+              next.incoming.find(_._1 == currentBlock).map(_._2: SSA.ValOrState).toSet
+            case next => next.upstream.collect { case v: SSA.ValOrState => v }.toSet
           }
 
           queueSortedUpstreams(set)
@@ -113,32 +116,32 @@ class MethodAnalyzer[T](methodBody: MethodBody,
           Step.Continue(Nil)
       }
 
-    }else if (jumpWorkList.nonEmpty) {
+    } else if (jumpWorkList.nonEmpty) {
       val item = jumpWorkList.head
       jumpWorkList.remove(item)
-      item match{
+      item match {
 
         case BlockJump(currentBlock) =>
           val nextBlocks = computeNextBlocks(currentBlock)
-          for(nextBlock <- nextBlocks){
+          for (nextBlock <- nextBlocks) {
             evaluateWorkList.add(Evaluate.Transition(currentBlock, nextBlock))
           }
           Step.Continue(Nil)
       }
-    }else{
+    } else {
       Step.Done()
     }
   }
 
   def queueDownstreamInvalidations(v: SSA.Val): Step.Continue[T] = {
-    val downstreams = v.downstreamList.filter{
+    val downstreams = v.downstreamList.filter {
       case v: SSA.Val => evaluated.contains(v)
       case j: SSA.Jump => liveBlocks.contains(j.block)
       case s: SSA.State => false
     }
     downstreams.foreach {
       case phi: SSA.Phi =>
-        if (evaluated(v) != evaluated(phi)){
+        if (evaluated(v) != evaluated(phi)) {
           evaluated(phi) = lattice.join(evaluated(v), evaluated(phi))
           invalidateWorkList.add(Invalidate.Phi(phi))
         }
@@ -147,17 +150,17 @@ class MethodAnalyzer[T](methodBody: MethodBody,
       case nextV: SSA.Val => invalidateWorkList.add(Invalidate.Incremental(nextV))
       case j: SSA.Jump => jumpWorkList.add(BlockJump(j.block))
     }
-    Step.Continue(downstreams.collect{case v: SSA.Val => v})
+    Step.Continue(downstreams.collect { case v: SSA.Val => v })
   }
 
   def invalidateValue(v: SSA.Val): MethodAnalyzer.Step[T] = {
-    val upstream = v.upstream.collect{case v: SSA.Val => evaluated.getOrElse(v, JType.Bottom)}
+    val upstream = v.upstream.collect { case v: SSA.Val => evaluated.getOrElse(v, JType.Bottom) }
 
     if (upstream.contains(JType.Bottom)) Step.Continue(Seq(v)) // do nothing
     else {
       val newValue = lattice.transferValue(v, evaluated)
       if (evaluated(v) == newValue) Step.Continue(Seq(v))
-      else{
+      else {
         evaluated(v) = newValue
         queueDownstreamInvalidations(v)
       }
@@ -232,7 +235,6 @@ class MethodAnalyzer[T](methodBody: MethodBody,
     newPhiExpressions
   }
 
-
   def queueNextBlockTwo(currentBlock: SSA.Block, nextBlock: SSA.Block) = {
     val newPhiValues = getNewPhiExpressions(currentBlock, nextBlock)
       .map { case (phi, expr) => phi -> evaluated(expr) }
@@ -245,7 +247,7 @@ class MethodAnalyzer[T](methodBody: MethodBody,
       }
       liveBlocks.add(nextBlock)
       evaluateWorkList.add(Evaluate.Block(nextBlock))
-    }else{
+    } else {
       for ((k, v) <- newPhiValues) {
         val old = evaluated(k)
         if (old != v) {
@@ -261,19 +263,18 @@ class MethodAnalyzer[T](methodBody: MethodBody,
     }
   }
 
-
   def queueNextBlock(currentBlock: SSA.Block, nextBlock: SSA.Block) = {
     val newPhiExpressions = getNewPhiExpressions(currentBlock, nextBlock)
 
     queueSortedUpstreams(newPhiExpressions.map(_._2).toSet)
   }
 
-
   def queueSortedUpstreams(set: Set[SSA.ValOrState]) = {
     val topoed = topoSort(set.filter(!_.isInstanceOf[SSA.Phi]))
     log.pprint(topoed)
-    topoed.collect { case v: SSA.Val =>
-      evaluateWorkList.add(Evaluate.Val(v))
+    topoed.collect {
+      case v: SSA.Val =>
+        evaluateWorkList.add(Evaluate.Val(v))
     }
   }
 
@@ -296,13 +297,13 @@ class MethodAnalyzer[T](methodBody: MethodBody,
 
   def evaluateVal(v: SSA.Val): Step[T] = {
     if (evaluated.contains(v)) Step.Continue(Nil)
-    else{
-      val upstream = v.upstream.collect{case v: SSA.Val => evaluated(v)}
+    else {
+      val upstream = v.upstream.collect { case v: SSA.Val => evaluated(v) }
       if (upstream.contains(bottom)) {
         evaluated(v) = bottom
         Step.Continue(Nil)
       } else {
-        v match{
+        v match {
           case n: SSA.Invoke =>
           case n: SSA.InvokeDynamic =>
           case _ => evaluated(v) = lattice.transferValue(v, evaluated)
@@ -314,16 +315,16 @@ class MethodAnalyzer[T](methodBody: MethodBody,
 }
 object MethodAnalyzer {
   sealed trait Invalidate
-  object Invalidate{
+  object Invalidate {
     case class Phi(src: SSA.Phi) extends Invalidate
     case class Invoke(src: SSA.Invoke) extends Invalidate
     case class InvokeDynamic(src: SSA.InvokeDynamic) extends Invalidate
-    case class Incremental(src: SSA.Val) extends Invalidate{
+    case class Incremental(src: SSA.Val) extends Invalidate {
       assert(!src.isInstanceOf[SSA.Invoke] && !src.isInstanceOf[SSA.Phi])
     }
   }
   sealed trait Evaluate
-  object Evaluate{
+  object Evaluate {
     case class Val(value: SSA.Val) extends Evaluate
     case class Block(value: SSA.Block) extends Evaluate
     case class Transition(src: SSA.Block, dest: SSA.Block) extends Evaluate
@@ -332,18 +333,19 @@ object MethodAnalyzer {
   case class BlockJump(value: SSA.Block)
 
   sealed trait Step[T]
-  object Step{
+  object Step {
     case class Continue[T](node: Seq[SSA.Val]) extends Step[T]
     case class Done[T]() extends Step[T]
   }
-  case class Result[T](inferredTerminals: mutable.LinkedHashMap[SSA.Jump, T],
-                       inferred: mutable.LinkedHashMap[SSA.Val, T],
-                       liveBlocks: Set[SSA.Block])
-
+  case class Result[T](
+    inferredTerminals: mutable.LinkedHashMap[SSA.Jump, T],
+    inferred: mutable.LinkedHashMap[SSA.Val, T],
+    liveBlocks: Set[SSA.Block]
+  )
 
   def topoSort[T](set: Set[SSA.ValOrState]) = {
     val agg = Util.breadthFirstSeen[SSA.ValOrState](set)(
-      _.upstream.collect{ case s: SSA.ValOrState if !s.isInstanceOf[SSA.Phi] => s}
+      _.upstream.collect { case s: SSA.ValOrState if !s.isInstanceOf[SSA.Phi] => s }
     )
 
     val aggArray = agg.toArray

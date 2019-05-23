@@ -54,7 +54,7 @@ public class Arrays {
     @test.Test(inputs = {1, 2, 3, 4, 5, 6})
     public static double[][][] set3(int a, int b, int c) {
         double[][][] x = new double[a][b][c];
-        x[a-1][b-1][c-1] = 999;
+        x[a - 1][b - 1][c - 1] = 999;
         return x;
     }
 
@@ -73,6 +73,7 @@ public class Arrays {
         x[n] = y + 1;
         return x[n];
     }
+
     @test.Test(inputs = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12})
     public static int getAndSet2(int n) {
         int[] x = new int[n + 1];
@@ -82,6 +83,7 @@ public class Arrays {
         x[n] = z + 1;
         return x[n];
     }
+
     @test.Test(inputs = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12})
     public static int getAndSet3(int n) {
         int[][] x = new int[n + 1][n + 1];

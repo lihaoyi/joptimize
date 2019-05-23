@@ -11,9 +11,7 @@ import scala.collection.mutable
 import collection.JavaConverters._
 object ConstructSSA {
 
-  def apply(sig: MethodSig,
-            mn: MethodNode,
-            log: Logger.Method) = {
+  def apply(sig: MethodSig, mn: MethodNode, log: Logger.Method) = {
     val phiMerges0 = mutable.LinkedHashSet.empty[SSA.Phi]
 
     val insns = mn.instructions.iterator().asScala.toVector
@@ -24,15 +22,27 @@ object ConstructSSA {
     val printer = new Textifier
     val methodPrinter = new TraceMethodVisitor(printer)
 
-    log(Renderer.renderInsns(mn.instructions, printer, methodPrinter, decorate = i => pprint.apply(decoration(i))))
+    log(
+      Renderer.renderInsns(
+        mn.instructions,
+        printer,
+        methodPrinter,
+        decorate = i => pprint.apply(decoration(i))
+      )
+    )
     val startRegionLookup = ControlFlowExtraction.findStartRegionLookup(insns, regionStarts)
 
     val argMapping = Util.argMapping(sig, _ => true).map(_.swap)
     val blockStartStates = regionStarts.map(_.map(new SSA.State(_)))
-    val frames = joptimize.frontend.DataflowExecutor.analyze(
-      sig.cls.name, mn, blockStartStates,
-      new BytecodeToSSAInterpreter(phiMerges0, startRegionLookup, regionStarts, argMapping)
-    )
+    val frames = joptimize
+      .frontend
+      .DataflowExecutor
+      .analyze(
+        sig.cls.name,
+        mn,
+        blockStartStates,
+        new BytecodeToSSAInterpreter(phiMerges0, startRegionLookup, regionStarts, argMapping)
+      )
 
 //    log.println(
 //      Renderer

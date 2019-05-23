@@ -95,15 +95,17 @@ public class Statics {
         return n + x + y + z;
 
     }
+
     static int staticInitValue = 10;
-    static class StaticInit{
+
+    static class StaticInit {
         static int dummy = 123;
 
-        static int get(){
+        static int get() {
             return 100;
         }
 
-        static{
+        static {
             System.out.println("Hello!");
             Statics.staticInitValue = 1000;
         }

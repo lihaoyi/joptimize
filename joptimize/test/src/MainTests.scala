@@ -1,8 +1,8 @@
 package test
 import utest._
 import MainTestUtils.annotatedTest
-object MainTests extends TestSuite{
-  def tests = Tests{
+object MainTests extends TestSuite {
+  def tests = Tests {
     'simple - {
       'Hello - {
         'incrI - annotatedTest
@@ -256,7 +256,6 @@ object MainTests extends TestSuite{
         'shallow - annotatedTest
         'deep - annotatedTest
       }
-
 
       'Liveness - {
         'entrypointUnused0 - annotatedTest

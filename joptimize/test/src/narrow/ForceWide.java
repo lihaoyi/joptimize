@@ -5,8 +5,8 @@ class ForceWide {
     static Foo f2 = new Qux();
 
     @test.Test(
-        inputs = {1, 2},
-        checkPresent = {"ForceWide.call"}
+            inputs = {1, 2},
+            checkPresent = {"ForceWide.call"}
     )
     static int main(int x, int y) {
         return call(f1, x) + call(f2, y);

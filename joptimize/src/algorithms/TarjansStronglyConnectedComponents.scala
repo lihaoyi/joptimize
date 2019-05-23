@@ -14,7 +14,6 @@ object TarjansStronglyConnectedComponents {
     val lowlink = new Array[Int](n)
     val components = mutable.ArrayBuffer.empty[Seq[Int]]
 
-
     for (u <- 0 until n) {
       if (!visited(u)) dfs(u)
     }

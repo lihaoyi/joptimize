@@ -2,9 +2,9 @@ package test.narrow;
 
 class Supertype {
     @test.Test(
-        inputs = {2, 1, 1, 2},
-        checkRemoved = {"Supertype.call"},
-        checkMangled = {"Supertype.call"}
+            inputs = {2, 1, 1, 2},
+            checkRemoved = {"Supertype.call"},
+            checkMangled = {"Supertype.call"}
     )
     static int main(int x, int y) {
         return call(new Bar(), x) + call(new Qux(), y);
@@ -16,9 +16,9 @@ class Supertype {
     }
 
     @test.Test(
-        inputs = {2, 1, 1, 2},
-        checkRemoved = {"Supertype.call"},
-        checkMangled = {"Supertype.call", "Supertype.callDeep"}
+            inputs = {2, 1, 1, 2},
+            checkRemoved = {"Supertype.call"},
+            checkMangled = {"Supertype.call", "Supertype.callDeep"}
     )
     static int mainDeep(int x, int y) {
         return callDeep(new Bar(), x) + callDeep(new Qux(), y);

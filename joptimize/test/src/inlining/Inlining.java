@@ -6,7 +6,7 @@ public class Inlining {
             checkRemoved = {"Inlining.called"},
             assertOnInlined = true
     )
-    static int simple(int a){
+    static int simple(int a) {
         return called(a);
     }
 
@@ -24,7 +24,7 @@ public class Inlining {
     }
 
     static int conditional0(int bc) {
-        return bc != 0 ? 1 : 0 ;
+        return bc != 0 ? 1 : 0;
     }
 
     @test.Test(
@@ -33,20 +33,21 @@ public class Inlining {
             assertOnInlined = true
     )
     static int conditionalIf(int a, int b) {
-        if (a == 0){
+        if (a == 0) {
             return conditionalIf0(b);
-        }else{
+        } else {
             return 0;
         }
     }
 
     static int conditionalIf0(int bc) {
-        if (bc == 0){
+        if (bc == 0) {
             return 1;
-        }else{
+        } else {
             return -1;
         }
     }
+
     @test.Test(
             inputs = {0, 0, 0, 1, 1, 0, 1, 1},
             checkRemoved = {"Inlining.conditionalVoid0"},
@@ -54,20 +55,21 @@ public class Inlining {
     )
     static int conditionalVoid(int a, int b) {
         int[] box = {0};
-        if (a == 0){
+        if (a == 0) {
             conditionalVoid0(box, b);
         }
         return box[0];
     }
 
     static void conditionalVoid0(int[] box, int bc) {
-        if (bc == 0){
+        if (bc == 0) {
             box[0] = bc;
-        }else{
+        } else {
             box[0] = -bc;
         }
         return;
     }
+
     @test.Test(
             inputs = {0, 0, 0, 1, 1, 0, 1, 1},
             checkRemoved = {"Inlining.conditionalIfVoid0"},
@@ -75,40 +77,42 @@ public class Inlining {
     )
     static int conditionalIfVoid(int a, int b) {
         int[] box = {0};
-        if (a == 0){
+        if (a == 0) {
             conditionalIfVoid0(box, b);
             return box[0];
-        }else{
+        } else {
             return box[0];
         }
     }
 
     static void conditionalIfVoid0(int[] box, int bc) {
-        if (bc == 0){
+        if (bc == 0) {
             box[0] = bc;
             return;
-        }else{
+        } else {
             box[0] = -bc;
             return;
         }
     }
+
     @test.Test(
             inputs = {0},
             checkRemoved = {"Inlining.thrower0"},
             assertOnInlined = true
     )
     static int thrower(int a) throws Exception {
-        if (a != 0){
+        if (a != 0) {
             thrower0();
             return (a + 123) * 456;
-        }else{
+        } else {
             return 789;
         }
     }
 
-    static void thrower0() throws Exception{
+    static void thrower0() throws Exception {
         throw new Exception();
     }
+
     @test.Test(
             inputs = {0},
             checkRemoved = {"Inlining.throwerComplex0"},
@@ -123,11 +127,12 @@ public class Inlining {
         return 1;
     }
 
-    static void throwerComplex0(int a) throws Exception{
+    static void throwerComplex0(int a) throws Exception {
         int x = 1;
         if (a > 100) x += 2;
         throw new Exception(String.valueOf(x));
     }
+
     @test.Test(
             inputs = {0},
             checkRemoved = {"Inlining.throwerPartialMerge0"},
@@ -135,21 +140,22 @@ public class Inlining {
     )
     static int throwerPartialMerge(int a) throws Exception {
         int x = 0;
-        if (a != 0){
+        if (a != 0) {
             throwerPartialMerge0(a);
             x = 1;
-        }else{
+        } else {
             x = 2;
         }
         return x;
     }
 
-    static void throwerPartialMerge0(int a) throws Exception{
+    static void throwerPartialMerge0(int a) throws Exception {
         int x = 1;
         if (a > 100) x += 2;
         else x += 3;
         throw new Exception(String.valueOf(x));
     }
+
     @test.Test(
             inputs = {0},
             checkRemoved = {"Inlining.throwerFullMerge1", "Inlining.throwerFullMerge2"},
@@ -157,27 +163,28 @@ public class Inlining {
     )
     static int throwerFullMerge(int a) throws Exception {
         int x = 0;
-        if (a > 100){
-            if (a > 200){
+        if (a > 100) {
+            if (a > 200) {
                 throwerFullMerge1(a);
                 x = 1;
-            }else{
+            } else {
                 throwerFullMerge2(a);
                 x = 2;
             }
             return x;
-        } else{
+        } else {
             return -1;
         }
     }
 
-    static void throwerFullMerge1(int a) throws Exception{
+    static void throwerFullMerge1(int a) throws Exception {
         int x = 1;
         if (a > 100) x += 1;
         else x += 3;
         throw new Exception(String.valueOf(x));
     }
-    static void throwerFullMerge2(int a) throws Exception{
+
+    static void throwerFullMerge2(int a) throws Exception {
         int x = 1;
         if (a > 100) x += 2;
         else x += 3;

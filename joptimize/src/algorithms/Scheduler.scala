@@ -7,11 +7,13 @@ import joptimize.model.SSA
 import scala.collection.mutable
 
 object Scheduler {
-  def apply(loopTree: HavlakLoopTree.Loop[SSA.Block],
-            dominators: Dominator.Result[SSA.Block],
-            startBlock: SSA.Block,
-            allVertices: Set[SSA.Node],
-            log: Logger.InferredMethod): mutable.LinkedHashMap[SSA.ValOrState, SSA.Block] = {
+  def apply(
+    loopTree: HavlakLoopTree.Loop[SSA.Block],
+    dominators: Dominator.Result[SSA.Block],
+    startBlock: SSA.Block,
+    allVertices: Set[SSA.Node],
+    log: Logger.InferredMethod
+  ): mutable.LinkedHashMap[SSA.ValOrState, SSA.Block] = {
 
     val loopNestMap = mutable.LinkedHashMap.empty[SSA.Node, Int]
     def recLoop(loop: HavlakLoopTree.Loop[SSA.Block], depth: Int): Unit = {
@@ -24,7 +26,8 @@ object Scheduler {
     val scheduler = new ClickScheduler(dominators, log) {
       override def downstream(ssa: SSA.Node) = ssa.downstreamList.toSeq
 
-      override def upstream(ssa: SSA.Node) = ssa.upstream.collect{case ssa: SSA.ValOrState => ssa}
+      override def upstream(ssa: SSA.Node) =
+        ssa.upstream.collect { case ssa: SSA.ValOrState => ssa }
 
       override def isPinned(ssa: SSA.Node) = ssa.isInstanceOf[SSA.Control]
 
@@ -34,28 +37,28 @@ object Scheduler {
       }
     }
 
-    allVertices.collect{
+    allVertices.collect {
       case c: SSA.Phi => scheduler.block(c) = c.block
       case c: SSA.Val if c.upstream.isEmpty => scheduler.block(c) = startBlock
       case c: SSA.State =>
-        c.parent match{
+        c.parent match {
           case b: SSA.Block => scheduler.block(c) = b
           case _ =>
         }
     }
 
-    allVertices.collect{
+    allVertices.collect {
       case scheduleRoot: SSA.Phi => scheduler.scheduleEarlyRoot(scheduleRoot)
       case scheduleRoot: SSA.Control => scheduler.scheduleEarlyRoot(scheduleRoot)
     }
 
-    allVertices.collect{
+    allVertices.collect {
       case scheduleRoot: SSA.Phi => scheduler.scheduleLateRoot(scheduleRoot)
       case scheduleRoot: SSA.Control => scheduler.scheduleLateRoot(scheduleRoot)
       case scheduleRoot if scheduleRoot.upstreamVals.isEmpty =>
         scheduler.scheduleLateRoot(scheduleRoot)
     }
 
-    scheduler.block.filter{case (k, v) => v != null}
+    scheduler.block.filter { case (k, v) => v != null }
   }
 }

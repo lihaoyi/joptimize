@@ -9,8 +9,10 @@ object Dominator {
     val indices = allNodes.zipWithIndex.toMap
     val nodes = indices.map(_.swap)
 
-    val successorMap = edges.groupBy(_._1).map{case (k, v) => (indices(k), v.map(_._2).map(indices))}
-    val predecessorMap = edges.groupBy(_._2).map{case (k, v) => (indices(k), v.map(_._1).map(indices))}
+    val successorMap =
+      edges.groupBy(_._1).map { case (k, v) => (indices(k), v.map(_._2).map(indices)) }
+    val predecessorMap =
+      edges.groupBy(_._2).map { case (k, v) => (indices(k), v.map(_._1).map(indices)) }
 
     val immediateDominators = new LengauerTarjanDominatorTree {
       def successors(v: Int) = successorMap.getOrElse(v, Nil)
@@ -22,7 +24,7 @@ object Dominator {
       Array.tabulate(immediateDominators.length) { i =>
         var current = i
         var n = 0
-        while (immediateDominators(current) != -1){
+        while (immediateDominators(current) != -1) {
           current = immediateDominators(current)
           n += 1
         }
@@ -31,8 +33,11 @@ object Dominator {
     }
 
     Result(
-      immediateDominators.zipWithIndex.collect{case (v, i) if v != -1 => (nodes(i), nodes(v))}.toMap,
-      dominatorDepth.zipWithIndex.map{case (v, i) => (nodes(i), v)}.toMap
+      immediateDominators
+        .zipWithIndex
+        .collect { case (v, i) if v != -1 => (nodes(i), nodes(v)) }
+        .toMap,
+      dominatorDepth.zipWithIndex.map { case (v, i) => (nodes(i), v) }.toMap
     )
   }
 }

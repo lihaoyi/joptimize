@@ -9,12 +9,20 @@ import java.lang.annotation.Target;
 @Target(ElementType.METHOD)
 public @interface Test {
     int[] inputs() default {};
+
     String[] checkPresent() default {};
+
     String[] checkRemoved() default {};
+
     String[] checkClassRemoved() default {};
+
     String[] checkMangled() default {};
+
     String[] checkNotMangled() default {};
+
     int[] addedNumConst() default {};
+
     int[] removedNumConst() default {};
+
     boolean assertOnInlined() default false;
 }

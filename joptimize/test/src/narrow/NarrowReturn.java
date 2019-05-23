@@ -2,9 +2,9 @@ package test.narrow;
 
 class NarrowReturn {
     @test.Test(
-        inputs = {2, 1, 1, 2},
-        checkRemoved = {"NarrowReturn.call"},
-        checkMangled = {"NarrowReturn.call"}
+            inputs = {2, 1, 1, 2},
+            checkRemoved = {"NarrowReturn.call"},
+            checkMangled = {"NarrowReturn.call"}
     )
     static int main(int x, int y) {
         return call(wrap(new Bar()), x) + call(wrap(new Qux()), y);

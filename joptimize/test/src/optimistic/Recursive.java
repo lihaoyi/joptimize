@@ -55,6 +55,7 @@ class Recursive {
             return generalRecursiveHelper(z);
         }
     }
+
     public static int generalRecursiveHelper(int z) {
         return z * z;
     }

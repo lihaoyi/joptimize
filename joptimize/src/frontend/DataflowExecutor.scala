@@ -7,29 +7,37 @@ import org.objectweb.asm.tree.analysis._
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 
-
 /**
   * Fork of {@link org.objectweb.asm.tree.analysis.Analyzer},
   * to give us a bit more flexibility in keeping track of the control flow
   * graph's incoming edges during the {@link Interpreter#merge}
   */
-object DataflowExecutor{
-  def analyze[V <: Value, S](owner: String,
-                                  method: MethodNode,
-                                  blockStartStates: IndexedSeq[Option[S]],
-                                  interpreter: Interpreter[V, S]): Array[Frame[V, S]] = {
+object DataflowExecutor {
+  def analyze[V <: Value, S](
+    owner: String,
+    method: MethodNode,
+    blockStartStates: IndexedSeq[Option[S]],
+    interpreter: Interpreter[V, S]
+  ): Array[Frame[V, S]] = {
+
     /** The instructions of the currently analyzed method. */
     val insnList = method.instructions
+
     /** The size of {@link #insnList}. */
     val insnListSize = insnList.size()
+
     /** The exception handlers of the currently analyzed method (one list per instruction index). */
     val handlers = new Array[mutable.Buffer[TryCatchBlockNode]](insnListSize)
+
     /** The execution stack frames of the currently analyzed method (one per instruction index). */
     val frames = new Array[Frame[V, S]](insnListSize)
+
     /** The instructions that remain to process (one boolean per instruction index). */
     val inInstructionsToProcess = new Array[Boolean](insnListSize)
+
     /** The indices of the instructions that remain to process in the currently analyzed method. */
     val instructionsToProcess = new Array[Int](insnListSize)
+
     /** The number of instructions that remain to process in the currently analyzed method. */
     var numInstructionsToProcess = 0
 
@@ -41,7 +49,7 @@ object DataflowExecutor{
         frames(targetInsnIndex).initFrom(frames(insnIndex))
         frames(targetInsnIndex).merge0(insnIndex, targetInsnIndex, interpreter)
         inInstructionsToProcess(targetInsnIndex) = true
-        blockStartStates(targetInsnIndex).foreach{s =>
+        blockStartStates(targetInsnIndex).foreach { s =>
           frames(targetInsnIndex).state = s
         }
         instructionsToProcess(numInstructionsToProcess) = targetInsnIndex
@@ -56,10 +64,10 @@ object DataflowExecutor{
     // For each exception handler, and each instruction within its range, record in 'handlers' the
     // fact that execution can flow from this instruction to the exception handler.
 
-    for(tryCatchBlock <- method.tryCatchBlocks.asScala){
+    for (tryCatchBlock <- method.tryCatchBlocks.asScala) {
       val startIndex = insnList.indexOf(tryCatchBlock.start)
       val endIndex = insnList.indexOf(tryCatchBlock.end)
-      for(j <- startIndex until endIndex){
+      for (j <- startIndex until endIndex) {
         var insnHandlers = handlers(j)
         if (insnHandlers == null) {
           insnHandlers = new mutable.ArrayBuffer[TryCatchBlockNode]()
@@ -87,7 +95,7 @@ object DataflowExecutor{
         val insnOpcode = insnNode.getOpcode
         val insnType = insnNode.getType
 
-        insnType match{
+        insnType match {
           case AbstractInsnNode.LABEL | AbstractInsnNode.LINE | AbstractInsnNode.FRAME =>
             merge(insnIndex, insnIndex + 1, currentFrame)
 
@@ -102,19 +110,19 @@ object DataflowExecutor{
 
               case lookupSwitchInsn: LookupSwitchInsnNode =>
                 merge(insnIndex, insnList.indexOf(lookupSwitchInsn.dflt), currentFrame)
-                for(label <- lookupSwitchInsn.labels.iterator().asScala){
+                for (label <- lookupSwitchInsn.labels.iterator().asScala) {
                   merge(insnIndex, insnList.indexOf(label), currentFrame)
                 }
 
               case tableSwitchInsn: TableSwitchInsnNode =>
                 merge(insnIndex, insnList.indexOf(tableSwitchInsn.dflt), currentFrame)
-                for(label <- tableSwitchInsn.labels.iterator().asScala){
+                for (label <- tableSwitchInsn.labels.iterator().asScala) {
                   merge(insnIndex, insnList.indexOf(label), currentFrame)
                 }
 
               case _ =>
                 if (insnOpcode != Opcodes.ATHROW &&
-                    (insnOpcode < Opcodes.IRETURN || insnOpcode > Opcodes.RETURN)) {
+                  (insnOpcode < Opcodes.IRETURN || insnOpcode > Opcodes.RETURN)) {
                   merge(insnIndex, insnIndex + 1, currentFrame)
                 }
             }
@@ -134,7 +142,11 @@ object DataflowExecutor{
         }
       } catch {
         case e: AnalyzerException =>
-          throw new AnalyzerException(e.node, "Error at instruction " + insnIndex + ": " + e.getMessage, e)
+          throw new AnalyzerException(
+            e.node,
+            "Error at instruction " + insnIndex + ": " + e.getMessage,
+            e
+          )
       }
     }
 
@@ -148,9 +160,11 @@ object DataflowExecutor{
     * @param method the method to be analyzed.
     * @return the initial execution stack frame of the 'method'.
     */
-  private def computeInitialFrame[V <: Value, S, B](owner: String,
-                                                         method: MethodNode,
-                                                         interpreter: Interpreter[V, S]) = {
+  private def computeInitialFrame[V <: Value, S, B](
+    owner: String,
+    method: MethodNode,
+    interpreter: Interpreter[V, S]
+  ) = {
     val frame = new Frame[V, S](method.maxLocals, method.maxStack)
     var currentLocal = 0
     val isInstanceMethod = (method.access & Opcodes.ACC_STATIC) == 0

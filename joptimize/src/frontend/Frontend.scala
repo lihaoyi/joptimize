@@ -22,7 +22,9 @@ class Frontend(val classManager: ClassManager) {
     Util.labelExceptions(originalSig.toString) {
       val printer = new Textifier
       val methodPrinter = new TraceMethodVisitor(printer)
-      val mn = classManager.loadMethod(originalSig).getOrElse(throw new Exception("Unknown Sig: " + originalSig))
+      val mn = classManager
+        .loadMethod(originalSig)
+        .getOrElse(throw new Exception("Unknown Sig: " + originalSig))
       if (mn.instructions.size() == 0) None
       else {
         log(Renderer.renderInsns(mn.instructions, printer, methodPrinter))
@@ -42,11 +44,10 @@ class Frontend(val classManager: ClassManager) {
     }
   }
 
-
 }
-object Frontend{
+object Frontend {
 
-  def simplifyPhiMerges(methodBody: MethodBody) = methodBody.transform{
+  def simplifyPhiMerges(methodBody: MethodBody) = methodBody.transform {
     case n: SSA.InvokeSpecial if n.name == "<init>" && n.srcs(0).isInstanceOf[SSA.New0] =>
       val newNode = new SSA.New(n.cls, n.state, n.srcs.drop(1), n.desc)
       Util.replace(n, newNode)
@@ -57,12 +58,11 @@ object Frontend{
       if (filteredValues.map(_._2).size == 1) {
         phi.block.phis = phi.block.phis.filter(_ != phi)
         Util.replace(phi, filteredValues.head._2)
-      }
-      else Nil
+      } else Nil
 
     case merge: SSA.Merge =>
       if (merge.incoming.size == 1 && merge.next != null) {
-        for(next <- Option(merge.next) ++ merge.nextPhis){
+        for (next <- Option(merge.next) ++ merge.nextPhis) {
           next.replaceUpstream(merge, merge.incoming.head._1)
         }
         val nextState = merge.nextState
@@ -74,7 +74,6 @@ object Frontend{
 
         merge.next = null
         (merge.incoming.head._1 +: merge.phis) ++ merge.nextPhis ++ Option(merge.nextState)
-      }
-      else Nil
+      } else Nil
   }
 }

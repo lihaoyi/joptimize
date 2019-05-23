@@ -31,7 +31,7 @@ object Chaining {
     if (res.isEmpty) -1 else res.get
   }
 
-  class NamedFunction(a: Int) extends Function1[Integer, Integer]{
+  class NamedFunction(a: Int) extends Function1[Integer, Integer] {
     def apply(x: Integer) = Integer.valueOf(x.intValue() + a)
   }
 
@@ -52,10 +52,10 @@ object Chaining {
     if (res.isEmpty) -1 else res.get
   }
 
-  abstract class Func[-A, +B]{
+  abstract class Func[-A, +B] {
     def apply(a: A): B
   }
-  class IntFunc() extends Func[Int, Int]{
+  class IntFunc() extends Func[Int, Int] {
     def apply(a: Int): Int = 456
   }
   sealed abstract class Option2[+A]
@@ -109,7 +109,7 @@ object Chaining {
     val res1 = xOpt.map(x => x + 1)
     val res2 = yOpt.map(y => y + 2)
 
-    (res1.isEmpty, res2.isEmpty) match{
+    (res1.isEmpty, res2.isEmpty) match {
       case (true, true) => -1
       case (false, true) => res1.get
       case (true, false) => res2.get
@@ -122,7 +122,7 @@ object Chaining {
     val xOpt = if (a % 2 == 0) Some(1) else None
     val yOpt = if (b % 2 == 0) Some(2) else None
     val zOpt = if (c % 2 == 0) Some(3) else None
-    val res = for{
+    val res = for {
       x <- xOpt
       y <- yOpt
       z <- zOpt

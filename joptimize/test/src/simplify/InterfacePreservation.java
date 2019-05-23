@@ -2,14 +2,14 @@ package test.simplify;
 
 class InterfacePreservation {
     @test.Test(
-        inputs = {1, 2}
+            inputs = {1, 2}
     )
     static int shallow(int i) {
         return new Bar().run(i);
     }
 
     @test.Test(
-        inputs = {1, 2}
+            inputs = {1, 2}
     )
     static int deep(int i) {
         return new Qux().run(i);

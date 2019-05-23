@@ -15,20 +15,22 @@ import scala.collection.mutable
   * back into executable bytecode, without all the unreachable, unused or
   * constant-folded instructions
   */
-
-class CodeGenMethod(log: Logger.InferredMethod,
-                    isInterface: JType.Cls => Option[Boolean],
-                    methodBody: MethodBody,
-                    nodesToBlocks: mutable.LinkedHashMap[SSA.ValOrState, SSA.Block],
-                    cfg: Seq[(SSA.Control, SSA.Control)]){
-  val blocksToNodes = nodesToBlocks.groupBy(_._2).map{case (k, v) => (k, v.keys.toSeq)}
-  val sortedBlocks: collection.Set[SSA.Block] = CodeGenMethod.sortControlFlowGraph(cfg).collect{case b: SSA.Block => b}
+class CodeGenMethod(
+  log: Logger.InferredMethod,
+  isInterface: JType.Cls => Option[Boolean],
+  methodBody: MethodBody,
+  nodesToBlocks: mutable.LinkedHashMap[SSA.ValOrState, SSA.Block],
+  cfg: Seq[(SSA.Control, SSA.Control)]
+) {
+  val blocksToNodes = nodesToBlocks.groupBy(_._2).map { case (k, v) => (k, v.keys.toSeq) }
+  val sortedBlocks: collection.Set[SSA.Block] =
+    CodeGenMethod.sortControlFlowGraph(cfg).collect { case b: SSA.Block => b }
   val blockIndices = sortedBlocks.zipWithIndex.toMap
   val labels = sortedBlocks.map(_ -> new LabelNode()).toMap
   val sortedAllNodes = sortedBlocks.flatMap(b => blocksToNodes(b).map(_ -> b))
-  val allProps = sortedAllNodes
-    .collect { case (k: SSA.Val, b) => (k, CodeGenMethod.getValProperties(k, b, nodesToBlocks)) }
-    .toMap
+  val allProps = sortedAllNodes.collect {
+    case (k: SSA.Val, b) => (k, CodeGenMethod.getValProperties(k, b, nodesToBlocks))
+  }.toMap
 
   val (savedLocalNumbers, seen) = CodeGenMethod.computeSavedLocalNumbers(
     methodBody,
@@ -36,7 +38,7 @@ class CodeGenMethod(log: Logger.InferredMethod,
     allProps
   )
 
-  def apply() = log.block{
+  def apply() = log.block {
     // Generates serialized bytecode on a block-by-block basis, walking the blocks in
     // depth-first order, starting from the terminal nodes of each block and walking
     // upstream in depth-first post-order. This includes:
@@ -55,20 +57,20 @@ class CodeGenMethod(log: Logger.InferredMethod,
     //
     // Each block starts ends with an empty operand stack, and any values that are
     // passed between blocks do so in local slots
-    val insnsPerBlock = for(block <- sortedBlocks.toArray) yield{
+    val insnsPerBlock = for (block <- sortedBlocks.toArray) yield {
 //      log.pprint(block -> block.next)
-      val (valsForNextControlInsns, nextStateNodes, suffixInsns) = block.next match{
+      val (valsForNextControlInsns, nextStateNodes, suffixInsns) = block.next match {
         case next: SSA.Merge =>
-
-          val (nextVals, phiStores) = next.phis
-            .map{ phi =>
-              val value = phi.incoming.collect{case (k, v) if k == block => v}
+          val (nextVals, phiStores) = next
+            .phis
+            .map { phi =>
+              val value = phi.incoming.collect { case (k, v) if k == block => v }
               val flatted = value.flatMap(rec(_, fromVal = true, block))
               (flatted, new VarInsnNode(CodeGenMethod.saveOp(phi), savedLocalNumbers(phi)))
             }
             .unzip
 
-          val nextStateNodes = next.incoming.collect{case (k, v) if k == block => v}
+          val nextStateNodes = next.incoming.collect { case (k, v) if k == block => v }
 
           (nextVals.flatten, nextStateNodes, phiStores.reverse)
 
@@ -79,8 +81,9 @@ class CodeGenMethod(log: Logger.InferredMethod,
 
       val valsSavedForOtherBlockInsns = saveValueInsnsForOtherBlocks(block)
 
-      val gotoFooterInsns = block.downstreamList.collect{case b: SSA.Control => b} match{
-        case Seq(d: SSA.Block) if blockIndices(d) != blockIndices(block) + 1 => Some(new JumpInsnNode(GOTO, labels(d)))
+      val gotoFooterInsns = block.downstreamList.collect { case b: SSA.Control => b } match {
+        case Seq(d: SSA.Block) if blockIndices(d) != blockIndices(block) + 1 =>
+          Some(new JumpInsnNode(GOTO, labels(d)))
         case _ => None
       }
 
@@ -94,9 +97,8 @@ class CodeGenMethod(log: Logger.InferredMethod,
       gotoFooterInsns
     }
 
-
     val finalInsns = new InsnList()
-    for(blockInsns <- insnsPerBlock){
+    for (blockInsns <- insnsPerBlock) {
       blockInsns.foreach(finalInsns.add)
     }
 
@@ -107,34 +109,37 @@ class CodeGenMethod(log: Logger.InferredMethod,
     finalInsns
   }
 
-
   def saveValueInsnsForOtherBlocks(block: SSA.Block) = {
-    blocksToNodes(block)
-      .collect { case n: SSA.Val if n.upstream.nonEmpty && !n.isInstanceOf[SSA.Phi] =>
+    blocksToNodes(block).collect {
+      case n: SSA.Val if n.upstream.nonEmpty && !n.isInstanceOf[SSA.Phi] =>
         val props = allProps(n)
         if (props.valUses == 0 && !props.stateUse && props.otherBlockUse) {
           recVal(n, block) ++
           Seq(new VarInsnNode(CodeGenMethod.saveOp(n), savedLocalNumbers(n)))
         } else Nil
-      }
-      .flatten
+    }.flatten
   }
 
   def generateJumpBytecode(ssa: SSA.Jump): Seq[AbstractInsnNode] = {
 
     def computeSwitchLabels(n: SSA.Switch) = (
-      this.labels(n.downstreamList.collect{case t: SSA.Default => t}.head),
-      n.downstreamList.collect{case t: SSA.Case => t}.map(this.labels),
+      this.labels(n.downstreamList.collect { case t: SSA.Default => t }.head),
+      n.downstreamList.collect { case t: SSA.Case => t }.map(this.labels)
     )
 
-    ssa match{
+    ssa match {
       case n: SSA.Branch =>
-        val destination = n.downstreamList.collect{case t: SSA.False => t}.head
+        val destination = n.downstreamList.collect { case t: SSA.False => t }.head
         val goto =
           if (blockIndices(destination) == blockIndices(ssa.block) + 1) None
           else Some(new JumpInsnNode(GOTO, labels(destination)))
 
-        val jump = Seq(new JumpInsnNode(n.opcode.i, labels(n.downstreamList.collect{case t: SSA.True => t}.head)))
+        val jump = Seq(
+          new JumpInsnNode(
+            n.opcode.i,
+            labels(n.downstreamList.collect { case t: SSA.True => t }.head)
+          )
+        )
         jump ++ goto
 
       case n: SSA.ReturnVal => Seq(new InsnNode(CodeGenMethod.returnOp(n.src)))
@@ -143,89 +148,93 @@ class CodeGenMethod(log: Logger.InferredMethod,
       case n: SSA.AThrow => Seq(new InsnNode(ATHROW))
       case n: SSA.TableSwitch =>
         val (default, labels) = computeSwitchLabels(n)
-        Seq(new TableSwitchInsnNode(n.min, n.max, default, labels.toArray:_*))
+        Seq(new TableSwitchInsnNode(n.min, n.max, default, labels.toArray: _*))
       case n: SSA.LookupSwitch =>
         val (default, labels) = computeSwitchLabels(n)
         Seq(new LookupSwitchInsnNode(default, n.keys.toArray, labels.toArray))
     }
   }
 
+  def rec(ssa: SSA.ValOrState, fromVal: Boolean, currentBlock: SSA.Block): Seq[AbstractInsnNode] =
+    ssa match {
 
-  def rec(ssa: SSA.ValOrState,
-          fromVal: Boolean,
-          currentBlock: SSA.Block): Seq[AbstractInsnNode] = ssa match{
+      case ssa: SSA.State =>
+        ssa
+          .upstream
+          .collect { case s: SSA.ValOrState => s }
+          .flatMap(rec(_, fromVal = false, currentBlock))
+      case n: SSA.Val =>
+        if (n.upstream.isEmpty && !n.isInstanceOf[SSA.Arg]) recTrivialVal(n)
+        else if (seen(n)) {
+          if (fromVal) Seq(new VarInsnNode(CodeGenMethod.loadOp(n), savedLocalNumbers(n)))
+          else Nil
+        } else {
+          val props = allProps(n)
 
-    case ssa: SSA.State =>
-      ssa.upstream.collect{case s: SSA.ValOrState => s}.flatMap(rec(_, fromVal = false, currentBlock))
-    case n: SSA.Val =>
+          (props.valUses, props.stateUse, props.otherBlockUse, fromVal) match {
 
-      if (n.upstream.isEmpty && !n.isInstanceOf[SSA.Arg]) recTrivialVal(n)
-      else if (seen(n)) {
-        if (fromVal) Seq(new VarInsnNode(CodeGenMethod.loadOp(n), savedLocalNumbers(n)))
-        else Nil
-      } else {
-        val props = allProps(n)
+            case (0, true, false, false) =>
+              recVal(n, currentBlock) ++
+              (n.getSize match {
+                case 0 => Nil
+                case 1 => Seq(new InsnNode(POP))
+                case 2 => Seq(new InsnNode(POP2))
+              })
 
-        (props.valUses, props.stateUse, props.otherBlockUse, fromVal) match {
+            case (0, true, true, false) =>
+              recVal(n, currentBlock) ++
+              Seq(new VarInsnNode(CodeGenMethod.saveOp(n), savedLocalNumbers(n)))
 
-          case (0, true, false, false) =>
-            recVal(n, currentBlock) ++
-            (n.getSize match {
-              case 0 => Nil
-              case 1 => Seq(new InsnNode(POP))
-              case 2 => Seq(new InsnNode(POP2))
-            })
+            case (1, _, false, true) => recVal(n, currentBlock)
 
-          case (0, true, true, false) =>
-            recVal(n, currentBlock) ++
-            Seq(new VarInsnNode(CodeGenMethod.saveOp(n), savedLocalNumbers(n)))
+            case (_, true, _, false) => Nil
 
-          case (1, _, false, true) => recVal(n, currentBlock)
+            case (_, _, _, true) =>
+              recVal(n, currentBlock) ++
+              Seq(
+                new InsnNode(if (n.getSize == 1) DUP else DUP2),
+                new VarInsnNode(CodeGenMethod.saveOp(n), savedLocalNumbers(n))
+              )
 
-          case (_, true, _, false) => Nil
-
-          case (_, _, _, true) =>
-            recVal(n, currentBlock) ++
-            Seq(
-              new InsnNode(if (n.getSize == 1) DUP else DUP2),
-              new VarInsnNode(CodeGenMethod.saveOp(n), savedLocalNumbers(n))
-            )
-
-          case _ => ???
+            case _ => ???
+          }
         }
-      }
-  }
+    }
 
-  def recTrivialVal(ssa: SSA.Val): Seq[AbstractInsnNode] = ssa match{
-    case n: SSA.ConstI => Seq(n.value match{
-      case -1 => new InsnNode(ICONST_M1)
-      case 0 => new InsnNode(ICONST_0)
-      case 1 => new InsnNode(ICONST_1)
-      case 2 => new InsnNode(ICONST_2)
-      case 3 => new InsnNode(ICONST_3)
-      case 4 => new InsnNode(ICONST_4)
-      case 5 => new InsnNode(ICONST_5)
-      case _ =>
-        if (-128 <= n.value && n.value < 127) new IntInsnNode(BIPUSH, n.value)
-        else if (-32768 <= n.value && n.value <= 32767) new IntInsnNode(SIPUSH, n.value)
-        else new LdcInsnNode(n.value)
-    })
-    case n: SSA.ConstJ => Seq(n.value match{
-      case 0 => new InsnNode(LCONST_0)
-      case 1 => new InsnNode(LCONST_1)
-      case _ => new LdcInsnNode(n.value)
-    })
-    case n: SSA.ConstF => Seq(n.value match{
-      case 0 => new InsnNode(FCONST_0)
-      case 1 => new InsnNode(FCONST_1)
-      case 2 => new InsnNode(FCONST_2)
-      case _ => new LdcInsnNode(n.value)
-    })
-    case n: SSA.ConstD => Seq(n.value match{
-      case 0 => new InsnNode(DCONST_0)
-      case 1 => new InsnNode(DCONST_1)
-      case _ => new LdcInsnNode(n.value)
-    })
+  def recTrivialVal(ssa: SSA.Val): Seq[AbstractInsnNode] = ssa match {
+    case n: SSA.ConstI =>
+      Seq(n.value match {
+        case -1 => new InsnNode(ICONST_M1)
+        case 0 => new InsnNode(ICONST_0)
+        case 1 => new InsnNode(ICONST_1)
+        case 2 => new InsnNode(ICONST_2)
+        case 3 => new InsnNode(ICONST_3)
+        case 4 => new InsnNode(ICONST_4)
+        case 5 => new InsnNode(ICONST_5)
+        case _ =>
+          if (-128 <= n.value && n.value < 127) new IntInsnNode(BIPUSH, n.value)
+          else if (-32768 <= n.value && n.value <= 32767) new IntInsnNode(SIPUSH, n.value)
+          else new LdcInsnNode(n.value)
+      })
+    case n: SSA.ConstJ =>
+      Seq(n.value match {
+        case 0 => new InsnNode(LCONST_0)
+        case 1 => new InsnNode(LCONST_1)
+        case _ => new LdcInsnNode(n.value)
+      })
+    case n: SSA.ConstF =>
+      Seq(n.value match {
+        case 0 => new InsnNode(FCONST_0)
+        case 1 => new InsnNode(FCONST_1)
+        case 2 => new InsnNode(FCONST_2)
+        case _ => new LdcInsnNode(n.value)
+      })
+    case n: SSA.ConstD =>
+      Seq(n.value match {
+        case 0 => new InsnNode(DCONST_0)
+        case 1 => new InsnNode(DCONST_1)
+        case _ => new LdcInsnNode(n.value)
+      })
     case n: SSA.ConstStr => Seq(new LdcInsnNode(n.value))
     case n: SSA.ConstNull => Seq(new InsnNode(ACONST_NULL))
     case n: SSA.ConstCls =>
@@ -234,12 +243,13 @@ class CodeGenMethod(log: Logger.InferredMethod,
 
   def recVal(ssa: SSA.Val, currentBlock: SSA.Block): Seq[AbstractInsnNode] = {
     seen.add(ssa)
-    def upstreams = ssa
-      .upstream
-      .collect{case v: SSA.ValOrState => v}
-      .flatMap(rec(_, fromVal = true, currentBlock))
+    def upstreams =
+      ssa
+        .upstream
+        .collect { case v: SSA.ValOrState => v }
+        .flatMap(rec(_, fromVal = true, currentBlock))
 
-    ssa match{
+    ssa match {
       case n: SSA.BinOp => upstreams ++ Seq(new InsnNode(n.opcode.i))
       case n: SSA.UnaOp => upstreams ++ Seq(new InsnNode(n.opcode.i))
       case n: SSA.CheckCast => upstreams ++ Seq(new TypeInsnNode(CHECKCAST, n.desc.name))
@@ -248,33 +258,53 @@ class CodeGenMethod(log: Logger.InferredMethod,
       case n: SSA.InvokeStatic =>
         upstreams ++
         Seq(new MethodInsnNode(INVOKESTATIC, n.cls.name, n.name, n.desc.unparse)) ++
-        (if (n.desc.ret == JType.Bottom && n.downstreamList.count(!_.isInstanceOf[SSA.State]) == 0) Seq(new InsnNode(POP)) else Nil)
+        (if (n.desc.ret == JType.Bottom && n.downstreamList.count(!_.isInstanceOf[SSA.State]) == 0)
+           Seq(new InsnNode(POP))
+         else Nil)
       case n: SSA.InvokeSpecial =>
         upstreams ++
         Seq(new MethodInsnNode(INVOKESPECIAL, n.cls.name, n.name, n.desc.unparse)) ++
-        (if (n.desc.ret == JType.Bottom && n.downstreamList.count(!_.isInstanceOf[SSA.State]) == 0) Seq(new InsnNode(POP)) else Nil)
+        (if (n.desc.ret == JType.Bottom && n.downstreamList.count(!_.isInstanceOf[SSA.State]) == 0)
+           Seq(new InsnNode(POP))
+         else Nil)
       case n: SSA.InvokeVirtual =>
-        val opcode = if (isInterface(n.cls).getOrElse(n.interface)) INVOKEINTERFACE else INVOKEVIRTUAL
+        val opcode =
+          if (isInterface(n.cls).getOrElse(n.interface)) INVOKEINTERFACE else INVOKEVIRTUAL
         upstreams ++
         Seq(new MethodInsnNode(opcode, n.cls.name, n.name, n.desc.unparse)) ++
-        (if (n.desc.ret == JType.Bottom && n.downstreamList.count(!_.isInstanceOf[SSA.State]) == 0) Seq(new InsnNode(POP)) else Nil)
-      case n: SSA.InvokeDynamic=>
-        upstreams ++ Seq(new InvokeDynamicInsnNode(
-          n.name, n.desc.unparse,
-          new Handle(n.bootstrap.tag, n.bootstrap.owner.name, n.bootstrap.name, n.bootstrap.desc.unparse),
-          n.bootstrapArgs.map(SSA.InvokeDynamic.argToAny):_*
-        ))
+        (if (n.desc.ret == JType.Bottom && n.downstreamList.count(!_.isInstanceOf[SSA.State]) == 0)
+           Seq(new InsnNode(POP))
+         else Nil)
+      case n: SSA.InvokeDynamic =>
+        upstreams ++ Seq(
+          new InvokeDynamicInsnNode(
+            n.name,
+            n.desc.unparse,
+            new Handle(
+              n.bootstrap.tag,
+              n.bootstrap.owner.name,
+              n.bootstrap.name,
+              n.bootstrap.desc.unparse
+            ),
+            n.bootstrapArgs.map(SSA.InvokeDynamic.argToAny): _*
+          )
+        )
       case n: SSA.New =>
         Seq(new TypeInsnNode(NEW, n.cls.name), new InsnNode(DUP)) ++
         upstreams ++
         Seq(new MethodInsnNode(INVOKESPECIAL, n.cls.name, "<init>", n.desc.unparse))
 
       case n: SSA.NewArray => upstreams ++ Seq(CodeGenMethod.newArrayOp(n.typeRef))
-      case n: SSA.MultiANewArray => upstreams ++ Seq(new MultiANewArrayInsnNode(n.desc.name, n.dims.length))
-      case n: SSA.PutStatic => upstreams ++ Seq(new FieldInsnNode(PUTSTATIC, n.cls.name, n.name, n.desc.internalName))
-      case n: SSA.GetStatic => upstreams ++ Seq(new FieldInsnNode(GETSTATIC, n.cls.name, n.name, n.desc.internalName))
-      case n: SSA.PutField => upstreams ++ Seq(new FieldInsnNode(PUTFIELD, n.owner.name, n.name, n.desc.internalName))
-      case n: SSA.GetField => upstreams ++ Seq(new FieldInsnNode(GETFIELD, n.owner.name, n.name, n.desc.internalName))
+      case n: SSA.MultiANewArray =>
+        upstreams ++ Seq(new MultiANewArrayInsnNode(n.desc.name, n.dims.length))
+      case n: SSA.PutStatic =>
+        upstreams ++ Seq(new FieldInsnNode(PUTSTATIC, n.cls.name, n.name, n.desc.internalName))
+      case n: SSA.GetStatic =>
+        upstreams ++ Seq(new FieldInsnNode(GETSTATIC, n.cls.name, n.name, n.desc.internalName))
+      case n: SSA.PutField =>
+        upstreams ++ Seq(new FieldInsnNode(PUTFIELD, n.owner.name, n.name, n.desc.internalName))
+      case n: SSA.GetField =>
+        upstreams ++ Seq(new FieldInsnNode(GETFIELD, n.owner.name, n.name, n.desc.internalName))
       case n: SSA.PutArray => upstreams ++ Seq(new InsnNode(CodeGenMethod.arrayStoreOp(n.src)))
       case n: SSA.GetArray => upstreams ++ Seq(new InsnNode(CodeGenMethod.arrayLoadOp(n.tpe)))
       case n: SSA.MonitorEnter => ???
@@ -284,11 +314,13 @@ class CodeGenMethod(log: Logger.InferredMethod,
   }
 
 }
-object CodeGenMethod{
+object CodeGenMethod {
   case class ValDownstreamProps(valUses: Int, stateUse: Boolean, otherBlockUse: Boolean)
-  def getValProperties(n: SSA.Val,
-                       currentBlock: SSA.Block,
-                       nodesToBlocks: collection.Map[SSA.ValOrState, SSA.Block]) = {
+  def getValProperties(
+    n: SSA.Val,
+    currentBlock: SSA.Block,
+    nodesToBlocks: collection.Map[SSA.ValOrState, SSA.Block]
+  ) = {
     var downstreamValsOrJumps = 0
     var downstreamState = false
     var downstreamOtherBlock = false
@@ -308,10 +340,11 @@ object CodeGenMethod{
     }
     ValDownstreamProps(downstreamValsOrJumps, downstreamState, downstreamOtherBlock)
   }
-  def computeSavedLocalNumbers(methodBody: MethodBody,
-                               sortedAllNodes: collection.Set[(SSA.ValOrState, SSA.Block)],
-                               allProps: Map[SSA.Val, ValDownstreamProps])
-      : (collection.Map[SSA.Val, Int], mutable.LinkedHashSet[SSA.Val]) = {
+  def computeSavedLocalNumbers(
+    methodBody: MethodBody,
+    sortedAllNodes: collection.Set[(SSA.ValOrState, SSA.Block)],
+    allProps: Map[SSA.Val, ValDownstreamProps]
+  ): (collection.Map[SSA.Val, Int], mutable.LinkedHashSet[SSA.Val]) = {
 
     val seen = mutable.LinkedHashSet.empty[SSA.Val]
     val savedLocalNumbers = mutable.LinkedHashMap.empty[SSA.Val, Int]
@@ -324,7 +357,7 @@ object CodeGenMethod{
       localEntry
     }
 
-    for(arg <- methodBody.args ){
+    for (arg <- methodBody.args) {
       saveLocal(arg)
       seen.add(arg)
     }
@@ -348,7 +381,7 @@ object CodeGenMethod{
   }
 
   def sortControlFlowGraph(cfg: Seq[(SSA.Control, SSA.Control)]) = {
-    val Seq(startBlock) = cfg.collect{case (s: SSA.Start, _) => s}
+    val Seq(startBlock) = cfg.collect { case (s: SSA.Start, _) => s }
     val successor = cfg.groupBy(_._1).map { case (k, v) => (k, v.map(_._2)) }
     val sortedControls = mutable.LinkedHashSet.empty[SSA.Control]
 

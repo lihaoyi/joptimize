@@ -7,35 +7,40 @@ import joptimize.{Logger, Util}
 import scala.collection.mutable
 
 object OptimisticSimplify {
-  def apply(isStatic: Boolean,
-            argMapping: Map[Int, Int],
-            methodBody: MethodBody,
-            inferred: mutable.LinkedHashMap[SSA.Val, IType],
-            liveBlocks: Set[SSA.Block],
-            log: Logger.InferredMethod,
-            classExists: JType.Cls => Boolean,
-            resolvedProperties: (InferredSig, Boolean) => ProgramAnalyzer.Properties) = log.block{
+  def apply(
+    isStatic: Boolean,
+    argMapping: Map[Int, Int],
+    methodBody: MethodBody,
+    inferred: mutable.LinkedHashMap[SSA.Val, IType],
+    liveBlocks: Set[SSA.Block],
+    log: Logger.InferredMethod,
+    classExists: JType.Cls => Boolean,
+    resolvedProperties: (InferredSig, Boolean) => ProgramAnalyzer.Properties
+  ) = log.block {
 
-    methodBody.args = methodBody.args.filter(a => argMapping.contains(a.index) || (a.index == 0 && !isStatic))
+    methodBody.args =
+      methodBody.args.filter(a => argMapping.contains(a.index) || (a.index == 0 && !isStatic))
 
 //    log.pprint(inferred)
-    for(n <- methodBody.getAllVertices()){
+    for (n <- methodBody.getAllVertices()) {
       simplifyNode(n, inferred, classExists, log, liveBlocks, resolvedProperties, argMapping)
 //      log.graph(n.toString())(Renderer.dumpSvg(methodBody))
     }
 
-    methodBody.allTerminals = methodBody.allTerminals.filter{
+    methodBody.allTerminals = methodBody.allTerminals.filter {
       case j: SSA.Jump => liveBlocks.contains(j.block)
     }
   }
 
-  def simplifyNode(node: SSA.Node,
-                   inferred: mutable.LinkedHashMap[SSA.Val, IType],
-                   classExists: JType.Cls => Boolean,
-                   log: Logger.InferredMethod,
-                   liveBlocks: Set[SSA.Block],
-                   resolvedProperties: (InferredSig, Boolean) => ProgramAnalyzer.Properties,
-                   argMapping: Map[Int, Int]) = node match {
+  def simplifyNode(
+    node: SSA.Node,
+    inferred: mutable.LinkedHashMap[SSA.Val, IType],
+    classExists: JType.Cls => Boolean,
+    log: Logger.InferredMethod,
+    liveBlocks: Set[SSA.Block],
+    resolvedProperties: (InferredSig, Boolean) => ProgramAnalyzer.Properties,
+    argMapping: Map[Int, Int]
+  ) = node match {
     case p: SSA.State => // do nothing
     case unInferred: SSA.Val if !inferred.contains(unInferred) => // do nothing
     case n: SSA.Invoke =>
@@ -60,28 +65,29 @@ object OptimisticSimplify {
 
       val mangledCls =
         if (n.isInstanceOf[SSA.InvokeStatic] || n.isInstanceOf[SSA.InvokeSpecial]) n.cls
-        else inferred(n.srcs(0)) match{
-          case j: JType.Cls => j
-          case a: JType.Arr => JType.Cls("java/lang/Object")
-        }
+        else
+          inferred(n.srcs(0)) match {
+            case j: JType.Cls => j
+            case a: JType.Arr => JType.Cls("java/lang/Object")
+          }
 
-      if (properties.pure){
+      if (properties.pure) {
         val replacement = prepareNodeReplacement(inferred, n)
-        replacement match{
+        replacement match {
           case Some(r) => constantFoldNode(inferred, r, n)
           case None =>
             purifyNode(n)
 
             mangleInvocation(n, liveArgsOpt, mangledName, mangledDesc, mangledCls)
         }
-      }else{
+      } else {
         mangleInvocation(n, liveArgsOpt, mangledName, mangledDesc, mangledCls)
       }
 
     case p: SSA.Phi =>
-      for((k, v) <- p.incoming.toArray){
+      for ((k, v) <- p.incoming.toArray) {
         val live = liveBlocks(k)
-        if (!live){
+        if (!live) {
           k.next = null
           v.downstreamRemove(p)
           p.incoming.remove(k)
@@ -89,7 +95,7 @@ object OptimisticSimplify {
       }
 
     case m: SSA.Merge =>
-      for((k, v) <- m.incoming.toArray){
+      for ((k, v) <- m.incoming.toArray) {
         val live = liveBlocks(k)
         if (!live) {
           k.next = null
@@ -98,30 +104,29 @@ object OptimisticSimplify {
       }
 
     case n: SSA.Val =>
-      n match{
+      n match {
         case a: SSA.Arg if argMapping.contains(a.index) => a.index = argMapping(a.index)
         case _ => //do nothing
       }
       val replacement = prepareNodeReplacement(inferred, n)
 
-      for(r <- replacement) constantFoldNode(inferred, r, n)
+      for (r <- replacement) constantFoldNode(inferred, r, n)
 
     case j: SSA.Jump =>
-      val allTargets = j.downstreamList.collect{case b: SSA.Block => b}
+      val allTargets = j.downstreamList.collect { case b: SSA.Block => b }
       val liveTargets = allTargets.filter(liveBlocks)
-      if (liveTargets.isEmpty){
+      if (liveTargets.isEmpty) {
         // do nothing
-      } else if (liveTargets.size == 1 && allTargets.size > 1){
+      } else if (liveTargets.size == 1 && allTargets.size > 1) {
         PartialEvaluator.replaceJump(j, liveTargets.head, liveBlocks, log)
-      } else if (liveTargets.size < allTargets.size){
+      } else if (liveTargets.size < allTargets.size) {
         ???
       }
     case _ =>
     // do nothing
   }
 
-  def prepareNodeReplacement(inferred: mutable.LinkedHashMap[SSA.Val, IType],
-                             n: SSA.Val) = {
+  def prepareNodeReplacement(inferred: mutable.LinkedHashMap[SSA.Val, IType], n: SSA.Val) = {
     inferred(n) match {
       case CType.I(v) => Some(new SSA.ConstI(v))
       case CType.J(v) => Some(new SSA.ConstJ(v))
@@ -134,9 +139,11 @@ object OptimisticSimplify {
   /**
     * Removes a node entirely and replace it with a constant value
     */
-  def constantFoldNode(inferred: mutable.LinkedHashMap[SSA.Val, IType],
-                       replacement: SSA.Val,
-                       original: SSA.Val) = {
+  def constantFoldNode(
+    inferred: mutable.LinkedHashMap[SSA.Val, IType],
+    replacement: SSA.Val,
+    original: SSA.Val
+  ) = {
     inferred(replacement) = inferred(original)
     var upstreamState: SSA.State = null
     original.upstream.foreach {
@@ -176,11 +183,13 @@ object OptimisticSimplify {
     n.state = null
   }
 
-  def mangleInvocation(n: SSA.Invoke,
-                       liveArgsOpt: Option[Set[Int]],
-                       mangledName: String,
-                       mangledDesc: Desc,
-                       mangledCls: JType.Cls) = {
+  def mangleInvocation(
+    n: SSA.Invoke,
+    liveArgsOpt: Option[Set[Int]],
+    mangledName: String,
+    mangledDesc: Desc,
+    mangledCls: JType.Cls
+  ) = {
     for (liveArgs <- liveArgsOpt) {
       val (live, die) = n.srcs.zipWithIndex.partition {
         case (a, i) => (!n.sig.static && i == 0) || liveArgs(i)

@@ -14,18 +14,22 @@ import collection.JavaConverters._
 import scala.collection.mutable
 
 object Backend {
-  def apply(analyzerRes: ProgramAnalyzer.ProgramResult,
-            entrypoints: scala.Seq[MethodSig],
-            classManager: ClassManager.Frozen,
-            eliminateOldMethods: Boolean,
-            log: Logger.Global,
-            inline: Boolean): Seq[ClassNode] = log.block{
+  def apply(
+    analyzerRes: ProgramAnalyzer.ProgramResult,
+    entrypoints: scala.Seq[MethodSig],
+    classManager: ClassManager.Frozen,
+    eliminateOldMethods: Boolean,
+    log: Logger.Global,
+    inline: Boolean
+  ): Seq[ClassNode] = log.block {
 
     val inlinedAnalyzerRes =
-      if(inline) Inliner.inlineAll(analyzerRes, classManager, log)
+      if (inline) Inliner.inlineAll(analyzerRes, classManager, log)
       else analyzerRes
 
-    val actualMethodInferredSigs = inlinedAnalyzerRes.visitedResolved.keysIterator
+    val actualMethodInferredSigs = inlinedAnalyzerRes
+      .visitedResolved
+      .keysIterator
       .++(inlinedAnalyzerRes.visitedMethods.keysIterator)
       .to[mutable.LinkedHashSet]
 
@@ -45,7 +49,6 @@ object Backend {
       classManager
     )
 
-
     if (eliminateOldMethods) {
       for (cn <- classManager.allClasses) {
         cn.methods.clear()
@@ -57,7 +60,10 @@ object Backend {
       Seq("scala/runtime/Nothing$", "scala/runtime/Null$")
 
     log.pprint(visitedInterfaces)
-    val lhs = (visitedInterfaces ++ inlinedAnalyzerRes.staticFieldReferencedClasses.flatMap(classManager.getAllSupertypes).map(_.name))
+    val lhs = (visitedInterfaces ++ inlinedAnalyzerRes
+      .staticFieldReferencedClasses
+      .flatMap(classManager.getAllSupertypes)
+      .map(_.name))
       .filter(s => classManager.loadClass(JType.Cls(s)).nonEmpty)
       .map(classManager.loadClass(_).get -> Nil)
       .toMap
@@ -65,13 +71,13 @@ object Backend {
       lhs ++
       newMethods.groupBy(_._1).mapValues(_.toSeq.map(_._2))
 
-    for((cn, mns) <- grouped) yield {
+    for ((cn, mns) <- grouped) yield {
       log.pprint(cn.name)
       log.pprint(mns.map(_.name))
       if (cn.attrs != null) Util.removeFromJavaList(cn.attrs)(_.`type` == "ScalaSig")
       if (cn.attrs != null) Util.removeFromJavaList(cn.attrs)(_.`type` == "ScalaInlineInfo")
       if (cn.visibleAnnotations != null) {
-        Util.removeFromJavaList(cn.visibleAnnotations )(_.desc == "Lscala/reflect/ScalaSignature;")
+        Util.removeFromJavaList(cn.visibleAnnotations)(_.desc == "Lscala/reflect/ScalaSignature;")
       }
 
       mns.foreach(cn.methods.add)
@@ -87,14 +93,14 @@ object Backend {
 //    grouped.keys.toSeq
   }
 
-
-
-  def generateNewMethods(analyzerRes: ProgramAnalyzer.ProgramResult,
-                         entrypoints: Seq[MethodSig],
-                         log: Logger.Global,
-                         actualMethodInferredSigs: mutable.LinkedHashSet[InferredSig],
-                         highestMethodDefiners: collection.Map[InferredSig, JType.Cls],
-                         classManager: ClassManager.Frozen) = log.block {
+  def generateNewMethods(
+    analyzerRes: ProgramAnalyzer.ProgramResult,
+    entrypoints: Seq[MethodSig],
+    log: Logger.Global,
+    actualMethodInferredSigs: mutable.LinkedHashSet[InferredSig],
+    highestMethodDefiners: collection.Map[InferredSig, JType.Cls],
+    classManager: ClassManager.Frozen
+  ) = log.block {
 
     def resolveDefsiteProps(isig: InferredSig) = {
       val resolvedSig =
@@ -105,66 +111,72 @@ object Backend {
     }
 
     def resolveCallsiteProps(isig: InferredSig, invokeSpecial: Boolean) = {
-      if (classManager.loadClass(isig.method.cls).isEmpty) ProgramAnalyzer.dummyProps(isig.method, optimistic = false)
-      else if (classManager.resolvePossibleSigs(isig.method).exists(!_.exists(classManager.loadMethod(_).nonEmpty))) {
+      if (classManager.loadClass(isig.method.cls).isEmpty)
         ProgramAnalyzer.dummyProps(isig.method, optimistic = false)
-      }
-      else if (invokeSpecial) analyzerRes.visitedMethods(isig).props
+      else if (classManager
+          .resolvePossibleSigs(isig.method)
+          .exists(!_.exists(classManager.loadMethod(_).nonEmpty))) {
+        ProgramAnalyzer.dummyProps(isig.method, optimistic = false)
+      } else if (invokeSpecial) analyzerRes.visitedMethods(isig).props
       else resolveDefsiteProps(isig)
     }
 
-    for (isig <- actualMethodInferredSigs.toArray if classManager.loadMethod(isig.method).nonEmpty) yield Util.labelExceptions(isig.toString){
-      val props = resolveDefsiteProps(isig)
+    for (isig <- actualMethodInferredSigs.toArray if classManager.loadMethod(isig.method).nonEmpty)
+      yield Util.labelExceptions(isig.toString) {
+        val props = resolveDefsiteProps(isig)
 
-      val liveArgs =
-        if (entrypoints.contains(isig.method)) (_: Int) => true
-        else props.liveArgs
+        val liveArgs =
+          if (entrypoints.contains(isig.method)) (_: Int) => true
+          else props.liveArgs
 
-      val originalNode = classManager.loadMethod(isig.method).get
+        val originalNode = classManager.loadMethod(isig.method).get
 
-      val (mangledName, mangledDesc) =
-        if (entrypoints.contains(isig.method) || isig.method.name == "<init>") (isig.method.name, isig.method.desc)
-        else Util.mangle(isig, props.inferredReturn, liveArgs)
+        val (mangledName, mangledDesc) =
+          if (entrypoints.contains(isig.method) || isig.method.name == "<init>")
+            (isig.method.name, isig.method.desc)
+          else Util.mangle(isig, props.inferredReturn, liveArgs)
 
-      val newNode = new MethodNode(
-        Opcodes.ASM6,
-        originalNode.access,
-        mangledName,
-        mangledDesc.unparse,
-        originalNode.signature,
-        originalNode.exceptions.asScala.toArray
-      )
-      originalNode.accept(newNode)
-      if (!analyzerRes.visitedMethods.contains(isig)) newNode.instructions = new InsnList()
-      else {
-        val argMapping = Util.argMapping(isig.method, liveArgs)
-
-        newNode.instructions = processMethodBody(
-          isig.method,
-          analyzerRes.visitedMethods(isig),
-          log.inferredMethod(isig),
-          classManager.loadClass(_).nonEmpty,
-          resolveCallsiteProps,
-          argMapping,
-          cls => classManager.loadClass(cls).map(c => (c.access & Opcodes.ACC_INTERFACE) != 0)
+        val newNode = new MethodNode(
+          Opcodes.ASM6,
+          originalNode.access,
+          mangledName,
+          mangledDesc.unparse,
+          originalNode.signature,
+          originalNode.exceptions.asScala.toArray
         )
-      }
-      newNode.desc = mangledDesc.unparse
-      newNode.tryCatchBlocks = Nil.asJava
+        originalNode.accept(newNode)
+        if (!analyzerRes.visitedMethods.contains(isig)) newNode.instructions = new InsnList()
+        else {
+          val argMapping = Util.argMapping(isig.method, liveArgs)
 
-      classManager.loadClass(isig.method.cls).get -> newNode
-    }
+          newNode.instructions = processMethodBody(
+            isig.method,
+            analyzerRes.visitedMethods(isig),
+            log.inferredMethod(isig),
+            classManager.loadClass(_).nonEmpty,
+            resolveCallsiteProps,
+            argMapping,
+            cls => classManager.loadClass(cls).map(c => (c.access & Opcodes.ACC_INTERFACE) != 0)
+          )
+        }
+        newNode.desc = mangledDesc.unparse
+        newNode.tryCatchBlocks = Nil.asJava
+
+        classManager.loadClass(isig.method.cls).get -> newNode
+      }
   }
 
-  def computeHighestMethodDefiners(analyzerRes: ProgramAnalyzer.ProgramResult,
-                                   log: Logger.Global,
-                                   classManager: ClassManager.Frozen,
-                                   actualMethodInferredSigs: mutable.LinkedHashSet[InferredSig]) = log.block {
+  def computeHighestMethodDefiners(
+    analyzerRes: ProgramAnalyzer.ProgramResult,
+    log: Logger.Global,
+    classManager: ClassManager.Frozen,
+    actualMethodInferredSigs: mutable.LinkedHashSet[InferredSig]
+  ) = log.block {
     for (isig <- actualMethodInferredSigs) yield {
       var parentClasses = List.empty[JType.Cls]
       var current = isig.method.cls
-      while ( {
-        classManager.loadClass(current) match{
+      while ({
+        classManager.loadClass(current) match {
           case None => false
           case Some(c) =>
             parentClasses = current :: parentClasses
@@ -177,30 +189,29 @@ object Backend {
         }
       }) ()
 
-      val highestCls = parentClasses
-        .find { cls =>
-          actualMethodInferredSigs.contains(isig.copy(method = isig.method.copy(cls = cls)))
-        }
-        .get
+      val highestCls = parentClasses.find { cls =>
+        actualMethodInferredSigs.contains(isig.copy(method = isig.method.copy(cls = cls)))
+      }.get
 
       (isig, highestCls)
     }
   }
 
-  def processMethodBody(originalSig: MethodSig,
-                        result: ProgramAnalyzer.MethodResult,
-                        log: Logger.InferredMethod,
-                        classExists: JType.Cls => Boolean,
-                        resolvedProperties: (InferredSig, Boolean) => ProgramAnalyzer.Properties,
-                        argMapping: Map[Int, Int],
-                        isInterface: JType.Cls => Option[Boolean]) = log.block{
+  def processMethodBody(
+    originalSig: MethodSig,
+    result: ProgramAnalyzer.MethodResult,
+    log: Logger.InferredMethod,
+    classExists: JType.Cls => Boolean,
+    resolvedProperties: (InferredSig, Boolean) => ProgramAnalyzer.Properties,
+    argMapping: Map[Int, Int],
+    isInterface: JType.Cls => Option[Boolean]
+  ) = log.block {
 
     log.check(result.methodBody.checkLinks())
     log.graph("PROCESSMETHODBODY")(Renderer.dumpSvg(result.methodBody))
 
 //    result.methodBody.removeDeadNodes()
 //    log.global().graph("ZZZ")(Renderer.dumpSvg(result.methodBody))
-
 
     log.pprint(argMapping)
     log.pprint(result.liveTerminals)
@@ -253,8 +264,11 @@ object Backend {
 //    log.graph("COPY INSERTED")(Renderer.dumpSvg(result.methodBody))
 
     val nodesToBlocks = Scheduler.apply(
-      loopTree2, dominators2, startBlock,
-      allVertices2, log
+      loopTree2,
+      dominators2,
+      startBlock,
+      allVertices2,
+      log
     )
 //
 //    val postRegisterAllocNaming = Namer.apply(
@@ -273,13 +287,12 @@ object Backend {
       analyzeBlockStructure(result.methodBody)._1
     ).apply()
 
-
     finalInsns
   }
 
   def analyzeBlockStructure(methodBody: MethodBody) = {
     val controlFlowEdges = Renderer.findControlFlowGraph(methodBody)
-    val startBlock = controlFlowEdges.collect{case (s: SSA.Start, _) => s}.head
+    val startBlock = controlFlowEdges.collect { case (s: SSA.Start, _) => s }.head
     val allBlocks = controlFlowEdges
       .flatMap { case (k, v) => Seq(k, v) }
       .collect { case b: SSA.Block => b }

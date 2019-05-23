@@ -4,7 +4,6 @@ import org.objectweb.asm.Type
 import org.objectweb.asm.tree.{AbstractInsnNode, TryCatchBlockNode}
 import org.objectweb.asm.tree.analysis.Value
 
-
 /**
   * A semantic bytecode interpreter. More precisely, this interpreter only manages the computation of
   * values from other values: it does not manage the transfer of values to or from the stack, and to
@@ -16,6 +15,7 @@ import org.objectweb.asm.tree.analysis.Value
   * @author Eric Bruneton
   */
 abstract class Interpreter[V <: Value, S] {
+
   /**
     * Creates a new value that represents the given parameter type. This method is called to
     * initialize the value of a local corresponding to a method parameter in a frame.
@@ -33,8 +33,7 @@ abstract class Interpreter[V <: Value, S] {
     * Creates a new value that represents the given exception type. This method is called to
     * initialize the exception value on the call stack at the entry of an exception handler.
     */
-  def newExceptionValue(tryCatchBlockNode: TryCatchBlockNode,
-                        exceptionType: Type): V
+  def newExceptionValue(tryCatchBlockNode: TryCatchBlockNode, exceptionType: Type): V
 
   /**
     * ACONST_NULL, ICONST_M1, ICONST_0, ICONST_1, ICONST_2, ICONST_3, ICONST_4, ICONST_5,
@@ -42,6 +41,7 @@ abstract class Interpreter[V <: Value, S] {
     * NEW
     */
   def constOperation(insn: AbstractInsnNode): V
+
   /**
     * GETSTATIC
     */
@@ -57,13 +57,13 @@ abstract class Interpreter[V <: Value, S] {
     * INEG, LNEG, FNEG, DNEG, IINC, I2L, I2F, I2D, L2I, L2F, L2D, F2I, F2L, F2D, D2I, D2L, D2F,
     * I2B, I2C, I2S, INSTANCEOF
     */
-
   def unaryOp(insn: AbstractInsnNode, value: V): V
+
   /**
     * CHECKCAST, NEWARRAY, ANEWARRAY, ARRAYLENGTH
     */
-
   def unaryOpUnsafe(insn: AbstractInsnNode, value: V, state: S): (V, S)
+
   /**
     * GETFIELD
     */
@@ -99,6 +99,7 @@ abstract class Interpreter[V <: Value, S] {
     * IF_ACMPNE
     */
   def binaryCommand(insn: AbstractInsnNode, value1: V, value2: V): Unit
+
   /**
     * PUTFIELD
     */

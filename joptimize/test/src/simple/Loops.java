@@ -94,7 +94,7 @@ public class Loops {
             int liftable2 = liftable + 9;
             int unliftable2 = unliftable + 11;
 
-            for(int j = 0; j < a; j++){
+            for (int j = 0; j < a; j++) {
                 int innerLiftable = a * 13;
                 int innerHalfLiftable = i * 15;
                 int innerLiftable2 = innerLiftable + 17;
@@ -113,7 +113,7 @@ public class Loops {
         int c = 1;
 
         for (int i = 0; i < a; i++) {
-            for(int j = 0; j < a; j++){
+            for (int j = 0; j < a; j++) {
                 c = c * a;
             }
         }
@@ -124,7 +124,7 @@ public class Loops {
     public static int nestedLiftableFor(int a) {
         int c = 1;
         for (int i = 0; i < a; i++) {
-            for(int j = 0; j < a; j++){
+            for (int j = 0; j < a; j++) {
                 int e = a + 7;
                 c += e;
             }
@@ -137,7 +137,7 @@ public class Loops {
         int c = 1;
         for (int i = 0; i < a; i++) {
             int e = a + 7;
-            for(int j = 0; j < a; j++){
+            for (int j = 0; j < a; j++) {
                 c += e;
             }
         }
@@ -199,7 +199,7 @@ public class Loops {
 
     @test.Test(inputs = {1, 9, 121, 10000})
     public static double sqrtFinder(int n0) {
-        double n = (double)n0;
+        double n = (double) n0;
         double guess = n;
 
         while (true) {

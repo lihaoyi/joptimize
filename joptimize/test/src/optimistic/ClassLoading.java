@@ -52,16 +52,19 @@ class ClassLoading {
         int second = foo.call() + 456;
         return first + second;
     }
-    static abstract class Foo{
+
+    static abstract class Foo {
         abstract int call();
     }
-    static class Bar extends Foo{
-        int call(){
+
+    static class Bar extends Foo {
+        int call() {
             return 1;
         }
     }
-    static class Qux extends Foo{
-        int call(){
+
+    static class Qux extends Foo {
+        int call() {
             return 2;
         }
     }

@@ -7,7 +7,6 @@ import org.objectweb.asm.tree.analysis.{AnalyzerException, Value}
 
 import scala.collection.mutable
 
-
 /**
   * A symbolic execution stack frame. A stack frame contains a set of local variable slots, and an
   * operand stack. Warning: long and double values are represented with <i>two</i> slots in local
@@ -16,7 +15,7 @@ import scala.collection.mutable
   * @param < V> type of the Value used for the analysis.
   * @author Eric Bruneton
   */
-class Frame[V <: Value, S] (var numLocals: Int, val numStack0: Int){
+class Frame[V <: Value, S](var numLocals: Int, val numStack0: Int) {
 
   /**
     * The local variables and the operand stack of this frame. The first {@link #numLocals} elements
@@ -25,6 +24,7 @@ class Frame[V <: Value, S] (var numLocals: Int, val numStack0: Int){
     */
   private val values = new Array[Value](numLocals + numStack0).asInstanceOf[Array[V]]
   var state: S = null.asInstanceOf[S]
+
   /** The number of elements in the operand stack. */
   private var numStack = 0
 
@@ -74,7 +74,8 @@ class Frame[V <: Value, S] (var numLocals: Int, val numStack0: Int){
     * @throws IndexOutOfBoundsException if the variable does not exist.
     */
   def getLocal(index: Int) = {
-    if (index >= numLocals) throw new IndexOutOfBoundsException("Trying to access an inexistant local variable")
+    if (index >= numLocals)
+      throw new IndexOutOfBoundsException("Trying to access an inexistant local variable")
     values(index)
   }
 
@@ -86,7 +87,8 @@ class Frame[V <: Value, S] (var numLocals: Int, val numStack0: Int){
     * @throws IndexOutOfBoundsException if the variable does not exist.
     */
   def setLocal(index: Int, value: V): Unit = {
-    if (index >= numLocals) throw new IndexOutOfBoundsException("Trying to access an inexistant local variable " + index)
+    if (index >= numLocals)
+      throw new IndexOutOfBoundsException("Trying to access an inexistant local variable " + index)
     values(index) = value
   }
 
@@ -143,7 +145,8 @@ class Frame[V <: Value, S] (var numLocals: Int, val numStack0: Int){
     * @throws IndexOutOfBoundsException if the operand stack is full.
     */
   def push(value: V): Unit = {
-    if (numLocals + numStack >= values.length) throw new IndexOutOfBoundsException("Insufficient maximum stack size.")
+    if (numLocals + numStack >= values.length)
+      throw new IndexOutOfBoundsException("Insufficient maximum stack size.")
     values(numLocals + numStack) = value
     numStack += 1
   }
@@ -157,9 +160,11 @@ class Frame[V <: Value, S] (var numLocals: Int, val numStack0: Int){
     *                           POP on an empty operand stack).
     */
   @throws[AnalyzerException]
-  def execute(insn: AbstractInsnNode,
-              interpreter: Interpreter[V, S],
-              blockStartState: Option[S]): Unit = {
+  def execute(
+    insn: AbstractInsnNode,
+    interpreter: Interpreter[V, S],
+    blockStartState: Option[S]
+  ): Unit = {
     var value1: V = null.asInstanceOf[V]
     var value2: V = null.asInstanceOf[V]
     var value3: V = null.asInstanceOf[V]
@@ -173,9 +178,9 @@ class Frame[V <: Value, S] (var numLocals: Int, val numStack0: Int){
 
     insn.getOpcode match {
       case NOP =>
-      case ACONST_NULL | ICONST_M1 | ICONST_0 | ICONST_1 | ICONST_2 | ICONST_3 |
-           ICONST_4 | ICONST_5 | LCONST_0 | LCONST_1 | FCONST_0 | FCONST_1 | FCONST_2 |
-           DCONST_0 | DCONST_1 | BIPUSH | SIPUSH | LDC =>
+      case ACONST_NULL | ICONST_M1 | ICONST_0 | ICONST_1 | ICONST_2 | ICONST_3 | ICONST_4 |
+          ICONST_5 | LCONST_0 | LCONST_1 | FCONST_0 | FCONST_1 | FCONST_2 | DCONST_0 | DCONST_1 |
+          BIPUSH | SIPUSH | LDC =>
         val res = interpreter.constOperation(insn)
         push(res)
       case ILOAD | LLOAD | FLOAD | DLOAD | ALOAD =>
@@ -187,7 +192,8 @@ class Frame[V <: Value, S] (var numLocals: Int, val numStack0: Int){
         if (value1.getSize == 2) setLocal(`var` + 1, interpreter.newEmptyValue(`var` + 1))
         if (`var` > 0) {
           val local = getLocal(`var` - 1)
-          if (local != null && local.getSize == 2) setLocal(`var` - 1, interpreter.newEmptyValue(`var` - 1))
+          if (local != null && local.getSize == 2)
+            setLocal(`var` - 1, interpreter.newEmptyValue(`var` - 1))
         }
       case Opcodes.IASTORE | LASTORE | FASTORE | DASTORE | AASTORE | BASTORE | CASTORE | SASTORE =>
         value3 = pop()
@@ -197,7 +203,8 @@ class Frame[V <: Value, S] (var numLocals: Int, val numStack0: Int){
       case Opcodes.POP =>
         if (pop().getSize == 2) throw new AnalyzerException(insn, "Illegal use of POP")
       case Opcodes.POP2 =>
-        if (pop().getSize == 1 && pop().getSize != 1) throw new AnalyzerException(insn, "Illegal use of POP2")
+        if (pop().getSize == 1 && pop().getSize != 1)
+          throw new AnalyzerException(insn, "Illegal use of POP2")
       case Opcodes.DUP =>
         value1 = pop()
         if (value1.getSize != 1) throw new AnalyzerException(insn, "Illegal use of DUP")
@@ -206,7 +213,8 @@ class Frame[V <: Value, S] (var numLocals: Int, val numStack0: Int){
       case Opcodes.DUP_X1 =>
         value1 = pop()
         value2 = pop()
-        if (value1.getSize != 1 || value2.getSize != 1) throw new AnalyzerException(insn, "Illegal use of DUP_X1")
+        if (value1.getSize != 1 || value2.getSize != 1)
+          throw new AnalyzerException(insn, "Illegal use of DUP_X1")
         push(interpreter.copyOperation(insn, value1))
         push(value2)
         push(value1)
@@ -221,13 +229,13 @@ class Frame[V <: Value, S] (var numLocals: Int, val numStack0: Int){
               push(value3)
               push(value2)
               push(value1)
-            }else throw new AnalyzerException(insn, "Illegal use of DUP_X2")
+            } else throw new AnalyzerException(insn, "Illegal use of DUP_X2")
           } else {
             push(interpreter.copyOperation(insn, value1))
             push(value2)
             push(value1)
           }
-        }else throw new AnalyzerException(insn, "Illegal use of DUP_X2")
+        } else throw new AnalyzerException(insn, "Illegal use of DUP_X2")
 
       case Opcodes.DUP2 =>
         value1 = pop()
@@ -238,7 +246,7 @@ class Frame[V <: Value, S] (var numLocals: Int, val numStack0: Int){
             push(value1)
             push(interpreter.copyOperation(insn, value2))
             push(interpreter.copyOperation(insn, value1))
-          }else throw new AnalyzerException(insn, "Illegal use of DUP2")
+          } else throw new AnalyzerException(insn, "Illegal use of DUP2")
         } else {
           push(value1)
           push(interpreter.copyOperation(insn, value1))
@@ -256,15 +264,15 @@ class Frame[V <: Value, S] (var numLocals: Int, val numStack0: Int){
               push(value3)
               push(value2)
               push(value1)
-            }else throw new AnalyzerException(insn, "Illegal use of DUP2_X1")
-          }else throw new AnalyzerException(insn, "Illegal use of DUP2_X1")
+            } else throw new AnalyzerException(insn, "Illegal use of DUP2_X1")
+          } else throw new AnalyzerException(insn, "Illegal use of DUP2_X1")
         } else {
           value2 = pop()
           if (value2.getSize == 1) {
             push(interpreter.copyOperation(insn, value1))
             push(value2)
             push(value1)
-          }else throw new AnalyzerException(insn, "Illegal use of DUP2_X1")
+          } else throw new AnalyzerException(insn, "Illegal use of DUP2_X1")
         }
 
       case Opcodes.DUP2_X2 =>
@@ -282,16 +290,15 @@ class Frame[V <: Value, S] (var numLocals: Int, val numStack0: Int){
                 push(value3)
                 push(value2)
                 push(value1)
-              }else throw new AnalyzerException(insn, "Illegal use of DUP2_X2")
-            }
-            else {
+              } else throw new AnalyzerException(insn, "Illegal use of DUP2_X2")
+            } else {
               push(interpreter.copyOperation(insn, value2))
               push(interpreter.copyOperation(insn, value1))
               push(value3)
               push(value2)
               push(value1)
             }
-          }else throw new AnalyzerException(insn, "Illegal use of DUP2_X2")
+          } else throw new AnalyzerException(insn, "Illegal use of DUP2_X2")
         } else {
           value2 = pop()
           if (value2.getSize == 1) {
@@ -301,7 +308,7 @@ class Frame[V <: Value, S] (var numLocals: Int, val numStack0: Int){
               push(value3)
               push(value2)
               push(value1)
-            }else throw new AnalyzerException(insn, "Illegal use of DUP2_X2")
+            } else throw new AnalyzerException(insn, "Illegal use of DUP2_X2")
           } else {
             push(interpreter.copyOperation(insn, value1))
             push(value2)
@@ -312,18 +319,19 @@ class Frame[V <: Value, S] (var numLocals: Int, val numStack0: Int){
       case Opcodes.SWAP =>
         value2 = pop()
         value1 = pop()
-        if (value1.getSize != 1 || value2.getSize != 1) throw new AnalyzerException(insn, "Illegal use of SWAP")
+        if (value1.getSize != 1 || value2.getSize != 1)
+          throw new AnalyzerException(insn, "Illegal use of SWAP")
         push(interpreter.copyOperation(insn, value2))
         push(interpreter.copyOperation(insn, value1))
-      case IADD | LADD | FADD | DADD | ISUB | LSUB | FSUB | DSUB | IMUL | LMUL | FMUL |
-           DMUL | ISHL | LSHL | ISHR | LSHR | IUSHR | LUSHR | IAND | LAND | IOR | LOR |
-           IXOR | LXOR | LCMP | FCMPL | FCMPG | DCMPL | DCMPG =>
+      case IADD | LADD | FADD | DADD | ISUB | LSUB | FSUB | DSUB | IMUL | LMUL | FMUL | DMUL |
+          ISHL | LSHL | ISHR | LSHR | IUSHR | LUSHR | IAND | LAND | IOR | LOR | IXOR | LXOR | LCMP |
+          FCMPL | FCMPG | DCMPL | DCMPG =>
         value2 = pop()
         value1 = pop()
         val res = interpreter.binaryOp(insn, value1, value2)
         push(res)
-      case IALOAD | LALOAD | FALOAD | DALOAD | AALOAD | BALOAD | CALOAD | SALOAD |
-           IDIV | LDIV | FDIV | DDIV | IREM | LREM | FREM | DREM  =>
+      case IALOAD | LALOAD | FALOAD | DALOAD | AALOAD | BALOAD | CALOAD | SALOAD | IDIV | LDIV |
+          FDIV | DDIV | IREM | LREM | FREM | DREM =>
         value2 = pop()
         value1 = pop()
         val (res, newState) = interpreter.binaryOpUnsafe(insn, value1, value2, state)
@@ -336,15 +344,15 @@ class Frame[V <: Value, S] (var numLocals: Int, val numStack0: Int){
         `var` = insn.asInstanceOf[IincInsnNode].`var`
         val res = interpreter.unaryOp(insn, getLocal(`var`))
         setLocal(`var`, res)
-      case I2L | I2F | I2D | L2I | L2F | L2D | F2I | F2L | F2D | D2I | D2L |
-           D2F | I2B | I2C | I2S =>
-        val res  = interpreter.unaryOp(insn, pop())
+      case I2L | I2F | I2D | L2I | L2F | L2D | F2I | F2L | F2D | D2I | D2L | D2F | I2B | I2C |
+          I2S =>
+        val res = interpreter.unaryOp(insn, pop())
         push(res)
       case IFEQ | IFNE | IFLT | IFGE | IFGT | IFLE =>
         interpreter.unaryCommand(insn, pop())
 
-      case IF_ICMPEQ | IF_ICMPNE | IF_ICMPLT | IF_ICMPGE | IF_ICMPGT | IF_ICMPLE |
-           IF_ACMPEQ | IF_ACMPNE =>
+      case IF_ICMPEQ | IF_ICMPNE | IF_ICMPLT | IF_ICMPGE | IF_ICMPGT | IF_ICMPLE | IF_ACMPEQ |
+          IF_ACMPNE =>
         value2 = pop()
         value1 = pop()
         interpreter.binaryCommand(insn, value1, value2)
@@ -440,12 +448,14 @@ class Frame[V <: Value, S] (var numLocals: Int, val numStack0: Int){
     *                    { @literal false} otherwise.
     * @throws AnalyzerException if the frames have incompatible sizes.
     */
-  def merge(insnIndex: Int,
-            targetInsnIndex: Int,
-            frame: Frame[V, S],
-            interpreter: Interpreter[V, S]) = {
+  def merge(
+    insnIndex: Int,
+    targetInsnIndex: Int,
+    frame: Frame[V, S],
+    interpreter: Interpreter[V, S]
+  ) = {
     if (numStack != frame.numStack) throw new AnalyzerException(null, "Incompatible stack heights")
-    for(i <- 0 until (numLocals + numStack)){
+    for (i <- 0 until (numLocals + numStack)) {
       val v = interpreter.merge(values(i), frame.values(i), insnIndex, targetInsnIndex)
       if (v != values(i)) {
         values(i) = v
@@ -462,7 +472,7 @@ class Frame[V <: Value, S] (var numLocals: Int, val numStack0: Int){
     * @throws AnalyzerException if the frames have incompatible sizes.
     */
   def merge0(insnIndex: Int, targetInsnIndex: Int, interpreter: Interpreter[V, S]) = {
-    for(i <- 0 until (numLocals + numStack)){
+    for (i <- 0 until (numLocals + numStack)) {
       val v = interpreter.merge0(values(i), insnIndex, targetInsnIndex)
       if (v != values(i)) {
         values(i) = v
@@ -477,9 +487,9 @@ class Frame[V <: Value, S] (var numLocals: Int, val numStack0: Int){
     */
   override def toString = {
     val stringBuilder = new StringBuilder
-    for(i <- 0 until getLocals) stringBuilder.append(getLocal(i))
+    for (i <- 0 until getLocals) stringBuilder.append(getLocal(i))
     stringBuilder.append(' ')
-    for(i <- 0 until getStackSize) stringBuilder.append(getStack(i).toString)
+    for (i <- 0 until getStackSize) stringBuilder.append(getStack(i).toString)
     stringBuilder.toString
   }
 }

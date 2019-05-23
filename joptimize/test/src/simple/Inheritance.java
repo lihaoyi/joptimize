@@ -117,7 +117,6 @@ public class Inheritance {
     }
 
 
-
     static interface ParentInterface {
         public static int x = 30;
     }
@@ -172,6 +171,7 @@ public class Inheritance {
     public static int moreStrings() {
         return moreStrings0(new int[9][9]).length();
     }
+
     public static String moreStrings0(int[][] solution) {
 
         StringBuilder s = new StringBuilder("\n");
@@ -194,10 +194,12 @@ public class Inheritance {
         return s.toString();
     }
 
-    public static Integer apply0(int a){ return Integer.valueOf(a);}
+    public static Integer apply0(int a) {
+        return Integer.valueOf(a);
+    }
 
     @test.Test(inputs = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12})
-    public static int lambdaSpecialized0(int a){
+    public static int lambdaSpecialized0(int a) {
         return apply0(a).intValue();
     }
 
@@ -206,9 +208,11 @@ public class Inheritance {
     }
 
     @test.Test(inputs = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12})
-    public static int lambdaSpecialized(int a){
-        Func1<Object, Integer> r1 = new Func1<Object, Integer>(){
-            public Integer apply(Object v){ return v.getClass().getName().length() + a;}
+    public static int lambdaSpecialized(int a) {
+        Func1<Object, Integer> r1 = new Func1<Object, Integer>() {
+            public Integer apply(Object v) {
+                return v.getClass().getName().length() + a;
+            }
         };
         return r1.apply(Integer.valueOf(123)) + r1.apply("abc");
     }

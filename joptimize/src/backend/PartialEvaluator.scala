@@ -5,10 +5,12 @@ import joptimize.model.SSA
 
 object PartialEvaluator {
 
-  def replaceJump(branch: SSA.Jump,
-                  directNext: SSA.Block,
-                  liveBlocks: SSA.Block => Boolean,
-                  log: Logger.InferredMethod) = {
+  def replaceJump(
+    branch: SSA.Jump,
+    directNext: SSA.Block,
+    liveBlocks: SSA.Block => Boolean,
+    log: Logger.InferredMethod
+  ) = {
     //                     c
     //                    /
     //       a        TRUE -- d
@@ -20,12 +22,12 @@ object PartialEvaluator {
     //                      e----
 
     directNext.next.replaceUpstream(directNext, branch.block)
-    for(phi <- directNext.nextPhis){
+    for (phi <- directNext.nextPhis) {
       phi.replaceUpstream(directNext, branch.block)
       branch.block.nextPhis ++= Seq(phi)
     }
 
-    for(up <- branch.upstreamVals){
+    for (up <- branch.upstreamVals) {
       up.downstreamRemoveAll(branch)
     }
     //       --------------------
@@ -56,13 +58,12 @@ object PartialEvaluator {
       case phi: SSA.Phi =>
         val arr = phi.incoming.toArray
         phi.incoming.clear()
-        for((k, v) <- arr){
+        for ((k, v) <- arr) {
           if (k == directNext) phi.incoming(branch.block) = v
           else if (branchBlocks(k)) {
             k.next = null
             v.downstreamRemove(phi)
-          }
-          else phi.incoming(k) = v
+          } else phi.incoming(k) = v
 
         }
         phi
@@ -70,12 +71,11 @@ object PartialEvaluator {
       case r: SSA.Merge =>
         val arr = r.incoming.toArray
         r.incoming.clear()
-        for((k, v) <- arr){
+        for ((k, v) <- arr) {
           if (k == directNext) r.incoming(branch.block) = branch.block.nextState
           else if (branchBlocks(k)) {
             k.next = null
-          }
-          else r.incoming(k) = v
+          } else r.incoming(k) = v
         }
         r
     }

@@ -2,36 +2,36 @@ package test.simplify;
 
 class InstanceofJumpFlatten {
     @test.Test(
-        inputs = {1},
-        checkPresent = {"InstanceofJumpFlatten.leaf1"},
-        checkRemoved = {"InstanceofJumpFlatten.leaf2", "InstanceofJumpFlatten.leaf3"}
+            inputs = {1},
+            checkPresent = {"InstanceofJumpFlatten.leaf1"},
+            checkRemoved = {"InstanceofJumpFlatten.leaf2", "InstanceofJumpFlatten.leaf3"}
     )
     static int simpleBar(int x) {
         return call(new InstanceImplA(), x);
     }
 
     @test.Test(
-        inputs = {1},
-        checkPresent = {"InstanceofJumpFlatten.leaf2"},
-        checkRemoved = {"InstanceofJumpFlatten.leaf1", "InstanceofJumpFlatten.leaf3"}
+            inputs = {1},
+            checkPresent = {"InstanceofJumpFlatten.leaf2"},
+            checkRemoved = {"InstanceofJumpFlatten.leaf1", "InstanceofJumpFlatten.leaf3"}
     )
     static int simpleBaz(int x) {
         return call(new InstanceImplB(), x);
     }
 
     @test.Test(
-        inputs = {1},
-        checkPresent = {"InstanceofJumpFlatten.leaf3"},
-        checkRemoved = {"InstanceofJumpFlatten.leaf1", "InstanceofJumpFlatten.leaf2"}
+            inputs = {1},
+            checkPresent = {"InstanceofJumpFlatten.leaf3"},
+            checkRemoved = {"InstanceofJumpFlatten.leaf1", "InstanceofJumpFlatten.leaf2"}
     )
     static int simpleQux(int x) {
         return call(new InstanceImplC(), x);
     }
 
     @test.Test(
-        inputs = {1},
-        checkPresent = {"InstanceofJumpFlatten.leaf1"},
-        checkRemoved = {"InstanceofJumpFlatten.leaf2", "InstanceofJumpFlatten.leaf3"}
+            inputs = {1},
+            checkPresent = {"InstanceofJumpFlatten.leaf1"},
+            checkRemoved = {"InstanceofJumpFlatten.leaf2", "InstanceofJumpFlatten.leaf3"}
     )
     static int simpleBarMatch(int x) {
         return call(new InstanceImplA(), x);
@@ -39,18 +39,18 @@ class InstanceofJumpFlatten {
 
 
     @test.Test(
-        inputs = {1},
-        checkPresent = {"InstanceofJumpFlatten.leaf2"},
-        checkRemoved = {"InstanceofJumpFlatten.leaf1", "InstanceofJumpFlatten.leaf3"}
+            inputs = {1},
+            checkPresent = {"InstanceofJumpFlatten.leaf2"},
+            checkRemoved = {"InstanceofJumpFlatten.leaf1", "InstanceofJumpFlatten.leaf3"}
     )
     static int simpleBazMatch(int x) {
         return call(new InstanceImplB(), x);
     }
 
     @test.Test(
-        inputs = {1},
-        checkPresent = {"InstanceofJumpFlatten.leaf3"},
-        checkRemoved = {"InstanceofJumpFlatten.leaf1", "InstanceofJumpFlatten.leaf2"}
+            inputs = {1},
+            checkPresent = {"InstanceofJumpFlatten.leaf3"},
+            checkRemoved = {"InstanceofJumpFlatten.leaf1", "InstanceofJumpFlatten.leaf2"}
     )
     static int simpleQuxMatch(int x) {
         return call(new InstanceImplC(), x);
