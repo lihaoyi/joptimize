@@ -12,6 +12,7 @@ object Inliner {
   def inlineAll(analyzerRes: ProgramAnalyzer.ProgramResult,
                 classManager: ClassManager.Frozen,
                 log: Logger.Global) = log.block{
+
     val filteredCallgraph = analyzerRes
       .callGraph
       .filter(e => e.called.method.name != "<init>" && e.called.method.name != "<clinit>")
@@ -243,7 +244,12 @@ object Inliner {
             val phi = new SSA.Phi(
               null,
               mutable.LinkedHashMap.empty,
-              classManager.mergeTypes(triplets.map { case (s, j, v) => v.get.jtype }).get.asInstanceOf[JType]
+              classManager
+                .mergeTypes(
+                  triplets.collect{ case (s, j, v) if inferred.contains(v.get) => v.get.jtype }
+                )
+                .get
+                .asInstanceOf[JType]
             )
             triplets.map { case (s, j, v) => phi.incoming.put(j.block, v.get) }
             val inferredMerged = classManager

@@ -91,11 +91,17 @@ object BytecodeDCE {
                 virtualCallSig <- virtualCallSignatures.getOrElse(sup, Nil)
                 if methodNameDescs((virtualCallSig.name, virtualCallSig.desc))
               } queue.enqueue(MethodSig(current.desc, virtualCallSig.name, virtualCallSig.desc, false))
+
             }
           case current: TypeInsnNode if current.getOpcode == Opcodes.ANEWARRAY =>
             def rec(t: JType): Unit = t match{
               case arr: JType.Arr => rec(arr.innerType)
-              case cls: JType.Cls => classManager.getAllSupertypes(cls).foreach(seenClasses.add)
+              case cls: JType.Cls =>
+                for(c <- classManager.getAllSupertypes(cls)){
+                  seenClasses.add(c)
+                  val clinitMethod = MethodSig(c, "<clinit>", Desc.read("()V"), true)
+                  if (classManager.loadMethod(clinitMethod).nonEmpty) queue.enqueue(clinitMethod)
+                }
               case _ => // do nothing
             }
             rec(JType.read(current.desc))
@@ -103,7 +109,12 @@ object BytecodeDCE {
           case current: MultiANewArrayInsnNode if current.getOpcode == Opcodes.ANEWARRAY =>
             def rec(t: JType): Unit = t match{
               case arr: JType.Arr => rec(arr.innerType)
-              case cls: JType.Cls => classManager.getAllSupertypes(cls).foreach(seenClasses.add)
+              case cls: JType.Cls =>
+                for(c <- classManager.getAllSupertypes(cls)){
+                  seenClasses.add(c)
+                  val clinitMethod = MethodSig(c, "<clinit>", Desc.read("()V"), true)
+                  if (classManager.loadMethod(clinitMethod).nonEmpty) queue.enqueue(clinitMethod)
+                }
               case _ => // do nothing
             }
             rec(JType.read(current.desc))
@@ -127,6 +138,7 @@ object BytecodeDCE {
     for (cn <- finalClassNodes){
       cn.methods.removeIf(m => !seenMethodNames.get(cn.name).fold(false)(_(m.name, m.desc)))
     }
+
     finalClassNodes
   }
 }

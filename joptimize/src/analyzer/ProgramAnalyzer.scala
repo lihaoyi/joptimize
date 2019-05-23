@@ -337,7 +337,7 @@ object ProgramAnalyzer {
   }
 
   def handleNew(isig: InferredSig, n: SSA.New, api: HandlerApi): StepResult = {
-    api.classManager.loadClass(n.cls)
+
     val superClasses = api.classManager.getAllSupertypes(n.cls).toSet
 
     val superClassCallList = for {

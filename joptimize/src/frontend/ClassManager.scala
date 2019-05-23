@@ -85,6 +85,7 @@ trait ClassManager{
   }
 
   def getAllSupertypes(current0: JType.Cls): Seq[JType.Cls] = {
+    loadClass(current0)
     val supers = getSupertypes(current0) match{
       case None => Nil
       case Some(sup) => sup.flatMap(getAllSupertypes)
