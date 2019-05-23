@@ -69,7 +69,7 @@ class BytecodeDCE(entrypoints: scala.Seq[MethodSig],
     val seenClassNames = (seenMethods.map(_.cls) ++ seenClasses).map(_.name).toSet
     val seenMethodNames = seenMethods
       .groupBy(_.cls.name)
-      .mapValues(_.map(sig => (sig.name, sig.desc.unparse)).toSet)
+      .mapValues(_.map(sig => (sig.name, sig.desc.render)).toSet)
       .toMap
 
     val seenClassNodes = classNodes.filter(cn => seenClassNames(cn.name))

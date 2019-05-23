@@ -18,6 +18,7 @@ object Inliner {
     val filteredCallgraph = analyzerRes
       .callGraph
       .filter(e => e.called.method.name != "<init>" && e.called.method.name != "<clinit>")
+
     val singleCallerEdges = filteredCallgraph
       .groupBy(_.called)
       .values
@@ -29,15 +30,14 @@ object Inliner {
       .values
       .collect { case Seq(singleEdge) => singleEdge }
 
-    val callGraphLookup = filteredCallgraph.groupBy(_.called).collect {
-      case (src, Seq(dest)) => (src, dest.caller)
-    }
+    val callGraphLookup = filteredCallgraph
+      .groupBy(_.called)
+      .collect { case (src, Seq(dest)) => (src, dest.caller) }
+
     val inlineableEdgesSet = singleCallerEdges
       .to[mutable.LinkedHashSet]
       .intersect(singleCalledEdges.to[mutable.LinkedHashSet])
-      .filter { edge =>
-        edge.caller != edge.called
-      }
+      .filter(edge => edge.caller != edge.called)
 
     log.pprint(inlineableEdgesSet.map(_.toString))
 

@@ -1,7 +1,7 @@
 package joptimize.backend
 
 import joptimize.{FileLogger, Logger, Util}
-import joptimize.algorithms.{Dominator, MultiBiMap, Scheduler}
+import joptimize.algorithms.{Dominator, Scheduler}
 import joptimize.analyzer.ProgramAnalyzer.{CallEdge, MethodResult}
 import joptimize.analyzer.{ProgramAnalyzer, Renderer}
 import joptimize.frontend.{ClassManager, Frontend}
@@ -121,49 +121,49 @@ object Backend {
       else resolveDefsiteProps(isig)
     }
 
-    for (isig <- actualMethodInferredSigs.toArray if classManager.loadMethod(isig.method).nonEmpty)
-      yield Util.labelExceptions(isig.toString) {
-        val props = resolveDefsiteProps(isig)
+    for {
+      isig <- actualMethodInferredSigs.toArray
+      if classManager.loadMethod(isig.method).nonEmpty
+    } yield Util.labelExceptions(isig.toString) {
+      val props = resolveDefsiteProps(isig)
 
-        val liveArgs =
-          if (entrypoints.contains(isig.method)) (_: Int) => true
-          else props.liveArgs
+      val liveArgs =
+        if (entrypoints.contains(isig.method)) (_: Int) => true
+        else props.liveArgs
 
-        val originalNode = classManager.loadMethod(isig.method).get
+      val originalNode = classManager.loadMethod(isig.method).get
 
-        val (mangledName, mangledDesc) =
-          if (entrypoints.contains(isig.method) || isig.method.name == "<init>")
-            (isig.method.name, isig.method.desc)
-          else Util.mangle(isig, props.inferredReturn, liveArgs)
+      val (mangledName, mangledDesc) =
+        if (entrypoints.contains(isig.method) || isig.method.name == "<init>")
+          (isig.method.name, isig.method.desc)
+        else Util.mangle(isig, props.inferredReturn, liveArgs)
 
-        val newNode = new MethodNode(
-          Opcodes.ASM6,
-          originalNode.access,
-          mangledName,
-          mangledDesc.unparse,
-          originalNode.signature,
-          originalNode.exceptions.asScala.toArray
+      val newNode = new MethodNode(
+        Opcodes.ASM6,
+        originalNode.access,
+        mangledName,
+        mangledDesc.render,
+        originalNode.signature,
+        originalNode.exceptions.asScala.toArray
+      )
+      originalNode.accept(newNode)
+      if (!analyzerRes.visitedMethods.contains(isig)) newNode.instructions = new InsnList()
+      else {
+        newNode.instructions = processMethodBody(
+          isig.method,
+          analyzerRes.visitedMethods(isig),
+          log.inferredMethod(isig),
+          classManager.loadClass(_).nonEmpty,
+          resolveCallsiteProps,
+          argMapping = Util.argMapping(isig.method, liveArgs),
+          cls => classManager.loadClass(cls).map(c => (c.access & Opcodes.ACC_INTERFACE) != 0)
         )
-        originalNode.accept(newNode)
-        if (!analyzerRes.visitedMethods.contains(isig)) newNode.instructions = new InsnList()
-        else {
-          val argMapping = Util.argMapping(isig.method, liveArgs)
-
-          newNode.instructions = processMethodBody(
-            isig.method,
-            analyzerRes.visitedMethods(isig),
-            log.inferredMethod(isig),
-            classManager.loadClass(_).nonEmpty,
-            resolveCallsiteProps,
-            argMapping,
-            cls => classManager.loadClass(cls).map(c => (c.access & Opcodes.ACC_INTERFACE) != 0)
-          )
-        }
-        newNode.desc = mangledDesc.unparse
-        newNode.tryCatchBlocks = Nil.asJava
-
-        classManager.loadClass(isig.method.cls).get -> newNode
       }
+      newNode.desc = mangledDesc.render
+      newNode.tryCatchBlocks = Nil.asJava
+
+      classManager.loadClass(isig.method.cls).get -> newNode
+    }
   }
 
   def computeHighestMethodDefiners(
@@ -250,18 +250,12 @@ object Backend {
 
     val allVertices2 = result.methodBody.getAllVertices()
 
-//    pprint.log(originalSig)
-//    pprint.log(result.program)
     val (controlFlowEdges, startBlock, allBlocks, blockEdges) =
       analyzeBlockStructure(result.methodBody)
 
     val loopTree2 = HavlakLoopTree.analyzeLoops(blockEdges, allBlocks)
 
     val dominators2 = Dominator.findDominators(blockEdges, allBlocks)
-
-//    RegisterAllocator.apply(result.methodBody, dominators2.immediateDominators, log)
-//
-//    log.graph("COPY INSERTED")(Renderer.dumpSvg(result.methodBody))
 
     val nodesToBlocks = Scheduler.apply(
       loopTree2,
@@ -270,16 +264,8 @@ object Backend {
       allVertices2,
       log
     )
-//
-//    val postRegisterAllocNaming = Namer.apply(
-//      result.methodBody,
-//      nodesToBlocks,
-//      result.methodBody.getAllVertices(),
-//      log
-//    )
 
     val finalInsns = new CodeGenMethod(
-//      postRegisterAllocNaming,
       log,
       isInterface,
       result.methodBody,

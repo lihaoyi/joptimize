@@ -14,5 +14,4 @@ trait IType extends java.io.Serializable{
     * widen it into a type as represented purely by JVM classes
     */
   def widen: IType
-  def isConstant: Boolean
 }

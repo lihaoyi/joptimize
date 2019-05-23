@@ -3,23 +3,16 @@ package joptimize.model
 import collection.mutable
 import reflect.ClassTag
 
-
-object JType{
+object JType {
   def fromJavaCls(c: Class[_]): JType =
     if (c.isPrimitive) Prim.allJava(c.getTypeName)
     else if (c.isArray) Arr(fromJavaCls(c.getComponentType))
     else Cls(c.getName)
 
-  def read(s: String): JType = s match{
+  def read(s: String): JType = s match {
     case x if Prim.all.contains(x(0)) => Prim.all(x(0))
     case s if s.startsWith("L") && s.endsWith(";") => Cls.apply(s.drop(1).dropRight(1))
     case s if s.startsWith("[") => Arr.read(s)
-    case s => Cls.apply(s)
-  }
-
-  def readJava(s: String): JType = s match {
-    case x if Prim.allJava.contains(x) => Prim.allJava(x)
-    case s if s.startsWith("[") => Arr.readJava(s)
     case s => Cls.apply(s)
   }
 
@@ -27,13 +20,8 @@ object JType{
     * Reference types, which can either be Class or Array types
     */
   trait Ref extends JType
-  object Arr{
+  object Arr {
     def read(s: String) = Arr(JType.read(s.drop(1)))
-    def readJava(s: String) = Arr(s.drop(1) match {
-      case x if Prim.all.contains(x(0)) => Prim.all(x(0))
-      case x if x.startsWith("L") => Cls.apply(x.drop(1).dropRight(1))
-      case x => JType.readJava(x)
-    })
   }
 
   /**
@@ -41,22 +29,21 @@ object JType{
     *
     * @param innerType The type of the components of the array
     */
-  case class Arr(innerType: JType) extends Ref{
+  case class Arr(innerType: JType) extends Ref {
     def size = 1
-    def name = innerType match{
+    def name = innerType match {
       case tpe: Cls => "[L" + tpe.name + ";"
-      case tpe: Prim[_] => "[" + tpe.internalName
+      case tpe: Prim => "[" + tpe.internalName
       case tpe => "[" + tpe.javaName
     }
-    def realCls = innerType.realCls
-    def javaName = innerType match{
+    def javaName = innerType match {
       case tpe: Cls => "[L" + tpe.javaName + ";"
-      case tpe: Prim[_] => "[" + tpe.internalName
+      case tpe: Prim => "[" + tpe.internalName
       case tpe => "[" + tpe.javaName
     }
     def internalName = "[" + innerType.internalName
   }
-  object Cls{
+  object Cls {
     implicit def apply(name: String): Cls = new Cls(name.replace('.', '/'))
     def unapply(cls: Cls): Option[String] = Some(cls.name)
   }
@@ -69,10 +56,8 @@ object JType{
   class Cls private (val name: String) extends Ref {
     def size = 1
 
-    def realCls = classOf[Object]
-
     override val hashCode = name.hashCode
-    override def equals(other: Any) = other match{
+    override def equals(other: Any) = other match {
       case o: Cls => o.name == name
       case _ => false
     }
@@ -81,142 +66,66 @@ object JType{
     def javaName = name.replace('/', '.')
   }
 
-
-
-  abstract class Prim[T: ClassTag](val size: Int,
-                                   val index: Int,
-                                   val javaName: String) extends JType{
-    def read(x: () => Int): T
-    def write(x: T, out: Int => Unit): Unit
-    def boxedClass: Class[_]
-    val primClass: Class[_] = implicitly[ClassTag[T]].runtimeClass
-    def realCls = Class.forName(boxedClass.getName.replace('/', '.'))
-
-    def productPrefix: String
-    def name = productPrefix
-    def internalName = name
+  class Prim(val size: Int, val javaName: String)(implicit sname: sourcecode.Name) extends JType {
+    def name = sname.value
+    def internalName = sname.value
   }
   object Prim extends {
+    val V = new Prim(0, "void")
+    val Z = new Prim(1, "boolean")
+    val B = new Prim(1, "byte")
+    val C = new Prim(1, "char")
+    val S = new Prim(1, "short")
+    val I = new Prim(1, "int")
+    val F = new Prim(1, "float")
+    val J = new Prim(2, "long")
+    val D = new Prim(2, "double")
+
     def read(s: String) = all(s(0))
-    val all: Map[Char, Prim[_]] = Map(
-      'V' -> (V: Prim[_]),
-      'Z' -> (Z: Prim[_]),
-      'B' -> (B: Prim[_]),
-      'C' -> (C: Prim[_]),
-      'S' -> (S: Prim[_]),
-      'I' -> (I: Prim[_]),
-      'F' -> (F: Prim[_]),
-      'J' -> (J: Prim[_]),
-      'D' -> (D: Prim[_])
-    )
-    val indexed: IndexedSeq[Prim[_]] = {
-      val arr = new Array[Prim[_]](all.size)
-      for (prim <- all.values) arr(prim.index) = prim
-      for(v <- arr) assert(v != null)
-      arr
-    }
-
-
-    val allJava: Map[String, Prim[_]] = Map(
-      "void" -> (V: Prim[_]),
-      "boolean" -> (Z: Prim[_]),
-      "byte" -> (B: Prim[_]),
-      "char" -> (C: Prim[_]),
-      "short" -> (S: Prim[_]),
-      "int" -> (I: Prim[_]),
-      "float" -> (F: Prim[_]),
-      "long" -> (J: Prim[_]),
-      "double" -> (D: Prim[_])
+    val all: Map[Char, Prim] = Map(
+      'V' -> (V: Prim),
+      'Z' -> (Z: Prim),
+      'B' -> (B: Prim),
+      'C' -> (C: Prim),
+      'S' -> (S: Prim),
+      'I' -> (I: Prim),
+      'F' -> (F: Prim),
+      'J' -> (J: Prim),
+      'D' -> (D: Prim)
     )
 
-    def unapply(p: Prim[_]) = Some(p.javaName)
+    val allJava: Map[String, Prim] = Map(
+      "void" -> (V: Prim),
+      "boolean" -> (Z: Prim),
+      "byte" -> (B: Prim),
+      "char" -> (C: Prim),
+      "short" -> (S: Prim),
+      "int" -> (I: Prim),
+      "float" -> (F: Prim),
+      "long" -> (J: Prim),
+      "double" -> (D: Prim)
+    )
 
-    implicit case object V extends Prim[Unit](0, 0, "void"){
-      def apply(x: Int) = ???
-      def read(x: () => Int) = ()
-      def write(x: Unit, out: Int => Unit) = ()
-      def boxedClass = classOf[java.lang.Void]
-    }
+    def unapply(p: Prim) = Some(p.javaName)
 
-    type Z = Boolean
-    implicit case object Z extends Prim[Boolean](1, 1, "boolean"){
-      def apply(x: Int) = x != 0
-      def read(x: () => Int) = this(x())
-      def write(x: Boolean, out: Int => Unit) = out(if (x) 1 else 0)
-      def boxedClass = classOf[java.lang.Boolean]
-    }
-    type B = Byte
-    implicit case object B extends Prim[Byte](1, 2, "byte"){
-      def apply(x: Int) = x.toByte
-      def read(x: () => Int) = this(x())
-      def write(x: Byte, out: Int => Unit) = out(x)
-      def boxedClass = classOf[java.lang.Byte]
-    }
-    type C = Char
-    implicit case object C extends Prim[Char](1, 3, "char"){
-      def apply(x: Int) = x.toChar
-      def read(x: () => Int) = this(x())
-      def write(x: Char, out: Int => Unit) = out(x)
-      def boxedClass = classOf[java.lang.Character]
-    }
-    type S = Short
-    implicit case object S extends Prim[Short](1, 4, "short"){
-      def apply(x: Int) = x.toShort
-      def read(x: () => Int) = this(x())
-      def write(x: Short, out: Int => Unit) = out(x)
-      def boxedClass = classOf[java.lang.Short]
-    }
-    type I = Int
-    implicit case object I extends Prim[Int](1, 5, "int"){
-      def apply(x: Int) = x
-      def read(x: () => Int) = this(x())
-      def write(x: Int, out: Int => Unit) = out(x)
-      def boxedClass = classOf[java.lang.Integer]
-    }
-    type F = Float
-    implicit case object F extends Prim[Float](1, 6, "float"){
-      def apply(x: Int) = java.lang.Float.intBitsToFloat(x)
-      def read(x: () => Int) = this(x())
-      def write(x: Float, out: Int => Unit) = out(java.lang.Float.floatToRawIntBits(x))
-      def boxedClass = classOf[java.lang.Float]
-    }
-    type J = Long
-    implicit case object J extends Prim[Long](2, 7, "long"){
-      def apply(v1: Int, v2: Int) = v1.toLong << 32 | v2 & 0xFFFFFFFFL
-      def read(x: () => Int) = {
-        this(x(), x())
-      }
-      def write(x: Long, out: Int => Unit) = {
-        out((x >> 32).toInt)
-        out(x.toInt)
-      }
-      def boxedClass = classOf[java.lang.Long]
-    }
-    type D = Double
-    implicit case object D extends Prim[Double](2, 8, "double"){
-      def apply(v1: Int, v2: Int) = java.lang.Double.longBitsToDouble(J(v1, v2))
-      def read(x: () => Int) = java.lang.Double.longBitsToDouble(J.read(x))
-      def write(x: Double, out: Int => Unit) = J.write(java.lang.Double.doubleToRawLongBits(x), out)
-      def boxedClass = classOf[java.lang.Double]
-    }
   }
 
-  case object Bottom extends JType{
+  case object Bottom extends JType {
     def name = "Bottom"
 
     def internalName = "Lscala/runtime/Nothing$;"
 
     def javaName = "scala.runtime.Nothing$"
 
-    def realCls = ???
-
     def size = 0
   }
 }
+
 /**
   * Represents all variable types within the Metascala VM
   */
-sealed trait JType extends IType{
+sealed trait JType extends IType {
+
   /**
     * The JVMs internal representation
     * - V Z B C S I F J D
@@ -239,49 +148,41 @@ sealed trait JType extends IType{
     * - java.lang.Object [java.lang.String;
     */
   def javaName: String
-  /**
-    * Retrieves the Class object in the host JVM which represents the
-    * given Type inside the Metascala VM
-    */
-  def realCls: Class[_]
 
   /**
     * 0, 1 or 2 for void, most things and double/long
     */
   def size: Int
 
-  def isRef: Boolean = this.isInstanceOf[JType.Ref]
-
   def widen = this
-  def isConstant = false
 }
 
-object Desc{
+object Desc {
   def read(s: String) = {
     val scala.Array(argString, ret) = s.drop(1).split(')')
     val args = mutable.Buffer.empty[String]
     var index = 0
-    while(index < argString.length){
+    while (index < argString.length) {
       val firstChar = argString.indexWhere(x => "BCDFIJSZL".contains(x), index)
-      val split = argString(firstChar) match{
+      val split = argString(firstChar) match {
         case 'L' => argString.indexWhere(x => ";".contains(x), index)
         case _ => argString.indexWhere(x => "BCDFIJSZ".contains(x), index)
       }
 
-      args.append(argString.substring(index, split+1))
-      index = split +1
+      args.append(argString.substring(index, split + 1))
+      index = split + 1
     }
     Desc(
       args.map(JType.read),
-      JType.read(ret) match{
+      JType.read(ret) match {
         case l => if (l.name == "scala/runtime/Nothing$") JType.Bottom else l
       }
     )
   }
-  def unparse(t: JType): String = {
-    t match{
+  def render(t: JType): String = {
+    t match {
       case t: JType.Cls => t.internalName
-      case t: JType.Arr => "[" + unparse(t.innerType)
+      case t: JType.Arr => "[" + render(t.innerType)
       case x => x.internalName
     }
   }
@@ -291,18 +192,18 @@ object Desc{
   * Represents the signature of a method.
   */
 case class Desc(args: Seq[JType], ret: JType) {
-  def unparse = "(" + args.map(Desc.unparse).foldLeft("")(_ + _) + ")" + Desc.unparse(ret)
+  def render = "(" + args.map(Desc.render).foldLeft("")(_ + _) + ")" + Desc.render(ret)
 
-  override def toString = unparse
+  override def toString = render
 }
 
-case class MethodSig(cls: JType.Cls, name: String, desc: Desc, static: Boolean){
+case class MethodSig(cls: JType.Cls, name: String, desc: Desc, static: Boolean) {
   override def toString = {
-    cls.javaName + (if (static) "." else "#") + name + desc.unparse
+    cls.javaName + (if (static) "." else "#") + name + desc.render
   }
 }
 
-case class InferredSig(method: MethodSig, inferred: Seq[IType]){
+case class InferredSig(method: MethodSig, inferred: Seq[IType]) {
   assert(method.desc.args.length == inferred.length)
   assert(!inferred.contains(JType.Bottom))
   override def toString = {

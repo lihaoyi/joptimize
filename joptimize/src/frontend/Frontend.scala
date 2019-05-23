@@ -2,7 +2,6 @@ package joptimize.frontend
 
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream, ObjectOutputStream}
 
-import joptimize.algorithms.MultiBiMap
 import joptimize.{FileLogger, Logger, Util}
 import joptimize.analyzer.Renderer
 import joptimize.model.{IType, InferredSig, JType, MethodBody, MethodSig, SSA}

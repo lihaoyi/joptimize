@@ -2,7 +2,6 @@ package joptimize.frontend
 
 import joptimize.{FileLogger, Logger, Util}
 import joptimize.analyzer.Renderer
-import joptimize.frontend.{BytecodeToSSAInterpreter, ControlFlowExtraction}
 import joptimize.model.{MethodSig, SSA}
 import org.objectweb.asm.tree.MethodNode
 import org.objectweb.asm.util.{Textifier, TraceMethodVisitor}

@@ -616,9 +616,9 @@ object SSA{
       case SSA.InvokeDynamic.FloatArg(i) => i.asInstanceOf[AnyRef]
       case SSA.InvokeDynamic.LongArg(i) => i.asInstanceOf[AnyRef]
       case SSA.InvokeDynamic.DoubleArg(i) => i.asInstanceOf[AnyRef]
-      case SSA.InvokeDynamic.MethodArg(desc) => org.objectweb.asm.Type.getMethodType(desc.unparse)
+      case SSA.InvokeDynamic.MethodArg(desc) => org.objectweb.asm.Type.getMethodType(desc.render)
       case SSA.InvokeDynamic.ClsArg(cls) => org.objectweb.asm.Type.getObjectType(cls.name)
-      case SSA.InvokeDynamic.HandleArg(cls, name, desc, tag) => new Handle(tag, cls.name, name, desc.unparse)
+      case SSA.InvokeDynamic.HandleArg(cls, name, desc, tag) => new Handle(tag, cls.name, name, desc.render)
     }
   }
   class New0(var cls: JType.Cls) extends Val(cls){
@@ -635,7 +635,7 @@ object SSA{
       state = swap(state)
       srcs = srcs.map(swap(_))
     }
-    override def toString = s"${super.toString()}(${cls.name}, ${desc.unparse})"
+    override def toString = s"${super.toString()}(${cls.name}, ${desc.render})"
   }
   class NewArray(var state: State, var size: Val, var typeRef: JType)
     extends Val(JType.Arr(typeRef)) with Stateful{

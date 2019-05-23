@@ -1,7 +1,6 @@
 package joptimize.frontend
 
 import joptimize.Util
-import joptimize.algorithms.MultiBiMap
 import joptimize.model.{CType, IType, JType, MethodSig}
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.tree.{ClassNode, MethodNode}
@@ -62,7 +61,7 @@ object ClassManager {
           .methods
           .iterator()
           .asScala
-          .find(mn => mn.name == sig.name && mn.desc == sig.desc.unparse)
+          .find(mn => mn.name == sig.name && mn.desc == sig.desc.render)
       }
     )
 

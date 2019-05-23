@@ -257,13 +257,13 @@ class CodeGenMethod(
       case n: SSA.InstanceOf => upstreams ++ Seq(new TypeInsnNode(INSTANCEOF, n.desc.name))
       case n: SSA.InvokeStatic =>
         upstreams ++
-        Seq(new MethodInsnNode(INVOKESTATIC, n.cls.name, n.name, n.desc.unparse)) ++
+        Seq(new MethodInsnNode(INVOKESTATIC, n.cls.name, n.name, n.desc.render)) ++
         (if (n.desc.ret == JType.Bottom && n.downstreamList.count(!_.isInstanceOf[SSA.State]) == 0)
            Seq(new InsnNode(POP))
          else Nil)
       case n: SSA.InvokeSpecial =>
         upstreams ++
-        Seq(new MethodInsnNode(INVOKESPECIAL, n.cls.name, n.name, n.desc.unparse)) ++
+        Seq(new MethodInsnNode(INVOKESPECIAL, n.cls.name, n.name, n.desc.render)) ++
         (if (n.desc.ret == JType.Bottom && n.downstreamList.count(!_.isInstanceOf[SSA.State]) == 0)
            Seq(new InsnNode(POP))
          else Nil)
@@ -271,7 +271,7 @@ class CodeGenMethod(
         val opcode =
           if (isInterface(n.cls).getOrElse(n.interface)) INVOKEINTERFACE else INVOKEVIRTUAL
         upstreams ++
-        Seq(new MethodInsnNode(opcode, n.cls.name, n.name, n.desc.unparse)) ++
+        Seq(new MethodInsnNode(opcode, n.cls.name, n.name, n.desc.render)) ++
         (if (n.desc.ret == JType.Bottom && n.downstreamList.count(!_.isInstanceOf[SSA.State]) == 0)
            Seq(new InsnNode(POP))
          else Nil)
@@ -279,12 +279,12 @@ class CodeGenMethod(
         upstreams ++ Seq(
           new InvokeDynamicInsnNode(
             n.name,
-            n.desc.unparse,
+            n.desc.render,
             new Handle(
               n.bootstrap.tag,
               n.bootstrap.owner.name,
               n.bootstrap.name,
-              n.bootstrap.desc.unparse
+              n.bootstrap.desc.render
             ),
             n.bootstrapArgs.map(SSA.InvokeDynamic.argToAny): _*
           )
@@ -292,7 +292,7 @@ class CodeGenMethod(
       case n: SSA.New =>
         Seq(new TypeInsnNode(NEW, n.cls.name), new InsnNode(DUP)) ++
         upstreams ++
-        Seq(new MethodInsnNode(INVOKESPECIAL, n.cls.name, "<init>", n.desc.unparse))
+        Seq(new MethodInsnNode(INVOKESPECIAL, n.cls.name, "<init>", n.desc.render))
 
       case n: SSA.NewArray => upstreams ++ Seq(CodeGenMethod.newArrayOp(n.typeRef))
       case n: SSA.MultiANewArray =>
