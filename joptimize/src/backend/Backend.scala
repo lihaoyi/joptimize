@@ -78,12 +78,12 @@ object Backend {
     }
     def ignore(s: String) = s.startsWith("java/")
 
-    BytecodeDCE.apply(
+    new BytecodeDCE(
       entrypoints,
       grouped.keys.toSeq,
       ignore = ignore,
       log = log
-    )
+    ).apply()
 //    grouped.keys.toSeq
   }
 

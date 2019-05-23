@@ -15,98 +15,53 @@ import scala.collection.mutable
   * walk because we need all liveness analysis to be complete before we can
   * scan for new unreachability.
   */
-object BytecodeDCE {
-  def apply(entrypoints: scala.Seq[MethodSig],
-            classNodes: Seq[ClassNode],
-            ignore: String => Boolean,
-            log: Logger.Global): Seq[ClassNode] = log.block{
+class BytecodeDCE(entrypoints: scala.Seq[MethodSig],
+                  classNodes: Seq[ClassNode],
+                  ignore: String => Boolean,
+                  log: Logger.Global) {
 
-    val classNodeMap = classNodes.map(c => (c.name, c)).toMap
-    val classManager = new frontend.ClassManager.Dynamic(classNodeMap.get(_))
-    val queue = entrypoints.to[mutable.Queue]
-    val seenMethods = mutable.LinkedHashSet.empty[MethodSig]
-    val seenClasses = mutable.LinkedHashSet.empty[JType.Cls]
-    val virtualCallSignatures = mutable.LinkedHashMap.empty[JType.Cls, List[MethodSig]]
-    def addSeenClassAndClInit(cls: JType.Cls) = {
-      seenClasses.add(cls)
-      val clinitMethod = MethodSig(cls, "<clinit>", Desc.read("()V"), true)
-      if (classManager.loadMethod(clinitMethod).nonEmpty) queue.enqueue(clinitMethod)
-    }
+  val classNodeMap = classNodes.map(c => (c.name, c)).toMap
+  val classManager = new frontend.ClassManager.Dynamic(classNodeMap.get(_))
+  val queue = entrypoints.to[mutable.LinkedHashSet]
+  val seenMethods = mutable.LinkedHashSet.empty[MethodSig]
+  val seenClasses = mutable.LinkedHashSet.empty[JType.Cls]
+  val virtualCallSignatures = mutable.LinkedHashMap.empty[JType.Cls, List[MethodSig]]
+
+  def apply(): Seq[ClassNode] = log.block{
     seenClasses.add("scala/runtime/Nothing$")
     seenClasses.add("scala/runtime/Null$")
 
-    while(queue.nonEmpty){
-      val currentSig = queue.dequeue()
-      if (!ignore(currentSig.cls.name) && !seenMethods(currentSig)){
+    while(queue.nonEmpty) {
+      val currentSig = queue.head
+      queue.remove(currentSig)
+      if (!ignore(currentSig.cls.name) && !seenMethods(currentSig)) {
         seenMethods.add(currentSig)
         seenClasses.add(currentSig.cls)
 
-        val mn = classManager.loadMethod(currentSig).get
+        for (mn <- classManager.loadMethod(currentSig)) {
 
-        mn.instructions.iterator().asScala.foreach{
-          case current: InvokeDynamicInsnNode =>
-            if (Set(Util.metafactory, Util.altMetafactory).contains(SSA.InvokeDynamic.bootstrapFromHandle(current.bsm))){
-              val target = current.bsmArgs(1).asInstanceOf[Handle]
-              val targetSig = MethodSig(
-                JType.Cls(target.getOwner),
-                target.getName,
-                Desc.read(target.getDesc),
-                target.getTag == Opcodes.H_INVOKESTATIC
-              )
-              queue.enqueue(targetSig)
-            }
+          mn.instructions.iterator().asScala.foreach {
+            case current: InvokeDynamicInsnNode =>
+              handleInvokeDynamic(current)
 
-          case current: MethodInsnNode if !ignore(current.owner) =>
-            addSeenClassAndClInit(current.owner)
-            val sig = MethodSig(
-              current.owner, current.name,
-              Desc.read(current.desc), current.getOpcode == Opcodes.INVOKESTATIC
-            )
-            if (current.getOpcode == Opcodes.INVOKEVIRTUAL ||
-                current.getOpcode == Opcodes.INVOKEINTERFACE) {
-              virtualCallSignatures(sig.cls) = sig :: virtualCallSignatures.getOrElse(sig.cls, Nil)
-            }
+            case current: MethodInsnNode if !ignore(current.owner) =>
+              handleMethodCall(current)
 
-            val possibleSigs = classManager.resolvePossibleSigs(sig).getOrElse(Nil)
+            case current: FieldInsnNode => addSeenClassAndClInit(current.owner)
 
-            possibleSigs.foreach(sig => seenClasses.add(sig.cls))
+            case current: TypeInsnNode if current.getOpcode == Opcodes.NEW =>
+              handleNew(current)
 
-            queue.enqueue(possibleSigs.filter(classManager.loadMethod(_).nonEmpty):_*)
-            sig.desc.ret match{
-              case cls: JType.Cls => seenClasses.add(cls)
-              case _ => // do nothing
-            }
+            case current: TypeInsnNode if current.getOpcode == Opcodes.ANEWARRAY =>
+              handleNewArray(JType.read(current.desc))
 
-          case current: FieldInsnNode => addSeenClassAndClInit(current.owner)
+            case current: MultiANewArrayInsnNode if current.getOpcode == Opcodes.MULTIANEWARRAY =>
+              handleNewArray(JType.read(current.desc))
 
-          case current: TypeInsnNode if current.getOpcode == Opcodes.NEW =>
-            for(clsNode <- classManager.loadClass(current.desc)) {
-              val supers = classManager.getAllSupertypes(current.desc)
-              val methodNameDescs = clsNode
-                .methods
-                .asScala
-                .map { m => (m.name, Desc.read(m.desc)) }.toSet
+            case current: TypeInsnNode => seenClasses.add(JType.Cls(current.desc))
 
-              for {
-                sup <- supers
-                virtualCallSig <- virtualCallSignatures.getOrElse(sup, Nil)
-                if methodNameDescs((virtualCallSig.name, virtualCallSig.desc))
-              } queue.enqueue(MethodSig(current.desc, virtualCallSig.name, virtualCallSig.desc, false))
-
-            }
-
-
-          // For ANEWARRAY and MULTIANEWARRAY, we only add the classes to seenClasses
-          // but do not trigger <clinit> walking, the JVM just requires the class be
-          // present but does not yet initialize it.
-          case current: TypeInsnNode if current.getOpcode == Opcodes.ANEWARRAY =>
-            unwrapArray(JType.read(current.desc), classManager).foreach(seenClasses.add)
-          case current: MultiANewArrayInsnNode if current.getOpcode == Opcodes.MULTIANEWARRAY =>
-            unwrapArray(JType.read(current.desc), classManager).foreach(seenClasses.add)
-
-          case current: TypeInsnNode => seenClasses.add(JType.Cls(current.desc))
-
-          case _ => // do nothing
+            case _ => // do nothing
+          }
         }
       }
     }
@@ -126,12 +81,77 @@ object BytecodeDCE {
 
     finalClassNodes
   }
-  def unwrapArray(a: JType, classManager: ClassManager.Dynamic): Seq[JType.Cls] = {
-    def rec(t: JType): Seq[JType.Cls] = t match{
+
+  def handleInvokeDynamic(current: InvokeDynamicInsnNode) = {
+    if (Set(Util.metafactory, Util.altMetafactory).contains(SSA.InvokeDynamic.bootstrapFromHandle(current.bsm))) {
+      val target = current.bsmArgs(1).asInstanceOf[Handle]
+      val targetSig = MethodSig(
+        JType.Cls(target.getOwner),
+        target.getName,
+        Desc.read(target.getDesc),
+        target.getTag == Opcodes.H_INVOKESTATIC
+      )
+      queue.add(targetSig)
+    }
+  }
+
+  def handleMethodCall(current: MethodInsnNode) = {
+
+    addSeenClassAndClInit(current.owner)
+    val sig = MethodSig(
+      current.owner, current.name,
+      Desc.read(current.desc), current.getOpcode == Opcodes.INVOKESTATIC
+    )
+    if (current.getOpcode == Opcodes.INVOKEVIRTUAL ||
+      current.getOpcode == Opcodes.INVOKEINTERFACE) {
+      virtualCallSignatures(sig.cls) = sig :: virtualCallSignatures.getOrElse(sig.cls, Nil)
+    }
+
+    val possibleSigs = classManager.resolvePossibleSigs(sig).getOrElse(Nil)
+
+    possibleSigs.foreach(sig => seenClasses.add(sig.cls))
+
+    possibleSigs.foreach(queue.add)
+    sig.desc.ret match {
+      case cls: JType.Cls => seenClasses.add(cls)
+      case _ => // do nothing
+    }
+  }
+
+  def handleNew(current: TypeInsnNode) = {
+    for (clsNode <- classManager.loadClass(current.desc)) {
+      val supers = classManager.getAllSupertypes(current.desc)
+      val methodNameDescs = clsNode
+        .methods
+        .asScala
+        .map { m => (m.name, Desc.read(m.desc)) }.toSet
+
+      for {
+        sup <- supers
+        virtualCallSig <- virtualCallSignatures.getOrElse(sup, Nil)
+        if methodNameDescs((virtualCallSig.name, virtualCallSig.desc))
+      } queue.add(MethodSig(current.desc, virtualCallSig.name, virtualCallSig.desc, false))
+
+    }
+  }
+
+  def handleNewArray(a: JType): Unit = {
+    def rec(t: JType): Unit = t match{
       case arr: JType.Arr => rec(arr.innerType)
-      case cls: JType.Cls => classManager.getAllSupertypes(cls)
-      case _ => Nil
+      case cls: JType.Cls =>
+        // For ANEWARRAY and MULTIANEWARRAY, we only add the classes to seenClasses
+        // but do not trigger <clinit> walking, the JVM just requires the class be
+        // present but does not yet initialize it.
+        classManager.getAllSupertypes(cls).foreach(seenClasses.add)
+      case _ => ()
     }
     rec(a)
+  }
+
+
+  def addSeenClassAndClInit(cls: JType.Cls) = {
+    seenClasses.add(cls)
+    val clinitMethod = MethodSig(cls, "<clinit>", Desc.read("()V"), true)
+    queue.add(clinitMethod)
   }
 }
