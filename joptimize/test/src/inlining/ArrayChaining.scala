@@ -75,15 +75,27 @@ object ArrayChaining {
 
   @test.Test()
   def initArray4(): String = {
-    TestCls4.toString.substring(0, TestCls3.toString.indexOf('@'))
+    val s = TestCls4.toString
+    s.substring(0, s.indexOf('@'))
+  }
+
+  object TestManifestFactory {
+    val Nothing = new PhantomManifest()
+    class PhantomManifest() extends ClassTypeManifest(None)
+    class ClassTypeManifest(prefix: Option[Int])
   }
 
   @test.Test()
+  def testManifestFactory(): String = {
+    val s = TestManifestFactory.toString
+    s.substring(0, s.indexOf('@'))
+  }
+
+
+  @test.Test()
   def manifestFactory(): String = {
-    scala.reflect.ManifestFactory.toString.substring(
-      0,
-      scala.reflect.ManifestFactory.toString.indexOf('@')
-    )
+    val s = scala.reflect.ManifestFactory.toString
+    s.substring(0, s.indexOf('@'))
   }
 
   @test.Test()

@@ -107,7 +107,7 @@ object BytecodeDCE {
       .toMap
 
     val seenClassNodes = classNodes.filter(cn => seenClassNames(cn.name))
-    val visitedInterfaces = Util.findSeenInterfaces(classNodeMap, seenClassNodes.to[mutable.LinkedHashSet])
+    val visitedInterfaces = Util.findSeenInterfaces(classNodeMap, seenClassNodes.toSeq)
     val finalClassNodes = classNodes.filter(cn => seenClassNames(cn.name) || visitedInterfaces(cn.name))
     for (cn <- finalClassNodes){
       cn.methods.removeIf(m => !seenMethodNames.get(cn.name).fold(false)(_(m.name, m.desc)))

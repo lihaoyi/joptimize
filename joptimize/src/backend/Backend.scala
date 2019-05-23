@@ -64,12 +64,13 @@ object Backend {
       Seq("scala/runtime/Nothing$", "scala/runtime/Null$")
 
     log.pprint(visitedInterfaces)
-    val grouped =
-      (visitedInterfaces ++ inlinedAnalyzerRes.staticFieldReferencedClasses.flatMap(classManager.getAllSupertypes).map(_.name))
-        .filter(s => loadClassCache.contains(JType.Cls(s)))
-        .map(loadClassCache(_) -> Nil)
-        .toMap ++
-      newMethods.groupBy(_._1).mapValues(_.map(_._2))
+    val lhs = (visitedInterfaces ++ inlinedAnalyzerRes.staticFieldReferencedClasses.flatMap(classManager.getAllSupertypes).map(_.name))
+      .filter(s => loadClassCache.contains(JType.Cls(s)))
+      .map(loadClassCache(_) -> Nil)
+      .toMap
+    val grouped: Map[ClassNode, Seq[MethodNode]] =
+      lhs ++
+      newMethods.groupBy(_._1).mapValues(_.toSeq.map(_._2))
 
     for((cn, mns) <- grouped) yield {
       log.pprint(cn.name)
@@ -119,12 +120,15 @@ object Backend {
     }
 
     def resolveCallsiteProps(isig: InferredSig, invokeSpecial: Boolean) = {
-      if (!actualMethodInferredSigs.contains(isig)) ProgramAnalyzer.dummyProps(isig.method, optimistic = false)
+      if (!loadClassCache.contains(isig.method.cls)) ProgramAnalyzer.dummyProps(isig.method, optimistic = false)
+      else if (classManager.resolvePossibleSigs(isig.method).exists(!_.exists(loadMethodCache.contains))) {
+        ProgramAnalyzer.dummyProps(isig.method, optimistic = false)
+      }
       else if (invokeSpecial) analyzerRes.visitedMethods(isig).props
       else resolveDefsiteProps(isig)
     }
 
-    for (isig <- actualMethodInferredSigs) yield Util.labelExceptions(isig.toString){
+    for (isig <- actualMethodInferredSigs.toArray) yield Util.labelExceptions(isig.toString){
       val props = resolveDefsiteProps(isig)
 
       val liveArgs =
@@ -172,7 +176,7 @@ object Backend {
                                    loadMethodCache: Map[MethodSig, MethodNode],
                                    loadClassCache: Map[JType.Cls, ClassNode],
                                    actualMethodInferredSigs: mutable.LinkedHashSet[InferredSig]) = log.block {
-    for (isig <- actualMethodInferredSigs) yield {
+    for (isig <- actualMethodInferredSigs ++ analyzerRes.visitedResolved.keys) yield {
       var parentClasses = List.empty[JType.Cls]
       var current = isig.method.cls
       while ( {

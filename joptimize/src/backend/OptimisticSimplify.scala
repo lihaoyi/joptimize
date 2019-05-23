@@ -39,7 +39,9 @@ object OptimisticSimplify {
     case p: SSA.State => // do nothing
     case unInferred: SSA.Val if !inferred.contains(unInferred) => // do nothing
     case n: SSA.Invoke =>
-      val inferredSig = n.inferredSig(inferred)
+      val inferredSig =
+        if (n.name == "<init>") InferredSig(n.sig, n.sig.desc.args)
+        else n.inferredSig(inferred)
       val properties = resolvedProperties(
         inferredSig,
         n.isInstanceOf[SSA.InvokeSpecial]
@@ -49,7 +51,7 @@ object OptimisticSimplify {
         else {
           val (name, desc) = Util.mangle(
             inferredSig,
-            inferred.getOrElseUpdate(n, n.desc.ret),
+            properties.inferredReturn,
             properties.liveArgs
           )
 
