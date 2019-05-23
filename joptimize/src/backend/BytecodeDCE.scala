@@ -25,6 +25,7 @@ object BytecodeDCE {
     val queue = entrypoints.to[mutable.Queue]
     val seenMethods = mutable.LinkedHashSet.empty[MethodSig]
     val seenClasses = mutable.LinkedHashSet.empty[JType.Cls]
+    val virtualCallSignatures = mutable.LinkedHashMap.empty[JType.Cls, List[MethodSig]]
     seenClasses.add("scala/runtime/Nothing$")
     seenClasses.add("scala/runtime/Null$")
 
@@ -55,6 +56,10 @@ object BytecodeDCE {
               current.owner, current.name,
               Desc.read(current.desc), current.getOpcode == Opcodes.INVOKESTATIC
             )
+            if (current.getOpcode == Opcodes.INVOKEVIRTUAL ||
+                current.getOpcode == Opcodes.INVOKEINTERFACE) {
+              virtualCallSignatures(sig.cls) = sig :: virtualCallSignatures.getOrElse(sig.cls, Nil)
+            }
 
             val possibleSigs = classManager.resolvePossibleSigs(sig).getOrElse(Nil)
 
@@ -73,6 +78,20 @@ object BytecodeDCE {
             if (classManager.loadMethod(clinitMethod).nonEmpty) queue.enqueue(clinitMethod)
             seenClasses.add(current.owner)
 
+          case current: TypeInsnNode if current.getOpcode == Opcodes.NEW =>
+            for(clsNode <- classManager.loadClass(current.desc)) {
+              val supers = classManager.getAllSupertypes(current.desc)
+              val methodNameDescs = clsNode
+                .methods
+                .asScala
+                .map { m => (m.name, Desc.read(m.desc)) }.toSet
+
+              for {
+                sup <- supers
+                virtualCallSig <- virtualCallSignatures.getOrElse(sup, Nil)
+                if methodNameDescs((virtualCallSig.name, virtualCallSig.desc))
+              } queue.enqueue(MethodSig(current.desc, virtualCallSig.name, virtualCallSig.desc, false))
+            }
           case current: TypeInsnNode if current.getOpcode == Opcodes.ANEWARRAY =>
             def rec(t: JType): Unit = t match{
               case arr: JType.Arr => rec(arr.innerType)
