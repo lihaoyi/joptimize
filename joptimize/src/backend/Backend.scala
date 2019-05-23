@@ -21,27 +21,24 @@ object Backend {
             log: Logger.Global,
             inline: Boolean): Seq[ClassNode] = log.block{
 
-
     val loadMethodCache = classManager.loadMethodCache.collect{case (k, Some(v)) => (k, v)}.toMap
     val loadClassCache = classManager.loadClassCache.collect{case (k, Some(v)) => (k, v)}.toMap
-    //    pprint.log(loadMethodCache.keys)
 
-
-//    val inlinedAnalyzerRes = analyzerRes
     val inlinedAnalyzerRes =
       if(inline) Inliner.inlineAll(analyzerRes, classManager, log)
       else analyzerRes
 
-    val combined =
-      inlinedAnalyzerRes.visitedResolved.mapValues(Right(_)) ++
-      inlinedAnalyzerRes.visitedMethods.mapValues(Left(_))
+    val actualMethodInferredSigs = inlinedAnalyzerRes.visitedResolved.keysIterator
+      .++(inlinedAnalyzerRes.visitedMethods.keysIterator)
+      .filter(k => loadMethodCache.contains(k.method))
+      .to[mutable.LinkedHashSet]
 
     val highestMethodDefiners = computeHighestMethodDefiners(
       inlinedAnalyzerRes,
       log,
       loadMethodCache,
       loadClassCache,
-      combined
+      actualMethodInferredSigs
     )
 
     val newMethods = generateNewMethods(
@@ -50,10 +47,9 @@ object Backend {
       log,
       loadMethodCache,
       loadClassCache,
-      combined,
-      highestMethodDefiners,
-      classManager,
-      inlinedAnalyzerRes.visitedResolved
+      actualMethodInferredSigs,
+      highestMethodDefiners.toMap,
+      classManager
     )
 
 
@@ -84,7 +80,7 @@ object Backend {
         Util.removeFromJavaList(cn.visibleAnnotations )(_.desc == "Lscala/reflect/ScalaSignature;")
       }
 
-      cn.methods.addAll(mns.asJava)
+      mns.foreach(cn.methods.add)
     }
     def ignore(s: String) = s.startsWith("java/")
 
@@ -110,89 +106,64 @@ object Backend {
                          log: Logger.Global,
                          loadMethodCache: Map[MethodSig, MethodNode],
                          loadClassCache: Map[JType.Cls, ClassNode],
-                         combined: collection.Map[InferredSig, Either[ProgramAnalyzer.MethodResult, ProgramAnalyzer.Properties]],
+                         actualMethodInferredSigs: mutable.LinkedHashSet[InferredSig],
                          highestMethodDefiners: collection.Map[InferredSig, JType.Cls],
-                         classManager: ClassManager.ReadOnly,
-                         visitedResolved: collection.Map[InferredSig, ProgramAnalyzer.Properties]) = {
-    log.pprint(combined.keys.map(_.toString))
-    log.block {
-      for {
-        (isig, result) <- combined.toList
-        if loadClassCache.contains(isig.method.cls)
-        if loadMethodCache.contains(isig.method)
-      } yield Util.labelExceptions(isig.toString){
-        log.pprint(isig.toString)
-        log.pprint(highestMethodDefiners.get(isig))
-        val liveArgs =
-          if (entrypoints.contains(isig.method)) (_: Int) => true
-          else {
-            val highestSig =
-              if (isig.method.static) isig.method
-              else isig.method.copy(cls = highestMethodDefiners(isig))
+                         classManager: ClassManager.ReadOnly) = log.block {
 
-            analyzerRes.visitedResolved(isig.copy(method = highestSig)).liveArgs
-          }
+    def resolveDefsiteProps(isig: InferredSig) = {
+      val resolvedSig =
+        if (isig.method.static) isig
+        else isig.copy(method = isig.method.copy(cls = highestMethodDefiners(isig)))
 
-        val originalNode = loadMethodCache(isig.method)
+      analyzerRes.visitedResolved(resolvedSig)
+    }
 
-        val props = result match {
-          case Left(res) => res.props
-          case Right(props) => props
-        }
-        val (mangledName, mangledDesc) =
-          if (entrypoints.contains(isig.method) || isig.method.name == "<init>") (isig.method.name, isig.method.desc)
-          else Util.mangle(isig, visitedResolved(isig.copy(method = isig.method.copy(cls = highestMethodDefiners(isig)))).inferredReturn, liveArgs)
+    def resolveCallsiteProps(isig: InferredSig, invokeSpecial: Boolean) = {
+      if (!actualMethodInferredSigs.contains(isig)) ProgramAnalyzer.dummyProps(isig.method, optimistic = false)
+      else if (invokeSpecial) analyzerRes.visitedMethods(isig).props
+      else resolveDefsiteProps(isig)
+    }
 
-        val newNode = new MethodNode(
-          Opcodes.ASM6,
-          originalNode.access,
-          mangledName,
-          mangledDesc.unparse,
-          originalNode.signature,
-          originalNode.exceptions.asScala.toArray
+    for (isig <- actualMethodInferredSigs) yield Util.labelExceptions(isig.toString){
+      val props = resolveDefsiteProps(isig)
+
+      val liveArgs =
+        if (entrypoints.contains(isig.method)) (_: Int) => true
+        else props.liveArgs
+
+      val originalNode = loadMethodCache(isig.method)
+
+      val (mangledName, mangledDesc) =
+        if (entrypoints.contains(isig.method) || isig.method.name == "<init>") (isig.method.name, isig.method.desc)
+        else Util.mangle(isig, props.inferredReturn, liveArgs)
+
+      val newNode = new MethodNode(
+        Opcodes.ASM6,
+        originalNode.access,
+        mangledName,
+        mangledDesc.unparse,
+        originalNode.signature,
+        originalNode.exceptions.asScala.toArray
+      )
+      originalNode.accept(newNode)
+      if (!analyzerRes.visitedMethods.contains(isig)) newNode.instructions = new InsnList()
+      else {
+        val argMapping = Util.argMapping(isig.method, liveArgs)
+
+        newNode.instructions = processMethodBody(
+          isig.method,
+          analyzerRes.visitedMethods(isig),
+          log.inferredMethod(isig),
+          loadClassCache.contains,
+          resolveCallsiteProps,
+          argMapping,
+          cls => classManager.loadClassCache.get(cls).flatten.map(c => (c.access & Opcodes.ACC_INTERFACE) != 0)
         )
-        originalNode.accept(newNode)
-        result match {
-          case Right(props) => newNode.instructions = new InsnList()
-          case Left(res) =>
-            val argMapping = Util.argMapping(isig.method, liveArgs)
-
-            newNode.instructions = processMethodBody(
-              isig.method,
-              res,
-              log.inferredMethod(isig),
-              loadClassCache.contains,
-              (invokedSig, invokeSpecial) => {
-
-                if (invokeSpecial) {
-                  analyzerRes.visitedMethods.get(invokedSig) match {
-                    case Some(res) => res.props
-                    case None => ProgramAnalyzer.dummyProps(invokedSig.method, optimistic = false)
-                  }
-                } else {
-
-                  val highestSig =
-                    if (invokedSig.method.static || !loadMethodCache.contains(invokedSig.method)) invokedSig.method
-                    else invokedSig.method.copy(cls = highestMethodDefiners(invokedSig))
-
-
-                  val res = analyzerRes.visitedResolved.getOrElse(
-                    invokedSig.copy(method = highestSig),
-                    ProgramAnalyzer.dummyProps(highestSig, optimistic = false)
-                  )
-
-                  res
-                }
-              },
-              argMapping,
-              cls => classManager.loadClassCache.get(cls).flatten.map(c => (c.access & Opcodes.ACC_INTERFACE) != 0)
-            )
-        }
-        newNode.desc = mangledDesc.unparse
-        newNode.tryCatchBlocks = Nil.asJava
-
-        loadClassCache(isig.method.cls) -> newNode
       }
+      newNode.desc = mangledDesc.unparse
+      newNode.tryCatchBlocks = Nil.asJava
+
+      loadClassCache(isig.method.cls) -> newNode
     }
   }
 
@@ -200,38 +171,31 @@ object Backend {
                                    log: Logger.Global,
                                    loadMethodCache: Map[MethodSig, MethodNode],
                                    loadClassCache: Map[JType.Cls, ClassNode],
-                                   combined: collection.Map[InferredSig, Either[ProgramAnalyzer.MethodResult, ProgramAnalyzer.Properties]]) = {
-    log.block {
-      for {
-        (isig, _) <- combined
-        if loadMethodCache.contains(isig.method)
-      } yield {
-        var parentClasses = List.empty[JType.Cls]
-        var current = isig.method.cls
-        while ( {
-          if (!loadClassCache.contains(current)) false
-          else {
-            parentClasses = current :: parentClasses
-            loadClassCache(current).superName match {
-              case null => false
-              case name =>
-                current = JType.Cls(name)
-                true
-            }
+                                   actualMethodInferredSigs: mutable.LinkedHashSet[InferredSig]) = log.block {
+    for (isig <- actualMethodInferredSigs) yield {
+      var parentClasses = List.empty[JType.Cls]
+      var current = isig.method.cls
+      while ( {
+        if (!loadClassCache.contains(current)) false
+        else {
+          parentClasses = current :: parentClasses
+          loadClassCache(current).superName match {
+            case null => false
+            case name =>
+              current = JType.Cls(name)
+              true
           }
-        }) ()
+        }
+      }) ()
 
-        val highestCls = parentClasses
-          .find { cls =>
+      val highestCls = parentClasses
+        .find { cls =>
+          val key = isig.copy(method = isig.method.copy(cls = cls))
+          analyzerRes.visitedResolved.contains(key) || analyzerRes.visitedMethods.contains(key)
+        }
+        .get
 
-            val key = isig.copy(method = isig.method.copy(cls = cls))
-            val res = combined.contains(key)
-            res
-          }
-          .get
-
-        (isig, highestCls)
-      }
+      (isig, highestCls)
     }
   }
 

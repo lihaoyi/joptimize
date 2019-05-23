@@ -31,8 +31,10 @@ object Inliner {
     }
     val inlineableEdgesSet = singleCallerEdges.to[mutable.LinkedHashSet]
       .intersect(singleCalledEdges.to[mutable.LinkedHashSet])
+      .filter{ edge => edge.caller != edge.called}
 
     log.pprint(inlineableEdgesSet.map(_.toString))
+
     val inlinedMethodsSet = inlineableEdgesSet.map(_.called)
     val visitedMethods = mutable.LinkedHashMap.empty[InferredSig, MethodResult]
     for((k, v) <- analyzerRes.visitedMethods){
@@ -42,7 +44,6 @@ object Inliner {
     for {
       edge <- inlineableEdgesSet
       node <- edge.node
-      if edge.caller != edge.called
     } {
       var caller = edge.caller
       //      pprint.log(analyzerRes.visitedMethods.keys)
@@ -68,7 +69,7 @@ object Inliner {
 
     ProgramAnalyzer.ProgramResult(
       visitedMethods,
-      analyzerRes.visitedResolved.filterKeys(!inlinedMethodsSet.contains(_)),
+      analyzerRes.visitedResolved.filter{case (k, v) => !inlinedMethodsSet.contains(k)},
       analyzerRes.staticFieldReferencedClasses,
       analyzerRes.callGraph.filter(!inlineableEdgesSet(_))
     )
