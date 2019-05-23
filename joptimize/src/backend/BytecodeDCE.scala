@@ -1,5 +1,6 @@
 package joptimize.backend
 
+import joptimize.frontend.ClassManager
 import joptimize.{Logger, Util, frontend}
 import joptimize.model.{Desc, JType, MethodSig, SSA}
 import org.objectweb.asm.tree._
@@ -26,6 +27,11 @@ object BytecodeDCE {
     val seenMethods = mutable.LinkedHashSet.empty[MethodSig]
     val seenClasses = mutable.LinkedHashSet.empty[JType.Cls]
     val virtualCallSignatures = mutable.LinkedHashMap.empty[JType.Cls, List[MethodSig]]
+    def addSeenClassAndClInit(cls: JType.Cls) = {
+      seenClasses.add(cls)
+      val clinitMethod = MethodSig(cls, "<clinit>", Desc.read("()V"), true)
+      if (classManager.loadMethod(clinitMethod).nonEmpty) queue.enqueue(clinitMethod)
+    }
     seenClasses.add("scala/runtime/Nothing$")
     seenClasses.add("scala/runtime/Null$")
 
@@ -49,9 +55,9 @@ object BytecodeDCE {
               )
               queue.enqueue(targetSig)
             }
+
           case current: MethodInsnNode if !ignore(current.owner) =>
-            val clinitMethod = MethodSig(current.owner, "<clinit>", Desc.read("()V"), true)
-            if (classManager.loadMethod(clinitMethod).nonEmpty) queue.enqueue(clinitMethod)
+            addSeenClassAndClInit(current.owner)
             val sig = MethodSig(
               current.owner, current.name,
               Desc.read(current.desc), current.getOpcode == Opcodes.INVOKESTATIC
@@ -63,8 +69,6 @@ object BytecodeDCE {
 
             val possibleSigs = classManager.resolvePossibleSigs(sig).getOrElse(Nil)
 
-            seenClasses.add(sig.cls)
-
             possibleSigs.foreach(sig => seenClasses.add(sig.cls))
 
             queue.enqueue(possibleSigs.filter(classManager.loadMethod(_).nonEmpty):_*)
@@ -73,10 +77,7 @@ object BytecodeDCE {
               case _ => // do nothing
             }
 
-          case current: FieldInsnNode =>
-            val clinitMethod = MethodSig(current.owner, "<clinit>", Desc.read("()V"), true)
-            if (classManager.loadMethod(clinitMethod).nonEmpty) queue.enqueue(clinitMethod)
-            seenClasses.add(current.owner)
+          case current: FieldInsnNode => addSeenClassAndClInit(current.owner)
 
           case current: TypeInsnNode if current.getOpcode == Opcodes.NEW =>
             for(clsNode <- classManager.loadClass(current.desc)) {
@@ -93,31 +94,15 @@ object BytecodeDCE {
               } queue.enqueue(MethodSig(current.desc, virtualCallSig.name, virtualCallSig.desc, false))
 
             }
-          case current: TypeInsnNode if current.getOpcode == Opcodes.ANEWARRAY =>
-            def rec(t: JType): Unit = t match{
-              case arr: JType.Arr => rec(arr.innerType)
-              case cls: JType.Cls =>
-                for(c <- classManager.getAllSupertypes(cls)){
-                  seenClasses.add(c)
-                  val clinitMethod = MethodSig(c, "<clinit>", Desc.read("()V"), true)
-                  if (classManager.loadMethod(clinitMethod).nonEmpty) queue.enqueue(clinitMethod)
-                }
-              case _ => // do nothing
-            }
-            rec(JType.read(current.desc))
 
-          case current: MultiANewArrayInsnNode if current.getOpcode == Opcodes.ANEWARRAY =>
-            def rec(t: JType): Unit = t match{
-              case arr: JType.Arr => rec(arr.innerType)
-              case cls: JType.Cls =>
-                for(c <- classManager.getAllSupertypes(cls)){
-                  seenClasses.add(c)
-                  val clinitMethod = MethodSig(c, "<clinit>", Desc.read("()V"), true)
-                  if (classManager.loadMethod(clinitMethod).nonEmpty) queue.enqueue(clinitMethod)
-                }
-              case _ => // do nothing
-            }
-            rec(JType.read(current.desc))
+
+          // For ANEWARRAY and MULTIANEWARRAY, we only add the classes to seenClasses
+          // but do not trigger <clinit> walking, the JVM just requires the class be
+          // present but does not yet initialize it.
+          case current: TypeInsnNode if current.getOpcode == Opcodes.ANEWARRAY =>
+            unwrapArray(JType.read(current.desc), classManager).foreach(seenClasses.add)
+          case current: MultiANewArrayInsnNode if current.getOpcode == Opcodes.MULTIANEWARRAY =>
+            unwrapArray(JType.read(current.desc), classManager).foreach(seenClasses.add)
 
           case current: TypeInsnNode => seenClasses.add(JType.Cls(current.desc))
 
@@ -140,5 +125,13 @@ object BytecodeDCE {
     }
 
     finalClassNodes
+  }
+  def unwrapArray(a: JType, classManager: ClassManager.Dynamic): Seq[JType.Cls] = {
+    def rec(t: JType): Seq[JType.Cls] = t match{
+      case arr: JType.Arr => rec(arr.innerType)
+      case cls: JType.Cls => classManager.getAllSupertypes(cls)
+      case _ => Nil
+    }
+    rec(a)
   }
 }
