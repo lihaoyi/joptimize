@@ -16,13 +16,10 @@ import scala.collection.mutable
 object Backend {
   def apply(analyzerRes: ProgramAnalyzer.ProgramResult,
             entrypoints: scala.Seq[MethodSig],
-            classManager: ClassManager.ReadOnly,
+            classManager: ClassManager.Frozen,
             eliminateOldMethods: Boolean,
             log: Logger.Global,
             inline: Boolean): Seq[ClassNode] = log.block{
-
-    val loadMethodCache = classManager.loadMethodCache.collect{case (k, Some(v)) => (k, v)}.toMap
-    val loadClassCache = classManager.loadClassCache.collect{case (k, Some(v)) => (k, v)}.toMap
 
     val inlinedAnalyzerRes =
       if(inline) Inliner.inlineAll(analyzerRes, classManager, log)
@@ -35,8 +32,7 @@ object Backend {
     val highestMethodDefiners = computeHighestMethodDefiners(
       inlinedAnalyzerRes,
       log,
-      loadMethodCache,
-      loadClassCache,
+      classManager,
       actualMethodInferredSigs
     )
 
@@ -44,8 +40,6 @@ object Backend {
       inlinedAnalyzerRes,
       entrypoints,
       log,
-      loadMethodCache,
-      loadClassCache,
       actualMethodInferredSigs,
       highestMethodDefiners.toMap,
       classManager
@@ -53,19 +47,19 @@ object Backend {
 
 
     if (eliminateOldMethods) {
-      for ((k, cn) <- loadClassCache) {
+      for (cn <- classManager.allClasses) {
         cn.methods.clear()
       }
     }
 
     val visitedInterfaces =
-      Util.findSeenInterfaces(loadClassCache, newMethods.map(_._1)) ++
+      Util.findSeenInterfaces(classManager.loadClass, newMethods.map(_._1)) ++
       Seq("scala/runtime/Nothing$", "scala/runtime/Null$")
 
     log.pprint(visitedInterfaces)
     val lhs = (visitedInterfaces ++ inlinedAnalyzerRes.staticFieldReferencedClasses.flatMap(classManager.getAllSupertypes).map(_.name))
-      .filter(s => loadClassCache.contains(JType.Cls(s)))
-      .map(loadClassCache(_) -> Nil)
+      .filter(s => classManager.loadClass(JType.Cls(s)).nonEmpty)
+      .map(classManager.loadClass(_).get -> Nil)
       .toMap
     val grouped: Map[ClassNode, Seq[MethodNode]] =
       lhs ++
@@ -84,18 +78,12 @@ object Backend {
     }
     def ignore(s: String) = s.startsWith("java/")
 
-    val outClasses = log.block{
-      BytecodeDCE.apply(
-        entrypoints,
-        grouped.keys.toSeq,
-        resolvePossibleSigs = classManager.resolvePossibleSigs(_).toSeq.flatten,
-        getLinearSuperclasses = classManager.getLinearSuperclasses,
-        getAllSupertypes = classManager.getAllSupertypes,
-        ignore = ignore,
-        log = log
-      )
-    }
-    outClasses
+    BytecodeDCE.apply(
+      entrypoints,
+      grouped.keys.toSeq,
+      ignore = ignore,
+      log = log
+    )
 //    grouped.keys.toSeq
   }
 
@@ -104,11 +92,9 @@ object Backend {
   def generateNewMethods(analyzerRes: ProgramAnalyzer.ProgramResult,
                          entrypoints: Seq[MethodSig],
                          log: Logger.Global,
-                         loadMethodCache: Map[MethodSig, MethodNode],
-                         loadClassCache: Map[JType.Cls, ClassNode],
                          actualMethodInferredSigs: mutable.LinkedHashSet[InferredSig],
                          highestMethodDefiners: collection.Map[InferredSig, JType.Cls],
-                         classManager: ClassManager.ReadOnly) = log.block {
+                         classManager: ClassManager.Frozen) = log.block {
 
     def resolveDefsiteProps(isig: InferredSig) = {
       val resolvedSig =
@@ -119,22 +105,22 @@ object Backend {
     }
 
     def resolveCallsiteProps(isig: InferredSig, invokeSpecial: Boolean) = {
-      if (!loadClassCache.contains(isig.method.cls)) ProgramAnalyzer.dummyProps(isig.method, optimistic = false)
-      else if (classManager.resolvePossibleSigs(isig.method).exists(!_.exists(loadMethodCache.contains))) {
+      if (classManager.loadClass(isig.method.cls).isEmpty) ProgramAnalyzer.dummyProps(isig.method, optimistic = false)
+      else if (classManager.resolvePossibleSigs(isig.method).exists(!_.exists(classManager.loadMethod(_).nonEmpty))) {
         ProgramAnalyzer.dummyProps(isig.method, optimistic = false)
       }
       else if (invokeSpecial) analyzerRes.visitedMethods(isig).props
       else resolveDefsiteProps(isig)
     }
 
-    for (isig <- actualMethodInferredSigs.toArray if loadMethodCache.contains(isig.method)) yield Util.labelExceptions(isig.toString){
+    for (isig <- actualMethodInferredSigs.toArray if classManager.loadMethod(isig.method).nonEmpty) yield Util.labelExceptions(isig.toString){
       val props = resolveDefsiteProps(isig)
 
       val liveArgs =
         if (entrypoints.contains(isig.method)) (_: Int) => true
         else props.liveArgs
 
-      val originalNode = loadMethodCache(isig.method)
+      val originalNode = classManager.loadMethod(isig.method).get
 
       val (mangledName, mangledDesc) =
         if (entrypoints.contains(isig.method) || isig.method.name == "<init>") (isig.method.name, isig.method.desc)
@@ -157,37 +143,37 @@ object Backend {
           isig.method,
           analyzerRes.visitedMethods(isig),
           log.inferredMethod(isig),
-          loadClassCache.contains,
+          classManager.loadClass(_).nonEmpty,
           resolveCallsiteProps,
           argMapping,
-          cls => classManager.loadClassCache.get(cls).flatten.map(c => (c.access & Opcodes.ACC_INTERFACE) != 0)
+          cls => classManager.loadClass(cls).map(c => (c.access & Opcodes.ACC_INTERFACE) != 0)
         )
       }
       newNode.desc = mangledDesc.unparse
       newNode.tryCatchBlocks = Nil.asJava
 
-      loadClassCache(isig.method.cls) -> newNode
+      classManager.loadClass(isig.method.cls).get -> newNode
     }
   }
 
   def computeHighestMethodDefiners(analyzerRes: ProgramAnalyzer.ProgramResult,
                                    log: Logger.Global,
-                                   loadMethodCache: Map[MethodSig, MethodNode],
-                                   loadClassCache: Map[JType.Cls, ClassNode],
+                                   classManager: ClassManager.Frozen,
                                    actualMethodInferredSigs: mutable.LinkedHashSet[InferredSig]) = log.block {
     for (isig <- actualMethodInferredSigs) yield {
       var parentClasses = List.empty[JType.Cls]
       var current = isig.method.cls
       while ( {
-        if (!loadClassCache.contains(current)) false
-        else {
-          parentClasses = current :: parentClasses
-          loadClassCache(current).superName match {
-            case null => false
-            case name =>
-              current = JType.Cls(name)
-              true
-          }
+        classManager.loadClass(current) match{
+          case None => false
+          case Some(c) =>
+            parentClasses = current :: parentClasses
+            c.superName match {
+              case null => false
+              case name =>
+                current = JType.Cls(name)
+                true
+            }
         }
       }) ()
 

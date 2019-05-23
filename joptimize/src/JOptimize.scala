@@ -13,19 +13,18 @@ object JOptimize{
           log: Logger.Global,
           inline: Boolean): Map[String, Array[Byte]] = {
 
-    val classManager = new ClassManager(getClassFile)
+    val classManager = new joptimize.frontend.ClassManager.Dynamic(
+      name => ClassManager.loadClassNode(getClassFile(name + ".class"))
+    )
     val frontend = new Frontend(classManager)
 
     val analyzer = new ProgramAnalyzer(entrypoints, classManager, log, frontend)
     val analyzerRes = analyzer.apply()
 
-//    pprint.log(analyzerRes.visitedMethods)
-//    pprint.log(analyzerRes.visitedResolved)
-//    pprint.log(analyzerRes.visitedMethods.mapValues(_.inferred))
     val outClasses = Backend.apply(
       analyzerRes,
       entrypoints,
-      classManager,
+      classManager.freeze(),
       eliminateOldMethods,
       log,
       inline

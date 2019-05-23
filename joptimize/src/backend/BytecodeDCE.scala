@@ -1,7 +1,6 @@
 package joptimize.backend
 
-import joptimize.analyzer.Renderer
-import joptimize.{Logger, Util}
+import joptimize.{Logger, Util, frontend}
 import joptimize.model.{Desc, JType, MethodSig, SSA}
 import org.objectweb.asm.tree._
 import org.objectweb.asm.{Handle, Opcodes}
@@ -18,19 +17,11 @@ import scala.collection.mutable
 object BytecodeDCE {
   def apply(entrypoints: scala.Seq[MethodSig],
             classNodes: Seq[ClassNode],
-            resolvePossibleSigs: MethodSig => Seq[MethodSig],
-            getLinearSuperclasses: JType.Cls => Seq[JType.Cls],
-            getAllSupertypes: JType.Cls => Seq[JType.Cls],
             ignore: String => Boolean,
-            log: Logger.Global): Seq[ClassNode] = {
+            log: Logger.Global): Seq[ClassNode] = log.block{
 
-    val classNodeMap = classNodes.map{cn => (JType.Cls(cn.name), cn)}.toMap
-    val allMethodSigs = for{
-      cn <- classNodes
-      mn <- cn.methods.iterator().asScala
-    } yield (MethodSig(cn.name, mn.name, Desc.read(mn.desc), (mn.access & Opcodes.ACC_STATIC) != 0), mn)
-    val methodSigMap = allMethodSigs.toMap
-
+    val classNodeMap = classNodes.map(c => (c.name, c)).toMap
+    val classManager = new frontend.ClassManager.Dynamic(classNodeMap.get(_))
     val queue = entrypoints.to[mutable.Queue]
     val seenMethods = mutable.LinkedHashSet.empty[MethodSig]
     val seenClasses = mutable.LinkedHashSet.empty[JType.Cls]
@@ -38,19 +29,12 @@ object BytecodeDCE {
     seenClasses.add("scala/runtime/Null$")
 
     while(queue.nonEmpty){
-      val current = queue.dequeue()
-      if (!ignore(current.cls.name) && !seenMethods(current)){
-        seenMethods.add(current)
-        seenClasses.add(current.cls)
-        val mn = methodSigMap(
-          if (!current.static) current
-          else {
-            val x = getLinearSuperclasses(current.cls)
-            val y = x.map(MethodSig(_, current.name, current.desc, current.static))
-            val z = y.filter(methodSigMap.contains)
-            z.take(1).toSeq.head
-          }
-        )
+      val currentSig = queue.dequeue()
+      if (!ignore(currentSig.cls.name) && !seenMethods(currentSig)){
+        seenMethods.add(currentSig)
+        seenClasses.add(currentSig.cls)
+
+        val mn = classManager.loadMethod(currentSig).get
 
         mn.instructions.iterator().asScala.foreach{
           case current: InvokeDynamicInsnNode =>
@@ -66,19 +50,19 @@ object BytecodeDCE {
             }
           case current: MethodInsnNode if !ignore(current.owner) =>
             val clinitMethod = MethodSig(current.owner, "<clinit>", Desc.read("()V"), true)
-            if (methodSigMap.contains(clinitMethod)) queue.enqueue(clinitMethod)
+            if (classManager.loadMethod(clinitMethod).nonEmpty) queue.enqueue(clinitMethod)
             val sig = MethodSig(
               current.owner, current.name,
               Desc.read(current.desc), current.getOpcode == Opcodes.INVOKESTATIC
             )
 
-            val possibleSigs = resolvePossibleSigs(sig)
+            val possibleSigs = classManager.resolvePossibleSigs(sig).getOrElse(Nil)
 
             seenClasses.add(sig.cls)
 
             possibleSigs.foreach(sig => seenClasses.add(sig.cls))
 
-            queue.enqueue(possibleSigs.filter(methodSigMap.contains):_*)
+            queue.enqueue(possibleSigs.filter(classManager.loadMethod(_).nonEmpty):_*)
             sig.desc.ret match{
               case cls: JType.Cls => seenClasses.add(cls)
               case _ => // do nothing
@@ -86,13 +70,13 @@ object BytecodeDCE {
 
           case current: FieldInsnNode =>
             val clinitMethod = MethodSig(current.owner, "<clinit>", Desc.read("()V"), true)
-            if (methodSigMap.contains(clinitMethod)) queue.enqueue(clinitMethod)
+            if (classManager.loadMethod(clinitMethod).nonEmpty) queue.enqueue(clinitMethod)
             seenClasses.add(current.owner)
 
           case current: TypeInsnNode if current.getOpcode == Opcodes.ANEWARRAY =>
             def rec(t: JType): Unit = t match{
               case arr: JType.Arr => rec(arr.innerType)
-              case cls: JType.Cls => getAllSupertypes(cls).foreach(seenClasses.add)
+              case cls: JType.Cls => classManager.getAllSupertypes(cls).foreach(seenClasses.add)
               case _ => // do nothing
             }
             rec(JType.read(current.desc))
@@ -100,7 +84,7 @@ object BytecodeDCE {
           case current: MultiANewArrayInsnNode if current.getOpcode == Opcodes.ANEWARRAY =>
             def rec(t: JType): Unit = t match{
               case arr: JType.Arr => rec(arr.innerType)
-              case cls: JType.Cls => getAllSupertypes(cls).foreach(seenClasses.add)
+              case cls: JType.Cls => classManager.getAllSupertypes(cls).foreach(seenClasses.add)
               case _ => // do nothing
             }
             rec(JType.read(current.desc))
@@ -119,7 +103,7 @@ object BytecodeDCE {
       .toMap
 
     val seenClassNodes = classNodes.filter(cn => seenClassNames(cn.name))
-    val visitedInterfaces = Util.findSeenInterfaces(classNodeMap, seenClassNodes.toSeq)
+    val visitedInterfaces = Util.findSeenInterfaces(classManager.loadClass, seenClassNodes.toSeq)
     val finalClassNodes = classNodes.filter(cn => seenClassNames(cn.name) || visitedInterfaces(cn.name))
     for (cn <- finalClassNodes){
       cn.methods.removeIf(m => !seenMethodNames.get(cn.name).fold(false)(_(m.name, m.desc)))

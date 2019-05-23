@@ -10,7 +10,7 @@ import scala.collection.mutable
 
 object Inliner {
   def inlineAll(analyzerRes: ProgramAnalyzer.ProgramResult,
-                classManager: ClassManager.ReadOnly,
+                classManager: ClassManager.Frozen,
                 log: Logger.Global) = log.block{
     val filteredCallgraph = analyzerRes
       .callGraph
@@ -75,7 +75,7 @@ object Inliner {
     )
   }
 
-  def inlineSingleMethod(classManager: ClassManager.ReadOnly,
+  def inlineSingleMethod(classManager: ClassManager.Frozen,
                          log: Logger.InferredMethod,
                          visitedMethods: mutable.LinkedHashMap[InferredSig, MethodResult],
                          edge: CallEdge,
@@ -216,7 +216,7 @@ object Inliner {
     visitedMethods.remove(edge.called)
   }
 
-  def prepareOutputNodes(classManager: ClassManager.ReadOnly,
+  def prepareOutputNodes(classManager: ClassManager.Frozen,
                          log: Logger.InferredMethod,
                          nodeBlock: SSA.Block,
                          returns: mutable.Buffer[(SSA.State, SSA.Jump, Option[SSA.Val])],

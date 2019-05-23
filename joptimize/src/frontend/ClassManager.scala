@@ -8,25 +8,72 @@ import org.objectweb.asm.tree.{ClassNode, MethodNode}
 import collection.JavaConverters._
 import scala.collection.mutable
 object ClassManager{
-  trait ReadOnly{
-    def getAllSubtypes(cls: JType.Cls): Seq[JType.Cls]
-    def getAllSupertypes(current0: JType.Cls): Seq[JType.Cls]
-    def getLinearSuperclasses(cls: JType.Cls): Seq[JType.Cls]
-    def supertypeMap: mutable.LinkedHashMap[JType.Cls, List[JType.Cls]]
-    def loadClassCache: collection.Map[JType.Cls, Option[ClassNode]]
-    def loadMethodCache: collection.Map[MethodSig, Option[MethodNode]]
-    def resolvePossibleSigs(sig: MethodSig): Option[Seq[MethodSig]]
-    def mergeTypes(itypes: Seq[IType]): Option[IType]
+
+  def loadClassNode(classFileOpt: Option[Array[Byte]]) = {
+    classFileOpt.map { file =>
+      val cr = new ClassReader(file)
+      val cn = new ClassNode()
+      cr.accept(cn, ClassReader.SKIP_FRAMES)
+      cn
+    }
   }
+
+  class Frozen(subtypeMap: mutable.LinkedHashMap[JType.Cls, List[JType.Cls]],
+               supertypeMap: mutable.LinkedHashMap[JType.Cls, List[JType.Cls]],
+               loadClassCache: mutable.LinkedHashMap[JType.Cls, Option[ClassNode]],
+               loadMethodCache: mutable.LinkedHashMap[MethodSig, Option[MethodNode]])
+    extends ClassManager {
+    def getSubtypes(cls: JType.Cls) = subtypeMap.get(cls)
+    def getSupertypes(cls: JType.Cls) = supertypeMap.get(cls)
+    def loadClass(cls: JType.Cls) = loadClassCache(cls)
+    def loadMethod(sig: MethodSig) = loadMethodCache(sig)
+    def allClasses = loadClassCache.valuesIterator.flatten
+  }
+
+  class Dynamic(getClassFile: String => Option[ClassNode]) extends ClassManager {
+
+    private val subtypeMap = mutable.LinkedHashMap.empty[JType.Cls, List[JType.Cls]]
+    private val supertypeMap = mutable.LinkedHashMap.empty[JType.Cls, List[JType.Cls]]
+
+    private val loadClassCache = mutable.LinkedHashMap.empty[JType.Cls, Option[ClassNode]]
+    private val loadMethodCache = mutable.LinkedHashMap.empty[MethodSig, Option[MethodNode]]
+
+    def getSubtypes(cls: JType.Cls) = subtypeMap.get(cls)
+    def getSupertypes(cls: JType.Cls) = supertypeMap.get(cls)
+    def loadClass(cls: JType.Cls): Option[ClassNode] = loadClassCache.getOrElseUpdate(
+      cls,
+      getClassFile(cls.name).map{cn =>
+        val uppers = cn.interfaces.asScala ++ Option(cn.superName)
+        val upperClasses = uppers.map(clsName => JType.Cls(clsName))
+        for(up <- upperClasses) {
+          subtypeMap(up) = cls :: subtypeMap.getOrElse(up, Nil)
+          supertypeMap(cls) = up :: supertypeMap.getOrElse(cls, Nil)
+          loadClass(up)
+        }
+        cn
+      }
+    )
+
+    def loadMethod(sig: MethodSig): Option[MethodNode] = loadMethodCache.getOrElseUpdate(
+      sig,
+      loadClass(sig.cls).flatMap { cls =>
+        cls.methods.iterator().asScala.find( mn =>
+          mn.name == sig.name && mn.desc == sig.desc.unparse
+        )
+      }
+    )
+
+    def freeze() = new Frozen(subtypeMap, supertypeMap, loadClassCache, loadMethodCache)
+  }
+
+
 }
-class ClassManager(getClassFile: String => Option[Array[Byte]]) extends ClassManager.ReadOnly {
+trait ClassManager{
 
-  val subtypeMap = mutable.LinkedHashMap.empty[JType.Cls, List[JType.Cls]]
-  val supertypeMap = mutable.LinkedHashMap.empty[JType.Cls, List[JType.Cls]]
-
-
-  val loadClassCache = mutable.LinkedHashMap.empty[JType.Cls, Option[ClassNode]]
-  val loadMethodCache = mutable.LinkedHashMap.empty[MethodSig, Option[MethodNode]]
+  def getSubtypes(cls: JType.Cls): Option[List[JType.Cls]]
+  def getSupertypes(cls: JType.Cls): Option[List[JType.Cls]]
+  def loadClass(cls: JType.Cls): Option[ClassNode]
+  def loadMethod(sig: MethodSig): Option[MethodNode]
   def getLinearSuperclasses(cls: JType.Cls): Seq[JType.Cls] = {
     def rec(currentCls: JType.Cls): List[JType.Cls] = {
       loadClass(currentCls) match {
@@ -38,7 +85,7 @@ class ClassManager(getClassFile: String => Option[Array[Byte]]) extends ClassMan
   }
 
   def getAllSupertypes(current0: JType.Cls): Seq[JType.Cls] = {
-    val supers = supertypeMap.get(current0) match{
+    val supers = getSupertypes(current0) match{
       case None => Nil
       case Some(sup) => sup.flatMap(getAllSupertypes)
     }
@@ -58,42 +105,17 @@ class ClassManager(getClassFile: String => Option[Array[Byte]]) extends ClassMan
     }else {
       Some(
         superDefiner.toSeq ++
-        getAllSubtypes(sig.cls).map(c => sig.copy(cls = c))
+          getAllSubtypes(sig.cls).map(c => sig.copy(cls = c))
       )
     }
   }
 
   def getAllSubtypes(cls: JType.Cls): Seq[JType.Cls] = {
-    Seq(cls) ++ subtypeMap.getOrElse(cls, Nil).flatMap(getAllSubtypes)
+    Seq(cls) ++ getSubtypes(cls).getOrElse(Nil).flatMap(getAllSubtypes)
   }
 
 
-  def loadClass(cls: JType.Cls): Option[ClassNode] = loadClassCache.getOrElseUpdate(
-    cls,
-    getClassFile(cls.name + ".class").map { file =>
-      val cr = new ClassReader(file)
-      val cn = new ClassNode()
-      cr.accept(cn, ClassReader.SKIP_FRAMES)
-      val uppers = cn.interfaces.asScala ++ Option(cn.superName)
-      val upperClasses = uppers.map(clsName => JType.Cls(clsName))
-      for(up <- upperClasses) {
-        subtypeMap(up) = cls :: subtypeMap.getOrElse(up, Nil)
-        supertypeMap(cls) = up :: supertypeMap.getOrElse(cls, Nil)
-        loadClass(up)
-      }
 
-      cn
-    }
-  )
-
-  def loadMethod(sig: MethodSig): Option[MethodNode] = loadMethodCache.getOrElseUpdate(
-    sig,
-    loadClass(sig.cls).flatMap { cls =>
-      cls.methods.iterator().asScala.find( mn =>
-        mn.name == sig.name && mn.desc == sig.desc.unparse
-      )
-    }
-  )
 
 
   def mergeClasses(classes: Seq[JType.Cls]) = {

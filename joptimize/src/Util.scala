@@ -202,7 +202,7 @@ object Util{
     )
   }
 
-  def findSeenInterfaces(classNodeMap: Map[JType.Cls, ClassNode], classNodes: Seq[ClassNode]) = {
+  def findSeenInterfaces(loadClass: JType.Cls => Option[ClassNode], classNodes: Seq[ClassNode]) = {
     // Discover all interfaces implemented by the visited classes and find all
     // their super-interfaces. We need to discover these separately as interfaces
     // do not have an <init> method and if unused won't be picked up by the
@@ -214,7 +214,7 @@ object Util{
       val current = queue.dequeue()
       if (!visitedInterfaces.contains(current)) {
         visitedInterfaces.add(current)
-        classNodeMap.get(current).foreach{cn =>
+        loadClass(current).foreach{cn =>
           queue.enqueue(cn.interfaces.asScala: _*)
         }
       }
