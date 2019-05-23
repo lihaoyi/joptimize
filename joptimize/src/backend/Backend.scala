@@ -52,7 +52,8 @@ object Backend {
       loadClassCache,
       combined,
       highestMethodDefiners,
-      classManager
+      classManager,
+      inlinedAnalyzerRes.visitedResolved
     )
 
 
@@ -87,19 +88,19 @@ object Backend {
     }
     def ignore(s: String) = s.startsWith("java/")
 
-//    val outClasses = log.block{
-//      BytecodeDCE.apply(
-//        entrypoints,
-//        grouped.keys.toSeq,
-//        resolvePossibleSigs = classManager.resolvePossibleSigs(_).toSeq.flatten,
-//        getLinearSuperclasses = classManager.getLinearSuperclasses,
-//        getAllSupertypes = classManager.getAllSupertypes,
-//        ignore = ignore,
-//        log = log
-//      )
-//    }
-//    outClasses
-    grouped.keys.toSeq
+    val outClasses = log.block{
+      BytecodeDCE.apply(
+        entrypoints,
+        grouped.keys.toSeq,
+        resolvePossibleSigs = classManager.resolvePossibleSigs(_).toSeq.flatten,
+        getLinearSuperclasses = classManager.getLinearSuperclasses,
+        getAllSupertypes = classManager.getAllSupertypes,
+        ignore = ignore,
+        log = log
+      )
+    }
+    outClasses
+//    grouped.keys.toSeq
   }
 
 
@@ -111,13 +112,17 @@ object Backend {
                          loadClassCache: Map[JType.Cls, ClassNode],
                          combined: collection.Map[InferredSig, Either[ProgramAnalyzer.MethodResult, ProgramAnalyzer.Properties]],
                          highestMethodDefiners: collection.Map[InferredSig, JType.Cls],
-                         classManager: ClassManager.ReadOnly) = {
+                         classManager: ClassManager.ReadOnly,
+                         visitedResolved: collection.Map[InferredSig, ProgramAnalyzer.Properties]) = {
+    log.pprint(combined.keys.map(_.toString))
     log.block {
       for {
         (isig, result) <- combined.toList
         if loadClassCache.contains(isig.method.cls)
         if loadMethodCache.contains(isig.method)
       } yield Util.labelExceptions(isig.toString){
+        log.pprint(isig.toString)
+        log.pprint(highestMethodDefiners.get(isig))
         val liveArgs =
           if (entrypoints.contains(isig.method)) (_: Int) => true
           else {
@@ -136,7 +141,7 @@ object Backend {
         }
         val (mangledName, mangledDesc) =
           if (entrypoints.contains(isig.method) || isig.method.name == "<init>") (isig.method.name, isig.method.desc)
-          else Util.mangle(isig, props.inferredReturn, liveArgs)
+          else Util.mangle(isig, visitedResolved(isig.copy(method = isig.method.copy(cls = highestMethodDefiners(isig)))).inferredReturn, liveArgs)
 
         val newNode = new MethodNode(
           Opcodes.ASM6,
