@@ -193,8 +193,17 @@ object ArrayChaining {
     f2("abcd")
   }
 
+  @test.Test(inputs = Array(0, 1, 2, 3))
+  def foreach5(n: Int): Int = {
+    try{
+      return 123 / n
+    } catch{case e =>
+      return 456
+    }
+  }
+
   @test.Test()
-  def foreach5(): Int = {
+  def foreach6(): Int = {
     lazy val inner =  1337
     inner
   }
@@ -210,7 +219,7 @@ object ArrayChaining {
   }
 
   @test.Test()
-  def foreach6(): Array[Int] = {
+  def foreach7(): Array[Int] = {
     val iterator = new SubTestIter()
     val holder = Array(1)
     iterator.foreach(x => holder(0) = x)

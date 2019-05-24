@@ -34,21 +34,9 @@ class Frame[V <: Value, S](var numLocals: Int, val numStack0: Int) {
     */
   def this(frame: Frame[V, S]) {
     this(frame.numLocals, frame.values.length - frame.numLocals)
-    initFrom(frame) // NOPMD(ConstructorCallsOverridableMethod): can't fix for backward compatibility.
-
-  }
-
-  /**
-    * Copies the state of the given frame into this frame.
-    *
-    * @param frame a frame.
-    * @return this frame.
-    */
-  def initFrom(frame: Frame[V, S]) = {
     System.arraycopy(frame.values, 0, values, 0, values.length)
     numStack = frame.numStack
     state = frame.state
-    this
   }
 
   /**

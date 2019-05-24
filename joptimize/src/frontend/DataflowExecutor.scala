@@ -46,7 +46,6 @@ object DataflowExecutor {
       if (oldFrame != null) oldFrame.merge(insnIndex, targetInsnIndex, frame, interpreter)
       else {
         frames(targetInsnIndex) = new Frame[V, S](frame)
-        frames(targetInsnIndex).initFrom(frames(insnIndex))
         frames(targetInsnIndex).merge0(insnIndex, targetInsnIndex, interpreter)
         inInstructionsToProcess(targetInsnIndex) = true
         blockStartStates(targetInsnIndex).foreach { s =>
