@@ -288,7 +288,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
     new MethodAnalyzer[IType](
       methodBody,
       Map.empty,
-      methodBody.getAllVertices().collect { case b: SSA.Block if b.upstream.isEmpty => b }.head,
+      methodBody.getAllVertices().collect { case s: SSA.Start => s }.head,
       new ITypeLattice((x, y) => classManager.mergeTypes(Seq(x, y)), inferredArgs),
       log,
       ITypeBrancher,
