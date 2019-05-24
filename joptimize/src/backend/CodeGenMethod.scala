@@ -257,13 +257,13 @@ class CodeGenMethod(
       case n: SSA.InstanceOf => upstreams ++ Seq(new TypeInsnNode(INSTANCEOF, n.desc.name))
       case n: SSA.InvokeStatic =>
         upstreams ++
-        Seq(new MethodInsnNode(INVOKESTATIC, n.cls.name, n.name, n.desc.render)) ++
+        Seq(new MethodInsnNode(INVOKESTATIC, n.cls.name, n.name, n.desc.render, n.interface)) ++
         (if (n.desc.ret == JType.Bottom && n.downstreamList.count(!_.isInstanceOf[SSA.State]) == 0)
            Seq(new InsnNode(POP))
          else Nil)
       case n: SSA.InvokeSpecial =>
         upstreams ++
-        Seq(new MethodInsnNode(INVOKESPECIAL, n.cls.name, n.name, n.desc.render)) ++
+        Seq(new MethodInsnNode(INVOKESPECIAL, n.cls.name, n.name, n.desc.render, n.interface)) ++
         (if (n.desc.ret == JType.Bottom && n.downstreamList.count(!_.isInstanceOf[SSA.State]) == 0)
            Seq(new InsnNode(POP))
          else Nil)

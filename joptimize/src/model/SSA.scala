@@ -532,26 +532,28 @@ object SSA{
                      var srcs: Seq[Val],
                      var cls: JType.Cls,
                      var name: String,
-                     var desc: Desc) extends Val(desc.ret) with Invoke {
+                     var desc: Desc,
+                     var interface: Boolean) extends Val(desc.ret) with Invoke {
     def upstream = Option(state).toSeq ++ srcs
     def replaceUpstream(swap: Swapper): Unit = {
       if (state != null) state = swap(state)
       srcs = srcs.map(swap(_))
     }
-    override def toString = s"${super.toString()}(${cls.name}, $name, $desc)"
+    override def toString = s"${super.toString()}(${cls.name}, $name, $desc, $interface)"
   }
 
   class InvokeSpecial(var state: State,
                       var srcs: Seq[Val],
                       var cls: JType.Cls,
                       var name: String,
-                      var desc: Desc) extends Val(desc.ret) with Invoke{
+                      var desc: Desc,
+                      var interface: Boolean) extends Val(desc.ret) with Invoke{
     def upstream = Option(state).toSeq ++ srcs
     def replaceUpstream(swap: Swapper): Unit = {
       if (state != null) state = swap(state)
       srcs = srcs.map(swap(_))
     }
-    override def toString = s"${super.toString()}(${cls.name}, $name, $desc)"
+    override def toString = s"${super.toString()}(${cls.name}, $name, $desc, $interface)"
   }
 
   class InvokeVirtual(var state: State,
