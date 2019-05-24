@@ -14,7 +14,7 @@ import org.objectweb.asm.tree.analysis.Value
   * @param < V> type of the Value used for the analysis.
   * @author Eric Bruneton
   */
-abstract class Interpreter[V <: Value, S] {
+abstract class Interpreter[V <: Value, S, B, M] {
 
   /**
     * Creates a new value that represents the given parameter type. This method is called to
@@ -130,4 +130,5 @@ abstract class Interpreter[V <: Value, S] {
   def merge[N <: V](value1: N, value2: N, insnIndex: Int, targetInsnIndex: Int): N
 
   def merge0[N <: V](value1: N, insnIndex: Int, targetInsnIndex: Int): N
+  def forceMerge0[N <: V](value1: N, src: B, dest: M): N
 }

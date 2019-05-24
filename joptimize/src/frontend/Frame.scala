@@ -10,11 +10,8 @@ import scala.collection.mutable
   * A symbolic execution stack frame. A stack frame contains a set of local variable slots, and an
   * operand stack. Warning: long and double values are represented with <i>two</i> slots in local
   * variables, and with <i>one</i> slot in the operand stack.
-  *
-  * @param < V> type of the Value used for the analysis.
-  * @author Eric Bruneton
   */
-class Frame[V <: Value, S](var numLocals: Int, val numStack0: Int) {
+class Frame[V <: Value, S, B, M](var numLocals: Int, val numStack0: Int) {
 
   /**
     * The local variables and the operand stack of this frame. The first {@link #numLocals} elements
@@ -32,7 +29,7 @@ class Frame[V <: Value, S](var numLocals: Int, val numStack0: Int) {
     *
     * @param frame a frame.
     */
-  def this(frame: Frame[V, S]) {
+  def this(frame: Frame[V, S, B, M]) {
     this(frame.numLocals, frame.values.length - frame.numLocals)
     System.arraycopy(frame.values, 0, values, 0, values.length)
     numStack = frame.numStack
@@ -149,7 +146,7 @@ class Frame[V <: Value, S](var numLocals: Int, val numStack0: Int) {
   @throws[AnalyzerException]
   def execute(
     insn: AbstractInsnNode,
-    interpreter: Interpreter[V, S],
+    interpreter: Interpreter[V, S, B, M],
     blockStartState: Option[S]
   ): Unit = {
     var value1: V = null.asInstanceOf[V]
@@ -438,8 +435,8 @@ class Frame[V <: Value, S](var numLocals: Int, val numStack0: Int) {
   def merge(
     insnIndex: Int,
     targetInsnIndex: Int,
-    frame: Frame[V, S],
-    interpreter: Interpreter[V, S]
+    frame: Frame[V, S, B, M],
+    interpreter: Interpreter[V, S, B, M]
   ) = {
     if (numStack != frame.numStack) throw new AnalyzerException(null, "Incompatible stack heights")
     for (i <- 0 until (numLocals + numStack)) {
@@ -458,12 +455,18 @@ class Frame[V <: Value, S](var numLocals: Int, val numStack0: Int) {
     *                    { @literal false} otherwise.
     * @throws AnalyzerException if the frames have incompatible sizes.
     */
-  def merge0(insnIndex: Int, targetInsnIndex: Int, interpreter: Interpreter[V, S]) = {
+  def merge0(insnIndex: Int, targetInsnIndex: Int, interpreter: Interpreter[V, S, B, M]) = {
     for (i <- 0 until (numLocals + numStack)) {
       val v = interpreter.merge0(values(i), insnIndex, targetInsnIndex)
       if (v != values(i)) {
         values(i) = v
       }
+    }
+  }
+
+  def forceMerge0(targetInsnIndex: Int, interpreter: Interpreter[V, S, B, M], src: B, dest: M) = {
+    for (i <- 0 until (numLocals + numStack)) {
+      values(i) = interpreter.forceMerge0(values(i), src, dest)
     }
   }
 

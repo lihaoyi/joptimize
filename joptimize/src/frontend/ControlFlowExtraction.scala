@@ -48,13 +48,18 @@ object ControlFlowExtraction {
     val blockStarts = (insns.take(1) ++ jumpTargets).toSet
 
     var first = true
+    val start = new SSA.Start(null)
+    val startState = new SSA.State(start)
+    start.nextState = startState
     val regionStarts =
       for (i <- insns.indices)
         yield {
           if (!blockStarts.contains(insns(i))) None
           else if (first) {
             first = false
-            Some(new SSA.Start(null))
+            val merge = new SSA.Merge(mutable.LinkedHashMap(start -> startState), null, Nil)
+            start.next = merge
+            Some(merge)
           } else Some(new SSA.Merge(mutable.LinkedHashMap(), null, Nil))
         }
     regionStarts
@@ -63,7 +68,8 @@ object ControlFlowExtraction {
   def extractControlFlow(
     insns: Vector[AbstractInsnNode],
     regionStarts: AbstractInsnNode => Option[SSA.Merge],
-    frames: Array[Frame[SSA.Val, SSA.State]],
+    startFrame: Frame[SSA.Val, SSA.State, SSA.Block, SSA.Merge],
+    frames: Array[Frame[SSA.Val, SSA.State, SSA.Block, SSA.Merge]],
     findStartRegion: Int => SSA.Merge,
     log: Logger.Method
   ) = {
@@ -236,8 +242,8 @@ object ControlFlowExtraction {
 
     }
 
-    val locals = Range(0, frames(0).getLocals)
-      .map(frames(0).getLocal)
+    val locals = Range(0, startFrame.getLocals)
+      .map(startFrame.getLocal)
       .filter(_.jtype != JType.Prim.V)
 
     val program = MethodBody(locals.map(_.asInstanceOf[SSA.Arg]), terminals.map(_._2))

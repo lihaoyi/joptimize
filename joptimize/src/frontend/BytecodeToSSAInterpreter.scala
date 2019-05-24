@@ -20,7 +20,7 @@ class BytecodeToSSAInterpreter(merges: mutable.LinkedHashSet[SSA.Phi],
                                findBlockStart: Int => SSA.Block,
                                findBlockDest: Int => Option[SSA.Merge],
                                argMapping: Map[Int, Int])
-  extends Interpreter[SSA.Val, SSA.State]{
+  extends Interpreter[SSA.Val, SSA.State, SSA.Block, SSA.Merge]{
 
   /**
     * ACONST_NULL, ICONST_M1, ICONST_0, ICONST_1, ICONST_2, ICONST_3, ICONST_4, ICONST_5,
@@ -298,6 +298,16 @@ class BytecodeToSSAInterpreter(merges: mutable.LinkedHashSet[SSA.Phi],
         phiStub.asInstanceOf[N]
       case _ => value1
     }
+  }
+
+  def forceMerge0[N <: SSA.Val](value1: N, src: SSA.Block, dest: SSA.Merge) = {
+
+    val phiStub = new SSA.Phi(dest, mutable.LinkedHashMap(src -> value1), value1.jtype)
+    src.nextPhis ++= Seq(phiStub)
+    dest.phis ++= Seq(phiStub)
+    merges.add(phiStub)
+    phiStub.asInstanceOf[N]
+
   }
 
   def newParameterValue(local: Int, tpe: Type) = {

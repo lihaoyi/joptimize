@@ -386,6 +386,7 @@ object MainTests extends TestSuite {
         'foreach7 - annotatedTest
         'foreach8 - annotatedTest
         'foreach9 - annotatedTest
+        'foreach10 - annotatedTest
       }
     }
   }
