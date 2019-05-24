@@ -215,6 +215,11 @@ object SSA{
     def replaceUpstream(swap: Swapper): Unit = {}
     override def toString = s"${super.toString()}($index, ${tpe.name})"
   }
+  class CaughtException(var tpe: JType) extends Val(tpe){
+    def upstream = Nil
+    def replaceUpstream(swap: Swapper): Unit = {}
+    override def toString = s"${super.toString()}(${tpe.name})"
+  }
   class BinOp(var state: State, var a: Val, var b: Val, var opcode: BinOp.Code)
     extends Val(opcode.tpe) with Stateful{
     def upstream = Option(state).toSeq ++ Seq(a, b)

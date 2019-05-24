@@ -310,6 +310,6 @@ class BytecodeToSSAInterpreter(merges: mutable.LinkedHashSet[SSA.Phi],
 
   def newExceptionValue(tryCatchBlockNode: TryCatchBlockNode,
                         exceptionType: Type) = {
-    new SSA.Arg(-1, JType.read(exceptionType.getInternalName))
+    new SSA.CaughtException(JType.read(exceptionType.getInternalName))
   }
 }
