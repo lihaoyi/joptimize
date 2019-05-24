@@ -9,7 +9,7 @@ object ArrayChaining {
   }
 
   @test.Test(inputs = Array(0, 2, 4))
-  def builder(a: Int): Array[Int] = {
+  def arraycopy(a: Int): Array[Int] = {
     val elems = Array(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
     if (elems.getClass.isArray) {
       java.lang.System.arraycopy(elems, 0, elems, 5, a)
@@ -18,13 +18,13 @@ object ArrayChaining {
   }
 
   @test.Test(inputs = Array(0, 2, 4))
-  def builder2(a: Int): Array[Int] = {
+  def arrayBuilderOfInt(a: Int): Array[Int] = {
     new collection.mutable.ArrayBuilder.ofInt().result()
   }
 
 
   @test.Test(inputs = Array(0, 2, 4))
-  def builder3(a: Int): Array[String] = {
+  def arraysCopyOf(a: Int): Array[String] = {
     java.util.Arrays.copyOf[String](new Array[String](a), 0)
   }
 
@@ -34,7 +34,7 @@ object ArrayChaining {
   class Test
 
   @test.Test()
-  def initArray(): String = {
+  def createArrayInStaticInitializer1(): String = {
     Test.toString.substring(0, Test.toString.indexOf('@'))
   }
 
@@ -48,7 +48,7 @@ object ArrayChaining {
   trait TestTrait
 
   @test.Test()
-  def initArray2(): String = {
+  def createArrayInStaticInitializer2(): String = {
     TestCls.toString.substring(0, TestCls.toString.indexOf('@'))
   }
 
@@ -61,7 +61,7 @@ object ArrayChaining {
   abstract class TestAbstractCls3
 
   @test.Test()
-  def initArray3(): String = {
+  def createArrayInStaticInitializer3(): String = {
     TestCls3.toString.substring(0, TestCls3.toString.indexOf('@'))
   }
 
@@ -74,7 +74,7 @@ object ArrayChaining {
   abstract class TestAbstractCls4
 
   @test.Test()
-  def initArray4(): String = {
+  def createNestedArrayInStaticInitializer(): String = {
     val s = TestCls4.toString
     s.substring(0, s.indexOf('@'))
   }
@@ -93,13 +93,13 @@ object ArrayChaining {
 
 
   @test.Test()
-  def manifestFactory(): String = {
+  def touchManifestFactory(): String = {
     val s = scala.reflect.ManifestFactory.toString
     s.substring(0, s.indexOf('@'))
   }
 
   @test.Test()
-  def pkg(): String = {
+  def touchScalaPackage(): String = {
     scala.Predef.int2Integer(123).toString
   }
 
@@ -129,7 +129,7 @@ object ArrayChaining {
   }
 
   @test.Test()
-  def foreach(): Array[Int] = {
+  def simpleLinkedListForeach(): Array[Int] = {
     val holder = Array(1)
 
     TestCons(1, TestCons(2, TestCons(3, TestNil))).foreach(x => holder(0) += x)
@@ -147,7 +147,7 @@ object ArrayChaining {
     }
   }
   @test.Test()
-  def foreach2(): Array[Int] = {
+  def simpleArraySeqForeach(): Array[Int] = {
     val holder = Array(1)
     val arr = new TestArraySeq[String](Array("a", "bb", "CCC"))
     arr.foreach(x => holder(0) += x.length)
@@ -166,7 +166,7 @@ object ArrayChaining {
     def apply(v1: Integer): String = v1.toString
   }
   @test.Test()
-  def foreach3(): Integer = {
+  def multipleSubtypesOfGeneric(): Integer = {
 
 
     val f1 = new TestFuncOne()
@@ -185,7 +185,7 @@ object ArrayChaining {
     def apply(v1: String): Integer = Integer.valueOf(v1.length)
   }
   @test.Test()
-  def foreach4(): Integer = {
+  def multipleTypesOfGeneric(): Integer = {
     val f1 = new TestFunctionOne()
     val f2: TestFunction[String, Integer] = new TestFunctionTwo()
 //    val f2 = new TestFunctionTwo()
@@ -194,7 +194,7 @@ object ArrayChaining {
   }
 
   @test.Test(inputs = Array(0, 1, 2, 3))
-  def foreach5(n: Int): Int = {
+  def tryCatch(n: Int): Int = {
     try {
       if (n < 10) return 123
       else return 456 / n
@@ -204,7 +204,7 @@ object ArrayChaining {
   }
 
   @test.Test()
-  def foreach6(): Int = {
+  def lazyVal(): Int = {
     lazy val inner =  1337
     inner
   }
@@ -213,15 +213,15 @@ object ArrayChaining {
   def thrower(): Any = throw new Exception("boom")
 
   @test.Test(inputs = Array(1, 2, 3))
-  def foreach7(n: Int): Int = {
+  def throwingInBranch1(n: Int): Int = {
     if (n == 0) thrower().toString.length
     else 123
   }
 
-  def identity[T](f: T): T= f
+  def identity[T](f: T): T = f
 
   @test.Test(inputs = Array(2, 3, 4))
-  def foreach8(n: Int): Int = {
+  def throwingInBranch2(n: Int): Int = {
     if (n == 0) identity(thrower()).toString.length
     else if (n == 1) {
       val m = n + n
@@ -234,7 +234,7 @@ object ArrayChaining {
   def hasNext: Boolean = false
 
   @test.Test()
-  def foreach9(): Int = {
+  def loopAtStartOfMethod(): Int = {
     while (hasNext) identity(123)
     456
   }
@@ -251,7 +251,7 @@ object ArrayChaining {
   }
 
   @test.Test()
-  def foreach10(): Array[Int] = {
+  def minimizedIterator(): Array[Int] = {
     val iterator = new SubTestIter()
     val holder = Array(1)
     iterator.foreach(x => holder(0) = x)

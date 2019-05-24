@@ -367,26 +367,26 @@ object MainTests extends TestSuite {
       }
       'ArrayChaining - {
         'equals - annotatedTest
-        'builder - annotatedTest
-        'builder2 - annotatedTest
-        'builder3 - annotatedTest
-        'initArray - annotatedTest
-        'initArray2 - annotatedTest
-        'initArray3 - annotatedTest
-        'initArray4 - annotatedTest
+        'arraycopy - annotatedTest
+        'arrayBuilderOfInt - annotatedTest
+        'arraysCopyOf - annotatedTest
+        'createArrayInStaticInitializer1 - annotatedTest
+        'createArrayInStaticInitializer2 - annotatedTest
+        'createArrayInStaticInitializer3 - annotatedTest
+        'createNestedArrayInStaticInitializer - annotatedTest
         'testManifestFactory - annotatedTest
-        'manifestFactory - annotatedTest
-        'pkg - annotatedTest
-        'foreach - annotatedTest
-        'foreach2 - annotatedTest
-        'foreach3 - annotatedTest
-        'foreach4 - annotatedTest
-        'foreach5 - annotatedTest
-        'foreach6 - annotatedTest
-        'foreach7 - annotatedTest
-        'foreach8 - annotatedTest
-        'foreach9 - annotatedTest
-        'foreach10 - annotatedTest
+        'touchManifestFactory - annotatedTest
+        'touchScalaPackage - annotatedTest
+        'simpleLinkedListForeach - annotatedTest
+        'simpleArraySeqForeach - annotatedTest
+        'multipleSubtypesOfGeneric - annotatedTest
+        'multipleTypesOfGeneric - annotatedTest
+        'tryCatch - annotatedTest
+        'lazyVal - annotatedTest
+        'throwingInBranch1 - annotatedTest
+        'throwingInBranch2 - annotatedTest
+        'loopAtStartOfMethod - annotatedTest
+        'minimizedIterator - annotatedTest
       }
     }
   }
