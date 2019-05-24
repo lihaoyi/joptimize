@@ -192,4 +192,28 @@ object ArrayChaining {
 
     f2("abcd")
   }
+
+  @test.Test()
+  def foreach5(): Int = {
+    lazy val inner =  1337
+    inner
+  }
+
+  trait TestIter[+A]{
+    def hasNext: Boolean
+    def next(): A
+    def foreach[U](f: A => U) = { while (hasNext) f(next()) }
+  }
+  class SubTestIter() extends TestIter[Nothing]{
+    def hasNext: Boolean = false
+    def next(): Nothing = throw new NoSuchElementException("next on empty iterator")
+  }
+
+  @test.Test()
+  def foreach6(): Array[Int] = {
+    val iterator = new SubTestIter()
+    val holder = Array(1)
+    iterator.foreach(x => holder(0) = x)
+    holder
+  }
 }
