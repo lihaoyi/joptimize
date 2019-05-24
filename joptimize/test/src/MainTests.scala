@@ -387,6 +387,7 @@ object MainTests extends TestSuite {
         'throwingInBranch2 - annotatedTest
         'loopAtStartOfMethod - annotatedTest
         'minimizedIterator - annotatedTest
+        'testRun - annotatedTest
       }
     }
   }

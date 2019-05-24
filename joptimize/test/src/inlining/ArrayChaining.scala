@@ -1,5 +1,11 @@
 package test.inlining
 
+import scala.annotation.migration
+import scala.collection.generic.CanBuildFrom
+import scala.collection.immutable.Stream
+import scala.collection.{AbstractIterator, BufferedIterator, GenIterable, GenIterableLike, GenTraversableLike, GenTraversableOnce, Iterator, Seq, Traversable, TraversableLike, TraversableOnce, mutable}
+import scala.collection.mutable.{ArrayBuffer, ArrayBuilder, ArrayLike, ArrayOps, WrappedArray}
+
 object ArrayChaining {
 
   @test.Test()
@@ -257,4 +263,21 @@ object ArrayChaining {
     iterator.foreach(x => holder(0) = x)
     holder
   }
+
+  @test.Test()
+  def testRun(): Int = {
+    new TestElements().run(new TestCallbackImpl())
+  }
+}
+
+class TestElements() extends TestIterator
+
+trait TestIterator {
+  def run(f: TestCallback[Int, Int]): Int = f(123)
+}
+abstract class TestCallback[T, V]{
+  def apply(x: T): V
+}
+class TestCallbackImpl extends TestCallback[Int, Int]{
+  def apply(x: Int): Int = x + 1
 }
