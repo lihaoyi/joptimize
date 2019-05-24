@@ -231,22 +231,15 @@ object ArrayChaining {
     else 123
   }
 
-
-  trait TestIter[+A]{
-    def hasNext: Boolean
-    def next(): A
-    def foreach[U](f: A => U) = { while (hasNext) f(next()) }
+  def foreach999(): Int = {
+    while (hasNext) identity(next())
+    123
   }
-  class SubTestIter() extends TestIter[Nothing]{
-    def hasNext: Boolean = false
-    def next(): Nothing = throw new NoSuchElementException("next on empty iterator")
-  }
+  def hasNext: Boolean = false
+  def next(): Int = throw new NoSuchElementException("boom")
 
   @test.Test()
-  def foreach9(): Array[Int] = {
-    val iterator = new SubTestIter()
-    val holder = Array(1)
-    iterator.foreach(x => holder(0) = x)
-    holder
+  def foreach9(): Int = {
+    foreach999()
   }
 }
