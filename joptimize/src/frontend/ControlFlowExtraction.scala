@@ -8,7 +8,8 @@ import org.objectweb.asm.tree.{
   AbstractInsnNode,
   JumpInsnNode,
   LookupSwitchInsnNode,
-  TableSwitchInsnNode
+  TableSwitchInsnNode,
+  TryCatchBlockNode
 }
 
 import scala.collection.JavaConverters._
@@ -30,13 +31,19 @@ object ControlFlowExtraction {
     startRegionLookup
   }
 
-  def findRegionStarts(insns: Vector[AbstractInsnNode]) = {
-    val jumpTargets = insns.collect {
-      case n: TableSwitchInsnNode => Seq(n.dflt) ++ n.labels.asScala
-      case n: LookupSwitchInsnNode => Seq(n.dflt) ++ n.labels.asScala
-      case n: JumpInsnNode => Seq(n.label) ++ Option(n.getNext)
-      case n if n == insns.head => Seq(n)
-    }.flatten
+  def findRegionStarts(
+    insns: Vector[AbstractInsnNode],
+    tryCacheBlockNodes: Seq[TryCatchBlockNode]
+  ) = {
+    val jumpTargets = insns
+      .collect {
+        case n: TableSwitchInsnNode => Seq(n.dflt) ++ n.labels.asScala
+        case n: LookupSwitchInsnNode => Seq(n.dflt) ++ n.labels.asScala
+        case n: JumpInsnNode => Seq(n.label) ++ Option(n.getNext)
+      }
+      .flatten
+      .++(Seq(insns.head))
+      .++(tryCacheBlockNodes.map(_.handler))
 
     val blockStarts = (insns.take(1) ++ jumpTargets).toSet
 

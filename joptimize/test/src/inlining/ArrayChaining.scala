@@ -195,10 +195,11 @@ object ArrayChaining {
 
   @test.Test(inputs = Array(0, 1, 2, 3))
   def foreach5(n: Int): Int = {
-    try{
-      return 123 / n
-    } catch{case e =>
-      return 456
+    try {
+      if (n < 10) return 123
+      else return 456 / n
+    } catch { case e =>
+      return 789
     }
   }
 

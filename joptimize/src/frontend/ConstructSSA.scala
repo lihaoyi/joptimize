@@ -16,7 +16,7 @@ object ConstructSSA {
     val insns = mn.instructions.iterator().asScala.toVector
     val insnIndices = insns.zipWithIndex.toMap
 
-    val regionStarts = ControlFlowExtraction.findRegionStarts(insns)
+    val regionStarts = ControlFlowExtraction.findRegionStarts(insns, mn.tryCatchBlocks.asScala)
     val decoration = insns.zip(regionStarts).toMap
     val printer = new Textifier
     val methodPrinter = new TraceMethodVisitor(printer)
