@@ -127,19 +127,19 @@ object DataflowExecutor {
                 }
             }
         }
-        val insnHandlers = handlers(insnIndex)
-        if (insnHandlers != null) {
-          for (tryCatchBlock <- insnHandlers) {
-            val catchType =
-              if (tryCatchBlock.`type` == null) Type.getObjectType("java/lang/Throwable")
-              else Type.getObjectType(tryCatchBlock.`type`)
-
-            val handler = new Frame[V, S](currentFrame)
-            handler.clearStack()
-            handler.push(interpreter.newExceptionValue(tryCatchBlock, catchType))
-            merge(insnIndex, insnList.indexOf(tryCatchBlock.handler), handler)
-          }
-        }
+//        val insnHandlers = handlers(insnIndex)
+//        if (insnHandlers != null) {
+//          for (tryCatchBlock <- insnHandlers) {
+//            val catchType =
+//              if (tryCatchBlock.`type` == null) Type.getObjectType("java/lang/Throwable")
+//              else Type.getObjectType(tryCatchBlock.`type`)
+//
+//            val handler = new Frame[V, S](currentFrame)
+//            handler.clearStack()
+//            handler.push(interpreter.newExceptionValue(tryCatchBlock, catchType))
+//            merge(insnIndex, insnList.indexOf(tryCatchBlock.handler), handler)
+//          }
+//        }
       } catch {
         case e: AnalyzerException =>
           throw new AnalyzerException(

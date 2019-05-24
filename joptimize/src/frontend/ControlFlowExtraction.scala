@@ -108,6 +108,7 @@ object ControlFlowExtraction {
     }
 
     val terminals = insns.zipWithIndex.flatMap {
+      case (_, i) if frames(i) == null => None
       case (insn0, i) =>
         val newNodes = (insn0.getOpcode, insn0) match {
           case (RETURN, insn) =>
