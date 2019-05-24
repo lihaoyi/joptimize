@@ -226,7 +226,9 @@ object Backend {
     log.pprint(liveBlocks)
     log.pprint(result.liveBlocks)
 
+    log.pprint(result.inferred)
     log.graph("PRE OPTIMISTIC SIMPLIFY")(Renderer.dumpSvg(result.methodBody))
+
     OptimisticSimplify.apply(
       originalSig.static,
       argMapping,

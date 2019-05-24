@@ -1,5 +1,6 @@
 package joptimize.frontend
 
+import joptimize.analyzer.Renderer
 import org.objectweb.asm.{Opcodes, Type}
 import org.objectweb.asm.tree._
 import org.objectweb.asm.tree.analysis._

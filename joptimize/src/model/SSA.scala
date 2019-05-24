@@ -384,7 +384,7 @@ object SSA{
     }
 
     override def upstream = Nil
-    override def downstreamList = Seq(next) ++ super.downstreamList
+    override def downstreamList = Option(next).toSeq ++ super.downstreamList
     override def downstreamSize = 1 + super.downstreamSize
   }
 

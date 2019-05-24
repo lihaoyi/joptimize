@@ -42,7 +42,8 @@ object OptimisticSimplify {
     argMapping: Map[Int, Int]
   ) = node match {
     case p: SSA.State => // do nothing
-    case unInferred: SSA.Val if !inferred.contains(unInferred) => // do nothing
+    case unInferred: SSA.Val
+      if !inferred.contains(unInferred) || inferred(unInferred) == JType.Bottom=> // do nothing
     case n: SSA.Invoke =>
       val inferredSig =
         if (n.name == "<init>") InferredSig(n.sig, n.sig.desc.args)

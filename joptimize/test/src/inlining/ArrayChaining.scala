@@ -208,6 +208,29 @@ object ArrayChaining {
     inner
   }
 
+
+  def thrower(): Any = throw new Exception("boom")
+
+  @test.Test(inputs = Array(1, 2, 3))
+  def foreach7(n: Int): Int = {
+    if (n == 0) thrower().toString.length
+    else 123
+  }
+
+  def identity[T](f: T): T= f
+
+  @test.Test(inputs = Array(2, 3, 4))
+  def foreach8(n: Int): Int = {
+    if (n == 0) identity(thrower()).toString.length
+    else if (n == 1) {
+      val m = n + n
+      val s = identity(thrower()).toString
+      identity(s).length + s.length + m
+    }
+    else 123
+  }
+
+
   trait TestIter[+A]{
     def hasNext: Boolean
     def next(): A
@@ -219,7 +242,7 @@ object ArrayChaining {
   }
 
   @test.Test()
-  def foreach7(): Array[Int] = {
+  def foreach9(): Array[Int] = {
     val iterator = new SubTestIter()
     val holder = Array(1)
     iterator.foreach(x => holder(0) = x)
