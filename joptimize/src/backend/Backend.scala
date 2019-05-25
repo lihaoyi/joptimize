@@ -16,22 +16,17 @@ object Backend {
     analyzerRes: ProgramAnalyzer.ProgramResult,
     entrypoints: scala.Seq[MethodSig],
     classManager: ClassManager.Frozen,
-    log: Logger.Global,
-    inline: Boolean
+    log: Logger.Global
   ): Seq[ClassNode] = log.block {
 
-    val inlinedAnalyzerRes =
-      if (inline) Inliner.inlineAll(analyzerRes, classManager, log)
-      else analyzerRes
-
     val highestDefinerProps = computeHighestDefinerProps(
-      inlinedAnalyzerRes,
+      analyzerRes,
       log,
       classManager
     )
 
     val newMethods = generateNewMethods(
-      inlinedAnalyzerRes,
+      analyzerRes,
       entrypoints,
       log,
       highestDefinerProps,
@@ -45,7 +40,7 @@ object Backend {
       Seq("scala/runtime/Nothing$", "scala/runtime/Null$")
 
     log.pprint(visitedInterfaces)
-    val lhs = (visitedInterfaces ++ inlinedAnalyzerRes
+    val lhs = (visitedInterfaces ++ analyzerRes
       .staticFieldReferencedClasses
       .flatMap(classManager.getAllSupertypes)
       .map(_.name))
@@ -146,13 +141,16 @@ object Backend {
 //      pprint.log(isig.toString)
       val allSupertypes = classManager.getAllSupertypes(isig.method.cls)
 //      pprint.log(allSupertypes)
-      val filtered = allSupertypes.filter(cls => analyzerRes.visitedMethods.contains(isig.copy(method = isig.method.copy(cls = cls))))
+      val filtered = allSupertypes.filter(
+        cls => analyzerRes.visitedMethods.contains(isig.copy(method = isig.method.copy(cls = cls)))
+      )
 //      pprint.log(filtered)
       val flatMapped = filtered.flatMap(cls => classManager.getAllSubtypes(cls))
 //      pprint.log(flatMapped)
       val mapped = flatMapped.map(cls => isig.copy(method = isig.method.copy(cls = cls)))
 //      pprint.log(mapped)
-      val allProps: Seq[ProgramAnalyzer.MethodResult] = mapped.flatMap(analyzerRes.visitedMethods.getOrElse(_, None))
+      val allProps: Seq[ProgramAnalyzer.MethodResult] =
+        mapped.flatMap(analyzerRes.visitedMethods.getOrElse(_, None))
 
       val (allRets, allPures, allLives) =
         allProps.map(p => (p.props.inferredReturn, p.props.pure, p.props.liveArgs)).unzip3

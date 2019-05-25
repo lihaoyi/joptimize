@@ -1,6 +1,6 @@
 package joptimize
 
-import backend.{Backend, BytecodeDCE}
+import backend.{Backend, BytecodeDCE, Inliner}
 import joptimize.analyzer.ProgramAnalyzer
 import joptimize.frontend.{ClassManager, Frontend}
 import joptimize.model._
@@ -17,15 +17,19 @@ object JOptimize{
     )
     val frontend = new Frontend(classManager)
 
-    val analyzer = new ProgramAnalyzer(entrypoints, classManager, log, frontend)
-    val analyzerRes = analyzer.apply()
+    val analyzerRes = new ProgramAnalyzer(entrypoints, classManager, log, frontend).apply()
+
+    val frozenClassManager = classManager.freeze()
+
+    val inlinedAnalyzerRes =
+      if (inline) Inliner.inlineAll(analyzerRes, frozenClassManager, log)
+      else analyzerRes
 
     val outClasses = Backend.apply(
-      analyzerRes,
+      inlinedAnalyzerRes,
       entrypoints,
-      classManager.freeze(),
+      frozenClassManager,
       log,
-      inline
     )
 
     val remaining = new BytecodeDCE(
@@ -37,7 +41,6 @@ object JOptimize{
 
     serialize(log, remaining)
   }
-
 
   def serialize(log: Logger.Global, outClasses: Seq[ClassNode]) = log.block {
     outClasses
