@@ -1,6 +1,9 @@
 package test.inlining
 
-import scala.collection.{AbstractIterator, BufferedIterator, Iterator}
+import scala.annotation.{migration, tailrec}
+import scala.collection.immutable.Stream
+import scala.collection.mutable.ArrayBuffer
+import scala.collection.{AbstractIterator, BufferedIterator, GenTraversable, GenTraversableOnce, Iterator, Seq, Traversable, TraversableOnce, mutable}
 
 object ArrayChaining {
 
@@ -316,5 +319,55 @@ object ArrayChaining {
   def manualIterator(n: Int): Int = {
     val iter = new Elements(Array(0, 1, 2, 3))
     iter.map(_ + 1).next()
+  }
+
+  @test.Test(inputs = Array(1, 2, 3, 4))
+  def manualIterator2(n: Int): Int = {
+    val box = Array(0)
+    val iter = new Elements(Array(0, 1, 2, 3))
+    iter.map(_ + n).foreach(x => box(0) += x)
+    box(0)
+  }
+
+  @test.Test(inputs = Array(1, 2, 3))
+  def manualIterator3(n: Int): Int = {
+    val iter = new SingletonBigTestIterator(n).filter(_ % 2 == 0)
+    if (iter.hasNext) iter.next()
+    else n
+  }
+}
+
+class SingletonBigTestIterator[T](a: T) extends BigTestIterator[T] {
+  var ready = true
+  def hasNext: Boolean = ready
+  def next(): T = {
+    ready = false
+    a
+  }
+}
+
+trait BigTestIterator[+A] {
+  def hasNext: Boolean
+
+  def next(): A
+
+  def filter(p: A => Boolean): BigTestIterator[A] = new FilterBigTestIterator[A](this, p)
+}
+
+class FilterBigTestIterator[A](parent: BigTestIterator[A], pred: A => Boolean) extends BigTestIterator [A]{
+  private var hd: A = _
+  private var hdDefined: Boolean = false
+
+  def hasNext: Boolean = hdDefined || {
+    do {
+      if (!parent.hasNext) return false
+      hd = parent.next()
+    } while (!pred(hd))
+    hdDefined = true
+    true
+  }
+
+  def next() = {
+    hdDefined = false; hd
   }
 }
