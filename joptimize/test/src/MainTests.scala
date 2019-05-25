@@ -389,7 +389,7 @@ object MainTests extends TestSuite {
         'minimizedIterator - annotatedTest
         'staticSpecialInterfaceMethods - annotatedTest
         'superDefineSubImplement - annotatedTest
-        'wip - annotatedTest
+        'manualIterator - annotatedTest
       }
     }
   }

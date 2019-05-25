@@ -313,7 +313,7 @@ object ArrayChaining {
   }
 
   @test.Test(inputs = Array(2, 3, 4))
-  def wip(n: Int): Int = {
+  def manualIterator(n: Int): Int = {
     val iter = new Elements(Array(0, 1, 2, 3))
     iter.map(_ + 1).next()
   }

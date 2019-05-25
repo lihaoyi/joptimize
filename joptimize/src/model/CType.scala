@@ -1,22 +1,22 @@
 package joptimize.model
 
 object CType {
-  def toJType(self: IType, fallback: JType): JType = self match {
+  def toJType(self: IType): JType = self match {
     case j: JType => j
     case CType.I(_) => JType.Prim.I
     case CType.J(_) => JType.Prim.J
     case CType.F(_) => JType.Prim.F
     case CType.D(_) => JType.Prim.D
-    case CType.Intersect(classes) => fallback
+//    case CType.Intersect(classes) => fallback
     case JType.Bottom => JType.Bottom
   }
 
-  case class Intersect(classes: Seq[JType.Cls]) extends IType {
-    def size = 1
-    def internalName: String = "?"
-    def name = s"R${classes.length}${classes.map(_.name.replace('/', '_')).mkString("__")}"
-    def widen = this
-  }
+//  case class Intersect(classes: Seq[JType.Cls]) extends IType {
+//    def size = 1
+//    def internalName: String = "?"
+//    def name = s"R${classes.length}${classes.map(_.name.replace('/', '_')).mkString("__")}"
+//    def widen = this
+//  }
   trait Constant[T] extends IType {
     def value: T
   }

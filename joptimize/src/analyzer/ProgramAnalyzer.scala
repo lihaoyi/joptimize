@@ -148,7 +148,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
     }
     globalLog.pprint(visitedMethods.map{case (k, v) => (k.toString, v.map(_.props))})
     for((m, props) <- visitedMethods){
-//      globalLog.inferredMethod(m).pprint(analyses(m).evaluated)
+      globalLog.inferredMethod(m).pprint(analyses.get(m).map(_.evaluated))
       globalLog.inferredMethod(m).pprint(props.map(_.props.inferredReturn))
       globalLog.inferredMethod(m).pprint(props.map(_.props.liveArgs))
       globalLog.inferredMethod(m).pprint(props.map(_.props.pure))

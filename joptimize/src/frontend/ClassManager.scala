@@ -133,10 +133,10 @@ trait ClassManager {
     val flattened = itypes.flatMap {
       case JType.Bottom => Nil
       case CType.Null => Nil
-      case CType.Intersect(values) => values
       case j => Seq(j)
     }.distinct
     if (flattened.length == 1) Some(flattened.head)
+    else if (flattened.contains(JType.Cls("java/lang/Object"))) Some(JType.Cls("java/lang/Object"))
     else if (flattened.length == 0) Some(JType.Bottom)
     else if (flattened.forall(_.widen == JType.Prim.V)) Some(JType.Prim.V)
     else if (flattened.forall(_.widen == JType.Prim.I)) Some(JType.Prim.I)
@@ -154,7 +154,7 @@ trait ClassManager {
     else if (flattened.forall(_.isInstanceOf[JType.Cls])) {
       mergeClasses(flattened.map(_.asInstanceOf[JType.Cls])) match {
         case Seq(single) => Some(single)
-        case many => Some(CType.Intersect(many))
+        case _ => Some(JType.Cls("java/lang/Object"))
       }
     } else if (flattened.forall(_.isInstanceOf[JType.Arr])) {
       Some(
