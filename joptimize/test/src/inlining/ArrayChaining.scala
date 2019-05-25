@@ -276,6 +276,17 @@ object ArrayChaining {
     new TestElements().run(new TestCallbackImpl())
   }
 
+  class Foo(repr: Int) extends Bar {
+    def apply(index: Int): Int = repr
+  }
+
+  trait Bar extends Qux {
+    def next(): Int = apply(0)
+  }
+
+  trait Qux  {
+    def apply(idx: Int): Int
+  }
 
   @test.Test(inputs = Array(2, 3, 4))
   def superDefineSubImplement(n: Int): Int = {
@@ -284,15 +295,4 @@ object ArrayChaining {
     box(0) = iter.next()
     box(0)
   }
-}
-class Foo(repr: Int) extends Bar {
-  def apply(index: Int): Int = repr
-}
-
-trait Bar extends Qux {
-  def next(): Int = apply(0)
-}
-
-trait Qux  {
-  def apply(idx: Int): Int
 }

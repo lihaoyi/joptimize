@@ -16,7 +16,6 @@ import scala.collection.mutable
   * to decide where to return to after each method analysis is complete.
   */
 class ProgramAnalyzer(entrypoints: Seq[MethodSig],
-                      val classManager: ClassManager,
                       val globalLog: Logger.Global,
                       frontend: Frontend) extends ProgramAnalyzer.HandlerApi {
 
@@ -72,6 +71,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
     */
   val callStackSets = mutable.Map.empty[InferredSig, Set[InferredSig]]
 
+  def classManager = frontend.classManager
   def addCallEdge(edge: ProgramAnalyzer.CallEdge) = {
     callGraph.add(edge)
     if (classManager.loadMethod(edge.called.method).get.instructions.size() != 0) current.add(edge.called)
@@ -154,12 +154,13 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
       globalLog.inferredMethod(m).pprint(props.map(_.props.pure))
     }
     globalLog.pprint(visitedResolved.map{case (k, v) => (k.toString, v.toString)}.toMap)
-    ProgramAnalyzer.ProgramResult(
+    val result = ProgramAnalyzer.ProgramResult(
       visitedMethods,
       visitedResolved.toMap,
       staticFieldReferencedClasses,
       callGraph.toSeq
     )
+    (result, classManager.freeze)
   }
 
   /**

@@ -12,21 +12,19 @@ object JOptimize{
           log: Logger.Global,
           inline: Boolean): Map[String, Array[Byte]] = {
 
-    val classManager = new joptimize.frontend.ClassManager.Dynamic(
-      name => ClassManager.loadClassNode(getClassFile(name + ".class"))
-    )
-    val frontend = new Frontend(classManager)
-
-    val analyzerRes = new ProgramAnalyzer(entrypoints, classManager, log, frontend).apply()
-
-    val frozenClassManager = classManager.freeze()
-
-    val inlinedAnalyzerRes =
-      if (inline) Inliner.inlineAll(analyzerRes, frozenClassManager, log)
-      else analyzerRes
+    val (analyzerRes, frozenClassManager) = new ProgramAnalyzer(
+      entrypoints,
+      log,
+      new Frontend(
+        new joptimize.frontend.ClassManager.Dynamic(
+          name => ClassManager.loadClassNode(getClassFile(name + ".class"))
+        )
+      )
+    ).apply()
 
     val outClasses = Backend.apply(
-      inlinedAnalyzerRes,
+      if (inline) Inliner.inlineAll(analyzerRes, frozenClassManager, log)
+      else analyzerRes,
       entrypoints,
       frozenClassManager,
       log,

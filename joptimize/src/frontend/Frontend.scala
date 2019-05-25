@@ -1,16 +1,14 @@
 package joptimize.frontend
 
-import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream, ObjectOutputStream}
 
-import joptimize.{FileLogger, Logger, Util}
+import joptimize.{Logger, Util}
 import joptimize.analyzer.Renderer
-import joptimize.model.{IType, InferredSig, JType, MethodBody, MethodSig, SSA}
-import org.objectweb.asm.tree.{ClassNode, MethodNode}
+import joptimize.model.{InferredSig, MethodBody, MethodSig, SSA}
 import org.objectweb.asm.util.{Textifier, TraceMethodVisitor}
 
 import scala.collection.mutable
 
-class Frontend(val classManager: ClassManager) {
+class Frontend(val classManager: ClassManager.Dynamic) {
 
   val cachedMethodBodies = mutable.LinkedHashMap.empty[InferredSig, Option[MethodBody]]
   def loadMethodBody(isig: InferredSig, log: Logger.Method): Option[MethodBody] = {
