@@ -27,24 +27,17 @@ object Backend {
       if (inline) Inliner.inlineAll(analyzerRes, classManager, log)
       else analyzerRes
 
-    val actualMethodInferredSigs = inlinedAnalyzerRes
-      .visitedResolved
-      .keysIterator
-      .++(inlinedAnalyzerRes.visitedMethods.keysIterator)
-      .to[mutable.LinkedHashSet]
-
-    val highestMethodDefiners = computeHighestMethodDefiners(
+    val highestDefinerProps = computeHighestDefinerProps(
       inlinedAnalyzerRes,
       log,
-      classManager,
-      actualMethodInferredSigs
+      classManager
     )
 
     val newMethods = generateNewMethods(
       inlinedAnalyzerRes,
       entrypoints,
       log,
-      highestMethodDefiners.toMap,
+      highestDefinerProps,
       classManager
     )
 
@@ -89,23 +82,20 @@ object Backend {
       ignore = ignore,
       log = log
     ).apply()
-//    grouped.keys.toSeq
+    grouped.keys.toSeq
   }
 
   def generateNewMethods(
     analyzerRes: ProgramAnalyzer.ProgramResult,
     entrypoints: Seq[MethodSig],
     log: Logger.Global,
-    highestMethodDefiners: collection.Map[InferredSig, JType.Cls],
+    highestDefinerProps: collection.Map[InferredSig, ProgramAnalyzer.Properties],
     classManager: ClassManager.Frozen
   ) = log.block {
 
     def resolveDefsiteProps(isig: InferredSig) = {
-      val resolvedSig =
-        if (isig.method.static) isig
-        else isig.copy(method = isig.method.copy(cls = highestMethodDefiners(isig)))
-
-      analyzerRes.visitedResolved(resolvedSig)
+      if (isig.method.static) analyzerRes.visitedResolved(isig)
+      else highestDefinerProps(isig)
     }
 
     def resolveCallsiteProps(isig: InferredSig, invokeSpecial: Boolean) = {
@@ -164,35 +154,40 @@ object Backend {
     }
   }
 
-  def computeHighestMethodDefiners(
+  def computeHighestDefinerProps(
     analyzerRes: ProgramAnalyzer.ProgramResult,
     log: Logger.Global,
-    classManager: ClassManager.Frozen,
-    actualMethodInferredSigs: mutable.LinkedHashSet[InferredSig]
+    classManager: ClassManager.Frozen
   ) = log.block {
-    for (isig <- actualMethodInferredSigs) yield {
-      var parentClasses = List.empty[JType.Cls]
-      var current = isig.method.cls
-      while ({
-        classManager.loadClass(current) match {
-          case None => false
-          case Some(c) =>
-            parentClasses = current :: parentClasses
-            c.superName match {
-              case null => false
-              case name =>
-                current = JType.Cls(name)
-                true
-            }
-        }
-      }) ()
 
-      val highestCls = parentClasses.find { cls =>
-        actualMethodInferredSigs.contains(isig.copy(method = isig.method.copy(cls = cls)))
-      }.get
+    val allKeys = analyzerRes.visitedMethods.keySet ++ analyzerRes.visitedResolved.keySet
+    val items = for (isig <- allKeys) yield {
 
-      (isig, highestCls)
+//      pprint.log(isig.toString)
+      val allSupertypes = classManager.getAllSupertypes(isig.method.cls)
+//      pprint.log(allSupertypes)
+      val filtered = allSupertypes.filter(cls => analyzerRes.visitedMethods.contains(isig.copy(method = isig.method.copy(cls = cls))))
+//      pprint.log(filtered)
+      val flatMapped = filtered.flatMap(cls => classManager.getAllSubtypes(cls))
+//      pprint.log(flatMapped)
+      val mapped = flatMapped.map(cls => isig.copy(method = isig.method.copy(cls = cls)))
+//      pprint.log(mapped)
+      val allProps: Seq[ProgramAnalyzer.MethodResult] = mapped.flatMap(analyzerRes.visitedMethods.getOrElse(_, None))
+
+      val (allRets, allPures, allLives) =
+        allProps.map(p => (p.props.inferredReturn, p.props.pure, p.props.liveArgs)).unzip3
+
+//      pprint.log(allRets)
+      Tuple2(
+        isig,
+        ProgramAnalyzer.Properties(
+          classManager.mergeTypes(allRets).get,
+          allPures.forall(identity),
+          allLives.flatten.toSet
+        )
+      )
     }
+    items.toMap
   }
 
   def processMethodBody(
