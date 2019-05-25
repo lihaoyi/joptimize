@@ -45,8 +45,8 @@ object MainTestUtils {
       val outputFileMap = joptimize.JOptimize.run(
         name => loadIfExists("CLASSES_FOLDER", name),
         Seq(MethodSig(s"test/${tp.value.dropRight(1).mkString("/")}", tp.value.last, methodDesc, static = true)),
-        log = joptimize.DummyLogger,
-//        log = new joptimize.FileLogger.Global(logRoot = outRoot),
+//        log = joptimize.DummyLogger,
+        log = new joptimize.FileLogger.Global(logRoot = outRoot),
         inline = inline
       )
 

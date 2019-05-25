@@ -1,5 +1,7 @@
 package test.inlining
 
+import scala.collection.{AbstractIterator, BufferedIterator, Iterator}
+
 object ArrayChaining {
 
   @test.Test()
@@ -294,5 +296,25 @@ object ArrayChaining {
     val iter = new Foo(n)
     box(0) = iter.next()
     box(0)
+  }
+
+
+  class Elements[T](arr: Array[T]) extends AbstractIterator[T] {
+    val end = arr.length
+    var index = 0
+
+    def hasNext: Boolean = index < end
+
+    def next(): T = {
+      val x = arr(index)
+      index += 1
+      x
+    }
+  }
+
+  @test.Test(inputs = Array(2, 3, 4))
+  def wip(n: Int): Int = {
+    val iter = new Elements(Array(0, 1, 2, 3))
+    iter.map(_ + 1).next()
   }
 }
