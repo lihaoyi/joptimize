@@ -74,7 +74,10 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
 
   def addCallEdge(edge: ProgramAnalyzer.CallEdge) = {
     callGraph.add(edge)
-    current.add(edge.called)
+    if (classManager.loadMethod(edge.called.method).get.instructions.size() != 0) current.add(edge.called)
+    else if (!methodProps.contains(edge.called)){
+      methodProps(edge.called) = ProgramAnalyzer.dummyProps(edge.called.method, optimistic = true)
+    }
     val newCallSet = callStackSets(edge.caller) + edge.caller
     if (callStackSets.contains(edge.called)) callStackSets(edge.called) ++= newCallSet
     else callStackSets(edge.called) = newCallSet
@@ -104,16 +107,17 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
       resolved <- resolveProps(isig)
     } yield (isig, resolved)
 
-    val visitedMethods = mutable.LinkedHashMap.empty[InferredSig, ProgramAnalyzer.MethodResult]
+    val visitedMethods = mutable.LinkedHashMap.empty[InferredSig, Option[ProgramAnalyzer.MethodResult]]
     for((k, props) <- methodProps) {
-      globalLog.inferredMethod(k).pprint(analyses(k).inferredReturns.keys)
-      globalLog.inferredMethod(k).pprint(analyses(k).inferredThrows.keys)
-      visitedMethods(k) = ProgramAnalyzer.MethodResult(
-        frontend.cachedMethodBodies(k).get,
-        analyses(k).evaluated,
-        analyses(k).liveBlocks.toSet,
-        props,
-        analyses(k).inferredReturns.keys.toSet ++ analyses(k).inferredThrows.keys.toSet
+
+      visitedMethods(k) = analyses.get(k).map(a =>
+        ProgramAnalyzer.MethodResult(
+          frontend.cachedMethodBodies(k).get,
+          a.evaluated,
+          a.liveBlocks.toSet,
+          props,
+          a.inferredReturns.keys.toSet ++ a.inferredThrows.keys.toSet
+        )
       )
     }
 
@@ -142,12 +146,12 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
         )
       )
     }
-    globalLog.pprint(visitedMethods.map{case (k, v) => (k.toString, v.props)})
+    globalLog.pprint(visitedMethods.map{case (k, v) => (k.toString, v.map(_.props))})
     for((m, props) <- visitedMethods){
-      globalLog.inferredMethod(m).pprint(analyses(m).evaluated)
-      globalLog.inferredMethod(m).pprint(props.props.inferredReturn)
-      globalLog.inferredMethod(m).pprint(props.props.liveArgs)
-      globalLog.inferredMethod(m).pprint(props.props.pure)
+//      globalLog.inferredMethod(m).pprint(analyses(m).evaluated)
+      globalLog.inferredMethod(m).pprint(props.map(_.props.inferredReturn))
+      globalLog.inferredMethod(m).pprint(props.map(_.props.liveArgs))
+      globalLog.inferredMethod(m).pprint(props.map(_.props.pure))
     }
     globalLog.pprint(visitedResolved.map{case (k, v) => (k.toString, v.toString)}.toMap)
     ProgramAnalyzer.ProgramResult(
@@ -311,7 +315,7 @@ object ProgramAnalyzer {
   case class CallEdge(caller: InferredSig, node: Option[SSA.Invoke], called: InferredSig){
     if (called.method.name == "<clinit>") assert(node.isEmpty)
   }
-  case class ProgramResult(visitedMethods: mutable.LinkedHashMap[InferredSig, MethodResult],
+  case class ProgramResult(visitedMethods: mutable.LinkedHashMap[InferredSig, Option[MethodResult]],
                            visitedResolved: collection.Map[InferredSig, Properties],
                            staticFieldReferencedClasses: collection.Set[JType.Cls],
                            callGraph: Seq[CallEdge])
@@ -425,9 +429,7 @@ object ProgramAnalyzer {
             calledSignatures = Seq(calledSig)
           )
         }else {
-          val subSigs = subSigs0.filter { subSig =>
-            api.classManager.loadMethod(subSig).exists(_.instructions.size() != 0)
-          }
+          val subSigs = subSigs0.filter { subSig => api.classManager.loadMethod(subSig).nonEmpty}
 
           assert(subSigs.nonEmpty)
 

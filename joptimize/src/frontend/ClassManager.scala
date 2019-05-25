@@ -95,16 +95,19 @@ trait ClassManager {
   }
 
   def resolvePossibleSigs(sig: MethodSig): Option[Seq[MethodSig]] = {
-    def superDefiner =
-      getLinearSuperclasses(sig.cls)
-        .iterator
-        .map(c => sig.copy(cls = c))
-        .find(loadMethod(_).nonEmpty)
 
     if (sig.static) {
       if (sig.name == "<clinit>") Some(Seq(sig))
-      else superDefiner.map(Seq(_))
+      else getLinearSuperclasses(sig.cls)
+        .iterator
+        .map(c => sig.copy(cls = c))
+        .find(loadMethod(_).nonEmpty)
+        .map(Seq(_))
     } else {
+      val superDefiner = getAllSupertypes(sig.cls)
+        .iterator
+        .map(c => sig.copy(cls = c))
+        .find(loadMethod(_).nonEmpty)
       Some(
         superDefiner.toSeq ++
         getAllSubtypes(sig.cls).map(c => sig.copy(cls = c))

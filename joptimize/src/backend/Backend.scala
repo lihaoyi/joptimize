@@ -44,7 +44,6 @@ object Backend {
       inlinedAnalyzerRes,
       entrypoints,
       log,
-      actualMethodInferredSigs,
       highestMethodDefiners.toMap,
       classManager
     )
@@ -97,7 +96,6 @@ object Backend {
     analyzerRes: ProgramAnalyzer.ProgramResult,
     entrypoints: Seq[MethodSig],
     log: Logger.Global,
-    actualMethodInferredSigs: mutable.LinkedHashSet[InferredSig],
     highestMethodDefiners: collection.Map[InferredSig, JType.Cls],
     classManager: ClassManager.Frozen
   ) = log.block {
@@ -117,12 +115,12 @@ object Backend {
           .resolvePossibleSigs(isig.method)
           .exists(!_.exists(classManager.loadMethod(_).nonEmpty))) {
         ProgramAnalyzer.dummyProps(isig.method, optimistic = false)
-      } else if (invokeSpecial) analyzerRes.visitedMethods(isig).props
+      } else if (invokeSpecial) analyzerRes.visitedMethods(isig).get.props
       else resolveDefsiteProps(isig)
     }
 
     for {
-      isig <- actualMethodInferredSigs.toArray
+      isig <- analyzerRes.visitedMethods.keysIterator.toArray
       if classManager.loadMethod(isig.method).nonEmpty
     } yield Util.labelExceptions(isig.toString) {
       val props = resolveDefsiteProps(isig)
@@ -147,11 +145,11 @@ object Backend {
         originalNode.exceptions.asScala.toArray
       )
       originalNode.accept(newNode)
-      if (!analyzerRes.visitedMethods.contains(isig)) newNode.instructions = new InsnList()
+      if (analyzerRes.visitedMethods(isig).isEmpty) newNode.instructions = new InsnList()
       else {
         newNode.instructions = processMethodBody(
           isig.method,
-          analyzerRes.visitedMethods(isig),
+          analyzerRes.visitedMethods(isig).get,
           log.inferredMethod(isig),
           classManager.loadClass(_).nonEmpty,
           resolveCallsiteProps,

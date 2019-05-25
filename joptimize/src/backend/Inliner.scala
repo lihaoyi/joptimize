@@ -42,7 +42,7 @@ object Inliner {
     log.pprint(inlineableEdgesSet.map(_.toString))
 
     val inlinedMethodsSet = inlineableEdgesSet.map(_.called)
-    val visitedMethods = mutable.LinkedHashMap.empty[InferredSig, MethodResult]
+    val visitedMethods = mutable.LinkedHashMap.empty[InferredSig, Option[MethodResult]]
     for ((k, v) <- analyzerRes.visitedMethods) {
       visitedMethods.put(k, v)
     }
@@ -83,17 +83,17 @@ object Inliner {
   def inlineSingleMethod(
     classManager: ClassManager.Frozen,
     log: Logger.InferredMethod,
-    visitedMethods: mutable.LinkedHashMap[InferredSig, MethodResult],
+    visitedMethods: mutable.LinkedHashMap[InferredSig, Option[MethodResult]],
     edge: CallEdge,
     node: SSA.Invoke
   ) = Util.labelExceptions(edge.toString) {
     log.pprint(node)
     log.pprint(edge)
     log.graph("edge.caller") {
-      Renderer.dumpSvg(visitedMethods(edge.caller).methodBody)
+      Renderer.dumpSvg(visitedMethods(edge.caller).get.methodBody)
     }
     log.graph("edge.called") {
-      Renderer.dumpSvg(visitedMethods(edge.called).methodBody)
+      Renderer.dumpSvg(visitedMethods(edge.called).get.methodBody)
     }
     def findBlock(current: SSA.Node): SSA.Block = {
 
@@ -104,7 +104,7 @@ object Inliner {
       }
     }
     val nodeBlock = findBlock(node)
-    val calledMethod = visitedMethods(edge.called)
+    val calledMethod = visitedMethods(edge.called).get
 
     val calledBody = calledMethod.methodBody
     val calledStartBlock =
@@ -122,7 +122,7 @@ object Inliner {
     calledStartBlock.nextState.parent = node.state
 
     log.graph("INPUT PARAMS STATE BLOCK WIRED") {
-      Renderer.dumpSvg(visitedMethods(edge.caller).methodBody)
+      Renderer.dumpSvg(visitedMethods(edge.caller).get.methodBody)
     }
     // Collect returns
     val returns = mutable.Buffer.empty[(SSA.State, SSA.Jump, Option[SSA.Val])]
@@ -143,7 +143,7 @@ object Inliner {
       nodeBlock,
       returns,
       nextState,
-      visitedMethods(edge.called).inferred ++ visitedMethods(edge.caller).inferred
+      visitedMethods(edge.called).get.inferred ++ visitedMethods(edge.caller).get.inferred
     )
     val (addedBlocks, inlinedFinalValOpt, inlinedFinalStateOpt) = outputNodes match {
       case Some((inlinedLastBlock, inlinedFinalValOpt, inlinedFinalState)) =>
@@ -182,7 +182,7 @@ object Inliner {
         (Nil, None, None)
     }
     log.graph("RETURNS WIRED") {
-      Renderer.dumpSvg(visitedMethods(edge.caller).methodBody)
+      Renderer.dumpSvg(visitedMethods(edge.caller).get.methodBody)
     }
 
     // Wire up input block
@@ -195,32 +195,36 @@ object Inliner {
 
     // Consolidate two method bodies in `visitedMethods`
     val newInferred = mutable.LinkedHashMap.empty[SSA.Val, IType]
-    visitedMethods(edge.caller).inferred.foreach(t => newInferred.put(t._1, t._2))
-    visitedMethods(edge.called).inferred.foreach(t => newInferred.put(t._1, t._2))
+    visitedMethods(edge.caller).get.inferred.foreach(t => newInferred.put(t._1, t._2))
+    visitedMethods(edge.called).get.inferred.foreach(t => newInferred.put(t._1, t._2))
     inlinedFinalValOpt.foreach(t => newInferred.put(t._1, t._2))
 
-    visitedMethods(edge.caller) = visitedMethods(edge.caller).copy(
-      inferred = newInferred,
-      liveBlocks =
-        visitedMethods(edge.caller).liveBlocks ++
-        visitedMethods(edge.called).liveBlocks ++
-        addedBlocks,
-      liveTerminals =
-        visitedMethods(edge.caller).liveTerminals ++
-        visitedMethods(edge.called).liveTerminals.filter(_.isInstanceOf[SSA.AThrow])
+    visitedMethods(edge.caller) = Some(
+      visitedMethods(edge.caller)
+        .get
+        .copy(
+          inferred = newInferred,
+          liveBlocks =
+            visitedMethods(edge.caller).get.liveBlocks ++
+            visitedMethods(edge.called).get.liveBlocks ++
+            addedBlocks,
+          liveTerminals =
+            visitedMethods(edge.caller).get.liveTerminals ++
+            visitedMethods(edge.called).get.liveTerminals.filter(_.isInstanceOf[SSA.AThrow])
+        )
     )
 
     visitedMethods.remove(edge.called)
 
-    visitedMethods(edge.caller).methodBody.allTerminals =
-      visitedMethods(edge.caller).methodBody.allTerminals ++
+    visitedMethods(edge.caller).get.methodBody.allTerminals =
+      visitedMethods(edge.caller).get.methodBody.allTerminals ++
       throws
-    visitedMethods(edge.caller).methodBody.removeDeadNodes()
+    visitedMethods(edge.caller).get.methodBody.removeDeadNodes()
     log.graph("INLINED " + edge) {
-      Renderer.dumpSvg(visitedMethods(edge.caller).methodBody)
+      Renderer.dumpSvg(visitedMethods(edge.caller).get.methodBody)
     }
 
-    log.check(visitedMethods(edge.caller).methodBody.checkLinks())
+    log.check(visitedMethods(edge.caller).get.methodBody.checkLinks())
     visitedMethods.remove(edge.called)
   }
 

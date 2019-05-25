@@ -1,11 +1,5 @@
 package test.inlining
 
-import scala.annotation.migration
-import scala.collection.generic.CanBuildFrom
-import scala.collection.immutable.Stream
-import scala.collection.{AbstractIterator, BufferedIterator, GenIterable, GenIterableLike, GenTraversableLike, GenTraversableOnce, Iterator, Seq, Traversable, TraversableLike, TraversableOnce, mutable}
-import scala.collection.mutable.{ArrayBuffer, ArrayBuilder, ArrayLike, ArrayOps, WrappedArray}
-
 object ArrayChaining {
 
   @test.Test()
@@ -281,4 +275,24 @@ object ArrayChaining {
   def staticSpecialInterfaceMethods(): Int = {
     new TestElements().run(new TestCallbackImpl())
   }
+
+
+  @test.Test(inputs = Array(2, 3, 4))
+  def superDefineSubImplement(n: Int): Int = {
+    val box = Array(0)
+    val iter = new Foo(n)
+    box(0) = iter.next()
+    box(0)
+  }
+}
+class Foo(repr: Int) extends Bar {
+  def apply(index: Int): Int = repr
+}
+
+trait Bar extends Qux {
+  def next(): Int = apply(0)
+}
+
+trait Qux  {
+  def apply(idx: Int): Int
 }
