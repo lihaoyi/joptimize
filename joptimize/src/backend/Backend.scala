@@ -1,8 +1,7 @@
 package joptimize.backend
 
-import joptimize.{FileLogger, Logger, Util}
+import joptimize.{Logger, Util}
 import joptimize.algorithms.{Dominator, Scheduler}
-import joptimize.analyzer.ProgramAnalyzer.{CallEdge, MethodResult}
 import joptimize.analyzer.{ProgramAnalyzer, Renderer}
 import joptimize.frontend.{ClassManager, Frontend}
 import joptimize.graph.HavlakLoopTree
@@ -11,14 +10,12 @@ import org.objectweb.asm.Opcodes
 import org.objectweb.asm.tree.{ClassNode, InsnList, MethodNode}
 
 import collection.JavaConverters._
-import scala.collection.mutable
 
 object Backend {
   def apply(
     analyzerRes: ProgramAnalyzer.ProgramResult,
     entrypoints: scala.Seq[MethodSig],
     classManager: ClassManager.Frozen,
-    eliminateOldMethods: Boolean,
     log: Logger.Global,
     inline: Boolean
   ): Seq[ClassNode] = log.block {
@@ -41,11 +38,7 @@ object Backend {
       classManager
     )
 
-    if (eliminateOldMethods) {
-      for (cn <- classManager.allClasses) {
-        cn.methods.clear()
-      }
-    }
+    for (cn <- classManager.allClasses) cn.methods.clear()
 
     val visitedInterfaces =
       Util.findSeenInterfaces(classManager.loadClass, newMethods.map(_._1)) ++
@@ -66,22 +59,9 @@ object Backend {
     for ((cn, mns) <- grouped) yield {
       log.pprint(cn.name)
       log.pprint(mns.map(_.name))
-      if (cn.attrs != null) Util.removeFromJavaList(cn.attrs)(_.`type` == "ScalaSig")
-      if (cn.attrs != null) Util.removeFromJavaList(cn.attrs)(_.`type` == "ScalaInlineInfo")
-      if (cn.visibleAnnotations != null) {
-        Util.removeFromJavaList(cn.visibleAnnotations)(_.desc == "Lscala/reflect/ScalaSignature;")
-      }
-
       mns.foreach(cn.methods.add)
     }
-    def ignore(s: String) = s.startsWith("java/")
 
-    new BytecodeDCE(
-      entrypoints,
-      grouped.keys.toSeq,
-      ignore = ignore,
-      log = log
-    ).apply()
     grouped.keys.toSeq
   }
 

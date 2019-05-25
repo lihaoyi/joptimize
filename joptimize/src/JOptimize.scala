@@ -1,6 +1,6 @@
 package joptimize
 
-import backend.Backend
+import backend.{Backend, BytecodeDCE}
 import joptimize.analyzer.ProgramAnalyzer
 import joptimize.frontend.{ClassManager, Frontend}
 import joptimize.model._
@@ -9,7 +9,6 @@ import org.objectweb.asm.{ClassVisitor, ClassWriter, Opcodes}
 object JOptimize{
   def run(getClassFile: String => Option[Array[Byte]],
           entrypoints: Seq[MethodSig],
-          eliminateOldMethods: Boolean,
           log: Logger.Global,
           inline: Boolean): Map[String, Array[Byte]] = {
 
@@ -25,18 +24,30 @@ object JOptimize{
       analyzerRes,
       entrypoints,
       classManager.freeze(),
-      eliminateOldMethods,
       log,
       inline
     )
 
-    serialize(log, outClasses)
+    val remaining = new BytecodeDCE(
+      entrypoints,
+      outClasses,
+      ignore = _.startsWith("java/"),
+      log = log
+    ).apply()
+
+    serialize(log, remaining)
   }
 
 
   def serialize(log: Logger.Global, outClasses: Seq[ClassNode]) = log.block {
     outClasses
       .map { cn =>
+        if (cn.attrs != null) Util.removeFromJavaList(cn.attrs)(_.`type` == "ScalaSig")
+        if (cn.attrs != null) Util.removeFromJavaList(cn.attrs)(_.`type` == "ScalaInlineInfo")
+        if (cn.visibleAnnotations != null) {
+          Util.removeFromJavaList(cn.visibleAnnotations)(_.desc == "Lscala/reflect/ScalaSignature;")
+        }
+
         log.pprint(cn.name)
         val cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES)
         cn.accept(new ClassVisitor(Opcodes.ASM7, cw) {
