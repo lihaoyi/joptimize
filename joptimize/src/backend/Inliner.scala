@@ -263,7 +263,6 @@ object Inliner {
                 .mergeTypes(
                   triplets.collect { case (s, j, v) if inferred.contains(v.get) => v.get.jtype }
                 )
-                .get
                 .asInstanceOf[JType]
             )
             triplets.map { case (s, j, v) => phi.incoming.put(j.block, v.get) }
@@ -271,7 +270,6 @@ object Inliner {
               .mergeTypes(
                 triplets.flatMap { case (s, j, v) => inferred.get(v.get) }
               )
-              .get
             Some((phi, inferredMerged))
           }
 

@@ -129,46 +129,75 @@ trait ClassManager {
       }
       .toSeq
   }
-  def mergeTypes(itypes: Seq[IType]): Option[IType] = {
-    val flattened = itypes.flatMap {
-      case JType.Bottom => Nil
-      case CType.Null => Nil
-      case j => Seq(j)
-    }.distinct
-    if (flattened.length == 1) Some(flattened.head)
-    else if (flattened.contains(JType.Cls("java/lang/Object"))) Some(JType.Cls("java/lang/Object"))
-    else if (flattened.length == 0) Some(JType.Bottom)
-    else if (flattened.forall(_.widen == JType.Prim.V)) Some(JType.Prim.V)
-    else if (flattened.forall(_.widen == JType.Prim.I)) Some(JType.Prim.I)
-    else if (flattened.forall(_.widen == JType.Prim.F)) Some(JType.Prim.F)
-    else if (flattened.forall(_.widen == JType.Prim.J)) Some(JType.Prim.J)
-    else if (flattened.forall(_.widen == JType.Prim.D)) Some(JType.Prim.D)
-    else if (flattened.forall(x => x.widen == JType.Prim.Z || x.widen == JType.Prim.I || x.getClass == classOf[CType.I]))
-      Some(JType.Prim.Z)
-    else if (flattened.forall(x => x.widen == JType.Prim.B || x.widen == JType.Prim.I || x.getClass == classOf[CType.I]))
-      Some(JType.Prim.B)
-    else if (flattened.forall(x => x.widen == JType.Prim.C || x.widen == JType.Prim.I || x.getClass == classOf[CType.I]))
-      Some(JType.Prim.C)
-    else if (flattened.forall(x => x.widen == JType.Prim.S || x.widen == JType.Prim.I || x.getClass == classOf[CType.I]))
-      Some(JType.Prim.S)
-    else if (flattened.forall(_.isInstanceOf[JType.Cls])) {
-      mergeClasses(flattened.map(_.asInstanceOf[JType.Cls])) match {
-        case Seq(single) => Some(single)
-        case _ => Some(JType.Cls("java/lang/Object"))
-      }
-    } else if (flattened.forall(_.isInstanceOf[JType.Arr])) {
-      Some(
-        mergeTypes(flattened.map { case a: JType.Arr => a.innerType }) match {
-          case None => JType.Cls("java.lang.Object")
-          case Some(merged) =>
-            merged match {
-              case j: JType => JType.Arr(j)
-              case _ => JType.Arr(JType.Cls("java.lang.Object"))
-            }
+  def mergeTypes0(lhs: IType, rhs: IType): Option[IType] = {
+    if (lhs == rhs) Some(lhs)
+    else (lhs, rhs) match{
+      case (lhs: JType.Cls, rhs: JType.Cls) =>
+        mergeClasses(Seq(lhs, rhs)) match{
+          case Seq(merged) => Some(merged)
+          case _ => Some(JType.Cls("java/lang/Object"))
         }
-      )
-    } else if (flattened.forall(t => t.isInstanceOf[JType.Cls] || t.isInstanceOf[JType.Arr])) {
-      Some(JType.Cls("java.lang.Object"))
-    } else None
+      case (lhs: JType.Arr, rhs: JType.Arr) =>
+        mergeTypes0(lhs.innerType, rhs.innerType) match{
+          case Some(mergedInner: JType) => Some(JType.Arr(mergedInner))
+          case _ => Some(JType.Cls("java/lang/Object"))
+        }
+
+      case (_: JType.Cls, _: JType.Arr) => Some(JType.Cls("java/lang/Object"))
+      case (_: JType.Arr, _: JType.Cls) => Some(JType.Cls("java/lang/Object"))
+
+      case (JType.Bottom | CType.Null, rhs) => Some(rhs)
+      case (lhs, JType.Bottom | CType.Null) => Some(lhs)
+
+      case (JType.Prim.Z, JType.Prim.I) => Some(JType.Prim.Z)
+      case (JType.Prim.Z, CType.I(_)) => Some(JType.Prim.Z)
+      case (JType.Prim.I, JType.Prim.Z) => Some(JType.Prim.Z)
+      case (CType.I(_), JType.Prim.Z) => Some(JType.Prim.Z)
+
+      case (JType.Prim.B, JType.Prim.I) => Some(JType.Prim.B)
+      case (JType.Prim.B, CType.I(_)) => Some(JType.Prim.B)
+      case (JType.Prim.I, JType.Prim.B) => Some(JType.Prim.B)
+      case (CType.I(_), JType.Prim.B) => Some(JType.Prim.B)
+
+      case (JType.Prim.C, JType.Prim.I) => Some(JType.Prim.C)
+      case (JType.Prim.C, CType.I(_)) => Some(JType.Prim.C)
+      case (JType.Prim.I, JType.Prim.C) => Some(JType.Prim.C)
+      case (CType.I(_), JType.Prim.C) => Some(JType.Prim.C)
+
+      case (JType.Prim.S, JType.Prim.I) => Some(JType.Prim.S)
+      case (JType.Prim.S, CType.I(_)) => Some(JType.Prim.S)
+      case (JType.Prim.I, JType.Prim.S) => Some(JType.Prim.S)
+      case (CType.I(_), JType.Prim.S) => Some(JType.Prim.S)
+
+      case (JType.Prim.I, CType.I(_)) => Some(JType.Prim.I)
+      case (CType.I(_), JType.Prim.I) => Some(JType.Prim.I)
+      case (CType.I(_), CType.I(_)) => Some(JType.Prim.I)
+
+      case (JType.Prim.J, CType.J(_)) => Some(JType.Prim.J)
+      case (CType.J(_), JType.Prim.J) => Some(JType.Prim.J)
+      case (CType.J(_), CType.J(_)) => Some(JType.Prim.J)
+
+      case (JType.Prim.F, CType.F(_)) => Some(JType.Prim.F)
+      case (CType.F(_), JType.Prim.F) => Some(JType.Prim.F)
+      case (CType.F(_), CType.F(_)) => Some(JType.Prim.F)
+
+      case (JType.Prim.D, CType.D(_)) => Some(JType.Prim.D)
+      case (CType.D(_), JType.Prim.D) => Some(JType.Prim.D)
+      case (CType.D(_), CType.D(_)) => Some(JType.Prim.D)
+
+      case _ => None
+    }
+  }
+
+  def mergeTypes(lhs: IType, rhs: IType): IType = {
+    mergeTypes0(lhs, rhs).getOrElse(throw new Exception(s"Unable to merge $lhs $rhs"))
+  }
+
+  def mergeTypes(itypes: Seq[IType]): IType = {
+    if (itypes.isEmpty) JType.Bottom
+    else itypes.tail.foldLeft[Option[IType]](Some(itypes.head)){
+      case (None, _) => None
+      case (Some(x), y) => mergeTypes0(x, y)
+    }.getOrElse(throw new Exception("Unable to merge " + itypes.mkString(" ")))
   }
 }

@@ -2,7 +2,7 @@ package joptimize.analyzer
 
 import joptimize.model._
 
-class ITypeLattice(merge: (IType, IType) => Option[IType], inferredArgs: Seq[IType])
+class ITypeLattice(merge: (IType, IType) => IType, inferredArgs: Seq[IType])
     extends Lattice[IType] {
   def transferValue(node: SSA.Val, inferences: SSA.Val => IType) = {
     node match {
@@ -10,13 +10,10 @@ class ITypeLattice(merge: (IType, IType) => Option[IType], inferredArgs: Seq[ITy
       case n: SSA.CheckCast => n.desc
       case n: SSA.InstanceOf =>
         val inferredSrc = inferences(n.src)
-        merge(inferredSrc, n.desc) match {
-          case None => CType.I(0)
-          case Some(merged) =>
-            if (merged == n.desc) CType.I(1)
-            else if (merged == inferredSrc) JType.Prim.Z
-            else CType.I(0)
-        }
+        val merged = merge(inferredSrc, n.desc)
+        if (merged == n.desc) CType.I(1)
+        else if (merged == inferredSrc) JType.Prim.Z
+        else CType.I(0)
 
       case n: SSA.Arg => inferredArgs(n.index)
 
@@ -165,8 +162,5 @@ class ITypeLattice(merge: (IType, IType) => Option[IType], inferredArgs: Seq[ITy
     }
   }
 
-  override def join(lhs: IType, rhs: IType) = {
-    val res = merge(lhs, rhs).get
-    res
-  }
+  override def join(lhs: IType, rhs: IType) = merge(lhs, rhs)
 }

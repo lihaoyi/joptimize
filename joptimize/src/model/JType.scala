@@ -154,7 +154,6 @@ sealed trait JType extends IType {
     */
   def size: Int
 
-  def widen = this
 }
 
 object Desc {

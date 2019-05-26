@@ -159,7 +159,7 @@ object Backend {
       Tuple2(
         isig,
         ProgramAnalyzer.Properties(
-          classManager.mergeTypes(allRets).get,
+          classManager.mergeTypes(allRets),
           allPures.forall(identity),
           allLives.flatten.toSet
         )

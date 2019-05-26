@@ -244,11 +244,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
         result.calledSignatures.foreach(calledSignatures.add)
         for((sig, invoke, tpe) <- result.evaluated) {
           val typesToMerge = Seq(tpe) ++ analyses(sig).evaluated.get(invoke)
-          val merged = classManager
-            .mergeTypes(typesToMerge)
-            .getOrElse(
-              throw new Exception(sig.toString + " " + invoke.toString + " " + typesToMerge.toString)
-            )
+          val merged = classManager.mergeTypes(typesToMerge)
           if (!analyses(sig).evaluated.get(invoke).contains(merged)){
             analyses(sig).evaluated(invoke) = merged
             invoke match{
@@ -275,7 +271,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
 
       val resolvedProps = copied.flatMap(methodProps.get)
       ProgramAnalyzer.Properties(
-        classManager.mergeTypes(resolvedProps.map(_.inferredReturn)).get,
+        classManager.mergeTypes(resolvedProps.map(_.inferredReturn)),
         resolvedProps.forall(_.pure),
         resolvedProps.flatMap(_.liveArgs).toSet
       )
@@ -299,7 +295,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
       methodBody,
       Map.empty,
       methodBody.getAllVertices().collect { case s: SSA.Start => s }.head,
-      new ITypeLattice((x, y) => classManager.mergeTypes(Seq(x, y)), inferredArgs),
+      new ITypeLattice((x, y) => classManager.mergeTypes(x, y), inferredArgs),
       log,
       ITypeBrancher,
       JType.Bottom,
@@ -442,10 +438,11 @@ object ProgramAnalyzer {
           val clinits = subSigs.flatMap(subSig => api.analyzeClinits(subSig.cls))
           val subs = subSigs.map(subSig => InferredSig(subSig, calledSig.inferred))
 
-          val merged = api.classManager.mergeTypes(
+          val typesToMerge =
             api.getAnalysesEvaluated(isig, invoke).toSeq ++
             subs.flatMap(api.getMethodProps(_).toSeq).map(_.inferredReturn)
-          ).get
+
+          val merged = api.classManager.mergeTypes(typesToMerge)
 
           StepResult(
             edges =
@@ -469,7 +466,8 @@ object ProgramAnalyzer {
       .valuesIterator
       .toSeq
 
-    val inferredReturn = api.classManager.mergeTypes(retTypes).get
+
+    val inferredReturn = api.classManager.mergeTypes(retTypes)
 
     val computedPurity = computePurity(isig, currentAnalysis.evaluated, api)
 

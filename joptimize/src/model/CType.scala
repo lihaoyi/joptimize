@@ -15,62 +15,26 @@ object CType {
 //    def size = 1
 //    def internalName: String = "?"
 //    def name = s"R${classes.length}${classes.map(_.name.replace('/', '_')).mkString("__")}"
-//    def widen = this
 //  }
-  trait Constant[T] extends IType {
-    def value: T
-  }
-  trait ConstantCompanion[T] {
-    def apply(value: T): Constant[T]
-    def wide: JType
-  }
-  object I extends ConstantCompanion[Int] {
-    def apply(value: Int) = new I(value)
-    def wide = JType.Prim.I
-  }
-  case class I(value: Int) extends Constant[Int] {
+  case class I(value: Int) extends IType {
     def size = 1
     def internalName = s"TI$value;"
     def name = s"TI$value"
-    def widen = JType.Prim.I
   }
-  object J extends ConstantCompanion[Long] {
-    def apply(value: Long) = new J(value)
-    def wide = JType.Prim.J
-  }
-  case class J(value: Long) extends Constant[Long] {
+  case class J(value: Long) extends IType {
     def size = 2
     def internalName = s"TJ$value;"
     def name = s"TJ$value"
-    def widen = JType.Prim.J
   }
-  object F extends ConstantCompanion[Float] {
-    def apply(value: Float) = new F(value)
-    def unapply(value: IType) = value match {
-      case x: F => Some(x.value)
-      case _ => None
-    }
-    def wide = JType.Prim.F
-  }
-  case class F(value: Float) extends Constant[Float] {
+  case class F(value: Float) extends IType {
     def size = 1
     def internalName = s"TF$value;"
     def name = s"TF$value"
-    def widen = JType.Prim.F
   }
-  object D extends ConstantCompanion[Double] {
-    def apply(value: Double) = new D(value)
-    def unapply(value: IType) = value match {
-      case x: D => Some(x.value)
-      case _ => None
-    }
-    def wide = JType.Prim.D
-  }
-  case class D(value: Double) extends Constant[Double] {
+  case class D(value: Double) extends IType {
     def size = 2
     def internalName = s"TD$value;"
     def name = s"TD$value"
-    def widen = JType.Prim.D
   }
 
   /**
@@ -80,7 +44,5 @@ object CType {
     */
   object Null extends IType {
     override def name = "Null"
-
-    def widen = Null
   }
 }
