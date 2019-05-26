@@ -371,4 +371,46 @@ object ArrayChaining {
     if (iter.hasNext) iter.next()
     else n
   }
+
+  abstract class Top{
+    def num: Int
+  }
+  class Left extends Top{
+    def num = 123
+  }
+  class Right extends Top{
+    def num = 456
+  }
+
+
+  abstract class Foo4(){
+    def apply(): Top
+  }
+
+  class Qux4 extends Foo4(){
+    def apply(): Top = new Right
+  }
+
+  abstract class Baz4() extends Foo4
+
+  class Bar4() extends Baz4(){
+    def apply(): Top = new Left
+  }
+
+  @test.Test(inputs = Array(1, 2, 3))
+  def manualIterator4(n: Int): Int = {
+    val quxNum = new Qux4().apply().num
+    val bar: Baz4 = new Bar4()
+    val barNum = bar.apply().num
+    quxNum + barNum
+  }
+//  @test.Test(inputs = Array(1, 2, 3))
+//  def manualIterator4(n: Int): Int = {
+//    val box = Array(0)
+//    val x = Vector.empty[Int]
+//    new collection.mutable.ArrayOps.ofInt(Array(1, 2, 3)).foreach{ n =>
+//      box(0) += n
+//    }
+//    box(0)
+//  }
 }

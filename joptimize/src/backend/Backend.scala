@@ -70,6 +70,7 @@ object Backend {
 
     def resolveDefsiteProps(isig: InferredSig) = {
       if (isig.method.static) analyzerRes.visitedResolved(isig)
+      else if (isig.method.name == "<init>") analyzerRes.visitedMethods(isig).get.props
       else highestDefinerProps(isig)
     }
 
@@ -136,7 +137,7 @@ object Backend {
   ) = log.block {
 
     val allKeys = analyzerRes.visitedMethods.keySet ++ analyzerRes.visitedResolved.keySet
-    val items = for (isig <- allKeys) yield {
+    val items = for (isig <- allKeys if !isig.method.static) yield {
 
 //      pprint.log(isig.toString)
       val allSupertypes = classManager.getAllSupertypes(isig.method.cls)

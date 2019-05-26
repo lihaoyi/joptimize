@@ -38,15 +38,15 @@ object MainTestUtils {
       else None
     }
     val output = mutable.Buffer.empty[ujson.Value]
-    for (inline <- Seq(false, true)){
+    for (inline <- Seq(false)){
       println(s"  test.MainTests.${tp.value.mkString(".")} inline: $inline")
       os.remove.all(os.pwd / 'out / 'scratch)
       os.remove.all(outRoot / tp.value)
       val outputFileMap = joptimize.JOptimize.run(
         name => loadIfExists("CLASSES_FOLDER", name),
         Seq(MethodSig(s"test/${tp.value.dropRight(1).mkString("/")}", tp.value.last, methodDesc, static = true)),
-        log = joptimize.DummyLogger,
-//        log = new joptimize.FileLogger.Global(logRoot = outRoot),
+//        log = joptimize.DummyLogger,
+        log = new joptimize.FileLogger.Global(logRoot = outRoot),
         inline = inline
       )
 
