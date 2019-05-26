@@ -392,7 +392,8 @@ object MainTests extends TestSuite {
         'manualIterator - annotatedTest
         'manualIterator2 - annotatedTest
         'manualIterator3 - annotatedTest
-        'manualIterator4 - annotatedTest
+        'inferredHighestDefinerReturnDiffer - annotatedTest
+        'inheritFromOutsideHierarchy - annotatedTest
       }
     }
   }

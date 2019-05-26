@@ -398,11 +398,34 @@ object ArrayChaining {
   }
 
   @test.Test(inputs = Array(1, 2, 3))
-  def manualIterator4(n: Int): Int = {
+  def inferredHighestDefinerReturnDiffer(n: Int): Int = {
     val quxNum = new Qux4().apply().num
     val bar: Baz4 = new Bar4()
     val barNum = bar.apply().num
     quxNum + barNum
+  }
+
+  trait Foo5{
+    def apply(): Top
+  }
+
+  class Qux5 extends Foo5{
+    def apply(): Top = new Right
+  }
+
+  trait Baz5 extends Foo5
+
+  class Bar5() extends Outer5() with Baz5
+
+  class Outer5(){
+    def apply(): Top = new Left
+  }
+
+  @test.Test(inputs = Array(1, 2, 3))
+  def inheritFromOutsideHierarchy(n: Int): Int = {
+    val bar: Baz5 = new Bar5()
+    val barNum = bar.apply().num
+    barNum
   }
 //  @test.Test(inputs = Array(1, 2, 3))
 //  def manualIterator4(n: Int): Int = {
