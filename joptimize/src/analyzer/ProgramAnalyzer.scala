@@ -243,7 +243,12 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
         result.staticFieldReferencedClasses.foreach(staticFieldReferencedClasses.add)
         result.calledSignatures.foreach(calledSignatures.add)
         for((sig, invoke, tpe) <- result.evaluated) {
-          val merged = classManager.mergeTypes(Seq(tpe) ++ analyses(sig).evaluated.get(invoke)).get
+          val typesToMerge = Seq(tpe) ++ analyses(sig).evaluated.get(invoke)
+          val merged = classManager
+            .mergeTypes(typesToMerge)
+            .getOrElse(
+              throw new Exception(sig.toString + " " + invoke.toString + " " + typesToMerge.toString)
+            )
           if (!analyses(sig).evaluated.get(invoke).contains(merged)){
             analyses(sig).evaluated(invoke) = merged
             invoke match{

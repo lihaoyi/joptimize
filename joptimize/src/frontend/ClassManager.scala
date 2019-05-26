@@ -143,13 +143,13 @@ trait ClassManager {
     else if (flattened.forall(_.widen == JType.Prim.F)) Some(JType.Prim.F)
     else if (flattened.forall(_.widen == JType.Prim.J)) Some(JType.Prim.J)
     else if (flattened.forall(_.widen == JType.Prim.D)) Some(JType.Prim.D)
-    else if (flattened.forall(x => x.widen == JType.Prim.Z || x.getClass == classOf[CType.I]))
+    else if (flattened.forall(x => x.widen == JType.Prim.Z || x.widen == JType.Prim.I || x.getClass == classOf[CType.I]))
       Some(JType.Prim.Z)
-    else if (flattened.forall(x => x.widen == JType.Prim.B || x.getClass == classOf[CType.I]))
+    else if (flattened.forall(x => x.widen == JType.Prim.B || x.widen == JType.Prim.I || x.getClass == classOf[CType.I]))
       Some(JType.Prim.B)
-    else if (flattened.forall(x => x.widen == JType.Prim.C || x.getClass == classOf[CType.I]))
+    else if (flattened.forall(x => x.widen == JType.Prim.C || x.widen == JType.Prim.I || x.getClass == classOf[CType.I]))
       Some(JType.Prim.C)
-    else if (flattened.forall(x => x.widen == JType.Prim.S || x.getClass == classOf[CType.I]))
+    else if (flattened.forall(x => x.widen == JType.Prim.S || x.widen == JType.Prim.I || x.getClass == classOf[CType.I]))
       Some(JType.Prim.S)
     else if (flattened.forall(_.isInstanceOf[JType.Cls])) {
       mergeClasses(flattened.map(_.asInstanceOf[JType.Cls])) match {
