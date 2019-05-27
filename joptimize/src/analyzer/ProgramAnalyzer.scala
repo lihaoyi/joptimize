@@ -55,6 +55,10 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
     */
   val callGraph = mutable.LinkedHashSet.empty[ProgramAnalyzer.CallEdge]
 
+  // Secondary indices for quick lookup into the append-only callgraph
+  val clsToCallGraph = mutable.LinkedHashMap.empty[JType.Cls, Set[ProgramAnalyzer.CallEdge]]
+  val calledToCallGraph = mutable.LinkedHashMap.empty[InferredSig, Set[ProgramAnalyzer.CallEdge]]
+
   /**
     * Work in progress optimistic analyses of the various methods in play. These analyses
     * may not be complete, as they may be awaiting the metadata of called functions to
@@ -74,6 +78,10 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
   def classManager = frontend.classManager
   def addCallEdge(edge: ProgramAnalyzer.CallEdge) = {
     callGraph.add(edge)
+    for(n <- edge.node) {
+      clsToCallGraph(n.sig.cls) = clsToCallGraph.getOrElse(n.sig.cls, Set()) ++ Set(edge)
+    }
+    calledToCallGraph(edge.called) = calledToCallGraph.getOrElse(edge.called, Set()) ++ Set(edge)
     val methodNode = classManager.loadMethod(edge.called.method).getOrElse(throw new Exception(edge.called.method.toString))
     if (methodNode.instructions.size() != 0) current.add(edge.called)
     else if (!methodProps.contains(edge.called)) {
@@ -333,7 +341,8 @@ object ProgramAnalyzer {
   trait HandlerApi{
     def globalLog: Logger.Global
     def classManager: ClassManager
-    def callGraph: Iterable[CallEdge]
+    def clsToCallGraph: mutable.LinkedHashMap[JType.Cls, Set[ProgramAnalyzer.CallEdge]]
+    def calledToCallGraph: mutable.LinkedHashMap[InferredSig, Set[ProgramAnalyzer.CallEdge]]
     def analyzeClinits(cls: JType.Cls): Seq[InferredSig]
     def getAlreadySeenMethodProps(isig: InferredSig): Option[Properties]
     def resolveProps(isig: InferredSig): Properties
@@ -342,22 +351,15 @@ object ProgramAnalyzer {
   }
 
   def handleNew(isig: InferredSig, n: SSA.New, api: HandlerApi): StepResult = {
-
-    val superClasses = api.classManager.getAllSupertypes(n.cls).toSet
-
-    val callNodes = for{
-      edge <- api.callGraph.to[mutable.LinkedHashSet]
-      node <- edge.node
-    } yield (edge.caller, node, edge.called.inferred)
-
     val newlyImplementedEdges = for{
-      (caller, node, inferred) <- callNodes
+      sup <- api.classManager.getAllSupertypes(n.cls).distinct
+      edge <- api.clsToCallGraph.getOrElse(sup, Nil)
+      node = edge.node.get
       if node.isInstanceOf[SSA.InvokeVirtual]
-      if superClasses.contains(node.cls)
       possibleNewCalled <- api.classManager.resolvePossibleSigs(node.sig)
-      possibleNewCalledInferred = InferredSig(possibleNewCalled, inferred)
+      possibleNewCalledInferred = InferredSig(possibleNewCalled, edge.called.inferred)
       if api.getAlreadySeenMethodProps(possibleNewCalledInferred).isEmpty
-    } yield CallEdge(caller, Some(node), possibleNewCalledInferred)
+    } yield CallEdge(edge.caller, Some(node), possibleNewCalledInferred)
 
     val initMethodEdge = CallEdge(
       isig,
@@ -464,8 +466,7 @@ object ProgramAnalyzer {
     )
 
     val evaluated = for {
-      edge <- api.callGraph
-      if edge.called == isig
+      edge <- api.calledToCallGraph.getOrElse(isig, Nil)
       node <- edge.node
     } yield (edge.caller, node, props.inferredReturn)
 
