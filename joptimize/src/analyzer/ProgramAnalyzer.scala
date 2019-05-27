@@ -74,8 +74,9 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
   def classManager = frontend.classManager
   def addCallEdge(edge: ProgramAnalyzer.CallEdge) = {
     callGraph.add(edge)
-    if (classManager.loadMethod(edge.called.method).get.instructions.size() != 0) current.add(edge.called)
-    else if (!methodProps.contains(edge.called)){
+    val methodNode = classManager.loadMethod(edge.called.method).getOrElse(throw new Exception(edge.called.method.toString))
+    if (methodNode.instructions.size() != 0) current.add(edge.called)
+    else if (!methodProps.contains(edge.called)) {
       methodProps(edge.called) = ProgramAnalyzer.dummyProps(edge.called.method, optimistic = true)
     }
     val newCallSet = callStackSets(edge.caller) + edge.caller
@@ -263,7 +264,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
       if (!step.isInstanceOf[MethodAnalyzer.Step.Done[_]]) current.add(isig)
     }
   }
-  def getMethodProps(isig: InferredSig): Option[ProgramAnalyzer.Properties] = methodProps.get(isig)
+  def getAlreadySeenMethodProps(isig: InferredSig): Option[ProgramAnalyzer.Properties] = methodProps.get(isig)
 
   def resolveProps(isig: InferredSig) = {
     classManager.resolvePossibleSigs(isig.method).map{ resolved =>
@@ -336,7 +337,7 @@ object ProgramAnalyzer {
     def classManager: ClassManager
     def callGraph: Iterable[CallEdge]
     def analyzeClinits(cls: JType.Cls): Seq[InferredSig]
-    def getMethodProps(isig: InferredSig): Option[Properties]
+    def getAlreadySeenMethodProps(isig: InferredSig): Option[Properties]
     def resolveProps(isig: InferredSig): Option[Properties]
     def isCalledFrom(isig: InferredSig, calledSig: InferredSig): Boolean
     def getAnalysesEvaluated(isig: InferredSig, invoke: SSA.Invoke): Option[IType]
@@ -346,27 +347,19 @@ object ProgramAnalyzer {
 
     val superClasses = api.classManager.getAllSupertypes(n.cls).toSet
 
-    val superClassCallList = for {
-      edge <- api.callGraph
+    val callNodes = for{
+      edge <- api.callGraph.to[mutable.LinkedHashSet]
       node <- edge.node
-      if !node.isInstanceOf[SSA.InvokeSpecial]
+    } yield (edge.caller, node, edge.called.inferred)
+
+    val newlyImplementedEdges = for{
+      (caller, node, inferred) <- callNodes
+      if node.isInstanceOf[SSA.InvokeVirtual]
       if superClasses.contains(node.cls)
-    } yield (node, edge)
-
-    val superClassMethodMap = superClassCallList
-      .groupBy(t => (t._1.name, t._1.desc))
-      .map{case (k, v) => (k, v.map(_._2))}
-
-    val newlyImplementedEdges = for {
-      loadedClsNode <- api.classManager.loadClass(n.cls).toSeq
-      mn <- loadedClsNode.methods.asScala
-      if (mn.access & (Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC)) == 0
-      edge <- superClassMethodMap.getOrElse((mn.name, Desc.read(mn.desc)), Nil)
-      node <- edge.node
-    } yield {
-      val msig = edge.called.method.copy(cls = n.cls)
-      CallEdge(edge.caller, Some(node), edge.called.copy(method = msig))
-    }
+      possibleNewCalled <- api.classManager.resolvePossibleSigs(node.sig).get
+      possibleNewCalledInferred = InferredSig(possibleNewCalled, inferred)
+      if api.getAlreadySeenMethodProps(possibleNewCalledInferred).isEmpty
+    } yield CallEdge(caller, Some(node), possibleNewCalledInferred)
 
     val initMethodEdge = CallEdge(
       isig,
@@ -440,7 +433,7 @@ object ProgramAnalyzer {
 
           val typesToMerge =
             api.getAnalysesEvaluated(isig, invoke).toSeq ++
-            subs.flatMap(api.getMethodProps(_).toSeq).map(_.inferredReturn)
+            subs.flatMap(api.getAlreadySeenMethodProps(_).toSeq).map(_.inferredReturn)
 
           val merged = api.classManager.mergeTypes(typesToMerge)
 
@@ -538,7 +531,7 @@ object ProgramAnalyzer {
           val key = n.inferredSig(inferred)
           val default = api.isCalledFrom(isig, key)
           if (api.classManager.loadClass(key.method.cls).isEmpty) false
-          else if (n.isInstanceOf[SSA.InvokeSpecial]) api.getMethodProps(key).fold(default)(_.pure)
+          else if (n.isInstanceOf[SSA.InvokeSpecial]) api.getAlreadySeenMethodProps(key).fold(default)(_.pure)
           else api.resolveProps(key).fold(default)(_.pure)
         }
 

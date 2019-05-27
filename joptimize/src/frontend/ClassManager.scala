@@ -111,6 +111,7 @@ trait ClassManager {
       Some(
         superDefiner.toSeq ++
         getAllSubtypes(sig.cls).map(c => sig.copy(cls = c))
+          .filter(loadMethod(_).nonEmpty)
       )
     }
   }

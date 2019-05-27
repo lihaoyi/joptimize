@@ -203,8 +203,8 @@ case class MethodSig(cls: JType.Cls, name: String, desc: Desc, static: Boolean) 
 }
 
 case class InferredSig(method: MethodSig, inferred: Seq[IType]) {
-  assert(method.desc.args.length == inferred.length)
-  assert(!inferred.contains(JType.Bottom))
+  assert(method.desc.args.length == inferred.length, method + " " + inferred)
+  assert(!inferred.contains(JType.Bottom), inferred)
   override def toString = {
     method.toString + inferred.map(_.name).mkString("(", ", ", ")")
   }
