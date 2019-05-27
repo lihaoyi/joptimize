@@ -137,24 +137,18 @@ object Backend {
     val allKeys = analyzerRes.visitedMethods.keySet ++ analyzerRes.visitedResolved.keySet
     val items = for (isig <- allKeys if !isig.method.static) yield {
 
-//      pprint.log(isig.toString)
       val allSupertypes = classManager.getAllSupertypes(isig.method.cls)
-//      pprint.log(allSupertypes)
       val filtered = allSupertypes.filter(
-        cls => analyzerRes.visitedMethods.contains(isig.copy(method = isig.method.copy(cls = cls)))
+        cls => allKeys.contains(isig.copy(method = isig.method.copy(cls = cls)))
       )
-//      pprint.log(filtered)
       val flatMapped = filtered.flatMap(cls => classManager.getAllSubtypes(cls))
-//      pprint.log(flatMapped)
       val mapped = flatMapped.map(cls => isig.copy(method = isig.method.copy(cls = cls)))
-//      pprint.log(mapped)
       val allProps: Seq[ProgramAnalyzer.MethodResult] =
         mapped.flatMap(analyzerRes.visitedMethods.getOrElse(_, None))
 
       val (allRets, allPures, allLives) =
         allProps.map(p => (p.props.inferredReturn, p.props.pure, p.props.liveArgs)).unzip3
 
-//      pprint.log(allRets)
       Tuple2(
         isig,
         ProgramAnalyzer.Properties(

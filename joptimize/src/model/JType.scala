@@ -200,6 +200,7 @@ case class MethodSig(cls: JType.Cls, name: String, desc: Desc, static: Boolean) 
   override def toString = {
     cls.javaName + (if (static) "." else "#") + name + desc.render
   }
+  def trivialInferred() = InferredSig(this, this.desc.args)
 }
 
 case class InferredSig(method: MethodSig, inferred: Seq[IType]) {

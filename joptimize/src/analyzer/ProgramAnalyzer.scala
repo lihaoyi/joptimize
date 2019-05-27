@@ -82,9 +82,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
     calledToCallGraph(edge.called) = calledToCallGraph.getOrElse(edge.called, Set()) ++ Set(edge)
     val methodNode = classManager.loadMethod(edge.called.method).getOrElse(throw new Exception(edge.called.method.toString))
     if (methodNode.instructions.size() != 0) current.add(edge.called)
-    else if (!methodProps.contains(edge.called)) {
-      methodProps(edge.called) = ProgramAnalyzer.dummyProps(edge.called.method, optimistic = true)
-    }
+
     val newCallSet = callStackSets(edge.caller) + edge.caller
     if (callStackSets.contains(edge.called)) callStackSets(edge.called) ++= newCallSet
     else callStackSets(edge.called) = newCallSet
@@ -112,14 +110,13 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
 
     val entrypointResolved = entrypoints.map(m => InferredSig(m, m.desc.args)).map(isig => (isig, resolveProps(isig)))
     val visitedMethods = mutable.LinkedHashMap.empty[InferredSig, Option[ProgramAnalyzer.MethodResult]]
-    for((k, props) <- methodProps) {
-
+    for(k <- entrypoints.map(_.trivialInferred()) ++ calledToCallGraph.keysIterator) {
       visitedMethods(k) = analyses.get(k).map(a =>
         ProgramAnalyzer.MethodResult(
           frontend.cachedMethodBodies(k).get,
           a.evaluated,
           a.liveBlocks.toSet,
-          props,
+          methodProps(k),
           a.inferredReturns.keys.toSet ++ a.inferredThrows.keys.toSet
         )
       )
@@ -157,7 +154,6 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
       globalLog.inferredMethod(m).pprint(props.map(_.props.liveArgs))
       globalLog.inferredMethod(m).pprint(props.map(_.props.pure))
     }
-    globalLog.pprint(visitedResolved.map{case (k, v) => (k.toString, v.toString)}.toMap)
     val result = ProgramAnalyzer.ProgramResult(
       visitedMethods,
       visitedResolved.toMap ++
@@ -165,6 +161,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
       staticFieldReferencedClasses,
       callGraph.toSeq
     )
+
     (result, classManager.freeze)
   }
 
@@ -274,11 +271,12 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
     val copied = resolved.map(m => isig.copy(method = m))
 
     val resolvedProps = copied.flatMap(methodProps.get)
-    ProgramAnalyzer.Properties(
+    val res = ProgramAnalyzer.Properties(
       classManager.mergeTypes(resolvedProps.map(_.inferredReturn)),
       resolvedProps.forall(_.pure),
       resolvedProps.flatMap(_.liveArgs).toSet
     )
+    res
   }
 
   def analyzeClinits(cls: JType.Cls) = {
