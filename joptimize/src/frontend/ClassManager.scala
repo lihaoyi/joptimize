@@ -104,15 +104,38 @@ trait ClassManager {
         .find(loadMethod(_).nonEmpty)
         .map(Seq(_))
     } else {
-      val superDefiner = getAllSupertypes(sig.cls)
-        .iterator
-        .map(c => sig.copy(cls = c))
-        .find(loadMethod(_).nonEmpty)
-      Some(
-        superDefiner.toSeq ++
-        getAllSubtypes(sig.cls).map(c => sig.copy(cls = c))
-          .filter(loadMethod(_).nonEmpty)
-      )
+      val allPossibleSigs = for{
+        sub <- getAllSubtypes(sig.cls) // For every possible subclass
+        up <- { // Perform JVM method resolution JVM SPEC 5.4.3.3.
+          // method resolution attempts to locate the referenced method
+          // in C and its superclasses:
+          getLinearSuperclasses(sub).find(cls => loadMethod(sig.copy(cls = cls)).isDefined) match{
+            case Some(x) => Seq(x)
+            case None =>
+              // Otherwise, method resolution attempts to locate the referenced
+              // method in the superinterfaces of the specified class C:
+              def rec(itf: JType.Cls): Seq[JType.Cls] = {
+                if (loadMethod(sig.copy(cls = itf)).isDefined) Seq(itf)
+                else getSupertypes(itf).getOrElse(Nil).flatMap(rec)
+              }
+
+              // If the maximally-specific superinterface methods of C for the
+              // name and descriptor specified by the method reference include
+              // exactly one method that does not have its ACC_ABSTRACT flag set,
+              // then this method is chosen and method lookup succeeds.
+              //
+              // Otherwise, if any superinterface of C declares a method with the
+              // name and descriptor specified by the method reference that has
+              // neither its ACC_PRIVATE flag nor its ACC_STATIC flag set, one of
+              // these is arbitrarily chosen and method lookup succeeds.
+              rec(sub).distinct
+          }
+        }
+        possibleSig = sig.copy(cls = up)
+        if loadMethod(possibleSig).nonEmpty
+      } yield possibleSig
+
+      Some(allPossibleSigs)
     }
   }
 
