@@ -90,15 +90,14 @@ trait ClassManager {
     Seq(current0) ++ getDirectSupertypes(current0).flatMap(getAllSupertypes)
   }
 
-  def resolvePossibleSigs(sig: MethodSig): Option[Seq[MethodSig]] = {
-
+  def resolvePossibleSigs(sig: MethodSig): Seq[MethodSig] = {
     if (sig.static) {
-      if (sig.name == "<clinit>") Some(Seq(sig).filter(loadMethod(_).nonEmpty))
+      if (sig.name == "<clinit>") Seq(sig).filter(loadMethod(_).nonEmpty)
       else getLinearSuperclasses(sig.cls)
         .iterator
         .map(c => sig.copy(cls = c))
         .find(loadMethod(_).nonEmpty)
-        .map(Seq(_))
+        .toSeq
     } else {
       val allPossibleSigs = for{
         sub <- getAllSubtypes(sig.cls) // For every possible subclass
@@ -131,7 +130,7 @@ trait ClassManager {
         if loadMethod(possibleSig).nonEmpty
       } yield possibleSig
 
-      Some(allPossibleSigs)
+      allPossibleSigs
     }
   }
 

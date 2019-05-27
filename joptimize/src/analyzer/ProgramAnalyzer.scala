@@ -105,8 +105,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
     }
     val visitedResolved = for{
       isig <- calledSignatures
-      resolved <- resolveProps(isig)
-    } yield (isig, resolved)
+    } yield (isig, resolveProps(isig))
 
     val visitedMethods = mutable.LinkedHashMap.empty[InferredSig, Option[ProgramAnalyzer.MethodResult]]
     for((k, props) <- methodProps) {
@@ -267,16 +266,15 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
   def getAlreadySeenMethodProps(isig: InferredSig): Option[ProgramAnalyzer.Properties] = methodProps.get(isig)
 
   def resolveProps(isig: InferredSig) = {
-    classManager.resolvePossibleSigs(isig.method).map{ resolved =>
-      val copied = resolved.map(m => isig.copy(method = m))
+    val resolved = classManager.resolvePossibleSigs(isig.method)
+    val copied = resolved.map(m => isig.copy(method = m))
 
-      val resolvedProps = copied.flatMap(methodProps.get)
-      ProgramAnalyzer.Properties(
-        classManager.mergeTypes(resolvedProps.map(_.inferredReturn)),
-        resolvedProps.forall(_.pure),
-        resolvedProps.flatMap(_.liveArgs).toSet
-      )
-    }
+    val resolvedProps = copied.flatMap(methodProps.get)
+    ProgramAnalyzer.Properties(
+      classManager.mergeTypes(resolvedProps.map(_.inferredReturn)),
+      resolvedProps.forall(_.pure),
+      resolvedProps.flatMap(_.liveArgs).toSet
+    )
   }
 
   def analyzeClinits(cls: JType.Cls) = {
@@ -338,7 +336,7 @@ object ProgramAnalyzer {
     def callGraph: Iterable[CallEdge]
     def analyzeClinits(cls: JType.Cls): Seq[InferredSig]
     def getAlreadySeenMethodProps(isig: InferredSig): Option[Properties]
-    def resolveProps(isig: InferredSig): Option[Properties]
+    def resolveProps(isig: InferredSig): Properties
     def isCalledFrom(isig: InferredSig, calledSig: InferredSig): Boolean
     def getAnalysesEvaluated(isig: InferredSig, invoke: SSA.Invoke): Option[IType]
   }
@@ -356,7 +354,7 @@ object ProgramAnalyzer {
       (caller, node, inferred) <- callNodes
       if node.isInstanceOf[SSA.InvokeVirtual]
       if superClasses.contains(node.cls)
-      possibleNewCalled <- api.classManager.resolvePossibleSigs(node.sig).get
+      possibleNewCalled <- api.classManager.resolvePossibleSigs(node.sig)
       possibleNewCalledInferred = InferredSig(possibleNewCalled, inferred)
       if api.getAlreadySeenMethodProps(possibleNewCalledInferred).isEmpty
     } yield CallEdge(caller, Some(node), possibleNewCalledInferred)
@@ -409,43 +407,37 @@ object ProgramAnalyzer {
         edges = Seq(CallEdge(isig, Some(invoke), calledSig2)),
         calledSignatures = Seq(calledSig2)
       )
-    } else api.classManager.resolvePossibleSigs(calledSig.method) match {
-      case None =>
+    } else {
+      val subSigs0 = api.classManager.resolvePossibleSigs(calledSig.method)
+      val loaded = subSigs0.map(api.classManager.loadMethod)
+      if (loaded.forall(_.isEmpty)){
         StepResult(
-          edges = Seq(CallEdge(isig, Some(invoke), calledSig)),
+          evaluated = Seq((isig, invoke, calledSig.method.desc.ret)),
+          calledSignatures = Seq(calledSig)
+        )
+      }else {
+        val subSigs = subSigs0.filter { subSig => api.classManager.loadMethod(subSig).nonEmpty}
+
+        assert(subSigs.nonEmpty)
+
+        val clinits = subSigs.flatMap(subSig => api.analyzeClinits(subSig.cls))
+        val subs = subSigs.map(subSig => InferredSig(subSig, calledSig.inferred))
+
+        val typesToMerge =
+          api.getAnalysesEvaluated(isig, invoke).toSeq ++
+          subs.flatMap(api.getAlreadySeenMethodProps(_).toSeq).map(_.inferredReturn)
+
+        val merged = api.classManager.mergeTypes(typesToMerge)
+
+        StepResult(
+          edges =
+            subs.map(ret => CallEdge(isig, Some(invoke), ret)) ++
+            clinits.map(ret => CallEdge(isig, None, ret)),
+          evaluated = Seq((isig, invoke, merged)),
           calledSignatures = Seq(calledSig)
         )
 
-      case Some(subSigs0) =>
-        val loaded = subSigs0.map(api.classManager.loadMethod)
-        if (loaded.forall(_.isEmpty)){
-          StepResult(
-            evaluated = Seq((isig, invoke, calledSig.method.desc.ret)),
-            calledSignatures = Seq(calledSig)
-          )
-        }else {
-          val subSigs = subSigs0.filter { subSig => api.classManager.loadMethod(subSig).nonEmpty}
-
-          assert(subSigs.nonEmpty)
-
-          val clinits = subSigs.flatMap(subSig => api.analyzeClinits(subSig.cls))
-          val subs = subSigs.map(subSig => InferredSig(subSig, calledSig.inferred))
-
-          val typesToMerge =
-            api.getAnalysesEvaluated(isig, invoke).toSeq ++
-            subs.flatMap(api.getAlreadySeenMethodProps(_).toSeq).map(_.inferredReturn)
-
-          val merged = api.classManager.mergeTypes(typesToMerge)
-
-          StepResult(
-            edges =
-              subs.map(ret => CallEdge(isig, Some(invoke), ret)) ++
-              clinits.map(ret => CallEdge(isig, None, ret)),
-            evaluated = Seq((isig, invoke, merged)),
-            calledSignatures = Seq(calledSig)
-          )
-
-        }
+      }
     }
   }
 
@@ -532,7 +524,7 @@ object ProgramAnalyzer {
           val default = api.isCalledFrom(isig, key)
           if (api.classManager.loadClass(key.method.cls).isEmpty) false
           else if (n.isInstanceOf[SSA.InvokeSpecial]) api.getAlreadySeenMethodProps(key).fold(default)(_.pure)
-          else api.resolveProps(key).fold(default)(_.pure)
+          else api.resolveProps(key).pure
         }
 
       case p: SSA.Phi => true

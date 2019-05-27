@@ -77,7 +77,7 @@ object Backend {
     def resolveCallsiteProps(isig: InferredSig, invokeSpecial: Boolean) = {
       if (classManager.loadClass(isig.method.cls).isEmpty)
         ProgramAnalyzer.dummyProps(isig.method, optimistic = false)
-      else if (classManager.resolvePossibleSigs(isig.method).exists(_.isEmpty)) {
+      else if (classManager.resolvePossibleSigs(isig.method).isEmpty) {
         ProgramAnalyzer.dummyProps(isig.method, optimistic = false)
       } else if (invokeSpecial) analyzerRes.visitedMethods(isig).get.props
       else resolveDefsiteProps(isig)

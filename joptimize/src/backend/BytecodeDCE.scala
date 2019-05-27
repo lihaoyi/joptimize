@@ -107,7 +107,7 @@ class BytecodeDCE(entrypoints: scala.Seq[MethodSig],
       virtualCallSignatures(sig.cls) = sig :: virtualCallSignatures.getOrElse(sig.cls, Nil)
     }
 
-    val possibleSigs = classManager.resolvePossibleSigs(sig).getOrElse(Nil)
+    val possibleSigs = classManager.resolvePossibleSigs(sig)
 
     possibleSigs.foreach(sig => seenClasses.add(sig.cls))
 
