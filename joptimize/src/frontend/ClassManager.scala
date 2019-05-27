@@ -23,8 +23,8 @@ object ClassManager {
     loadClassCache: mutable.LinkedHashMap[JType.Cls, Option[ClassNode]],
     loadMethodCache: mutable.LinkedHashMap[MethodSig, Option[MethodNode]]
   ) extends ClassManager {
-    def getSubtypes(cls: JType.Cls) = subtypeMap.get(cls)
-    def getSupertypes(cls: JType.Cls) = supertypeMap.get(cls)
+    protected def getDirectSubtypes(cls: JType.Cls) = subtypeMap.getOrElse(cls, Nil)
+    protected def getDirectSupertypes(cls: JType.Cls) = supertypeMap.getOrElse(cls, Nil)
     def loadClass(cls: JType.Cls) = loadClassCache.getOrElse(cls, None)
     def loadMethod(sig: MethodSig) = loadMethodCache.getOrElse(sig, None)
     def allClasses = loadClassCache.valuesIterator.flatten
@@ -38,8 +38,8 @@ object ClassManager {
     private val loadClassCache = mutable.LinkedHashMap.empty[JType.Cls, Option[ClassNode]]
     private val loadMethodCache = mutable.LinkedHashMap.empty[MethodSig, Option[MethodNode]]
 
-    def getSubtypes(cls: JType.Cls) = subtypeMap.get(cls)
-    def getSupertypes(cls: JType.Cls) = supertypeMap.get(cls)
+    protected def getDirectSubtypes(cls: JType.Cls) = subtypeMap.getOrElse(cls, Nil)
+    protected def getDirectSupertypes(cls: JType.Cls) = supertypeMap.getOrElse(cls, Nil)
     def loadClass(cls: JType.Cls): Option[ClassNode] = loadClassCache.getOrElseUpdate(
       cls,
       getClassFile(cls.name).map { cn =>
@@ -71,8 +71,8 @@ object ClassManager {
 }
 trait ClassManager {
 
-  def getSubtypes(cls: JType.Cls): Option[List[JType.Cls]]
-  def getSupertypes(cls: JType.Cls): Option[List[JType.Cls]]
+  protected def getDirectSubtypes(cls: JType.Cls): List[JType.Cls]
+  protected def getDirectSupertypes(cls: JType.Cls): List[JType.Cls]
   def loadClass(cls: JType.Cls): Option[ClassNode]
   def loadMethod(sig: MethodSig): Option[MethodNode]
   def getLinearSuperclasses(cls: JType.Cls): Seq[JType.Cls] = {
@@ -87,17 +87,13 @@ trait ClassManager {
 
   def getAllSupertypes(current0: JType.Cls): Seq[JType.Cls] = {
     loadClass(current0)
-    val supers = getSupertypes(current0) match {
-      case None => Nil
-      case Some(sup) => sup.flatMap(getAllSupertypes)
-    }
-    Seq(current0) ++ supers
+    Seq(current0) ++ getDirectSupertypes(current0).flatMap(getAllSupertypes)
   }
 
   def resolvePossibleSigs(sig: MethodSig): Option[Seq[MethodSig]] = {
 
     if (sig.static) {
-      if (sig.name == "<clinit>") Some(Seq(sig))
+      if (sig.name == "<clinit>") Some(Seq(sig).filter(loadMethod(_).nonEmpty))
       else getLinearSuperclasses(sig.cls)
         .iterator
         .map(c => sig.copy(cls = c))
@@ -116,7 +112,7 @@ trait ClassManager {
               // method in the superinterfaces of the specified class C:
               def rec(itf: JType.Cls): Seq[JType.Cls] = {
                 if (loadMethod(sig.copy(cls = itf)).isDefined) Seq(itf)
-                else getSupertypes(itf).getOrElse(Nil).flatMap(rec)
+                else getDirectSupertypes(itf).flatMap(rec)
               }
 
               // If the maximally-specific superinterface methods of C for the
@@ -140,7 +136,8 @@ trait ClassManager {
   }
 
   def getAllSubtypes(cls: JType.Cls): Seq[JType.Cls] = {
-    Seq(cls) ++ getSubtypes(cls).getOrElse(Nil).flatMap(getAllSubtypes)
+    loadClass(cls)
+    Seq(cls) ++ getDirectSubtypes(cls).flatMap(getAllSubtypes)
   }
 
   def mergeClasses(classes: Seq[JType.Cls]) = {
