@@ -33,11 +33,6 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
   val methodProps = mutable.LinkedHashMap.empty[InferredSig, ProgramAnalyzer.Properties]
 
   /**
-    * The set of all called method signatures.
-    */
-  val calledSignatures = mutable.LinkedHashSet.empty[InferredSig]
-
-  /**
     * Aggregate the list of classes who have static fields loaded separately from the
     * method analysis, since this is the one way you can reference a class and force
     * it to be loaded without calling a method or constructor
@@ -58,6 +53,7 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
   // Secondary indices for quick lookup into the append-only callgraph
   val clsToCallGraph = mutable.LinkedHashMap.empty[JType.Cls, Set[ProgramAnalyzer.CallEdge]]
   val calledToCallGraph = mutable.LinkedHashMap.empty[InferredSig, Set[ProgramAnalyzer.CallEdge]]
+  val isigToCallGraph = mutable.LinkedHashMap.empty[InferredSig, Set[ProgramAnalyzer.CallEdge]]
 
   /**
     * Work in progress optimistic analyses of the various methods in play. These analyses
@@ -80,6 +76,8 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
     callGraph.add(edge)
     for(n <- edge.node) {
       clsToCallGraph(n.sig.cls) = clsToCallGraph.getOrElse(n.sig.cls, Set()) ++ Set(edge)
+      val isig = edge.called.copy(method = n.sig)
+      isigToCallGraph(isig) = isigToCallGraph.getOrElse(isig, Set()) ++ Set(edge)
     }
     calledToCallGraph(edge.called) = calledToCallGraph.getOrElse(edge.called, Set()) ++ Set(edge)
     val methodNode = classManager.loadMethod(edge.called.method).getOrElse(throw new Exception(edge.called.method.toString))
@@ -97,7 +95,6 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
       val isig = InferredSig(ep, ep.desc.args)
       current.add(isig)
       callStackSets(isig) = Set()
-      calledSignatures.add(isig)
     }
 
     while(current.nonEmpty){
@@ -108,13 +105,12 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
       assert(v.evaluateWorkList.isEmpty, (k, v.evaluateWorkList))
       assert(v.invalidateWorkList.isEmpty, (k, v.invalidateWorkList))
     }
-    for(m <- methodProps.keysIterator){
-      calledSignatures.add(m)
-    }
-    val visitedResolved = for{
-      isig <- calledSignatures
-    } yield (isig, resolveProps(isig))
 
+    val visitedResolved =
+      for(isig <- isigToCallGraph.keys ++ methodProps.keysIterator)
+      yield (isig, resolveProps(isig))
+
+    val entrypointResolved = entrypoints.map(m => InferredSig(m, m.desc.args)).map(isig => (isig, resolveProps(isig)))
     val visitedMethods = mutable.LinkedHashMap.empty[InferredSig, Option[ProgramAnalyzer.MethodResult]]
     for((k, props) <- methodProps) {
 
@@ -164,7 +160,8 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
     globalLog.pprint(visitedResolved.map{case (k, v) => (k.toString, v.toString)}.toMap)
     val result = ProgramAnalyzer.ProgramResult(
       visitedMethods,
-      visitedResolved.toMap,
+      visitedResolved.toMap ++
+      entrypointResolved,
       staticFieldReferencedClasses,
       callGraph.toSeq
     )
@@ -249,7 +246,6 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
       for(result <- results){
         result.edges.foreach(addCallEdge)
         result.staticFieldReferencedClasses.foreach(staticFieldReferencedClasses.add)
-        result.calledSignatures.foreach(calledSignatures.add)
         for((sig, invoke, tpe) <- result.evaluated) {
           val typesToMerge = Seq(tpe) ++ analyses(sig).evaluated.get(invoke)
           val merged = classManager.mergeTypes(typesToMerge)
@@ -318,7 +314,6 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
 object ProgramAnalyzer {
   case class StepResult(edges: Seq[CallEdge] = Nil,
                         staticFieldReferencedClasses: Seq[JType.Cls] = Nil,
-                        calledSignatures: Seq[InferredSig] = Nil,
                         evaluated: Seq[(InferredSig, SSA.Val, IType)] = Nil,
                         setProps: Seq[(InferredSig, Properties)] = Nil)
   case class CallEdge(caller: InferredSig, node: Option[SSA.Invoke], called: InferredSig){
@@ -395,7 +390,6 @@ object ProgramAnalyzer {
     if (api.isCalledFrom(isig, calledSig)) {
       StepResult(
         edges = Seq(CallEdge(isig, Some(invoke), calledSig)),
-        calledSignatures = Seq(calledSig),
         evaluated = Seq((isig, invoke, JType.Bottom))
       )
     } else if (api.classManager.loadClass(calledSig.method.cls).isEmpty) {
@@ -407,7 +401,6 @@ object ProgramAnalyzer {
 
       StepResult(
         edges = Seq(CallEdge(isig, Some(invoke), calledSig2)),
-        calledSignatures = Seq(calledSig2)
       )
     } else {
       val subSigs0 = api.classManager.resolvePossibleSigs(calledSig.method)
@@ -415,7 +408,6 @@ object ProgramAnalyzer {
       if (loaded.forall(_.isEmpty)){
         StepResult(
           evaluated = Seq((isig, invoke, calledSig.method.desc.ret)),
-          calledSignatures = Seq(calledSig)
         )
       }else {
         val subSigs = subSigs0.filter { subSig => api.classManager.loadMethod(subSig).nonEmpty}
@@ -436,7 +428,6 @@ object ProgramAnalyzer {
             subs.map(ret => CallEdge(isig, Some(invoke), ret)) ++
             clinits.map(ret => CallEdge(isig, None, ret)),
           evaluated = Seq((isig, invoke, merged)),
-          calledSignatures = Seq(calledSig)
         )
 
       }
