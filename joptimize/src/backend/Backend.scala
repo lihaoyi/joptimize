@@ -7,7 +7,7 @@ import joptimize.frontend.{ClassManager, Frontend}
 import joptimize.graph.HavlakLoopTree
 import joptimize.model._
 import org.objectweb.asm.Opcodes
-import org.objectweb.asm.tree.{ClassNode, InsnList, MethodNode}
+import org.objectweb.asm.tree.{ClassNode, InsnList, InsnNode, MethodInsnNode, MethodNode, TypeInsnNode, VarInsnNode}
 
 import collection.JavaConverters._
 import scala.collection.mutable
@@ -99,18 +99,72 @@ object Backend {
   ): Seq[(ClassNode, MethodNode)] = {
 
     val forwardersNeeded = for {
-      (cls, descs) <- clsToDescs
+      (cls, descs) <- clsToDescs.toSeq
       directSupers = classManager.getDirectSupertypes(cls)
       (name, desc, inferred) <- descs
       if name != "<init>"
       currentProp = allProps(InferredSig(MethodSig(cls, name, desc, false), inferred))
+      if currentProp.inferredReturn != JType.Bottom
       sup <- directSupers
       superProp <- allProps.get(InferredSig(MethodSig(sup, name, desc, false), inferred))
-      if superProp != currentProp
-    } yield (cls, sup, name, desc, inferred, superProp, currentProp)
+      if superProp.liveArgs != currentProp.liveArgs || CType.toJType(superProp.inferredReturn) != CType.toJType(currentProp.inferredReturn)
+    } yield {
+      val (widerMangledName, widerMangledDesc) = Util.mangle(
+        InferredSig(MethodSig(sup, name, desc, false), inferred),
+        superProp.inferredReturn,
+        superProp.liveArgs
+      )
+      val (narrowMangledName, narrowMangledDesc) = Util.mangle(
+        InferredSig(MethodSig(cls, name, desc, false), inferred),
+        currentProp.inferredReturn,
+        currentProp.liveArgs
+      )
+      val newNode = new MethodNode(
+        Opcodes.ACC_PUBLIC,
+        widerMangledName,
+        widerMangledDesc.toString,
+        null,
+        Array()
+      )
 
-    pprint.log(forwardersNeeded)
-    Nil
+      // load `this`
+      newNode.instructions.add(new VarInsnNode(Opcodes.ALOAD, 0))
+
+      var i = 1
+//      pprint.log(superProp.liveArgs)
+//      pprint.log(currentProp.liveArgs)
+      for (n <- superProp.liveArgs.toSeq.filter(_ != 0).sorted){
+//        pprint.log(i)
+        if (currentProp.liveArgs(n)) {
+          newNode.instructions.add(new VarInsnNode(CodeGenMethod.loadOp(desc.args(n - 1)), i))
+        }
+        i += desc.args(n - 1).size
+      }
+
+      newNode
+        .instructions
+        .add(
+          new MethodInsnNode(
+            Opcodes.INVOKEVIRTUAL,
+            cls.name,
+            narrowMangledName,
+            narrowMangledDesc.toString,
+            false
+          )
+        )
+
+      newNode.instructions.add(
+        desc.ret match{
+          case JType.Prim.V => new InsnNode(Opcodes.RETURN)
+          case tpe => new InsnNode(CodeGenMethod.returnOp(tpe))
+        }
+
+      )
+      classManager.loadClass(cls).get -> newNode
+    }
+
+    forwardersNeeded
+//    Nil
   }
 
   def generateNewMethods(

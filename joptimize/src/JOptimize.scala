@@ -36,8 +36,8 @@ object JOptimize{
       ignore = _.startsWith("java/"),
       log = log
     ).apply()
-
     serialize(log, remaining)
+//    serialize(log, outClasses)
   }
 
   def serialize(log: Logger.Global, outClasses: Seq[ClassNode]) = log.block {

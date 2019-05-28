@@ -66,7 +66,7 @@ class CodeGenMethod(
             .map { phi =>
               val value = phi.incoming.collect { case (k, v) if k == block => v }
               val flatted = value.flatMap(rec(_, fromVal = true, block))
-              (flatted, new VarInsnNode(CodeGenMethod.saveOp(phi), savedLocalNumbers(phi)))
+              (flatted, new VarInsnNode(CodeGenMethod.saveOp(phi.jtype), savedLocalNumbers(phi)))
             }
             .unzip
 
@@ -115,7 +115,7 @@ class CodeGenMethod(
         val props = allProps(n)
         if (props.valUses == 0 && !props.stateUse && props.otherBlockUse) {
           recVal(n, block) ++
-          Seq(new VarInsnNode(CodeGenMethod.saveOp(n), savedLocalNumbers(n)))
+          Seq(new VarInsnNode(CodeGenMethod.saveOp(n.jtype), savedLocalNumbers(n)))
         } else Nil
     }.flatten
   }
@@ -142,7 +142,7 @@ class CodeGenMethod(
         )
         jump ++ goto
 
-      case n: SSA.ReturnVal => Seq(new InsnNode(CodeGenMethod.returnOp(n.src)))
+      case n: SSA.ReturnVal => Seq(new InsnNode(CodeGenMethod.returnOp(n.src.jtype)))
 
       case n: SSA.Return => Seq(new InsnNode(RETURN))
       case n: SSA.AThrow => Seq(new InsnNode(ATHROW))
@@ -166,7 +166,7 @@ class CodeGenMethod(
       case n: SSA.Val =>
         if (n.upstream.isEmpty && !n.isInstanceOf[SSA.Arg]) recTrivialVal(n)
         else if (seen(n)) {
-          if (fromVal) Seq(new VarInsnNode(CodeGenMethod.loadOp(n), savedLocalNumbers(n)))
+          if (fromVal) Seq(new VarInsnNode(CodeGenMethod.loadOp(n.jtype), savedLocalNumbers(n)))
           else Nil
         } else {
           val props = allProps(n)
@@ -183,7 +183,7 @@ class CodeGenMethod(
 
             case (0, true, true, false) =>
               recVal(n, currentBlock) ++
-              Seq(new VarInsnNode(CodeGenMethod.saveOp(n), savedLocalNumbers(n)))
+              Seq(new VarInsnNode(CodeGenMethod.saveOp(n.jtype), savedLocalNumbers(n)))
 
             case (1, _, false, true) => recVal(n, currentBlock)
 
@@ -193,7 +193,7 @@ class CodeGenMethod(
               recVal(n, currentBlock) ++
               Seq(
                 new InsnNode(if (n.getSize == 1) DUP else DUP2),
-                new VarInsnNode(CodeGenMethod.saveOp(n), savedLocalNumbers(n))
+                new VarInsnNode(CodeGenMethod.saveOp(n.jtype), savedLocalNumbers(n))
               )
 
             case _ => ???
@@ -436,8 +436,8 @@ object CodeGenMethod {
     }
   }
 
-  def loadOp(ssa: SSA.Val) = {
-    ssa.jtype match {
+  def loadOp(jtype: JType) = {
+    jtype match {
       case JType.Prim.I | JType.Prim.S | JType.Prim.Z | JType.Prim.B | JType.Prim.C => ILOAD
       case JType.Prim.J => LLOAD
       case JType.Prim.F => FLOAD
@@ -446,8 +446,8 @@ object CodeGenMethod {
     }
   }
 
-  def saveOp(n: SSA.Val) = {
-    n.jtype match {
+  def saveOp(jtype: JType) = {
+    jtype match {
       case JType.Prim.I | JType.Prim.S | JType.Prim.Z | JType.Prim.B | JType.Prim.C => ISTORE
       case JType.Prim.J => LSTORE
       case JType.Prim.F => FSTORE
@@ -456,8 +456,8 @@ object CodeGenMethod {
     }
   }
 
-  def returnOp(a: SSA.Val) = {
-    a.jtype match {
+  def returnOp(jtype: JType) = {
+    jtype match {
       case JType.Prim.I | JType.Prim.S | JType.Prim.Z | JType.Prim.B | JType.Prim.C => IRETURN
       case JType.Prim.J => LRETURN
       case JType.Prim.F => FRETURN

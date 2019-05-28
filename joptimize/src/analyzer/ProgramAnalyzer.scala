@@ -124,29 +124,29 @@ class ProgramAnalyzer(entrypoints: Seq[MethodSig],
 
     classManager.loadClass("scala/runtime/Nothing$")
     classManager.loadClass("scala/runtime/Null$")
-    globalLog.graph("PROGRAM CALL GRAPH") {
-      val allNodes = callGraph.flatMap(edge => Seq(edge.called, edge.caller)).toArray
-      val allNodeIndices = allNodes.zipWithIndex.toMap
-      LogMessage.Graph(
-        allNodes.map(n =>
-          LogMessage.Graph.Node(
-            n.method.toString + "\n" +
-            n.inferred.map(_.name).mkString("(", ", ", ")") + methodProps(n).inferredReturn,
-            "cyan",
-            live = true
-          )
-        ),
-        callGraph.toSeq.map(edge =>
-          LogMessage.Graph.Edge(
-            allNodeIndices(edge.caller),
-            allNodeIndices(edge.called),
-            forwardArrow = true,
-            dashed = false,
-            thick = false
-          )
-        )
-      )
-    }
+//    globalLog.graph("PROGRAM CALL GRAPH") {
+//      val allNodes = callGraph.flatMap(edge => Seq(edge.called, edge.caller)).toArray
+//      val allNodeIndices = allNodes.zipWithIndex.toMap
+//      LogMessage.Graph(
+//        allNodes.map(n =>
+//          LogMessage.Graph.Node(
+//            n.method.toString + "\n" +
+//            n.inferred.map(_.name).mkString("(", ", ", ")") + methodProps(n).inferredReturn,
+//            "cyan",
+//            live = true
+//          )
+//        ),
+//        callGraph.toSeq.map(edge =>
+//          LogMessage.Graph.Edge(
+//            allNodeIndices(edge.caller),
+//            allNodeIndices(edge.called),
+//            forwardArrow = true,
+//            dashed = false,
+//            thick = false
+//          )
+//        )
+//      )
+//    }
     globalLog.pprint(visitedMethods.map{case (k, v) => (k.toString, v.map(_.props))})
     for((m, props) <- visitedMethods){
       globalLog.inferredMethod(m).pprint(analyses.get(m).map(_.evaluated))
