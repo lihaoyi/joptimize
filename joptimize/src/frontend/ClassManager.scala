@@ -24,7 +24,7 @@ object ClassManager {
     loadMethodCache: mutable.LinkedHashMap[MethodSig, Option[MethodNode]]
   ) extends ClassManager {
     protected def getDirectSubtypes(cls: JType.Cls) = subtypeMap.getOrElse(cls, Nil)
-    protected def getDirectSupertypes(cls: JType.Cls) = supertypeMap.getOrElse(cls, Nil)
+    def getDirectSupertypes(cls: JType.Cls) = supertypeMap.getOrElse(cls, Nil)
     def loadClass(cls: JType.Cls) = loadClassCache.getOrElse(cls, None)
     def loadMethod(sig: MethodSig) = loadMethodCache.getOrElse(sig, None)
     def allClasses = loadClassCache.valuesIterator.flatten
@@ -39,7 +39,7 @@ object ClassManager {
     private val loadMethodCache = mutable.LinkedHashMap.empty[MethodSig, Option[MethodNode]]
 
     protected def getDirectSubtypes(cls: JType.Cls) = subtypeMap.getOrElse(cls, Nil)
-    protected def getDirectSupertypes(cls: JType.Cls) = supertypeMap.getOrElse(cls, Nil)
+    def getDirectSupertypes(cls: JType.Cls) = supertypeMap.getOrElse(cls, Nil)
     def loadClass(cls: JType.Cls): Option[ClassNode] = loadClassCache.getOrElseUpdate(
       cls,
       getClassFile(cls.name).map { cn =>
@@ -72,7 +72,7 @@ object ClassManager {
 trait ClassManager {
 
   protected def getDirectSubtypes(cls: JType.Cls): List[JType.Cls]
-  protected def getDirectSupertypes(cls: JType.Cls): List[JType.Cls]
+  def getDirectSupertypes(cls: JType.Cls): List[JType.Cls]
   def loadClass(cls: JType.Cls): Option[ClassNode]
   def loadMethod(sig: MethodSig): Option[MethodNode]
   def getLinearSuperclasses(cls: JType.Cls): Seq[JType.Cls] = {

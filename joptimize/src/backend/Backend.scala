@@ -10,6 +10,7 @@ import org.objectweb.asm.Opcodes
 import org.objectweb.asm.tree.{ClassNode, InsnList, MethodNode}
 
 import collection.JavaConverters._
+import scala.collection.mutable
 
 object Backend {
   def apply(
@@ -19,20 +20,15 @@ object Backend {
     log: Logger.Global
   ): Seq[ClassNode] = log.block {
 
-    val highestDefinerProps = computeHighestDefinerProps(
-      analyzerRes,
-      log,
-      classManager
-    )
-
+    val (allProps, clsToDescs) = computeAllProps(analyzerRes, classManager)
     val newMethods = generateNewMethods(
       analyzerRes,
       entrypoints,
       log,
-      highestDefinerProps,
-      classManager
+      classManager,
+      allProps
     )
-
+    val forwarders = generateForwarders(analyzerRes, classManager, allProps, clsToDescs)
     for (cn <- classManager.allClasses) cn.methods.clear()
 
     val visitedInterfaces =
@@ -49,7 +45,7 @@ object Backend {
       .toMap
     val grouped: Map[ClassNode, Seq[MethodNode]] =
       lhs ++
-      newMethods.groupBy(_._1).mapValues(_.toSeq.map(_._2))
+      (newMethods ++ forwarders).groupBy(_._1).mapValues(_.toSeq.map(_._2))
 
     for ((cn, mns) <- grouped) yield {
       log.pprint(cn.name)
@@ -60,18 +56,75 @@ object Backend {
     grouped.keys.toSeq
   }
 
+  def computeAllProps(
+    analyzerRes: ProgramAnalyzer.ProgramResult,
+    classManager: ClassManager.Frozen
+  ) = {
+    val clsToVisitedMethods = analyzerRes.visitedMethods.groupBy(_._1.method.cls)
+
+    val allClasses = clsToVisitedMethods.keys
+
+    val clsToDescs = allClasses.map { cls =>
+      cls -> classManager
+        .getAllSupertypes(cls)
+        .to[mutable.LinkedHashSet]
+        .flatMap(x => clsToVisitedMethods.getOrElse(x, Nil))
+        .filter(!_._1.method.static)
+        .map(x => (x._1.method.name, x._1.method.desc, x._1.inferred))
+
+    }.toMap
+
+    val allPropsList = for {
+      (cls, descs) <- clsToDescs.toList
+      (name, desc, inferred) <- descs
+    } yield {
+      val methodProps = classManager
+        .resolvePossibleSigs(MethodSig(cls, name, desc, false))
+        .flatMap(m => analyzerRes.visitedMethods.getOrElse(InferredSig(m, inferred), None))
+        .map(_.props)
+
+      InferredSig(MethodSig(cls, name, desc, false), inferred) -> ProgramAnalyzer.Properties(
+        classManager.mergeTypes(methodProps.map(_.inferredReturn)),
+        methodProps.forall(_.pure),
+        methodProps.flatMap(_.liveArgs).toSet
+      )
+    }
+    (allPropsList.toMap, clsToDescs)
+  }
+  def generateForwarders(
+    analyzerRes: ProgramAnalyzer.ProgramResult,
+    classManager: ClassManager.Frozen,
+    allProps: Map[InferredSig, ProgramAnalyzer.Properties],
+    clsToDescs: Map[JType.Cls, mutable.LinkedHashSet[(String, Desc, scala.Seq[IType])]]
+  ): Seq[(ClassNode, MethodNode)] = {
+
+    val forwardersNeeded = for {
+      (cls, descs) <- clsToDescs
+      directSupers = classManager.getDirectSupertypes(cls)
+      (name, desc, inferred) <- descs
+      if name != "<init>"
+      currentProp = allProps(InferredSig(MethodSig(cls, name, desc, false), inferred))
+      sup <- directSupers
+      superProp <- allProps.get(InferredSig(MethodSig(sup, name, desc, false), inferred))
+      if superProp != currentProp
+    } yield (cls, sup, name, desc, inferred, superProp, currentProp)
+
+    pprint.log(forwardersNeeded)
+    Nil
+  }
+
   def generateNewMethods(
     analyzerRes: ProgramAnalyzer.ProgramResult,
     entrypoints: Seq[MethodSig],
     log: Logger.Global,
-    highestDefinerProps: collection.Map[InferredSig, ProgramAnalyzer.Properties],
-    classManager: ClassManager.Frozen
+    classManager: ClassManager.Frozen,
+    allProps: Map[InferredSig, ProgramAnalyzer.Properties]
   ) = log.block {
 
     def resolveDefsiteProps(isig: InferredSig) = {
       if (isig.method.static) analyzerRes.visitedResolved(isig)
       else if (isig.method.name == "<init>") analyzerRes.visitedMethods(isig).get.props
-      else highestDefinerProps(isig)
+      else allProps(isig)
     }
 
     def resolveCallsiteProps(isig: InferredSig, invokeSpecial: Boolean) = {
@@ -126,39 +179,6 @@ object Backend {
 
       classManager.loadClass(isig.method.cls).get -> newNode
     }
-  }
-
-  def computeHighestDefinerProps(
-    analyzerRes: ProgramAnalyzer.ProgramResult,
-    log: Logger.Global,
-    classManager: ClassManager.Frozen
-  ) = log.block {
-
-    val allKeys = analyzerRes.visitedMethods.keySet ++ analyzerRes.visitedResolved.keySet
-    val items = for (isig <- allKeys if !isig.method.static) yield {
-
-      val allSupertypes = classManager.getAllSupertypes(isig.method.cls)
-      val filtered = allSupertypes.filter(
-        cls => allKeys.contains(isig.copy(method = isig.method.copy(cls = cls)))
-      )
-      val flatMapped = filtered.flatMap(cls => classManager.getAllSubtypes(cls))
-      val mapped = flatMapped.map(cls => isig.copy(method = isig.method.copy(cls = cls)))
-      val allProps: Seq[ProgramAnalyzer.MethodResult] =
-        mapped.flatMap(analyzerRes.visitedMethods.getOrElse(_, None))
-
-      val (allRets, allPures, allLives) =
-        allProps.map(p => (p.props.inferredReturn, p.props.pure, p.props.liveArgs)).unzip3
-
-      Tuple2(
-        isig,
-        ProgramAnalyzer.Properties(
-          classManager.mergeTypes(allRets),
-          allPures.forall(identity),
-          allLives.flatten.toSet
-        )
-      )
-    }
-    items.toMap
   }
 
   def processMethodBody(
