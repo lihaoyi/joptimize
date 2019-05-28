@@ -415,7 +415,7 @@ object MainTests extends TestSuite {
       'ArrayChaining - {
 
 
-
+        'manualIterator4 - annotatedTest
 
       }
     }
