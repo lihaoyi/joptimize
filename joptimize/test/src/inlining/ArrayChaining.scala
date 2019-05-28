@@ -321,12 +321,35 @@ object ArrayChaining {
     iter.map(_ + 1).next()
   }
 
+//  @test.Test(inputs = Array(1, 2, 3, 4))
+//  def manualIterator2(n: Int): Int = {
+//    val box = Array(0)
+//    val iter = new Elements(Array(0, 1, 2, 3))
+//    iter.map(_ + n).foreach(x => box(0) += x)
+//    box(0)
+//  }
+
+
+  abstract class FooX{
+    def apply(): Top
+  }
+  abstract class BarX extends FooX{
+    def apply(): Left
+  }
+  abstract class QuxX extends FooX{
+    def apply(): Right
+  }
+  class BarX2 extends BarX{
+    def apply() = new Left()
+  }
+  class QuxX2 extends QuxX{
+    def apply() = new Right()
+  }
   @test.Test(inputs = Array(1, 2, 3, 4))
   def manualIterator2(n: Int): Int = {
-    val box = Array(0)
-    val iter = new Elements(Array(0, 1, 2, 3))
-    iter.map(_ + n).foreach(x => box(0) += x)
-    box(0)
+    val bar: FooX = new BarX2()
+    val qux = new QuxX2()
+    bar.apply().num
   }
 
 

@@ -116,9 +116,11 @@ object Backend {
       if currentProp.inferredReturn != JType.Bottom
       sup <- directSupers
       superProp <- allProps.get(InferredSig(MethodSig(sup, name, desc, false), inferred))
-      if superProp.liveArgs != currentProp.liveArgs || CType.toJType(superProp.inferredReturn) != CType
-        .toJType(currentProp.inferredReturn)
+      liveArgsDiffer = superProp.liveArgs != currentProp.liveArgs
+      returnTypesDiffer = CType.toJType(superProp.inferredReturn) != CType.toJType(currentProp.inferredReturn)
+      if liveArgsDiffer || returnTypesDiffer
     } yield {
+      pprint.log((cls, sup, name, desc, liveArgsDiffer, returnTypesDiffer))
       val (widerMangledName, widerMangledDesc) = Util.mangle(
         InferredSig(MethodSig(sup, name, desc, false), inferred),
         superProp.inferredReturn,
