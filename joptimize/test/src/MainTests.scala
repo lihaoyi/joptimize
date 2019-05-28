@@ -337,6 +337,53 @@ object MainTests extends TestSuite {
       }
 
     }
+
+    'scalalib - {
+      'Small - {
+        'equals - annotatedTest
+        'arraycopy - annotatedTest
+        'arraysCopyOf - annotatedTest
+        'createArrayInStaticInitializer1 - annotatedTest
+        'createArrayInStaticInitializer2 - annotatedTest
+        'createArrayInStaticInitializer3 - annotatedTest
+        'createNestedArrayInStaticInitializer - annotatedTest
+        'loopAtStartOfMethod - annotatedTest
+      }
+
+      'Throwing - {
+        'tryCatch - annotatedTest
+        'lazyVal - annotatedTest
+        'throwingInBranch1 - annotatedTest
+        'throwingInBranch2 - annotatedTest
+      }
+      'Methods - {
+        'multipleSubtypesOfGeneric - annotatedTest
+        'multipleTypesOfGeneric - annotatedTest
+        'superDefineSubImplement - annotatedTest
+        'narrowingAbstractMethod - annotatedTest
+        'inferredHighestDefinerReturnDiffer - annotatedTest
+        'inheritFromOutsideHierarchy - annotatedTest
+      }
+      'FauxLibrary - {
+
+        'testManifestFactory - annotatedTest
+
+        'simpleLinkedListForeach - annotatedTest
+        'simpleArraySeqForeach - annotatedTest
+        'minimizedIterator - annotatedTest
+        'staticSpecialInterfaceMethods - annotatedTest
+
+        'manualIterator - annotatedTest
+        'manualIterator2 - annotatedTest
+
+        'manualIterator3 - annotatedTest
+      }
+      'Library - {
+        'arrayBuilderOfInt - annotatedTest
+        'touchManifestFactory - annotatedTest
+        'touchScalaPackage - annotatedTest
+      }
+    }
     'inlining - {
 
       'Inlining - {
@@ -366,35 +413,10 @@ object MainTests extends TestSuite {
         'flatMapMapChain - annotatedTest
       }
       'ArrayChaining - {
-        'equals - annotatedTest
-        'arraycopy - annotatedTest
-        'arrayBuilderOfInt - annotatedTest
-        'arraysCopyOf - annotatedTest
-        'createArrayInStaticInitializer1 - annotatedTest
-        'createArrayInStaticInitializer2 - annotatedTest
-        'createArrayInStaticInitializer3 - annotatedTest
-        'createNestedArrayInStaticInitializer - annotatedTest
-        'testManifestFactory - annotatedTest
-        'touchManifestFactory - annotatedTest
-        'touchScalaPackage - annotatedTest
-        'simpleLinkedListForeach - annotatedTest
-        'simpleArraySeqForeach - annotatedTest
-        'multipleSubtypesOfGeneric - annotatedTest
-        'multipleTypesOfGeneric - annotatedTest
-        'tryCatch - annotatedTest
-        'lazyVal - annotatedTest
-        'throwingInBranch1 - annotatedTest
-        'throwingInBranch2 - annotatedTest
-        'loopAtStartOfMethod - annotatedTest
-        'minimizedIterator - annotatedTest
-        'staticSpecialInterfaceMethods - annotatedTest
-        'superDefineSubImplement - annotatedTest
-        'manualIterator - annotatedTest
-        'manualIterator2 - annotatedTest
-        'narrowingAbstractMethod - annotatedTest
-        'manualIterator3 - annotatedTest
-        'inferredHighestDefinerReturnDiffer - annotatedTest
-        'inheritFromOutsideHierarchy - annotatedTest
+
+
+
+
       }
     }
   }
