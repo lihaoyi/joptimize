@@ -7,7 +7,15 @@ import joptimize.frontend.{ClassManager, Frontend}
 import joptimize.graph.HavlakLoopTree
 import joptimize.model._
 import org.objectweb.asm.Opcodes
-import org.objectweb.asm.tree.{ClassNode, InsnList, InsnNode, MethodInsnNode, MethodNode, TypeInsnNode, VarInsnNode}
+import org.objectweb.asm.tree.{
+  ClassNode,
+  InsnList,
+  InsnNode,
+  MethodInsnNode,
+  MethodNode,
+  TypeInsnNode,
+  VarInsnNode
+}
 
 import collection.JavaConverters._
 import scala.collection.mutable
@@ -29,7 +37,7 @@ object Backend {
       allProps
     )
     val forwarders = generateForwarders(analyzerRes, classManager, allProps, clsToDescs)
-    for (cn <- classManager.allClasses) cn.methods.clear()
+    for (cn <- classManager.allClassNodes) cn.methods.clear()
 
     val visitedInterfaces =
       Util.findSeenInterfaces(classManager.loadClass, newMethods.map(_._1)) ++
@@ -62,17 +70,18 @@ object Backend {
   ) = {
     val clsToVisitedMethods = analyzerRes.visitedMethods.groupBy(_._1.method.cls)
 
-    val allClasses = clsToVisitedMethods.keys
+    val clsToDescs = classManager
+      .allClassKeys
+      .map { cls =>
+        cls -> classManager
+          .getAllSupertypes(cls)
+          .to[mutable.LinkedHashSet]
+          .flatMap(x => clsToVisitedMethods.getOrElse(x, Nil))
+          .filter(!_._1.method.static)
+          .map(x => (x._1.method.name, x._1.method.desc, x._1.inferred))
 
-    val clsToDescs = allClasses.map { cls =>
-      cls -> classManager
-        .getAllSupertypes(cls)
-        .to[mutable.LinkedHashSet]
-        .flatMap(x => clsToVisitedMethods.getOrElse(x, Nil))
-        .filter(!_._1.method.static)
-        .map(x => (x._1.method.name, x._1.method.desc, x._1.inferred))
-
-    }.toMap
+      }
+      .toMap
 
     val allPropsList = for {
       (cls, descs) <- clsToDescs.toList
@@ -107,7 +116,8 @@ object Backend {
       if currentProp.inferredReturn != JType.Bottom
       sup <- directSupers
       superProp <- allProps.get(InferredSig(MethodSig(sup, name, desc, false), inferred))
-      if superProp.liveArgs != currentProp.liveArgs || CType.toJType(superProp.inferredReturn) != CType.toJType(currentProp.inferredReturn)
+      if superProp.liveArgs != currentProp.liveArgs || CType.toJType(superProp.inferredReturn) != CType
+        .toJType(currentProp.inferredReturn)
     } yield {
       val (widerMangledName, widerMangledDesc) = Util.mangle(
         InferredSig(MethodSig(sup, name, desc, false), inferred),
@@ -133,7 +143,7 @@ object Backend {
       var i = 1
 //      pprint.log(superProp.liveArgs)
 //      pprint.log(currentProp.liveArgs)
-      for (n <- superProp.liveArgs.toSeq.filter(_ != 0).sorted){
+      for (n <- superProp.liveArgs.toSeq.filter(_ != 0).sorted) {
 //        pprint.log(i)
         if (currentProp.liveArgs(n)) {
           newNode.instructions.add(new VarInsnNode(CodeGenMethod.loadOp(desc.args(n - 1)), i))
@@ -153,13 +163,14 @@ object Backend {
           )
         )
 
-      newNode.instructions.add(
-        desc.ret match{
-          case JType.Prim.V => new InsnNode(Opcodes.RETURN)
-          case tpe => new InsnNode(CodeGenMethod.returnOp(tpe))
-        }
-
-      )
+      newNode
+        .instructions
+        .add(
+          desc.ret match {
+            case JType.Prim.V => new InsnNode(Opcodes.RETURN)
+            case tpe => new InsnNode(CodeGenMethod.returnOp(tpe))
+          }
+        )
       classManager.loadClass(cls).get -> newNode
     }
 
@@ -178,7 +189,11 @@ object Backend {
     def resolveDefsiteProps(isig: InferredSig) = {
       if (isig.method.static) analyzerRes.visitedResolved(isig)
       else if (isig.method.name == "<init>") analyzerRes.visitedMethods(isig).get.props
-      else allProps(isig)
+      else
+        allProps.getOrElse(
+          isig,
+          throw new Exception(pprint.apply((isig.toString, allProps), height = 99999).toString())
+        )
     }
 
     def resolveCallsiteProps(isig: InferredSig, invokeSpecial: Boolean) = {

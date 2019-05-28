@@ -27,7 +27,8 @@ object ClassManager {
     def getDirectSupertypes(cls: JType.Cls) = supertypeMap.getOrElse(cls, Nil)
     def loadClass(cls: JType.Cls) = loadClassCache.getOrElse(cls, None)
     def loadMethod(sig: MethodSig) = loadMethodCache.getOrElse(sig, None)
-    def allClasses = loadClassCache.valuesIterator.flatten
+    def allClassNodes = loadClassCache.valuesIterator.flatten
+    def allClassKeys = loadClassCache.keys
   }
 
   class Dynamic(getClassFile: String => Option[ClassNode]) extends ClassManager {
