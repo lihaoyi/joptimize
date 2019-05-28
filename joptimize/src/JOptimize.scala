@@ -30,14 +30,14 @@ object JOptimize{
       log,
     )
 
-//    val remaining = new BytecodeDCE(
-//      entrypoints,
-//      outClasses,
-//      ignore = _.startsWith("java/"),
-//      log = log
-//    ).apply()
-//    serialize(log, remaining)
-    serialize(log, outClasses)
+    val remaining = new BytecodeDCE(
+      entrypoints,
+      outClasses,
+      ignore = _.startsWith("java/"),
+      log = log
+    ).apply()
+    serialize(log, remaining)
+//    serialize(log, outClasses)
   }
 
   def serialize(log: Logger.Global, outClasses: Seq[ClassNode]) = log.block {

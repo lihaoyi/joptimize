@@ -321,13 +321,13 @@ object ArrayChaining {
     iter.map(_ + 1).next()
   }
 
-//  @test.Test(inputs = Array(1, 2, 3, 4))
-//  def manualIterator2(n: Int): Int = {
-//    val box = Array(0)
-//    val iter = new Elements(Array(0, 1, 2, 3))
-//    iter.map(_ + n).foreach(x => box(0) += x)
-//    box(0)
-//  }
+  @test.Test(inputs = Array(1, 2, 3, 4))
+  def manualIterator2(n: Int): Int = {
+    val box = Array(0)
+    val iter = new Elements(Array(0, 1, 2, 3))
+    iter.map(_ + n).foreach(x => box(0) += x)
+    box(0)
+  }
 
 
   abstract class FooX{
@@ -346,7 +346,7 @@ object ArrayChaining {
     def apply() = new Right()
   }
   @test.Test(inputs = Array(1, 2, 3, 4))
-  def manualIterator2(n: Int): Int = {
+  def narrowingAbstractMethod(n: Int): Int = {
     val bar: FooX = new BarX2()
     val qux = new QuxX2()
     bar.apply().num

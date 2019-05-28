@@ -391,6 +391,7 @@ object MainTests extends TestSuite {
         'superDefineSubImplement - annotatedTest
         'manualIterator - annotatedTest
         'manualIterator2 - annotatedTest
+        'narrowingAbstractMethod - annotatedTest
         'manualIterator3 - annotatedTest
         'inferredHighestDefinerReturnDiffer - annotatedTest
         'inheritFromOutsideHierarchy - annotatedTest

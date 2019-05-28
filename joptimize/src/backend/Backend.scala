@@ -117,10 +117,13 @@ object Backend {
       sup <- directSupers
       superProp <- allProps.get(InferredSig(MethodSig(sup, name, desc, false), inferred))
       liveArgsDiffer = superProp.liveArgs != currentProp.liveArgs
-      returnTypesDiffer = CType.toJType(superProp.inferredReturn) != CType.toJType(currentProp.inferredReturn)
+      returnTypesDiffer = CType.toJType(superProp.inferredReturn) != CType.toJType(
+        currentProp.inferredReturn
+      )
       if liveArgsDiffer || returnTypesDiffer
     } yield {
-      pprint.log((cls, sup, name, desc, liveArgsDiffer, returnTypesDiffer))
+
+//      pprint.log((cls, sup, name, desc, liveArgsDiffer, returnTypesDiffer))
       val (widerMangledName, widerMangledDesc) = Util.mangle(
         InferredSig(MethodSig(sup, name, desc, false), inferred),
         superProp.inferredReturn,
@@ -173,10 +176,27 @@ object Backend {
             case tpe => new InsnNode(CodeGenMethod.returnOp(tpe))
           }
         )
-      classManager.loadClass(cls).get -> newNode
+
+      val abstractStubNodeOpt: Option[MethodNode] = {
+        val currentMethod = classManager.loadMethod(MethodSig(cls, name, desc, false))
+        if (currentMethod.nonEmpty) None
+        else {
+          val abstractStubNode = new MethodNode(
+            Opcodes.ACC_PUBLIC| Opcodes.ACC_ABSTRACT,
+            narrowMangledName,
+            narrowMangledDesc.toString,
+            null,
+            Array()
+          )
+
+          Some(abstractStubNode)
+        }
+      }
+
+      (Seq(newNode) ++ abstractStubNodeOpt).map(classManager.loadClass(cls).get -> _)
     }
 
-    forwardersNeeded
+    forwardersNeeded.flatten
 //    Nil
   }
 
