@@ -1,5 +1,6 @@
 package joptimize.model
 
+trait CType extends IType
 object CType {
   def toJType(self: IType): JType = self match {
     case j: JType => j
@@ -16,22 +17,22 @@ object CType {
 //    def internalName: String = "?"
 //    def name = s"R${classes.length}${classes.map(_.name.replace('/', '_')).mkString("__")}"
 //  }
-  case class I(value: Int) extends IType {
+  case class I(value: Int) extends CType {
     def size = 1
     def internalName = s"TI$value;"
     def name = s"TI$value"
   }
-  case class J(value: Long) extends IType {
+  case class J(value: Long) extends CType {
     def size = 2
     def internalName = s"TJ$value;"
     def name = s"TJ$value"
   }
-  case class F(value: Float) extends IType {
+  case class F(value: Float) extends CType {
     def size = 1
     def internalName = s"TF$value;"
     def name = s"TF$value"
   }
-  case class D(value: Double) extends IType {
+  case class D(value: Double) extends CType {
     def size = 2
     def internalName = s"TD$value;"
     def name = s"TD$value"
@@ -42,7 +43,7 @@ object CType {
     * and can take up spots in the stack or locals, but doesn't really have any
     * meaning beyond a placeholder and all operations on it should fail
     */
-  object Null extends IType {
+  object Null extends CType {
     override def name = "Null"
   }
 }

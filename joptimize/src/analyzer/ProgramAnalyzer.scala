@@ -451,7 +451,12 @@ object ProgramAnalyzer {
     val props = Properties(
       inferredReturn,
       computedPurity && !(isig.method.static && api.classManager.loadMethod(clinitSig).nonEmpty),
-      currentAnalysis.evaluated.collect { case (a: SSA.Arg, _) => a.index }.toSet
+      currentAnalysis
+        .evaluated
+        .collect {
+          case (a: SSA.Arg, _) if currentAnalysis.evaluated.get(a).exists(!_.isInstanceOf[CType]) => a.index
+        }
+        .toSet
     )
 
     val evaluated = for {

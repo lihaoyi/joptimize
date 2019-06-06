@@ -164,7 +164,7 @@ class CodeGenMethod(
           .collect { case s: SSA.ValOrState => s }
           .flatMap(rec(_, fromVal = false, currentBlock))
       case n: SSA.Val =>
-        if (n.upstream.isEmpty && !n.isInstanceOf[SSA.Arg]) recTrivialVal(n)
+        if (n.upstream.isEmpty && !n.isInstanceOf[SSA.Arg] && !n.isInstanceOf[SSA.Invoke]) recTrivialVal(n)
         else if (seen(n)) {
           if (fromVal) Seq(new VarInsnNode(CodeGenMethod.loadOp(n.jtype), savedLocalNumbers(n)))
           else Nil
