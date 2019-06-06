@@ -18,6 +18,7 @@ object Inliner {
     val filteredCallgraph = analyzerRes
       .callGraph
       .filter(e => e.called.method.name != "<init>" && e.called.method.name != "<clinit>")
+      .filter(e => analyzerRes.visitedMethods(e.called).nonEmpty)
 
     val singleCallerEdges = filteredCallgraph
       .groupBy(_.called)
@@ -46,15 +47,17 @@ object Inliner {
     for ((k, v) <- analyzerRes.visitedMethods) {
       visitedMethods.put(k, v)
     }
-
     for {
       edge <- inlineableEdgesSet
       node <- edge.node
     } {
+      log.pprint(edge.caller.toString)
+      log.pprint(edge.called.toString)
       var caller = edge.caller
       //      pprint.log(analyzerRes.visitedMethods.keys)
       //      pprint.log(edge)
       while ({
+
         if (visitedMethods.contains(caller)) {
           inlineSingleMethod(
             classManager,
