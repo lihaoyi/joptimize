@@ -123,28 +123,10 @@ class ITypeLattice(merge: (IType, IType) => IType, inferredArgs: Seq[IType])
 
           case (lhs0, rhs0) =>
             (lhs0, rhs0, n.opcode) match{
-              case (CType.I(0), rhs, SSA.BinOp.IADD) => rhs
-              case (lhs, CType.I(0),
-                SSA.BinOp.IADD | SSA.BinOp.ISUB | SSA.BinOp.ISHL |
-                SSA.BinOp.ISHR | SSA.BinOp.IUSHR | SSA.BinOp.IXOR) => lhs
-
-              case (CType.I(1), rhs, SSA.BinOp.IMUL) => rhs
-              case (lhs, CType.I(1), SSA.BinOp.IMUL | SSA.BinOp.IDIV) => lhs
-
-              case (CType.I(0), rhs, SSA.BinOp.IMUL) => CType.I(0)
-              case (lhs, CType.I(0), SSA.BinOp.IMUL) => CType.I(0)
-
-              case (CType.J(0), rhs, SSA.BinOp.LADD) => rhs
-              case (lhs, CType.J(0),
-                SSA.BinOp.LADD | SSA.BinOp.LSUB | SSA.BinOp.LSHL |
-                SSA.BinOp.LSHR | SSA.BinOp.LUSHR | SSA.BinOp.LXOR) => lhs
-
-              case (CType.I(1), rhs, SSA.BinOp.LMUL) => rhs
-              case (lhs, CType.I(1), SSA.BinOp.LMUL | SSA.BinOp.LDIV) => lhs
-
-              case (CType.J(0), rhs, SSA.BinOp.LMUL) => CType.I(0)
-              case (lhs, CType.J(0), SSA.BinOp.LMUL) => CType.I(0)
-
+              case (CType.I(0), _, SSA.BinOp.IMUL) => CType.I(0)
+              case (_, CType.I(0), SSA.BinOp.IMUL) => CType.I(0)
+              case (CType.J(0), _, SSA.BinOp.LMUL) => CType.J(0)
+              case (_, CType.J(0), SSA.BinOp.LMUL) => CType.J(0)
               case _ => n.opcode.tpe
             }
         }

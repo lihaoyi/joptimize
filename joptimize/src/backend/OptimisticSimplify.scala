@@ -133,7 +133,29 @@ object OptimisticSimplify {
       case CType.J(v) => Some(new SSA.ConstJ(v))
       case CType.F(v) => Some(new SSA.ConstF(v))
       case CType.D(v) => Some(new SSA.ConstD(v))
-      case _ => None
+      case _ =>
+        n match{
+          case b: SSA.BinOp =>
+            (inferred(b.a), inferred(b.b), b.opcode) match{
+              case (CType.I(0), _, SSA.BinOp.IADD) => Some(b.b)
+              case (_, CType.I(0),
+                SSA.BinOp.IADD | SSA.BinOp.ISUB | SSA.BinOp.ISHL |
+                SSA.BinOp.ISHR | SSA.BinOp.IUSHR | SSA.BinOp.IXOR) => Some(b.a)
+
+              case (CType.I(1), _, SSA.BinOp.IMUL) => Some(b.b)
+              case (_, CType.I(1), SSA.BinOp.IMUL | SSA.BinOp.IDIV) => Some(b.a)
+
+              case (CType.J(0), _, SSA.BinOp.LADD) => Some(b.b)
+              case (_, CType.J(0),
+                SSA.BinOp.LADD | SSA.BinOp.LSUB | SSA.BinOp.LSHL |
+                SSA.BinOp.LSHR | SSA.BinOp.LUSHR | SSA.BinOp.LXOR) => Some(b.a)
+
+              case (CType.I(1), _, SSA.BinOp.LMUL) => Some(b.b)
+              case (_, CType.I(1), SSA.BinOp.LMUL | SSA.BinOp.LDIV) => Some(b.a)
+              case _ => None
+            }
+          case _ => None
+        }
     }
   }
 
