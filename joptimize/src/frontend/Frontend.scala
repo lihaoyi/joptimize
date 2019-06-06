@@ -52,7 +52,7 @@ object Frontend {
     case phi: SSA.Phi =>
       val filteredValues = phi.incoming.filter(_._2 != phi)
 
-      if (filteredValues.map(_._2).size == 1) {
+      if (filteredValues.values.toSet.size == 1) {
         phi.block.phis = phi.block.phis.filter(_ != phi)
         Util.replace(phi, filteredValues.head._2)
       } else Nil

@@ -412,10 +412,10 @@ object MainTests extends TestSuite {
         'mapTwice3 - annotatedTest
         'flatMapMapChain - annotatedTest
       }
-      'ArrayChaining - {
+      'Demo - {
 
 
-        'manualIterator4 - annotatedTest
+        'mainA - annotatedTest
 
       }
     }
