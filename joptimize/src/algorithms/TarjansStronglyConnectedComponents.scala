@@ -5,14 +5,14 @@ import scala.collection.mutable
 // Adapted from
 // https://github.com/indy256/codelibrary/blob/c52247216258e84aac442a23273b7d8306ef757b/java/src/SCCTarjan.java
 object TarjansStronglyConnectedComponents {
-  def apply(graph0: TraversableOnce[TraversableOnce[Int]]): Seq[Seq[Int]] = {
+  def apply(graph0: TraversableOnce[TraversableOnce[Int]]): collection.Seq[collection.Seq[Int]] = {
     val graph = graph0.map(_.toArray).toArray
     val n = graph.length
     val visited = new Array[Boolean](n)
     val stack = mutable.ArrayBuffer.empty[Integer]
     var time = 0
     val lowlink = new Array[Int](n)
-    val components = mutable.ArrayBuffer.empty[Seq[Int]]
+    val components = mutable.ArrayBuffer.empty[collection.Seq[Int]]
 
     for (u <- 0 until n) {
       if (!visited(u)) dfs(u)

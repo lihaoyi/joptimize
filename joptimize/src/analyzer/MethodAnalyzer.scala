@@ -225,7 +225,7 @@ class MethodAnalyzer[T](
 
     val newPhiExpressions = nextPhis
       .map { phi =>
-        val Seq(expr) = phi
+        val collection.Seq(expr) = phi
           .incoming
           .collect { case (k, v) if k == currentBlock => v }
           .toSeq
@@ -353,7 +353,7 @@ object MethodAnalyzer {
     val edges = aggArray.map(_.upstreamVals.collect(aggIndices))
 
     val topoSorted = TarjansStronglyConnectedComponents(edges)
-    val res = topoSorted.map { case Seq(x) => aggArray(x) }
+    val res = topoSorted.map { case collection.Seq(x) => aggArray(x) }
     res
   }
 }

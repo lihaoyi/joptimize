@@ -22,7 +22,7 @@ class BytecodeDCE(entrypoints: scala.Seq[MethodSig],
 
   val classNodeMap = classNodes.map(c => (c.name, c)).toMap
   val classManager = new frontend.ClassManager.Dynamic(classNodeMap.get(_))
-  val queue = entrypoints.to[mutable.LinkedHashSet]
+  val queue = entrypoints.to(mutable.LinkedHashSet)
   val seenMethods = mutable.LinkedHashSet.empty[MethodSig]
   val seenClasses = mutable.LinkedHashSet.empty[JType.Cls]
   val virtualCallSignatures = mutable.LinkedHashMap.empty[JType.Cls, List[MethodSig]]

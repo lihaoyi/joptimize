@@ -46,7 +46,7 @@ case class MethodBody(var args: Seq[SSA.Arg], var allTerminals: Seq[SSA.Jump]) {
   }
 
   def transform(visit: PartialFunction[SSA.Node, Seq[SSA.Node]]) = {
-    val queue = getAllVertices().to[mutable.LinkedHashSet]
+    val queue = getAllVertices().to(mutable.LinkedHashSet)
     while (queue.nonEmpty) {
       val current = queue.head
       queue.remove(current)

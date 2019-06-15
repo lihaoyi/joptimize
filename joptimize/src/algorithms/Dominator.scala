@@ -4,7 +4,7 @@ import joptimize.graph.LengauerTarjanDominatorTree
 
 object Dominator {
   case class Result[T](immediateDominators: Map[T, T], dominatorDepth: Map[T, Int])
-  def findDominators[T](edges: Seq[(T, T)], allNodes0: Seq[T]): Result[T] = {
+  def findDominators[T](edges: collection.Seq[(T, T)], allNodes0: collection.Seq[T]): Result[T] = {
     val allNodes = allNodes0.distinct
     val indices = allNodes.zipWithIndex.toMap
     val nodes = indices.map(_.swap)

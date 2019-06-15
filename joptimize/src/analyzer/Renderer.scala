@@ -143,7 +143,7 @@ object Renderer {
     }
 
     recPrint(startNode)
-    fansi.Str.join(out:_*)
+    fansi.Str.join(out.toSeq:_*)
   }
 
 
@@ -259,7 +259,7 @@ object Renderer {
     val nodeIndices = allGraphvizNodes.keysIterator.zipWithIndex.toMap
 
 
-    val directedEdges: Map[SSA.Node, Seq[(SSA.Node, Int, Int)]] = allEdges
+    val directedEdges: Map[SSA.Node, collection.Seq[(SSA.Node, Int, Int)]] = allEdges
       .map{case (a0, b0, isUpstream) => if (isUpstream) (a0, b0) else (b0, a0)}
       .distinct
       .map{case (a, b) => (a, b, a.downstreamList.count(_ == b), b.upstream.count(_ == a))}

@@ -50,7 +50,7 @@ object SSA{
     }
     private[this] val downstream = mutable.LinkedHashMap.empty[Node, Int]
     override def downstreamContains(n: Node) = downstream.contains(n)
-    def downstreamList: Seq[SSA.Node] = downstream.flatMap{case (k, n) => Array.fill(n)(k)}.toArray[SSA.Node]
+    def downstreamList: Seq[SSA.Node] = downstream.flatMap{case (k, n) => Array.fill(n)(k).toSeq}.toArray[SSA.Node]
     def downstreamSize: Int = downstream.valuesIterator.sum
     def downstreamAdd(n: Node) = downstream(n) = downstream.getOrElse(n, 0) + 1
     def downstreamRemove(n: Node) = downstream.get(n) match{

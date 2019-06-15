@@ -123,7 +123,7 @@ object MainTestUtils {
 
 
 
-    ujson.Arr(output: _*)
+    ujson.Arr.from(output)
   }
 
 
@@ -184,7 +184,7 @@ object MainTestUtils {
     assert(!constants.contains(const))
   }
 
-  def checkNumConst0(cl: ClassLoader)(implicit tp: TestPath): Seq[Int] = {
+  def checkNumConst0(cl: ClassLoader)(implicit tp: TestPath): collection.Seq[Int] = {
 
     val clsName = tp.value(tp.value.length - 2)
     val bytestream = os.read.inputStream(

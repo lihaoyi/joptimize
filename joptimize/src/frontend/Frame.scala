@@ -375,7 +375,7 @@ class Frame[V <: Value, S, B, M](var numLocals: Int, val numStack0: Int) {
           i -= 1
         }
         if (insn.getOpcode != Opcodes.INVOKESTATIC) valueList.insert(0, pop())
-        val (res, newState) = interpreter.naryOperation(insn, valueList, state)
+        val (res, newState) = interpreter.naryOperation(insn, valueList.toSeq, state)
         state = newState
         if (Type.getReturnType(methodDescriptor) ne Type.VOID_TYPE) push(res)
 
@@ -388,7 +388,7 @@ class Frame[V <: Value, S, B, M](var numLocals: Int, val numStack0: Int) {
           valueList.insert(0, pop())
           i -= 1
         }
-        val (res, newState) = interpreter.naryOperation(insn, valueList, state)
+        val (res, newState) = interpreter.naryOperation(insn, valueList.toSeq, state)
         if (Type.getReturnType(methodDescriptor) ne Type.VOID_TYPE) push(res)
         state = newState
 
@@ -415,7 +415,7 @@ class Frame[V <: Value, S, B, M](var numLocals: Int, val numStack0: Int) {
           valueList.insert(0, pop())
           i -= 1
         }
-        val (res, newState) = interpreter.naryOperation(insn, valueList, state)
+        val (res, newState) = interpreter.naryOperation(insn, valueList.toSeq, state)
         push(res)
         state = newState
       case IFNULL | IFNONNULL => interpreter.unaryCommand(insn, pop())

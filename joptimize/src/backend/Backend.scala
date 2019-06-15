@@ -75,7 +75,7 @@ object Backend {
       .map { cls =>
         cls -> classManager
           .getAllSupertypes(cls)
-          .to[mutable.LinkedHashSet]
+          .to(mutable.LinkedHashSet)
           .flatMap(x => clsToVisitedMethods.getOrElse(x, Nil))
           .filter(!_._1.method.static)
           .map(x => (x._1.method.name, x._1.method.desc, x._1.inferred))
@@ -294,7 +294,7 @@ object Backend {
 
     val liveBlocks = {
       val (_, startBlock, _, blockEdges) = analyzeBlockStructure(result.methodBody)
-      val blockEdgeMap = blockEdges.groupBy(_._1).map { case (k, v) => (k, v.map(_._2)) }
+      val blockEdgeMap = blockEdges.groupBy(_._1).map { case (k, v) => (k, v.map(_._2).toSeq) }
       Util.breadthFirstSeen(Set(startBlock: SSA.Block))(blockEdgeMap.getOrElse(_, Nil))
     }
 

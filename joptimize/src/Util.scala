@@ -87,7 +87,7 @@ object Util{
       .replace('[', 'A')
       .replace(";", "")
 
-  def leastUpperBound[T](starts: Set[T])(edges: T => Seq[T]) = {
+  def leastUpperBound[T](starts: Set[T])(edges: T => collection.Seq[T]) = {
     // Walk up the graph from all starting locations
     val (seens, terminalss, backEdgess) =
       starts.map(start => breadthFirstAggregation0(Set(start))(edges(_).map(_ -> ()))).unzip3
@@ -116,15 +116,15 @@ object Util{
     val (seen, terminals, backEdges) = breadthFirstAggregation0(start, trackBackEdges = false)(edges(_).map(_ -> ()))
     terminals
   }
-  def breadthFirstBackEdges[T](start: Set[T])(edges: T => Seq[T]): Seq[(T, T)] = {
+  def breadthFirstBackEdges[T](start: Set[T])(edges: T => Seq[T]): collection.Seq[(T, T)] = {
     val (seen, terminals, backEdges) = breadthFirstAggregation0(start, trackTerminals = false)(edges(_).map(_ -> ()))
     backEdges.map{case (a, b, c) => (a, b)}
   }
   def breadthFirstAggregation0[T, V](start: Set[T],
                                      trackBackEdges: Boolean = true,
                                      trackTerminals: Boolean = true)
-                                    (edges: T => Seq[(T, V)]): (Map[T, List[T]], Set[T], Seq[(T, T, V)]) = {
-    val queue = start.to[mutable.Queue].map((_, List.empty[T]))
+                                    (edges: T => collection.Seq[(T, V)]): (Map[T, List[T]], Set[T], collection.Seq[(T, T, V)]) = {
+    val queue = start.to(mutable.Queue).map((_, List.empty[T]))
     val seen = mutable.LinkedHashMap.empty[T, List[T]]
     val terminals = if (trackTerminals) mutable.LinkedHashSet.empty[T] else null
     val backEdges = if (trackBackEdges) mutable.Buffer.empty[(T, T, V)] else null
@@ -207,13 +207,13 @@ object Util{
     // abstract interpreter, but still need to be present since they're
     // implemented by the classes we do use
     val visitedInterfaces = mutable.LinkedHashSet.empty[String]
-    val queue = classNodes.flatMap(_.interfaces.asScala).distinct.to[mutable.Queue]
+    val queue = classNodes.flatMap(_.interfaces.asScala).distinct.to(mutable.Queue)
     while (queue.nonEmpty) {
       val current = queue.dequeue()
       if (!visitedInterfaces.contains(current)) {
         visitedInterfaces.add(current)
         loadClass(current).foreach{cn =>
-          queue.enqueue(cn.interfaces.asScala: _*)
+          queue.enqueueAll(cn.interfaces.asScala)
         }
       }
     }

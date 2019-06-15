@@ -172,7 +172,7 @@ object Desc {
       index = split + 1
     }
     Desc(
-      args.map(JType.read),
+      args.map(JType.read).toSeq,
       JType.read(ret) match {
         case l => if (l.name == "scala/runtime/Nothing$") JType.Bottom else l
       }

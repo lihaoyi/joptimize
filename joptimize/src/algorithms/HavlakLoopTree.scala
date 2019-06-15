@@ -102,7 +102,7 @@ object HavlakLoopTree {
              number: scala.collection.mutable.LinkedHashMap[T, Int],
              last: Array[Int],
              current: Int,
-             outEdges: Map[T, Seq[T]]): Int = {
+             outEdges: Map[T, collection.Seq[T]]): Int = {
 
     number(currentNode) = current
 
@@ -121,7 +121,7 @@ object HavlakLoopTree {
   // been chosen to be identical to the nomenclature in Havlak's
   // paper (which, in turn, is similar to the one used by Tarjan).
   //
-  def analyzeLoops[T](edgeList: Seq[(T, T)], allNodes0: Seq[T]): Loop[T] = {
+  def analyzeLoops[T](edgeList: collection.Seq[(T, T)], allNodes0: collection.Seq[T]): Loop[T] = {
 
     val outEdges = edgeList.groupBy(_._1).map{case (k, v) => (k, v.map(_._2))}
     val inEdges = edgeList.groupBy(_._2).map{case (k, v) => (k, v.map(_._1))}

@@ -20,7 +20,7 @@ class CodeGenMethod(
   isInterface: JType.Cls => Option[Boolean],
   methodBody: MethodBody,
   nodesToBlocks: mutable.LinkedHashMap[SSA.ValOrState, SSA.Block],
-  cfg: Seq[(SSA.Control, SSA.Control)]
+  cfg: collection.Seq[(SSA.Control, SSA.Control)]
 ) {
   val blocksToNodes = nodesToBlocks.groupBy(_._2).map { case (k, v) => (k, v.keys.toSeq) }
   val sortedBlocks: collection.Set[SSA.Block] =
@@ -380,8 +380,8 @@ object CodeGenMethod {
     (savedLocalNumbers, seen)
   }
 
-  def sortControlFlowGraph(cfg: Seq[(SSA.Control, SSA.Control)]) = {
-    val Seq(startBlock) = cfg.collect { case (s: SSA.Start, _) => s }
+  def sortControlFlowGraph(cfg: collection.Seq[(SSA.Control, SSA.Control)]) = {
+    val collection.Seq(startBlock) = cfg.collect { case (s: SSA.Start, _) => s }
     val successor = cfg.groupBy(_._1).map { case (k, v) => (k, v.map(_._2)) }
     val sortedControls = mutable.LinkedHashSet.empty[SSA.Control]
 

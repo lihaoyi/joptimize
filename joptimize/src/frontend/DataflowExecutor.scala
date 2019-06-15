@@ -3,7 +3,7 @@ package joptimize.frontend
 import joptimize.analyzer.Renderer
 import org.objectweb.asm.{Opcodes, Type}
 import org.objectweb.asm.tree._
-import org.objectweb.asm.tree.analysis._
+import org.objectweb.asm.tree.analysis.{Frame => _, Interpreter => _, _}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable

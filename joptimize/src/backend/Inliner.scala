@@ -36,8 +36,8 @@ object Inliner {
       .collect { case (src, Seq(dest)) => (src, dest.caller) }
 
     val inlineableEdgesSet = singleCallerEdges
-      .to[mutable.LinkedHashSet]
-      .intersect(singleCalledEdges.to[mutable.LinkedHashSet])
+      .to(mutable.LinkedHashSet)
+      .intersect(singleCalledEdges.to(mutable.LinkedHashSet))
       .filter(edge => edge.caller != edge.called)
 
     log.pprint(inlineableEdgesSet.map(_.toString))
@@ -136,7 +136,7 @@ object Inliner {
       case a: SSA.AThrow => throws.append(a)
     }
 
-    val Seq(nextState) = node.downstreamList.collect { case s: SSA.State => s }
+    val collection.Seq(nextState) = node.downstreamList.collect { case s: SSA.State => s }
 
     node.downstreamRemove(nextState)
 
@@ -241,9 +241,9 @@ object Inliner {
   ) = {
     log.pprint(returns)
     returns match {
-      case Seq() =>
+      case mutable.Buffer() =>
         None
-      case Seq((returnedState, returnNode, returnedValOpt)) =>
+      case mutable.Buffer((returnedState, returnNode, returnedValOpt)) =>
 //        returnedState.downstreamRemoveAll(returnNode)
         returnedValOpt.foreach(_.downstreamRemoveAll(returnNode))
 
@@ -264,14 +264,14 @@ object Inliner {
               mutable.LinkedHashMap.empty,
               classManager
                 .mergeTypes(
-                  triplets.collect { case (s, j, v) if inferred.contains(v.get) => v.get.jtype }
+                  triplets.collect { case (s, j, v) if inferred.contains(v.get) => v.get.jtype }.toSeq
                 )
                 .asInstanceOf[JType]
             )
             triplets.map { case (s, j, v) => phi.incoming.put(j.block, v.get) }
             val inferredMerged = classManager
               .mergeTypes(
-                triplets.flatMap { case (s, j, v) => inferred.get(v.get) }
+                triplets.flatMap { case (s, j, v) => inferred.get(v.get) }.toSeq
               )
             Some((phi, inferredMerged))
           }

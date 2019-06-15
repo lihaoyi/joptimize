@@ -33,7 +33,7 @@ object ControlFlowExtraction {
 
   def findRegionStarts(
     insns: Vector[AbstractInsnNode],
-    tryCacheBlockNodes: Seq[TryCatchBlockNode]
+    tryCacheBlockNodes: collection.Seq[TryCatchBlockNode]
   ) = {
     val jumpTargets = insns
       .collect {
@@ -145,7 +145,7 @@ object ControlFlowExtraction {
               frames(i - 1).state,
               startRegion,
               frameTop(i - 1, 0),
-              keys,
+              keys.toSeq,
               null,
               null
             )
