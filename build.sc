@@ -20,7 +20,7 @@ object joptimize extends ScalaModule{
   def scalacPluginIvyDeps = Agg(ivy"com.lihaoyi::acyclic:0.2.0")
   object test extends Tests{
     def ivyDeps = Agg(
-      ivy"com.lihaoyi::utest::0.6.9",
+      ivy"com.lihaoyi::utest::0.7.1",
       ivy"com.lihaoyi::ujson:0.7.5"
     )
     def testFrameworks = Seq("test.UTestFramework")

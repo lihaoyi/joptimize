@@ -3,419 +3,419 @@ import utest._
 import MainTestUtils.annotatedTest
 object MainTests extends TestSuite {
   def tests = Tests {
-    'simple - {
-      'Hello - {
-        'incrI - annotatedTest
-        'incrJ - annotatedTest
-        'incrS - annotatedTest
-        'incrF - annotatedTest
-        'incrD - annotatedTest
-        'addI - annotatedTest
-        'addJ - annotatedTest
-        'addS - annotatedTest
-        'addF - annotatedTest
-        'addD - annotatedTest
-        'localI - annotatedTest
-        'localJ - annotatedTest
-        'localS - annotatedTest
-        'localF - annotatedTest
-        'localD - annotatedTest
-        'overrideArg1 - annotatedTest
-        'overrideArg2 - annotatedTest
-        'overrideArg3 - annotatedTest
-        'overrideArg4 - annotatedTest
-        'overrideArg5 - annotatedTest
-        'overrideArg6 - annotatedTest
+    test("simple"){
+      test("Hello"){
+        test("incrI") - annotatedTest
+        test("incrJ") - annotatedTest
+        test("incrS") - annotatedTest
+        test("incrF") - annotatedTest
+        test("incrD") - annotatedTest
+        test("addI") - annotatedTest
+        test("addJ") - annotatedTest
+        test("addS") - annotatedTest
+        test("addF") - annotatedTest
+        test("addD") - annotatedTest
+        test("localI") - annotatedTest
+        test("localJ") - annotatedTest
+        test("localS") - annotatedTest
+        test("localF") - annotatedTest
+        test("localD") - annotatedTest
+        test("overrideArg1") - annotatedTest
+        test("overrideArg2") - annotatedTest
+        test("overrideArg3") - annotatedTest
+        test("overrideArg4") - annotatedTest
+        test("overrideArg5") - annotatedTest
+        test("overrideArg6") - annotatedTest
       }
-      'IfElse - {
-        'basicIf - annotatedTest
-        'ifAssign - annotatedTest
-        'ifNonIntZero - annotatedTest
-        'ifNonIntBinary - annotatedTest
-        'ifElseIf - annotatedTest
-        'ifElseIfBig - annotatedTest
+      test("IfElse"){
+        test("basicIf") - annotatedTest
+        test("ifAssign") - annotatedTest
+        test("ifNonIntZero") - annotatedTest
+        test("ifNonIntBinary") - annotatedTest
+        test("ifElseIf") - annotatedTest
+        test("ifElseIfBig") - annotatedTest
       }
-      'Loops - {
-        'basicFor - annotatedTest
-        'liftableFor - annotatedTest
-        'unliftableFor - annotatedTest
-        'mixedLiftableFor - annotatedTest
-        'nestedLiftableFor - annotatedTest
-        'nestedLiftableFor2 - annotatedTest
-        'nestedUnliftableFor - annotatedTest
-        'nestedMixedLiftableFor - annotatedTest
-        'nestedFor - annotatedTest
-        'nestedFor2 - annotatedTest
-        'basicWhile - annotatedTest
-        'alternatingWhile - annotatedTest
-        'loopReturn1 - annotatedTest
-        'loopReturn2 - annotatedTest
-        'loopReturn3 - annotatedTest
-        'sqrtFinder - annotatedTest
-        'twoLoops - annotatedTest
-      }
-
-      'Switches - {
-        'smallSwitch - annotatedTest
-        'smallSwitchNoDefault - annotatedTest
-        'bigDenseSwitch - annotatedTest
-        'bigSparseSwitch - annotatedTest
-        'charSwitch - annotatedTest
-        'byteSwitch - annotatedTest
-        'stringSwitch - annotatedTest
-        'stringSwitchTwo - annotatedTest
+      test("Loops"){
+        test("basicFor") - annotatedTest
+        test("liftableFor") - annotatedTest
+        test("unliftableFor") - annotatedTest
+        test("mixedLiftableFor") - annotatedTest
+        test("nestedLiftableFor") - annotatedTest
+        test("nestedLiftableFor2") - annotatedTest
+        test("nestedUnliftableFor") - annotatedTest
+        test("nestedMixedLiftableFor") - annotatedTest
+        test("nestedFor") - annotatedTest
+        test("nestedFor2") - annotatedTest
+        test("basicWhile") - annotatedTest
+        test("alternatingWhile") - annotatedTest
+        test("loopReturn1") - annotatedTest
+        test("loopReturn2") - annotatedTest
+        test("loopReturn3") - annotatedTest
+        test("sqrtFinder") - annotatedTest
+        test("twoLoops") - annotatedTest
       }
 
-      'Arrays - {
-        'length - annotatedTest
-        'get1 - annotatedTest
-        'get2 - annotatedTest
-        'get3 - annotatedTest
-        'get4 - annotatedTest
-        'get5 - annotatedTest
-        'set1 - annotatedTest
-        'set2 - annotatedTest
-        'set3 - annotatedTest
-        'setIf - annotatedTest
-        'getAndSet1 - annotatedTest
-        'getAndSet2 - annotatedTest
-        'getAndSet3 - annotatedTest
-        'getAndSetLoop1 - annotatedTest
-        'getAndSetLoop2 - annotatedTest
-        'getAndSetLoop3 - annotatedTest
+      test("Switches"){
+        test("smallSwitch") - annotatedTest
+        test("smallSwitchNoDefault") - annotatedTest
+        test("bigDenseSwitch") - annotatedTest
+        test("bigSparseSwitch") - annotatedTest
+        test("charSwitch") - annotatedTest
+        test("byteSwitch") - annotatedTest
+        test("stringSwitch") - annotatedTest
+        test("stringSwitchTwo") - annotatedTest
       }
-      'Statics - {
-        'helloWorld - annotatedTest
-        'timesTwo - annotatedTest
-        'helloWorld2 - annotatedTest
-        'timesTwo2 - annotatedTest
-        'call - annotatedTest
-        'callAtPhiBoundary - annotatedTest
-        'voidCall - annotatedTest
-        'tailFactorial - annotatedTest
-        'tailFactorialLong - annotatedTest
-        'tailFactorialVoid - annotatedTest
-        'fibonacci - annotatedTest
-        'staticInit - annotatedTest
-        'regression - annotatedTest
+
+      test("Arrays"){
+        test("length") - annotatedTest
+        test("get1") - annotatedTest
+        test("get2") - annotatedTest
+        test("get3") - annotatedTest
+        test("get4") - annotatedTest
+        test("get5") - annotatedTest
+        test("set1") - annotatedTest
+        test("set2") - annotatedTest
+        test("set3") - annotatedTest
+        test("setIf") - annotatedTest
+        test("getAndSet1") - annotatedTest
+        test("getAndSet2") - annotatedTest
+        test("getAndSet3") - annotatedTest
+        test("getAndSetLoop1") - annotatedTest
+        test("getAndSetLoop2") - annotatedTest
+        test("getAndSetLoop3") - annotatedTest
+      }
+      test("Statics"){
+        test("helloWorld") - annotatedTest
+        test("timesTwo") - annotatedTest
+        test("helloWorld2") - annotatedTest
+        test("timesTwo2") - annotatedTest
+        test("call") - annotatedTest
+        test("callAtPhiBoundary") - annotatedTest
+        test("voidCall") - annotatedTest
+        test("tailFactorial") - annotatedTest
+        test("tailFactorialLong") - annotatedTest
+        test("tailFactorialVoid") - annotatedTest
+        test("fibonacci") - annotatedTest
+        test("staticInit") - annotatedTest
+        test("regression") - annotatedTest
 
       }
-      'InvokeDynamic - {
-//        'lambda - annotatedTest
-//        'lambdaArg - annotatedTest
-//        'lambdaBoxed - annotatedTest
-//        'lambdaBoxedArgs - annotatedTest
-        'concat - annotatedTest
+      test("InvokeDynamic"){
+//        test("lambda") - annotatedTest
+//        test("lambdaArg") - annotatedTest
+//        test("lambdaBoxed") - annotatedTest
+//        test("lambdaBoxedArgs") - annotatedTest
+        test("concat") - annotatedTest
       }
-      'ScalaInvokeDynamic - {
-        'hello - annotatedTest
-        'hello2 - annotatedTest
-        'lambda - annotatedTest
-        'lambdaSpecialized - annotatedTest
-        'lambdaBoxed - annotatedTest
-        'concat - annotatedTest
+      test("ScalaInvokeDynamic"){
+        test("hello") - annotatedTest
+        test("hello2") - annotatedTest
+        test("lambda") - annotatedTest
+        test("lambdaSpecialized") - annotatedTest
+        test("lambdaBoxed") - annotatedTest
+        test("concat") - annotatedTest
       }
-      'Inheritance - {
-        'hello - annotatedTest
-        'strings - annotatedTest
-        'implement - annotatedTest
-        'abstractClass - annotatedTest
-        'shadowedInheritedGet - annotatedTest
-        'shadowedInheritedSet - annotatedTest
-        'superMethod - annotatedTest
-        'staticInheritance - annotatedTest
-        'staticInheritanceMethod - annotatedTest
-        'moreStrings - annotatedTest
-        'lambdaSpecialized0 - annotatedTest
-        'lambdaSpecialized - annotatedTest
+      test("Inheritance"){
+        test("hello") - annotatedTest
+        test("strings") - annotatedTest
+        test("implement") - annotatedTest
+        test("abstractClass") - annotatedTest
+        test("shadowedInheritedGet") - annotatedTest
+        test("shadowedInheritedSet") - annotatedTest
+        test("superMethod") - annotatedTest
+        test("staticInheritance") - annotatedTest
+        test("staticInheritanceMethod") - annotatedTest
+        test("moreStrings") - annotatedTest
+        test("lambdaSpecialized0") - annotatedTest
+        test("lambdaSpecialized") - annotatedTest
       }
-//      'Exceptions - {
-//        'throwCatch0 - annotatedTest
-//        'throwCatch1 - annotatedTest
-//        'throwCatch2 - annotatedTest
-//        'throwCatch3 - annotatedTest
-//        'throwCatch4 - annotatedTest
-//        'multiCatch - annotatedTest
-//        'nullPointer - annotatedTest
-//        'arrayIndexOutOfBounds - annotatedTest
+//      test("Exceptions"){
+//        test("throwCatch0") - annotatedTest
+//        test("throwCatch1") - annotatedTest
+//        test("throwCatch2") - annotatedTest
+//        test("throwCatch3") - annotatedTest
+//        test("throwCatch4") - annotatedTest
+//        test("multiCatch") - annotatedTest
+//        test("nullPointer") - annotatedTest
+//        test("arrayIndexOutOfBounds") - annotatedTest
 //      }
-      'Sudoku - {
-        'quick - annotatedTest
-        'quick2 - annotatedTest
-        'quick3 - annotatedTest
-//        'run - annotatedTest
+      test("Sudoku"){
+        test("quick") - annotatedTest
+        test("quick2") - annotatedTest
+        test("quick3") - annotatedTest
+//        test("run") - annotatedTest
       }
     }
-    'simplify - {
-      'Folding - {
-        'iadd - annotatedTest
-        'isub - annotatedTest
-        'imul - annotatedTest
-        'idiv - annotatedTest
-        'irem - annotatedTest
-        'ishl - annotatedTest
-        'ishr - annotatedTest
-        'iushr - annotatedTest
-        'iand - annotatedTest
-        'ior - annotatedTest
-        'ixor - annotatedTest
+    test("simplify"){
+      test("Folding"){
+        test("iadd") - annotatedTest
+        test("isub") - annotatedTest
+        test("imul") - annotatedTest
+        test("idiv") - annotatedTest
+        test("irem") - annotatedTest
+        test("ishl") - annotatedTest
+        test("ishr") - annotatedTest
+        test("iushr") - annotatedTest
+        test("iand") - annotatedTest
+        test("ior") - annotatedTest
+        test("ixor") - annotatedTest
 
-        'jadd - annotatedTest
-        'jsub - annotatedTest
-        'jmul - annotatedTest
-        'jdiv - annotatedTest
-        'jrem - annotatedTest
-        'jshl - annotatedTest
-        'jshr - annotatedTest
-        'jushr - annotatedTest
-        'jand - annotatedTest
-        'jor - annotatedTest
-        'jxor - annotatedTest
+        test("jadd") - annotatedTest
+        test("jsub") - annotatedTest
+        test("jmul") - annotatedTest
+        test("jdiv") - annotatedTest
+        test("jrem") - annotatedTest
+        test("jshl") - annotatedTest
+        test("jshr") - annotatedTest
+        test("jushr") - annotatedTest
+        test("jand") - annotatedTest
+        test("jor") - annotatedTest
+        test("jxor") - annotatedTest
 
-        'fadd - annotatedTest
-        'fsub - annotatedTest
-        'fmul - annotatedTest
-        'fdiv - annotatedTest
-        'frem - annotatedTest
+        test("fadd") - annotatedTest
+        test("fsub") - annotatedTest
+        test("fmul") - annotatedTest
+        test("fdiv") - annotatedTest
+        test("frem") - annotatedTest
 
-        'dadd - annotatedTest
-        'dsub - annotatedTest
-        'dmul - annotatedTest
-        'ddiv - annotatedTest
-        'drem - annotatedTest
+        test("dadd") - annotatedTest
+        test("dsub") - annotatedTest
+        test("dmul") - annotatedTest
+        test("ddiv") - annotatedTest
+        test("drem") - annotatedTest
 
-        'lcmp0 - annotatedTest
-        'lcmp1 - annotatedTest
-        'lcmp2 - annotatedTest
+        test("lcmp0") - annotatedTest
+        test("lcmp1") - annotatedTest
+        test("lcmp2") - annotatedTest
 
-        'fcmp0 - annotatedTest
-        'fcmp1 - annotatedTest
-        'fcmp2 - annotatedTest
+        test("fcmp0") - annotatedTest
+        test("fcmp1") - annotatedTest
+        test("fcmp2") - annotatedTest
 
-        'dcmp0 - annotatedTest
-        'dcmp1 - annotatedTest
-        'dcmp2 - annotatedTest
+        test("dcmp0") - annotatedTest
+        test("dcmp1") - annotatedTest
+        test("dcmp2") - annotatedTest
 
-        'jump0 - annotatedTest
-        'jump1 - annotatedTest
-        'jump2 - annotatedTest
-        'jump3 - annotatedTest
+        test("jump0") - annotatedTest
+        test("jump1") - annotatedTest
+        test("jump2") - annotatedTest
+        test("jump3") - annotatedTest
 
-        'switch0 - annotatedTest
-        'switch1 - annotatedTest
-        'switch2 - annotatedTest
-        'switch3 - annotatedTest
+        test("switch0") - annotatedTest
+        test("switch1") - annotatedTest
+        test("switch2") - annotatedTest
+        test("switch3") - annotatedTest
       }
-      'SimpleDce - {
-        'main - annotatedTest
-        'deadLoopVariable - annotatedTest
-        'deadLocal - annotatedTest
+      test("SimpleDce"){
+        test("main") - annotatedTest
+        test("deadLoopVariable") - annotatedTest
+        test("deadLocal") - annotatedTest
       }
-      'ConstantMethod - {
-        'intMain0 - annotatedTest
-        'intMain - annotatedTest
-        'nonFoldedIntMain - annotatedTest
-        'boolMain - annotatedTest
-        'impureMain - annotatedTest
+      test("ConstantMethod"){
+        test("intMain0") - annotatedTest
+        test("intMain") - annotatedTest
+        test("nonFoldedIntMain") - annotatedTest
+        test("boolMain") - annotatedTest
+        test("impureMain") - annotatedTest
       }
-      'BooleanJumpFlatten - {
-        'simpleTrue - annotatedTest
-        'simpleFalse - annotatedTest
-        'nested1 - annotatedTest
-        'nested2 - annotatedTest
-        'nested3 - annotatedTest
-        'nested4 - annotatedTest
-      }
-
-      'InstanceofJumpFlatten - {
-        'simpleBar - annotatedTest
-        'simpleBaz - annotatedTest
-        'simpleQux - annotatedTest
-        'simpleBarMatch - annotatedTest
-        'simpleBazMatch - annotatedTest
-        'simpleQuxMatch - annotatedTest
-      }
-      'BooleanWidening - {
-        'simple - annotatedTest
-      }
-      'InstanceDce - {
-        'simple1 - annotatedTest
-        'simple2 - annotatedTest
-        'simple3 - annotatedTest
-
-        'single1 - annotatedTest
-        'single2 - annotatedTest
-        'single3 - annotatedTest
-        'single4 - annotatedTest
-
-        'unknown1 - annotatedTest
-        'unknown2 - annotatedTest
-        'unknown3 - annotatedTest
-      }
-      'InterfacePreservation - {
-        'shallow - annotatedTest
-        'deep - annotatedTest
+      test("BooleanJumpFlatten"){
+        test("simpleTrue") - annotatedTest
+        test("simpleFalse") - annotatedTest
+        test("nested1") - annotatedTest
+        test("nested2") - annotatedTest
+        test("nested3") - annotatedTest
+        test("nested4") - annotatedTest
       }
 
-      'Liveness - {
-        'entrypointUnused0 - annotatedTest
-        'entrypointUnused1 - annotatedTest
-        'entrypointUnused2 - annotatedTest
+      test("InstanceofJumpFlatten"){
+        test("simpleBar") - annotatedTest
+        test("simpleBaz") - annotatedTest
+        test("simpleQux") - annotatedTest
+        test("simpleBarMatch") - annotatedTest
+        test("simpleBazMatch") - annotatedTest
+        test("simpleQuxMatch") - annotatedTest
+      }
+      test("BooleanWidening"){
+        test("simple") - annotatedTest
+      }
+      test("InstanceDce"){
+        test("simple1") - annotatedTest
+        test("simple2") - annotatedTest
+        test("simple3") - annotatedTest
 
-        'trivialUnused - annotatedTest
-        'longUnusedRight - annotatedTest
-        'longUnusedLeft - annotatedTest
+        test("single1") - annotatedTest
+        test("single2") - annotatedTest
+        test("single3") - annotatedTest
+        test("single4") - annotatedTest
 
-        'simple - annotatedTest
-        'simple2a - annotatedTest
-        'simple2b - annotatedTest
+        test("unknown1") - annotatedTest
+        test("unknown2") - annotatedTest
+        test("unknown3") - annotatedTest
+      }
+      test("InterfacePreservation"){
+        test("shallow") - annotatedTest
+        test("deep") - annotatedTest
+      }
 
-        'chained - annotatedTest
-        'chained2a - annotatedTest
-        'chained2b - annotatedTest
+      test("Liveness"){
+        test("entrypointUnused0") - annotatedTest
+        test("entrypointUnused1") - annotatedTest
+        test("entrypointUnused2") - annotatedTest
 
-        'implement0 - annotatedTest
-        'implement1 - annotatedTest
-        'implement2a - annotatedTest
-        'implement2b - annotatedTest
-        'implement3 - annotatedTest
+        test("trivialUnused") - annotatedTest
+        test("longUnusedRight") - annotatedTest
+        test("longUnusedLeft") - annotatedTest
 
-        'override0 - annotatedTest
-        'override1 - annotatedTest
-        'override2 - annotatedTest
-        'override3 - annotatedTest
-        'override4 - annotatedTest
+        test("simple") - annotatedTest
+        test("simple2a") - annotatedTest
+        test("simple2b") - annotatedTest
 
-        'deadLoopCounter - annotatedTest
+        test("chained") - annotatedTest
+        test("chained2a") - annotatedTest
+        test("chained2b") - annotatedTest
+
+        test("implement0") - annotatedTest
+        test("implement1") - annotatedTest
+        test("implement2a") - annotatedTest
+        test("implement2b") - annotatedTest
+        test("implement3") - annotatedTest
+
+        test("override0") - annotatedTest
+        test("override1") - annotatedTest
+        test("override2") - annotatedTest
+        test("override3") - annotatedTest
+        test("override4") - annotatedTest
+
+        test("deadLoopCounter") - annotatedTest
       }
 
     }
 
-    'narrow - {
-      'Supertype - {
-        'main - annotatedTest
-        'mainDeep - annotatedTest
+    test("narrow"){
+      test("Supertype"){
+        test("main") - annotatedTest
+        test("mainDeep") - annotatedTest
       }
-      'Parametric - {
-        'main - annotatedTest
-        'mainDeep - annotatedTest
+      test("Parametric"){
+        test("main") - annotatedTest
+        test("mainDeep") - annotatedTest
       }
-      'NarrowReturn - {
-        'main - annotatedTest
+      test("NarrowReturn"){
+        test("main") - annotatedTest
       }
-      'MergeReturn - {
-        'main - annotatedTest
+      test("MergeReturn"){
+        test("main") - annotatedTest
       }
-//      'IntersectionReturn - {
-//        'main - annotatedTest
+//      test("IntersectionReturn"){
+//        test("main") - annotatedTest
 //      }
-      'ForceWide - {
-        'main - annotatedTest
+      test("ForceWide"){
+        test("main") - annotatedTest
       }
     }
-    'optimistic - {
-      'Simple - {
-        'trivial - annotatedTest
-        'loopConstant - annotatedTest
-        'branchConstant - annotatedTest
+    test("optimistic"){
+      test("Simple"){
+        test("trivial") - annotatedTest
+        test("loopConstant") - annotatedTest
+        test("branchConstant") - annotatedTest
       }
-      'Recursive - {
-        'recursivePureConstant - annotatedTest
-        'mutualRecursivePureConstant - annotatedTest
-        'generalRecursive - annotatedTest
+      test("Recursive"){
+        test("recursivePureConstant") - annotatedTest
+        test("mutualRecursivePureConstant") - annotatedTest
+        test("generalRecursive") - annotatedTest
       }
-      'ClassLoading - {
-        'monomorphicOptimize - annotatedTest
-        'preBimorphicUnoptimize - annotatedTest
-        'postBimorphicDeoptimize - annotatedTest
-        'prePostBimorphicDeoptimize - annotatedTest
+      test("ClassLoading"){
+        test("monomorphicOptimize") - annotatedTest
+        test("preBimorphicUnoptimize") - annotatedTest
+        test("postBimorphicDeoptimize") - annotatedTest
+        test("prePostBimorphicDeoptimize") - annotatedTest
         // These tests cannot pass until we have optimistic inter-procedural
         // liveness analysis, rather than the simple intra-procedural liveness
         // analysis that we have now
-        //        'recursivePureDeadArg - annotatedTest
-        //        'mutualRecursivePureDeadArg - annotatedTest
+        //        test("recursivePureDeadArg") - annotatedTest
+        //        test("mutualRecursivePureDeadArg") - annotatedTest
       }
 
     }
 
-    'scalalib - {
-      'Small - {
-        'equals - annotatedTest
-        'arraycopy - annotatedTest
-        'arraysCopyOf - annotatedTest
-        'createArrayInStaticInitializer1 - annotatedTest
-        'createArrayInStaticInitializer2 - annotatedTest
-        'createArrayInStaticInitializer3 - annotatedTest
-        'createNestedArrayInStaticInitializer - annotatedTest
-        'loopAtStartOfMethod - annotatedTest
+    test("scalalib"){
+      test("Small"){
+        test("equals") - annotatedTest
+        test("arraycopy") - annotatedTest
+        test("arraysCopyOf") - annotatedTest
+        test("createArrayInStaticInitializer1") - annotatedTest
+        test("createArrayInStaticInitializer2") - annotatedTest
+        test("createArrayInStaticInitializer3") - annotatedTest
+        test("createNestedArrayInStaticInitializer") - annotatedTest
+        test("loopAtStartOfMethod") - annotatedTest
       }
 
-      'Throwing - {
-        'tryCatch - annotatedTest
-        'lazyVal - annotatedTest
-        'throwingInBranch1 - annotatedTest
-        'throwingInBranch2 - annotatedTest
+      test("Throwing"){
+        test("tryCatch") - annotatedTest
+        test("lazyVal") - annotatedTest
+        test("throwingInBranch1") - annotatedTest
+        test("throwingInBranch2") - annotatedTest
       }
-      'Methods - {
-        'multipleSubtypesOfGeneric - annotatedTest
-        'multipleTypesOfGeneric - annotatedTest
-        'superDefineSubImplement - annotatedTest
-        'narrowingAbstractMethod - annotatedTest
-        'inferredHighestDefinerReturnDiffer - annotatedTest
-        'inheritFromOutsideHierarchy - annotatedTest
+      test("Methods"){
+        test("multipleSubtypesOfGeneric") - annotatedTest
+        test("multipleTypesOfGeneric") - annotatedTest
+        test("superDefineSubImplement") - annotatedTest
+        test("narrowingAbstractMethod") - annotatedTest
+        test("inferredHighestDefinerReturnDiffer") - annotatedTest
+        test("inheritFromOutsideHierarchy") - annotatedTest
       }
-      'FauxLibrary - {
+      test("FauxLibrary"){
 
-        'testManifestFactory - annotatedTest
+        test("testManifestFactory") - annotatedTest
 
-        'simpleLinkedListForeach - annotatedTest
-        'simpleArraySeqForeach - annotatedTest
-        'minimizedIterator - annotatedTest
-        'staticSpecialInterfaceMethods - annotatedTest
+        test("simpleLinkedListForeach") - annotatedTest
+        test("simpleArraySeqForeach") - annotatedTest
+        test("minimizedIterator") - annotatedTest
+        test("staticSpecialInterfaceMethods") - annotatedTest
 
-        'manualIterator - annotatedTest
-        'manualIterator2 - annotatedTest
+        test("manualIterator") - annotatedTest
+        test("manualIterator2") - annotatedTest
 
-        'manualIterator3 - annotatedTest
+        test("manualIterator3") - annotatedTest
       }
-      'Library - {
-        'arrayBuilderOfInt - annotatedTest
-        'touchManifestFactory - annotatedTest
-        'touchScalaPackage - annotatedTest
+      test("Library"){
+        test("arrayBuilderOfInt") - annotatedTest
+        test("touchManifestFactory") - annotatedTest
+        test("touchScalaPackage") - annotatedTest
       }
     }
-    'inlining - {
+    test("inlining"){
 
-      'Inlining - {
-        'simple - annotatedTest
-        'conditional - annotatedTest
-        'conditionalIf - annotatedTest
-        'conditionalVoid - annotatedTest
-        'conditionalIfVoid - annotatedTest
-        'thrower - annotatedTest
-        'throwerComplex - annotatedTest
-        'throwerPartialMerge - annotatedTest
-        'throwerFullMerge - annotatedTest
+      test("Inlining"){
+        test("simple") - annotatedTest
+        test("conditional") - annotatedTest
+        test("conditionalIf") - annotatedTest
+        test("conditionalVoid") - annotatedTest
+        test("conditionalIfVoid") - annotatedTest
+        test("thrower") - annotatedTest
+        test("throwerComplex") - annotatedTest
+        test("throwerPartialMerge") - annotatedTest
+        test("throwerFullMerge") - annotatedTest
       }
-      'Chaining - {
-        'noneGet - annotatedTest
-        'someGet - annotatedTest
-        'castSomeGet - annotatedTest
-        'get - annotatedTest
-        'map - annotatedTest
-        'mapInnerClass - annotatedTest
-        'flatMap - annotatedTest
-        'flatMapMapSimple - annotatedTest
-        'flatMapMap - annotatedTest
-        'mapTwice - annotatedTest
-        'mapTwice2 - annotatedTest
-        'mapTwice3 - annotatedTest
-        'flatMapMapChain - annotatedTest
+      test("Chaining"){
+        test("noneGet") - annotatedTest
+        test("someGet") - annotatedTest
+        test("castSomeGet") - annotatedTest
+        test("get") - annotatedTest
+        test("map") - annotatedTest
+        test("mapInnerClass") - annotatedTest
+        test("flatMap") - annotatedTest
+        test("flatMapMapSimple") - annotatedTest
+        test("flatMapMap") - annotatedTest
+        test("mapTwice") - annotatedTest
+        test("mapTwice2") - annotatedTest
+        test("mapTwice3") - annotatedTest
+        test("flatMapMapChain") - annotatedTest
       }
-      'Demo - {
+      test("Demo"){
 
 
-        'mainA - annotatedTest
+        test("mainA") - annotatedTest
 
       }
     }

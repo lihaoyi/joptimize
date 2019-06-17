@@ -24,16 +24,16 @@ object LoopFinderTests extends TestSuite {
       }
     }
 
-    'reducible - {
+    test("reducible"){
       // 0 -> 1
-      'twoNode - check[Int](
+      test("twoNode") - check[Int](
         args = Seq(0 -> 1),
         expectedLoopTree = Loop(0, true, Set(0, 1), Set()),
         expectedImmediateDominators = Map(1 -> 0),
         expectedDominatorDepths = Map(0 -> 0, 1 -> 1)
       )
       // 0 -> 1 -> 2
-      'threeNode - check[Int](
+      test("threeNode") - check[Int](
         args = Seq(0 -> 1, 1 -> 2),
         expectedLoopTree = Loop(0, true, Set(0, 1, 2), Set()),
         expectedImmediateDominators = Map(1 -> 0, 2 -> 1),
@@ -46,7 +46,7 @@ object LoopFinderTests extends TestSuite {
       //       \   ^
       //        v /
       //         3
-      'diamond - check[Int](
+      test("diamond") - check[Int](
         args = Seq(0 -> 1, 1 -> 2, 1 -> 3, 2 -> 4, 3 -> 4),
         expectedLoopTree = Loop(0, true, Set(0, 1, 2, 3, 4), Set()),
         expectedImmediateDominators = Map(1 -> 0, 2 -> 1, 3 -> 1, 4 -> 1),
@@ -54,7 +54,7 @@ object LoopFinderTests extends TestSuite {
       )
 
       // 0 -> 1 <-> 2
-      'loop - check[Int](
+      test("loop") - check[Int](
         args = Seq(0 -> 1, 1 -> 2, 2 -> 1),
         expectedLoopTree = Loop(
           0,
@@ -68,7 +68,7 @@ object LoopFinderTests extends TestSuite {
         expectedDominatorDepths = Map(0 -> 0, 1 -> 1, 2 -> 2)
       )
       // 0 -> 1 <-> 2 -> 3
-      'loopEnd - check[Int](
+      test("loopEnd") - check[Int](
         args = Seq(0 -> 1, 1 -> 2, 2 -> 1, 2 -> 3),
         expectedLoopTree = Loop(
           0,
@@ -83,7 +83,7 @@ object LoopFinderTests extends TestSuite {
       )
 
       // 0 -> 1 <-> 2 <-> 3
-      'nestedLoop - check[Int](
+      test("nestedLoop") - check[Int](
         args = Seq(0 -> 1, 1 -> 2, 2 -> 1, 2 -> 3, 3 -> 2),
         expectedLoopTree = Loop(
           0,
@@ -112,7 +112,7 @@ object LoopFinderTests extends TestSuite {
       //      ^        /
       //       \      /
       //        ------
-      'twoNestedLoops - check[Int](
+      test("twoNestedLoops") - check[Int](
         args = Seq(
           0 -> 1,
           1 -> 2,
@@ -151,7 +151,7 @@ object LoopFinderTests extends TestSuite {
       //      ^        /
       //       \      /
       //        ------
-      'twoNestedLoopsEnds - check[Int](
+      test("twoNestedLoopsEnds") - check[Int](
         args = Seq(
           0 -> 1,
           1 -> 2,
@@ -217,7 +217,7 @@ object LoopFinderTests extends TestSuite {
       //      ^        /       ^   /
       //       \      /         \ v
       //        ------           8
-      'twoDoublyNestedLoops - check[Int](
+      test("twoDoublyNestedLoops") - check[Int](
         args = Seq(
           0 -> 1,
           1 -> 2,
@@ -278,13 +278,13 @@ object LoopFinderTests extends TestSuite {
         )
       )
     }
-    'irreducible - {
+    test("irreducible"){
       //         -----> 3
       //        /       ^
       //  0 -> 1        |
       //        \       v
       //         -----> 2
-      'simple - check[Int](
+      test("simple") - check[Int](
         args = Seq(
           0 -> 1,
           1 -> 2,
@@ -320,7 +320,7 @@ object LoopFinderTests extends TestSuite {
       //        \     ^   /
       //         \     \ v
       //          ----> 2
-      'nested - check[Int](
+      test("nested") - check[Int](
         args = Seq(
           0 -> 1,
           1 -> 2,
@@ -363,7 +363,7 @@ object LoopFinderTests extends TestSuite {
           5 -> 2
         )
       )
-      'paper - check[String](
+      test("paper") - check[String](
         args = Seq(
           "START" -> "END",
           "START" -> "a",
@@ -414,13 +414,13 @@ object LoopFinderTests extends TestSuite {
       )
     }
 
-    'chains - {
+    test("chains"){
       //         -----> 3
       //        /       ^
       //  0 -> 1        |
       //        \       v
       //         -----> 2 -> 4 <-> 5
-      'reducibleIrreducible - check[Int](
+      test("reducibleIrreducible") - check[Int](
         args = Seq(
           0 -> 1,
           1 -> 2,
@@ -462,7 +462,7 @@ object LoopFinderTests extends TestSuite {
       //  0 -> 1        |
       //        \       v
       //         -----> 2 <-> 4
-      'reducibleIrreducible2 - check[Int](
+      test("reducibleIrreducible2") - check[Int](
         args = Seq(
           0 -> 1,
           1 -> 2,
@@ -502,7 +502,7 @@ object LoopFinderTests extends TestSuite {
       //        \        ^
       //         \       v
       //          -----> 2
-      'reducibleIrreducible3 - check[Int](
+      test("reducibleIrreducible3") - check[Int](
         args = Seq(
           0 -> 1,
           1 -> 2,
@@ -556,7 +556,7 @@ object LoopFinderTests extends TestSuite {
       //        \        ^
       //         \       v
       //          -----> 2
-      'reducibleIrreducible4 - check[Int](
+      test("reducibleIrreducible4") - check[Int](
         args = Seq(
           0 -> 1,
           1 -> 2,
@@ -605,7 +605,7 @@ object LoopFinderTests extends TestSuite {
       //  0 -> 1 <-> 2        |
       //              \       v
       //               -----> 4
-      'irreducibleReducible - check[Int](
+      test("irreducibleReducible") - check[Int](
         args = Seq(
           0 -> 1,
           1 -> 2,
@@ -644,7 +644,7 @@ object LoopFinderTests extends TestSuite {
       //  0 -> 1 <-> 2        |
       //              \       v
       //               -----> 4
-      'irreducibleReducible2 - check[Int](
+      test("irreducibleReducible2") - check[Int](
         args = Seq(
           0 -> 1,
           1 -> 2,
